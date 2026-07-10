@@ -211,19 +211,32 @@ function fillSheet(r){
   else if(r.inicioCarga && r.finCarga){ timerHM=minToHM(dur(r.inicioCarga,r.finCarga)); }
   body+=`<div class="timerbox"><div class="lbl">${running?'⏱ Cargando… tiempo transcurrido':'Tiempo de carga'}</div><div class="big" id="timerBig" style="color:${running?'var(--warn)':'var(--txt)'}">${timerHM}</div><div class="lbl">Límite ${r.tipo||''}: ${lim!=null?lim+' min':'—'}</div></div>`;
   body+=`<div class="stamps"><div class="st">Colocación<b>${r.colocacion||'--:--'}</b></div><div class="st">Inicio<b>${r.inicioCarga||'--:--'}</b></div><div class="st">Fin<b>${r.finCarga||'--:--'}</b></div></div>`;
-  // registrar colocación (ingreso al andén) si aún no se ha marcado y no está terminado
-  if(s!=='done' && !r.colocacion){ body+=`<button class="bigbtn bg-dis" onclick="stampColocacion('${r.id}')">📍 Registrar colocación (${nowHM()})</button>`; }
-  // kg cargados y sacos (editable en cualquier momento; fluye al programador)
-  body+=`<div class="stamps" style="margin-top:12px">
-    <div class="field" style="flex:1"><label>Kg cargados</label><input type="number" inputmode="numeric" value="${r.kilos!=null&&r.kilos!==''?r.kilos:''}" placeholder="0" onchange="setField('${r.id}','kilos',this.value)"></div>
-    <div class="field" style="flex:1"><label>Sacos</label><input type="number" inputmode="numeric" value="${r.sacos!=null&&r.sacos!==''?r.sacos:''}" placeholder="0" onchange="setField('${r.id}','sacos',this.value)"></div>
-  </div>`;
-  // status line
+  // kg cargados y sacos: solo una vez que ya inició la carga (paso 3)
+  if(s==='proc' || s==='done'){
+    body+=`<div class="stamps" style="margin-top:12px">
+      <div class="field" style="flex:1"><label>Kg cargados${s==='proc'?' <span style="color:var(--late)">*</span>':''}</label><input id="kgInput" type="number" inputmode="numeric" value="${r.kilos!=null&&r.kilos!==''?r.kilos:''}" placeholder="0" onchange="setField('${r.id}','kilos',this.value)"></div>
+      <div class="field" style="flex:1"><label>Sacos</label><input type="number" inputmode="numeric" value="${r.sacos!=null&&r.sacos!==''?r.sacos:''}" placeholder="0" onchange="setField('${r.id}','sacos',this.value)"></div>
+    </div>`;
+  }
+  // status line (terminado)
   if(s==='done'){ const c=dur(r.inicioCarga,r.finCarga); if(c!=null&&lim!=null){ const late=c>lim; body+=`<div class="statusline" style="background:${late?'var(--latebg)':'var(--okbg)'};color:${late?'var(--late)':'var(--ok)'}">${late?`⚠ RETRASADO (+${c-lim} min)${r.motivo?' · '+r.motivo:''}`:'✓ A TIEMPO'}</div>`; } }
-  // buttons
-  if(s==='pend'){ body+=`<button class="bigbtn bg-start" onclick="startLoad('${r.id}')">▶ Iniciar carga (${nowHM()})</button>`; }
-  else if(s==='proc'){ body+=`<button class="bigbtn bg-stop" onclick="stopLoad('${r.id}')">■ Finalizar carga</button>`; body+=`<button class="bigbtn bg-dis" onclick="undoStart('${r.id}')">Deshacer inicio</button>`; }
-  else { if(!isDesp(r)) body+=`<button class="bigbtn bg-done" onclick="dispatch('${r.id}')">✓ Marcar despachado</button>`; else body+=`<div class="statusline" style="background:#123522;color:var(--ok)">🚚 Despachado</div>`; }
+  // botones — flujo obligatorio en orden: colocación → iniciar → (kg) finalizar → despachar
+  if(s==='pend'){
+    if(!r.colocacion){
+      body+=`<div class="hint" style="text-align:center;margin-top:12px">Paso 1 de 3 · Marca el ingreso del camión al andén</div>`;
+      body+=`<button class="bigbtn bg-start" onclick="stampColocacion('${r.id}')">📍 Registrar colocación (${nowHM()})</button>`;
+    } else {
+      body+=`<div class="hint" style="text-align:center;margin-top:12px">Paso 2 de 3 · Colocación ${r.colocacion} ✓ — inicia la carga</div>`;
+      body+=`<button class="bigbtn bg-start" onclick="startLoad('${r.id}')">▶ Iniciar carga (${nowHM()})</button>`;
+    }
+  } else if(s==='proc'){
+    body+=`<div class="hint" style="text-align:center;margin-top:12px">Paso 3 de 3 · Captura los kilos cargados y finaliza</div>`;
+    body+=`<button class="bigbtn bg-stop" onclick="stopLoad('${r.id}')">■ Finalizar carga</button>`;
+    body+=`<button class="bigbtn bg-dis" onclick="undoStart('${r.id}')">Deshacer inicio</button>`;
+  } else {
+    if(!isDesp(r)) body+=`<button class="bigbtn bg-done" onclick="dispatch('${r.id}')">✓ Marcar despachado</button>`;
+    else body+=`<div class="statusline" style="background:#123522;color:var(--ok)">🚚 Despachado</div>`;
+  }
   document.getElementById('sheetBody').innerHTML=body;
 }
 function startTick(){ stopTick(); tick=setInterval(()=>{ if(!openId)return; const r=DATA.find(x=>x.id===openId); if(r&&r.inicioCarga&&!r.finCarga){ const el=document.getElementById('timerBig'); if(el)el.textContent=fmtHMS(elapsedSecs(r.inicioCarga)); } },1000); }
@@ -233,10 +246,12 @@ function stopTick(){ if(tick){clearInterval(tick);tick=null;} }
 function upd(r){ const i=DATA.findIndex(x=>x.id===r.id); if(i>=0)DATA[i]=r; persist(r); render(); }
 function stampColocacion(id){ const r=DATA.find(x=>x.id===id); r.colocacion=nowHM(); upd(r); toast('Colocación registrada 📍'); }
 function setField(id,field,val){ const r=DATA.find(x=>x.id===id); if(!r)return; r[field]=(val===''?'':val); persist(r); const i=DATA.findIndex(x=>x.id===id); if(i>=0)DATA[i]=r; }
-function startLoad(id){ const r=DATA.find(x=>x.id===id); r.inicioCarga=nowHM(); if(!r.colocacion)r.colocacion=nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); upd(r); toast('Carga iniciada ⏱'); }
+function startLoad(id){ const r=DATA.find(x=>x.id===id); if(!r.colocacion){ toast('Primero registra la colocación 📍'); return; } r.inicioCarga=nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); upd(r); toast('Carga iniciada ⏱'); }
 function undoStart(id){ const r=DATA.find(x=>x.id===id); r.inicioCarga=''; upd(r); toast('Inicio deshecho'); }
 function stopLoad(id){
-  const r=DATA.find(x=>x.id===id); const fin=nowHM(); const c=dur(r.inicioCarga,fin), lim=limMin(r.tipo);
+  const r=DATA.find(x=>x.id===id);
+  if(r.kilos===''||r.kilos==null||isNaN(Number(r.kilos))||Number(r.kilos)<=0){ toast('Captura los kilos cargados antes de finalizar ⚖️'); const el=document.getElementById('kgInput'); if(el){ el.style.borderColor='var(--late)'; el.focus(); } return; }
+  const fin=nowHM(); const c=dur(r.inicioCarga,fin), lim=limMin(r.tipo);
   if(c!=null&&lim!=null&&c>lim){ // retraso -> pedir motivo
     pendingStop={id,fin}; const sel=document.getElementById('motivoSel');
     sel.innerHTML=MOTIVOS.map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
