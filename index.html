@@ -66,6 +66,31 @@
   .modalc h3{margin:0 0 10px}
   textarea{width:100%;background:#0d1a27;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:10px;font-family:ui-monospace,monospace;font-size:12px}
   .hint{font-size:12px;color:var(--muted)}
+  .apptabs{display:flex;gap:6px;padding:8px 14px;max-width:640px;margin:0 auto;align-items:center}
+  .apptab{flex:0 0 auto;background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:9px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+  .apptab.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .turnobtn{margin-left:auto;background:transparent;border:1px solid var(--line);color:#cfe0f2;padding:9px 12px;border-radius:10px;font-size:13px;cursor:pointer}
+  .turnobtn.on{border-color:var(--ok);color:var(--ok)}
+  .viewbadge{max-width:640px;margin:0 auto;padding:0 14px 8px}
+  .viewbadge .b{background:#2a2410;border:1px solid var(--warn);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:12.5px;display:flex;align-items:center;gap:8px}
+  .monbar{display:flex;gap:8px;max-width:900px;margin:0 auto 12px;padding:0 14px}
+  .monstat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+  .monstat b{font-size:30px;display:block;color:var(--warn);font-variant-numeric:tabular-nums}
+  .monstat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  #monView{max-width:900px;margin:0 auto;padding:12px 0}
+  #monBoard{padding:0 14px}
+  .monrow{display:grid;grid-template-columns:64px 1fr 130px;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left-width:5px;border-radius:12px;padding:12px 14px;margin-bottom:9px}
+  .monrow .anden{font-size:26px;font-weight:800;text-align:center;line-height:1}
+  .monrow .andenlbl{font-size:9px;color:var(--muted);text-align:center;text-transform:uppercase}
+  .monrow .cli{font-size:16px;font-weight:700}
+  .monrow .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .monrow .right{text-align:right}
+  .monrow .st{font-size:13px;font-weight:800;letter-spacing:.5px}
+  .monrow .pbar{height:7px;background:#22303f;border-radius:6px;margin-top:6px;overflow:hidden}
+  .monrow .pbar>i{display:block;height:100%}
+  .bl-pend{border-left-color:var(--warn)} .bl-proc{border-left-color:var(--accent)} .bl-done{border-left-color:var(--ok)} .bl-late{border-left-color:var(--late)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  .loading-dot{animation:pulse 1.2s infinite}
 </style>
 </head>
 <body>
@@ -80,7 +105,13 @@
   </div>
 </header>
 
-<main>
+<div class="apptabs">
+  <button id="tabOper" class="apptab active" onclick="setTab('oper')">📋 Operación</button>
+  <button id="tabMon" class="apptab" onclick="setTab('mon')">🖥️ Monitor</button>
+  <button id="turnoBtn" class="turnobtn" onclick="turnoClick()">👤 Iniciar turno</button>
+</div>
+
+<main id="operView">
   <div class="datebar">
     <span class="hint">Programación del día:</span>
     <input type="date" id="theDate" onchange="render()">
@@ -93,6 +124,41 @@
   </div>
   <div id="list"></div>
 </main>
+
+<!-- MONITOR (aeropuerto) -->
+<main id="monView" style="display:none">
+  <div class="monbar">
+    <div class="monstat"><b id="mPend">0</b><span>Pendientes</span></div>
+    <div class="monstat"><b id="mProc" style="color:var(--accent)">0</b><span>En carga</span></div>
+    <div class="monstat"><b id="mDone" style="color:var(--ok)">0</b><span>Terminados</span></div>
+    <div class="monstat"><b id="mPct" style="color:var(--ok)">0%</b><span>Avance del día</span></div>
+  </div>
+  <div id="monBoard"></div>
+</main>
+
+<!-- LOGIN TURNO -->
+<div class="modal" id="turnoModal">
+  <div class="modalc">
+    <h3>👤 Iniciar turno</h3>
+    <p class="hint">Escribe tu nombre para registrar cargas. Quedará registrado quién mueve cada dato.</p>
+    <input id="turnoName" list="dlNames" placeholder="Tu nombre" style="width:100%;font-size:16px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px">
+    <datalist id="dlNames"></datalist>
+    <button class="bigbtn bg-start" onclick="doTurno()">Entrar</button>
+    <button class="bigbtn bg-dis" onclick="document.getElementById('turnoModal').classList.remove('show')">Cancelar</button>
+  </div>
+</div>
+
+<!-- PIN CONFIG -->
+<div class="modal" id="pinModal">
+  <div class="modalc">
+    <h3>🔒 PIN de configuración</h3>
+    <p class="hint">La conexión solo la cambia un supervisor. Ingresa el PIN.</p>
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')checkPin()">
+    <div id="pinErr" style="color:var(--late);font-size:13px;margin-top:6px;display:none">PIN incorrecto</div>
+    <button class="bigbtn bg-start" onclick="checkPin()">Entrar</button>
+    <button class="bigbtn bg-dis" onclick="document.getElementById('pinModal').classList.remove('show')">Cancelar</button>
+  </div>
+</div>
 
 <!-- DETAIL SHEET -->
 <div class="sheet" id="sheet">
@@ -145,11 +211,13 @@ const FIREBASE_CONFIG = {
 };
 
 const DEFAULT_LIMITES={"NISSAN":30,"ISUZU":30,"TORTON":40,"TRAILER 30 TON":50,"TRAILER 34 TON":80};
+const APP_PIN="2468";   // PIN para abrir la configuración de conexión (cámbialo si quieres)
 let LIMITES={...DEFAULT_LIMITES};
 let DATA=[], fbCfgObj=null;
-let fb=null, fbData=null, fbCfg=null;
-const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', APPCFG_KEY='cargApp_fb';
-let openId=null, tick=null;
+let fb=null, fbData=null, fbCfg=null, fbAudit=null;
+const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', APPCFG_KEY='cargApp_fb', USER_KEY='cargApp_user';
+let openId=null, tick=null, curTab='oper';
+let currentUser = null;   // null = modo visor (solo lectura)
 
 /* ---- cálculo compartido ---- */
 function toMin(h){ if(!h)return null; const p=h.split(':'); return (+p[0])*60+(+p[1]); }
@@ -168,10 +236,11 @@ function state(r){
 }
 
 /* ---- render lista ---- */
-function forDate(){
+function forDate(useSearch){
   const d=document.getElementById('theDate').value;
-  const q=(document.getElementById('q').value||'').toLowerCase();
+  const q=useSearch===false?'':(document.getElementById('q').value||'').toLowerCase();
   return DATA.filter(r=>{
+    if(r.cancelado===true) return false;   // los pedidos cancelados no aparecen en piso
     const rd = r.fechaCarga || r.fechaProg;
     if(d && rd!==d && r.fechaProg!==d) return false;
     if(q){ const blob=[r.cliente,r.pedido,r.eco,r.anden,r.destino,r.operador].join(' ').toLowerCase(); if(!blob.includes(q))return false; }
@@ -195,6 +264,47 @@ function render(){
   document.getElementById('list').innerHTML = rows.length? html : `<div class="empty">Sin embarques programados para esta fecha.<br><span class="hint">Cambia la fecha arriba o revisa la conexión.</span></div>`;
   document.getElementById('cPend').textContent=p; document.getElementById('cProc').textContent=pr; document.getElementById('cDone').textContent=dn;
   if(openId){ const r=DATA.find(x=>x.id===openId); if(r) fillSheet(r); }
+  renderMon();
+  // datalist de nombres (cargadores conocidos)
+  const names=[...new Set(DATA.map(r=>r.ultimoUsuario).filter(Boolean))];
+  const dl=document.getElementById('dlNames'); if(dl) dl.innerHTML=names.map(n=>`<option value="${n}">`).join('');
+}
+
+/* ---- MONITOR tipo aeropuerto ---- */
+function renderMon(){
+  const rows=forDate(false);
+  let p=0,pr=0,dn=0;
+  const board=rows.map(r=>{
+    const s=state(r), lim=limMin(r.tipo);
+    if(s==='pend')p++; else if(s==='proc')pr++; else dn++;
+    let stTxt,cls,bar='';
+    if(s==='pend'){ stTxt='PENDIENTE'; cls='bl-pend'; }
+    else if(s==='proc'){
+      const el=elapsedSecs(r.inicioCarga)/60, pct=lim?Math.min(100,Math.round(el/lim*100)):0; const over=lim&&el>lim;
+      stTxt=`<span class="loading-dot">● CARGANDO</span> ${fmtHMS(elapsedSecs(r.inicioCarga))}`; cls=over?'bl-late':'bl-proc';
+      bar=`<div class="pbar"><i style="width:${pct}%;background:${over?'var(--late)':'var(--accent)'}"></i></div>`;
+    } else {
+      const c=dur(r.inicioCarga,r.finCarga); const late=lim&&c!=null&&c>lim;
+      stTxt=late?`RETRASO ${minToHM(c)}`:`✓ ${minToHM(c)||'LISTO'}`; cls=late?'bl-late':'bl-done';
+    }
+    const stcolor = cls==='bl-late'?'var(--late)':cls==='bl-done'?'var(--ok)':cls==='bl-proc'?'var(--accent)':'var(--warn)';
+    return `<div class="monrow ${cls}">
+      <div><div class="anden">${r.anden||'-'}</div><div class="andenlbl">Andén</div></div>
+      <div><div class="cli">${r.cliente||'(sin cliente)'}</div><div class="sub">🕐 ${r.horaProg||'--:--'} · ${r.tipo||'—'} · ${r.destino||''} ${r.eco?'· '+r.eco:''}</div>${bar}</div>
+      <div class="right"><div class="st" style="color:${stcolor}">${stTxt}</div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('monBoard').innerHTML = rows.length? board : `<div class="empty">Sin embarques para esta fecha.</div>`;
+  const tot=p+pr+dn;
+  document.getElementById('mPend').textContent=p; document.getElementById('mProc').textContent=pr; document.getElementById('mDone').textContent=dn;
+  document.getElementById('mPct').textContent = tot? Math.round(dn/tot*100)+'%' : '0%';
+}
+function setTab(t){ curTab=t;
+  document.getElementById('tabOper').classList.toggle('active',t==='oper');
+  document.getElementById('tabMon').classList.toggle('active',t==='mon');
+  document.getElementById('operView').style.display=t==='oper'?'block':'none';
+  document.getElementById('monView').style.display=t==='mon'?'block':'none';
+  render();
 }
 
 /* ---- detalle ---- */
@@ -211,6 +321,17 @@ function fillSheet(r){
   else if(r.inicioCarga && r.finCarga){ timerHM=minToHM(dur(r.inicioCarga,r.finCarga)); }
   body+=`<div class="timerbox"><div class="lbl">${running?'⏱ Cargando… tiempo transcurrido':'Tiempo de carga'}</div><div class="big" id="timerBig" style="color:${running?'var(--warn)':'var(--txt)'}">${timerHM}</div><div class="lbl">Límite ${r.tipo||''}: ${lim!=null?lim+' min':'—'}</div></div>`;
   body+=`<div class="stamps"><div class="st">Colocación<b>${r.colocacion||'--:--'}</b></div><div class="st">Inicio<b>${r.inicioCarga||'--:--'}</b></div><div class="st">Fin<b>${r.finCarga||'--:--'}</b></div></div>`;
+  // status line (terminado) — informativa, se ve siempre
+  if(s==='done'){ const c=dur(r.inicioCarga,r.finCarga); if(c!=null&&lim!=null){ const late=c>lim; body+=`<div class="statusline" style="background:${late?'var(--latebg)':'var(--okbg)'};color:${late?'var(--late)':'var(--ok)'}">${late?`⚠ RETRASADO (+${c-lim} min)${r.motivo?' · '+r.motivo:''}`:'✓ A TIEMPO'}</div>`; } }
+
+  if(!currentUser){
+    // MODO VISOR (solo lectura)
+    if(r.kilos) body+=`<div class="stamps" style="margin-top:12px"><div class="st" style="flex:1">Kg cargados<b>${Number(r.kilos).toLocaleString('es-MX')}</b></div>${r.sacos?`<div class="st" style="flex:1">Sacos<b>${r.sacos}</b></div>`:''}</div>`;
+    if(r.ultimoUsuario) body+=`<div class="hint" style="text-align:center;margin-top:10px">Último registro por: <b>${r.ultimoUsuario}</b></div>`;
+    body+=`<div style="text-align:center;margin-top:14px;color:var(--muted);font-size:13.5px">👁️ Modo visor (solo lectura).<br>Toca <b>Iniciar turno</b> arriba para poder registrar.</div>`;
+    document.getElementById('sheetBody').innerHTML=body; return;
+  }
+
   // kg cargados y sacos: solo una vez que ya inició la carga (paso 3)
   if(s==='proc' || s==='done'){
     body+=`<div class="stamps" style="margin-top:12px">
@@ -218,8 +339,6 @@ function fillSheet(r){
       <div class="field" style="flex:1"><label>Sacos</label><input type="number" inputmode="numeric" value="${r.sacos!=null&&r.sacos!==''?r.sacos:''}" placeholder="0" onchange="setField('${r.id}','sacos',this.value)"></div>
     </div>`;
   }
-  // status line (terminado)
-  if(s==='done'){ const c=dur(r.inicioCarga,r.finCarga); if(c!=null&&lim!=null){ const late=c>lim; body+=`<div class="statusline" style="background:${late?'var(--latebg)':'var(--okbg)'};color:${late?'var(--late)':'var(--ok)'}">${late?`⚠ RETRASADO (+${c-lim} min)${r.motivo?' · '+r.motivo:''}`:'✓ A TIEMPO'}</div>`; } }
   // botones — flujo obligatorio en orden: colocación → iniciar → (kg) finalizar → despachar
   if(s==='pend'){
     if(!r.colocacion){
@@ -243,12 +362,13 @@ function startTick(){ stopTick(); tick=setInterval(()=>{ if(!openId)return; cons
 function stopTick(){ if(tick){clearInterval(tick);tick=null;} }
 
 /* ---- acciones ---- */
-function upd(r){ const i=DATA.findIndex(x=>x.id===r.id); if(i>=0)DATA[i]=r; persist(r); render(); }
-function stampColocacion(id){ const r=DATA.find(x=>x.id===id); r.colocacion=nowHM(); upd(r); toast('Colocación registrada 📍'); }
-function setField(id,field,val){ const r=DATA.find(x=>x.id===id); if(!r)return; r[field]=(val===''?'':val); persist(r); const i=DATA.findIndex(x=>x.id===id); if(i>=0)DATA[i]=r; }
-function startLoad(id){ const r=DATA.find(x=>x.id===id); if(!r.colocacion){ toast('Primero registra la colocación 📍'); return; } r.inicioCarga=nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); upd(r); toast('Carga iniciada ⏱'); }
-function undoStart(id){ const r=DATA.find(x=>x.id===id); r.inicioCarga=''; upd(r); toast('Inicio deshecho'); }
+function upd(r){ r.ultimoUsuario=currentUser; r.ultimaAccionAt=new Date().toISOString(); const i=DATA.findIndex(x=>x.id===r.id); if(i>=0)DATA[i]=r; persist(r); render(); }
+function stampColocacion(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); const prev=r.colocacion||''; r.colocacion=nowHM(); appAudit(r,'colocacion','Colocación (app)',prev,r.colocacion); upd(r); toast('Colocación registrada 📍'); }
+function setField(id,field,val){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); if(!r)return; const prev=r[field]; r[field]=(val===''?'':val); if(String(prev||'')!==String(val||'')) appAudit(r,field,(field==='kilos'?'Kg cargados (app)':field+' (app)'),prev,val); r.ultimoUsuario=currentUser; persist(r); const i=DATA.findIndex(x=>x.id===id); if(i>=0)DATA[i]=r; }
+function startLoad(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); if(!r.colocacion){ toast('Primero registra la colocación 📍'); return; } r.inicioCarga=nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'inicioCarga','Inicio de carga (app)','',r.inicioCarga); upd(r); toast('Carga iniciada ⏱'); }
+function undoStart(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); const prev=r.inicioCarga; r.inicioCarga=''; appAudit(r,'inicioCarga','Deshacer inicio (app)',prev,''); upd(r); toast('Inicio deshecho'); }
 function stopLoad(id){
+  if(!requireTurno())return;
   const r=DATA.find(x=>x.id===id);
   if(r.kilos===''||r.kilos==null||isNaN(Number(r.kilos))||Number(r.kilos)<=0){ toast('Captura los kilos cargados antes de finalizar ⚖️'); const el=document.getElementById('kgInput'); if(el){ el.style.borderColor='var(--late)'; el.focus(); } return; }
   const fin=nowHM(); const c=dur(r.inicioCarga,fin), lim=limMin(r.tipo);
@@ -257,12 +377,12 @@ function stopLoad(id){
     sel.innerHTML=MOTIVOS.map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
     document.getElementById('motivoModal').classList.add('show'); return;
   }
-  r.finCarga=fin; upd(r); toast('Carga finalizada ✓');
+  r.finCarga=fin; appAudit(r,'finCarga','Fin de carga (app)','',fin); upd(r); toast('Carga finalizada ✓');
 }
 let pendingStop=null;
 const MOTIVOS=[{cod:"OP-01",desc:"Producto no listo"},{cod:"OP-02",desc:"Falta de personal"},{cod:"OP-03",desc:"Fallo de equipo"},{cod:"TR-01",desc:"Malas condiciones de la unidad"},{cod:"TR-02",desc:"Llegada tardía del chofer"},{cod:"TR-03",desc:"Documentación incompleta"},{cod:"SYS-01",desc:"Facturación / pedido"},{cod:"CAL-01",desc:"Rechazo por calidad"},{cod:"MASC-01",desc:"Planta lo manda tarde"}];
-function confirmMotivo(){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=document.getElementById('motivoSel').value; document.getElementById('motivoModal').classList.remove('show'); upd(r); toast('Finalizado con motivo'); pendingStop=null; }
-function dispatch(id){ const r=DATA.find(x=>x.id===id); r.despachado=true; r.horaSalida=r.horaSalida||nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); upd(r); toast('🚚 Despachado'); }
+function confirmMotivo(){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=document.getElementById('motivoSel').value; document.getElementById('motivoModal').classList.remove('show'); appAudit(r,'finCarga','Fin de carga con motivo (app)','',r.finCarga+' · '+r.motivo); upd(r); toast('Finalizado con motivo'); pendingStop=null; }
+function dispatch(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); r.despachado=true; r.horaSalida=r.horaSalida||nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'despachado','Despachado (app)','',r.horaSalida); upd(r); toast('🚚 Despachado'); }
 
 /* ---- persistencia ---- */
 function persist(r){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fbData){ fbData.child(r.id).set(JSON.parse(JSON.stringify(r))); } }
@@ -280,7 +400,7 @@ function initFirebase(){
   if(!cfg||!cfg.databaseURL){ setConn('local','Local'); return; }
   loadFbScripts(()=>{ try{
     if(!fb) fb=firebase.initializeApp(cfg,'carg'+Date.now());
-    const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config');
+    const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
     fbCfg.on('value',snap=>{ const v=snap.val(); if(v&&v.limites)LIMITES=v.limites; });
@@ -292,15 +412,29 @@ function loadFbScripts(cb){ if(fbLoaded||window.firebase){fbLoaded=true;return c
   s1.onload=()=>{ const s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'; s2.onload=()=>{fbLoaded=true;cb();}; s2.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s2); };
   s1.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s1);
 }
-function openCfg(){ const c=getAppCfg(); document.getElementById('cfgFb').value=c?JSON.stringify(c,null,2):''; document.getElementById('cfgModal').classList.add('show'); }
+function openCfg(){ document.getElementById('pinInput').value=''; document.getElementById('pinErr').style.display='none'; document.getElementById('pinModal').classList.add('show'); setTimeout(()=>document.getElementById('pinInput').focus(),50); }
+function checkPin(){ if(document.getElementById('pinInput').value===APP_PIN){ document.getElementById('pinModal').classList.remove('show'); const c=getAppCfg(); document.getElementById('cfgFb').value=c?JSON.stringify(c,null,2):''; document.getElementById('cfgModal').classList.add('show'); } else document.getElementById('pinErr').style.display='block'; }
 function saveCfg(){ const t=document.getElementById('cfgFb').value.trim(); if(!t){ localStorage.removeItem(APPCFG_KEY); document.getElementById('cfgModal').classList.remove('show'); toast('Modo local'); setConn('local','Local'); return; } try{ const o=JSON.parse(t); localStorage.setItem(APPCFG_KEY,JSON.stringify(o)); document.getElementById('cfgModal').classList.remove('show'); toast('Guardado, conectando…'); initFirebase(); }catch(e){ toast('JSON inválido'); } }
+
+/* ---- turno / usuario ---- */
+function updateTurnoBtn(){ const b=document.getElementById('turnoBtn'); if(currentUser){ b.textContent='👤 '+currentUser+' · salir'; b.classList.add('on'); } else { b.textContent='👤 Iniciar turno'; b.classList.remove('on'); } }
+function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentUser+'? Ya no podrás registrar hasta iniciar de nuevo.')){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); toast('Turno cerrado'); } } else { document.getElementById('turnoName').value=''; document.getElementById('turnoModal').classList.add('show'); setTimeout(()=>document.getElementById('turnoName').focus(),50); } }
+function doTurno(){ const n=document.getElementById('turnoName').value.trim(); if(n.length<2){ toast('Escribe tu nombre'); return; } currentUser=n; try{localStorage.setItem(USER_KEY,n);}catch(e){} document.getElementById('turnoModal').classList.remove('show'); updateTurnoBtn(); render(); toast('Turno iniciado: '+n); }
+function requireTurno(){ if(!currentUser){ toast('Inicia turno para registrar 👤'); turnoClick(); return false; } return true; }
+/* ---- auditoría de la app (quién movió qué) ---- */
+function appAudit(r, field, label, from, to){
+  const entry={ ts:new Date().toISOString(), id:r.id, pedido:r.pedido||'', cliente:r.cliente||'', field, label, from:(from==null?'':String(from)), to:(to==null?'':String(to)), maquillaje:false, estatusAntes:'', estatusDespues:'', by:currentUser||'?', origen:'app' };
+  if(fbAudit){ try{ fbAudit.push(JSON.parse(JSON.stringify(entry))); }catch(e){} }
+}
 
 /* ---- util ---- */
 let tT; function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),1600); }
 document.getElementById('sheet').addEventListener('click',e=>{ if(e.target.id==='sheet')closeSheet(); });
 
 /* ---- init ---- */
+try{ currentUser=localStorage.getItem(USER_KEY)||null; }catch(e){}
 document.getElementById('theDate').value=todayISO();
+updateTurnoBtn();
 loadLocal();
 initFirebase();
 render();
