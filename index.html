@@ -176,8 +176,9 @@
 <!-- MOTIVO MODAL -->
 <div class="modal" id="motivoModal">
   <div class="modalc">
-    <h3>⚠️ Carga fuera de tiempo</h3>
-    <p class="hint">La carga superó el tiempo permitido. Indica el motivo del retraso:</p>
+    <h3>⚠️ Unidad con retraso</h3>
+    <p class="hint" id="motivoRazon" style="color:var(--warn);font-weight:600"></p>
+    <p class="hint">Indica el motivo del retraso:</p>
     <select id="motivoSel" style="width:100%;font-size:15px"></select>
     <button class="bigbtn bg-done" onclick="confirmMotivo()">Guardar y finalizar</button>
   </div>
@@ -225,7 +226,15 @@ let currentUser = null;   // null = modo visor (solo lectura)
 function toMin(h){ if(!h)return null; const p=h.split(':'); return (+p[0])*60+(+p[1]); }
 function minToHM(m){ if(m==null||isNaN(m))return ''; m=((Math.round(m)%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
 function dur(a,b){ const x=toMin(a),y=toMin(b); if(x==null||y==null)return null; let d=y-x; if(d<0)d+=1440; return d; }
+function dur2(a,b){ const x=toMin(a),y=toMin(b); if(x==null||y==null)return null; let d=y-x; if(d>720)d-=1440; if(d<-720)d+=1440; return d; }
 function limMin(t){ return LIMITES[(t||'').toUpperCase().trim()] ?? null; }
+// retraso: por tiempo de carga Y por horario de salida (hora prog + tiempo permitido)
+function lateness(r){ const permit=limMin(r.tipo); const carga=dur(r.inicioCarga,r.finCarga); let rc=null,rs=null;
+  if(carga!=null&&permit!=null&&carga>permit) rc=carga-permit;
+  const salidaProg = r.horaSalidaProg || ((toMin(r.horaProg)!=null&&permit!=null)?minToHM(toMin(r.horaProg)+permit):'');
+  const sal=r.horaSalida||r.finCarga||'';
+  if(salidaProg&&sal){ const d=dur2(salidaProg,sal); if(d>0) rs=d; }
+  return {permit,carga,rc,rs,late:(rc!=null||rs!=null),retraso:Math.max(rc||0,rs||0)}; }
 function nowHM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function elapsedSecs(hhmm){ if(!hhmm)return 0; const p=hhmm.split(':'); const d=new Date(); let s=(d.getHours()*3600+d.getMinutes()*60+d.getSeconds())-((+p[0])*3600+(+p[1])*60); if(s<0)s+=86400; return s; }
 function fmtHMS(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
@@ -256,7 +265,7 @@ function render(){
     const s=state(r); if(s==='pend')p++; else if(s==='proc')pr++; else dn++;
     const badge={pend:['b-pend','PENDIENTE'],proc:['b-proc','EN CARGA'],done:['b-ok','TERMINADO']}[s];
     let extra='';
-    if(s==='done'){ const c=dur(r.inicioCarga,r.finCarga), lim=limMin(r.tipo); if(c!=null&&lim!=null){ const late=c>lim; extra=`<span class="badge ${late?'b-late':'b-ok'}" style="margin-left:6px">${late?'RETRASO':'A TIEMPO'} ${minToHM(c)}</span>`; } }
+    if(s==='done'){ const L=lateness(r), c=L.carga; if(c!=null&&L.permit!=null){ extra=`<span class="badge ${L.late?'b-late':'b-ok'}" style="margin-left:6px">${L.late?'RETRASO':'A TIEMPO'} ${minToHM(c)}${L.rs&&!L.rc?' (salida)':''}</span>`; } }
     return `<div class="card" onclick="openSheet('${r.id}')">
       <div class="top"><div><div class="cli">${r.cliente||'(sin cliente)'}</div>
         <div class="meta"><span class="chip">🕐 ${r.horaProg||'--:--'}</span><span class="chip">Andén ${r.anden||'-'}</span><span class="chip">${r.tipo||'—'}</span></div>
@@ -286,8 +295,8 @@ function renderMon(){
       stTxt=`<span class="loading-dot">● CARGANDO</span> ${fmtHMS(elapsedSecs(r.inicioCarga))}`; cls=over?'bl-late':'bl-proc';
       bar=`<div class="pbar"><i style="width:${pct}%;background:${over?'var(--late)':'var(--accent)'}"></i></div>`;
     } else {
-      const c=dur(r.inicioCarga,r.finCarga); const late=lim&&c!=null&&c>lim;
-      stTxt=late?`RETRASO ${minToHM(c)}`:`✓ ${minToHM(c)||'LISTO'}`; cls=late?'bl-late':'bl-done';
+      const L=lateness(r); const c=L.carga; const late=L.late;
+      stTxt=late?`RETRASO ${L.rs&&!L.rc?'(salida) ':''}${minToHM(L.retraso)}`:`✓ ${minToHM(c)||'LISTO'}`; cls=late?'bl-late':'bl-done';
     }
     const stcolor = cls==='bl-late'?'var(--late)':cls==='bl-done'?'var(--ok)':cls==='bl-proc'?'var(--accent)':'var(--warn)';
     return `<div class="monrow ${cls}">
@@ -324,7 +333,7 @@ function fillSheet(r){
   body+=`<div class="timerbox"><div class="lbl">${running?'⏱ Cargando… tiempo transcurrido':'Tiempo de carga'}</div><div class="big" id="timerBig" style="color:${running?'var(--warn)':'var(--txt)'}">${timerHM}</div><div class="lbl">Límite ${r.tipo||''}: ${lim!=null?lim+' min':'—'}</div></div>`;
   body+=`<div class="stamps"><div class="st">Colocación<b>${r.colocacion||'--:--'}</b></div><div class="st">Inicio<b>${r.inicioCarga||'--:--'}</b></div><div class="st">Fin<b>${r.finCarga||'--:--'}</b></div></div>`;
   // status line (terminado) — informativa, se ve siempre
-  if(s==='done'){ const c=dur(r.inicioCarga,r.finCarga); if(c!=null&&lim!=null){ const late=c>lim; body+=`<div class="statusline" style="background:${late?'var(--latebg)':'var(--okbg)'};color:${late?'var(--late)':'var(--ok)'}">${late?`⚠ RETRASADO (+${c-lim} min)${r.motivo?' · '+r.motivo:''}`:'✓ A TIEMPO'}</div>`; } }
+  if(s==='done'){ const L=lateness(r); if(L.carga!=null&&L.permit!=null){ const razon=L.rc&&L.rs?'carga y salida':(L.rc?'carga lenta':'salió tarde'); body+=`<div class="statusline" style="background:${L.late?'var(--latebg)':'var(--okbg)'};color:${L.late?'var(--late)':'var(--ok)'}">${L.late?`⚠ RETRASADO +${L.retraso} min · ${razon}${r.motivo?' · '+r.motivo:''}`:'✓ A TIEMPO'}</div>`; } }
 
   if(!currentUser){
     // MODO VISOR (solo lectura)
@@ -373,18 +382,31 @@ function stopLoad(id){
   if(!requireTurno())return;
   const r=DATA.find(x=>x.id===id);
   if(r.kilos===''||r.kilos==null||isNaN(Number(r.kilos))||Number(r.kilos)<=0){ toast('Captura los kilos cargados antes de finalizar ⚖️'); const el=document.getElementById('kgInput'); if(el){ el.style.borderColor='var(--late)'; el.focus(); } return; }
-  const fin=nowHM(); const c=dur(r.inicioCarga,fin), lim=limMin(r.tipo);
-  if(c!=null&&lim!=null&&c>lim){ // retraso -> pedir motivo
+  const fin=nowHM();
+  const L=lateness({...r, finCarga:fin});
+  if(L.late){ // retraso por carga o por horario de salida -> pedir motivo
     pendingStop={id,fin}; const sel=document.getElementById('motivoSel');
     sel.innerHTML=MOTIVOS.map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
+    const razon = (L.rc&&L.rs)?'Carga lenta y salió tarde':(L.rc?`Carga lenta (+${L.rc} min)`:`Se fue tarde vs programado (+${L.rs} min)`);
+    document.getElementById('motivoRazon').textContent=razon;
     document.getElementById('motivoModal').classList.add('show'); return;
   }
   r.finCarga=fin; appAudit(r,'finCarga','Fin de carga (app)','',fin); upd(r); toast('Carga finalizada ✓');
 }
 let pendingStop=null;
 let MOTIVOS=[{cod:"OP-01",desc:"Falta de mercancía / Producto no listo"},{cod:"OP-02",desc:"Falta de personal (montacarguistas/auxiliares)"},{cod:"OP-03",desc:"Fallo de equipo (montacargas/rampa)"},{cod:"TR-01",desc:"Malas condiciones de la unidad"},{cod:"TR-02",desc:"Llegada tardía (pérdida de ventana de cita)"},{cod:"TR-03",desc:"Documentación incompleta del chofer"},{cod:"SYS-01",desc:"Falta de pagos / facturación / pedido"},{cod:"CAL-01",desc:"Rechazo por calidad"},{cod:"MEC-01",desc:"Falla mecánica de la unidad"},{cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"}];
-function confirmMotivo(){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=document.getElementById('motivoSel').value; document.getElementById('motivoModal').classList.remove('show'); appAudit(r,'finCarga','Fin de carga con motivo (app)','',r.finCarga+' · '+r.motivo); upd(r); toast('Finalizado con motivo'); pendingStop=null; }
-function dispatch(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); r.despachado=true; r.horaSalida=r.horaSalida||nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'despachado','Despachado (app)','',r.horaSalida); upd(r); toast('🚚 Despachado'); }
+function confirmMotivo(){ const mv=document.getElementById('motivoSel').value; document.getElementById('motivoModal').classList.remove('show');
+  if(pendingStop){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=mv; appAudit(r,'finCarga','Fin de carga con motivo (app)','',r.finCarga+' · '+mv); upd(r); toast('Finalizado con motivo'); pendingStop=null; return; }
+  if(pendingDispatch){ const r=DATA.find(x=>x.id===pendingDispatch.id); r.despachado=true; r.horaSalida=pendingDispatch.sal; r.motivo=mv; if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'despachado','Despachado con motivo (app)','',r.horaSalida+' · '+mv); upd(r); toast('Despachado con motivo'); pendingDispatch=null; return; } }
+function dispatch(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); const sal=r.horaSalida||nowHM();
+  // si sale tarde vs su salida programada y aún no hay motivo, pedirlo
+  const L=lateness({...r, horaSalida:sal});
+  if(L.rs && !r.motivo){ pendingDispatch={id,sal}; const sel=document.getElementById('motivoSel');
+    sel.innerHTML=MOTIVOS.map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
+    document.getElementById('motivoRazon').textContent=`Se va tarde vs salida programada (+${L.rs} min)`;
+    document.getElementById('motivoModal').classList.add('show'); return; }
+  r.despachado=true; r.horaSalida=sal; if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'despachado','Despachado (app)','',r.horaSalida); upd(r); toast('🚚 Despachado'); }
+let pendingDispatch=null;
 
 /* ---- persistencia ---- */
 function persist(r){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fbData){ fbData.child(r.id).set(JSON.parse(JSON.stringify(r))); } }
