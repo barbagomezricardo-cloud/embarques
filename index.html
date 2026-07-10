@@ -140,9 +140,10 @@
 <div class="modal" id="turnoModal">
   <div class="modalc">
     <h3>👤 Iniciar turno</h3>
-    <p class="hint">Escribe tu nombre para registrar cargas. Quedará registrado quién mueve cada dato.</p>
-    <input id="turnoName" list="dlNames" placeholder="Tu nombre" style="width:100%;font-size:16px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px">
-    <datalist id="dlNames"></datalist>
+    <p class="hint">Selecciona tu usuario e ingresa tu PIN. Solo usuarios autorizados por el supervisor pueden registrar.</p>
+    <select id="turnoName" style="width:100%;font-size:16px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px;margin-bottom:9px"></select>
+    <input id="turnoPin" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')doTurno()">
+    <div id="turnoErr" style="color:var(--late);font-size:13px;margin-top:6px;display:none">Usuario o PIN incorrecto</div>
     <button class="bigbtn bg-start" onclick="doTurno()">Entrar</button>
     <button class="bigbtn bg-dis" onclick="document.getElementById('turnoModal').classList.remove('show')">Cancelar</button>
   </div>
@@ -213,6 +214,7 @@ const FIREBASE_CONFIG = {
 const DEFAULT_LIMITES={"NISSAN":30,"ISUZU":30,"TORTON":40,"TRAILER 30 TON":50,"TRAILER 34 TON":80};
 const APP_PIN="2468";   // PIN para abrir la configuración de conexión (cámbialo si quieres)
 let LIMITES={...DEFAULT_LIMITES};
+let USERS=[];   // usuarios autorizados (los crea el master, llegan por Firebase)
 let DATA=[], fbCfgObj=null;
 let fb=null, fbData=null, fbCfg=null, fbAudit=null;
 const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', APPCFG_KEY='cargApp_fb', USER_KEY='cargApp_user';
@@ -380,14 +382,14 @@ function stopLoad(id){
   r.finCarga=fin; appAudit(r,'finCarga','Fin de carga (app)','',fin); upd(r); toast('Carga finalizada ✓');
 }
 let pendingStop=null;
-const MOTIVOS=[{cod:"OP-01",desc:"Producto no listo"},{cod:"OP-02",desc:"Falta de personal"},{cod:"OP-03",desc:"Fallo de equipo"},{cod:"TR-01",desc:"Malas condiciones de la unidad"},{cod:"TR-02",desc:"Llegada tardía del chofer"},{cod:"TR-03",desc:"Documentación incompleta"},{cod:"SYS-01",desc:"Facturación / pedido"},{cod:"CAL-01",desc:"Rechazo por calidad"},{cod:"MASC-01",desc:"Planta lo manda tarde"}];
+let MOTIVOS=[{cod:"OP-01",desc:"Falta de mercancía / Producto no listo"},{cod:"OP-02",desc:"Falta de personal (montacarguistas/auxiliares)"},{cod:"OP-03",desc:"Fallo de equipo (montacargas/rampa)"},{cod:"TR-01",desc:"Malas condiciones de la unidad"},{cod:"TR-02",desc:"Llegada tardía (pérdida de ventana de cita)"},{cod:"TR-03",desc:"Documentación incompleta del chofer"},{cod:"SYS-01",desc:"Falta de pagos / facturación / pedido"},{cod:"CAL-01",desc:"Rechazo por calidad"},{cod:"MEC-01",desc:"Falla mecánica de la unidad"},{cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"}];
 function confirmMotivo(){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=document.getElementById('motivoSel').value; document.getElementById('motivoModal').classList.remove('show'); appAudit(r,'finCarga','Fin de carga con motivo (app)','',r.finCarga+' · '+r.motivo); upd(r); toast('Finalizado con motivo'); pendingStop=null; }
 function dispatch(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); r.despachado=true; r.horaSalida=r.horaSalida||nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'despachado','Despachado (app)','',r.horaSalida); upd(r); toast('🚚 Despachado'); }
 
 /* ---- persistencia ---- */
 function persist(r){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fbData){ fbData.child(r.id).set(JSON.parse(JSON.stringify(r))); } }
 function loadLocal(){
-  try{ const c=localStorage.getItem(CFG_KEY); if(c){ const o=JSON.parse(c); if(o.limites)LIMITES=o.limites; } }catch(e){}
+  try{ const c=localStorage.getItem(CFG_KEY); if(c){ const o=JSON.parse(c); if(o.limites)LIMITES=o.limites; if(o.users)USERS=o.users; } }catch(e){}
   try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=JSON.parse(d); return; } }catch(e){}
   DATA=[];
 }
@@ -403,7 +405,7 @@ function initFirebase(){
     const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
-    fbCfg.on('value',snap=>{ const v=snap.val(); if(v&&v.limites)LIMITES=v.limites; });
+    fbCfg.on('value',snap=>{ const v=snap.val(); if(v){ if(v.limites)LIMITES=v.limites; if(v.users)USERS=v.users; if(currentUser && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } } });
   }catch(e){ console.error(e); setConn('local','Local (error)'); } });
 }
 let fbLoaded=false;
@@ -418,8 +420,16 @@ function saveCfg(){ const t=document.getElementById('cfgFb').value.trim(); if(!t
 
 /* ---- turno / usuario ---- */
 function updateTurnoBtn(){ const b=document.getElementById('turnoBtn'); if(currentUser){ b.textContent='👤 '+currentUser+' · salir'; b.classList.add('on'); } else { b.textContent='👤 Iniciar turno'; b.classList.remove('on'); } }
-function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentUser+'? Ya no podrás registrar hasta iniciar de nuevo.')){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); toast('Turno cerrado'); } } else { document.getElementById('turnoName').value=''; document.getElementById('turnoModal').classList.add('show'); setTimeout(()=>document.getElementById('turnoName').focus(),50); } }
-function doTurno(){ const n=document.getElementById('turnoName').value.trim(); if(n.length<2){ toast('Escribe tu nombre'); return; } currentUser=n; try{localStorage.setItem(USER_KEY,n);}catch(e){} document.getElementById('turnoModal').classList.remove('show'); updateTurnoBtn(); render(); toast('Turno iniciado: '+n); }
+function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentUser+'? Ya no podrás registrar hasta iniciar de nuevo.')){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); toast('Turno cerrado'); } } else {
+    if(!USERS.length){ toast('El supervisor aún no ha creado usuarios'); return; }
+    const sel=document.getElementById('turnoName'); sel.innerHTML=USERS.map(u=>`<option value="${u.name}">${u.name}</option>`).join('');
+    document.getElementById('turnoPin').value=''; document.getElementById('turnoErr').style.display='none';
+    document.getElementById('turnoModal').classList.add('show'); setTimeout(()=>document.getElementById('turnoPin').focus(),50);
+  } }
+function doTurno(){ const n=document.getElementById('turnoName').value; const pin=document.getElementById('turnoPin').value.trim();
+  const u=USERS.find(x=>x.name===n && String(x.pin)===pin);
+  if(!u){ document.getElementById('turnoErr').style.display='block'; return; }
+  currentUser=n; try{localStorage.setItem(USER_KEY,n);}catch(e){} document.getElementById('turnoModal').classList.remove('show'); updateTurnoBtn(); render(); toast('Turno iniciado: '+n); }
 function requireTurno(){ if(!currentUser){ toast('Inicia turno para registrar 👤'); turnoClick(); return false; } return true; }
 /* ---- auditoría de la app (quién movió qué) ---- */
 function appAudit(r, field, label, from, to){
@@ -434,8 +444,9 @@ document.getElementById('sheet').addEventListener('click',e=>{ if(e.target.id===
 /* ---- init ---- */
 try{ currentUser=localStorage.getItem(USER_KEY)||null; }catch(e){}
 document.getElementById('theDate').value=todayISO();
-updateTurnoBtn();
 loadLocal();
+if(currentUser && USERS.length && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} }
+updateTurnoBtn();
 initFirebase();
 render();
 </script>
