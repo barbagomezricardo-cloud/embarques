@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Carga · App de Cargadores</title>
+<style>
+  :root{
+    --bg:#0d1520;--panel:#16212e;--panel2:#1d2a3a;--line:#28394d;--txt:#eaf1f8;--muted:#93a6bc;
+    --accent:#3b9dff;--accent2:#1f6feb;--ok:#2ecc71;--okbg:#123522;--late:#ff5c5c;--latebg:#3a1414;
+    --warn:#ffb020;--warnbg:#3a2c10;--proc:#8a97a8;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:15px;padding-bottom:30px}
+  header{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#11203a,#0d3b66);padding:12px 15px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+  header .t{font-size:16px;font-weight:700}
+  header .s{font-size:11px;color:#b9d4f0}
+  .conn{font-size:11px;padding:4px 9px;border-radius:20px;border:1px solid var(--line);display:inline-flex;gap:6px;align-items:center}
+  .conn .d{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .conn.online .d{background:var(--ok)}.conn.local .d{background:var(--warn)}
+  .gear{background:none;border:none;color:#cfe0f2;font-size:20px;cursor:pointer}
+  main{max-width:640px;margin:0 auto;padding:12px 14px}
+  .datebar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  input,select{background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:10px 11px;border-radius:9px;font-size:15px;font-family:inherit}
+  .datebar input{flex:1}
+  .search{width:100%;margin-bottom:12px}
+  .counts{display:flex;gap:8px;margin-bottom:12px}
+  .cnt{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:9px;text-align:center}
+  .cnt b{font-size:20px;display:block}.cnt span{font-size:11px;color:var(--muted)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px 14px;margin-bottom:11px;cursor:pointer;transition:.12s}
+  .card:active{transform:scale(.99)}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .card .cli{font-size:16px;font-weight:700}
+  .card .meta{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+  .badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+  .b-pend{background:var(--warnbg);color:var(--warn)}.b-proc{background:#212c38;color:var(--proc)}
+  .b-ok{background:var(--okbg);color:var(--ok)}.b-late{background:var(--latebg);color:var(--late)}
+  .chip{display:inline-block;background:#0d1a27;border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:12px;margin-right:5px}
+  .empty{text-align:center;color:var(--muted);padding:44px 10px}
+  /* detail sheet */
+  .sheet{position:fixed;inset:0;background:rgba(4,9,15,.8);display:none;align-items:flex-end;z-index:40}
+  .sheet.show{display:flex}
+  .sheetc{background:var(--panel);border-top-left-radius:20px;border-top-right-radius:20px;width:100%;max-width:640px;margin:0 auto;max-height:92vh;overflow:auto;border:1px solid var(--line)}
+  .sheeth{padding:16px 18px 8px;position:sticky;top:0;background:var(--panel)}
+  .sheeth .cli{font-size:20px;font-weight:800}
+  .sheeth .meta{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.6}
+  .sheetb{padding:6px 18px 20px}
+  .timerbox{background:#0d1a27;border:1px solid var(--line);border-radius:13px;padding:14px;text-align:center;margin:10px 0}
+  .timerbox .big{font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px}
+  .timerbox .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .stamps{display:flex;gap:10px;margin:10px 0;font-size:13px}
+  .stamps .st{flex:1;background:#0d1a27;border:1px solid var(--line);border-radius:10px;padding:9px;text-align:center}
+  .stamps .st b{display:block;font-size:17px;margin-top:2px}
+  .bigbtn{display:block;width:100%;padding:16px;border-radius:13px;border:none;font-size:17px;font-weight:700;color:#fff;margin-top:11px;cursor:pointer}
+  .bigbtn:active{filter:brightness(.92)}
+  .bg-start{background:var(--accent2)}.bg-stop{background:#c0392b}.bg-done{background:#1f8f4d}.bg-dis{background:#33414f;color:#8ea3ba}
+  .statusline{text-align:center;font-size:15px;font-weight:700;padding:10px;border-radius:10px;margin-top:10px}
+  .field{display:flex;flex-direction:column;gap:5px;margin-top:12px}
+  .field label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .closebtn{background:none;border:none;color:var(--muted);font-size:26px;position:absolute;right:14px;top:12px;cursor:pointer}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#123522;color:#c9ffdf;border:1px solid #2ecc71;padding:12px 20px;border-radius:11px;opacity:0;transition:.3s;pointer-events:none;z-index:99;font-weight:600}
+  .toast.show{opacity:1}
+  .modal{position:fixed;inset:0;background:rgba(4,9,15,.8);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
+  .modal.show{display:flex}
+  .modalc{background:var(--panel);border:1px solid var(--line);border-radius:15px;width:100%;max-width:440px;padding:18px}
+  .modalc h3{margin:0 0 10px}
+  textarea{width:100%;background:#0d1a27;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:10px;font-family:ui-monospace,monospace;font-size:12px}
+  .hint{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="t">🐾 Carga de Camiones</div>
+    <div class="s">Registro de tiempos en piso</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="conn local" id="conn"><span class="d"></span><span id="connTxt">Local</span></span>
+    <button class="gear" onclick="openCfg()">⚙</button>
+  </div>
+</header>
+
+<main>
+  <div class="datebar">
+    <span class="hint">Programación del día:</span>
+    <input type="date" id="theDate" onchange="render()">
+  </div>
+  <input class="search" id="q" placeholder="🔍 Buscar cliente, pedido, andén, eco…" oninput="render()">
+  <div class="counts">
+    <div class="cnt"><b id="cPend" style="color:var(--warn)">0</b><span>Pendientes</span></div>
+    <div class="cnt"><b id="cProc" style="color:var(--proc)">0</b><span>En carga</span></div>
+    <div class="cnt"><b id="cDone" style="color:var(--ok)">0</b><span>Terminados</span></div>
+  </div>
+  <div id="list"></div>
+</main>
+
+<!-- DETAIL SHEET -->
+<div class="sheet" id="sheet">
+  <div class="sheetc">
+    <div class="sheeth">
+      <button class="closebtn" onclick="closeSheet()">×</button>
+      <div class="cli" id="dCli">—</div>
+      <div class="meta" id="dMeta"></div>
+    </div>
+    <div class="sheetb" id="sheetBody"></div>
+  </div>
+</div>
+
+<!-- MOTIVO MODAL -->
+<div class="modal" id="motivoModal">
+  <div class="modalc">
+    <h3>⚠️ Carga fuera de tiempo</h3>
+    <p class="hint">La carga superó el tiempo permitido. Indica el motivo del retraso:</p>
+    <select id="motivoSel" style="width:100%;font-size:15px"></select>
+    <button class="bigbtn bg-done" onclick="confirmMotivo()">Guardar y finalizar</button>
+  </div>
+</div>
+
+<!-- CONFIG MODAL -->
+<div class="modal" id="cfgModal">
+  <div class="modalc">
+    <h3>⚙ Conexión</h3>
+    <p class="hint">Pega la misma configuración de Firebase que usa el programador para sincronizar en tiempo real. Vacío = modo local (mismo dispositivo).</p>
+    <textarea id="cfgFb" rows="7" placeholder='{ "apiKey":"…", "databaseURL":"https://…firebaseio.com", "projectId":"…" }'></textarea>
+    <button class="bigbtn bg-start" onclick="saveCfg()">Guardar</button>
+    <button class="bigbtn bg-dis" onclick="document.getElementById('cfgModal').classList.remove('show')">Cerrar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* 👇 PEGA AQUÍ LA MISMA CONFIGURACIÓN DE FIREBASE QUE EL PROGRAMADOR.
+   Reemplaza  null  por el objeto { ... } (debe incluir "databaseURL").
+   En null = modo local (mismo equipo). */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBYa3yZxWML-rwxKwuXp_gTyOTkisUKe8w",
+  authDomain: "embarques-mascotas.firebaseapp.com",
+  databaseURL: "https://embarques-mascotas-default-rtdb.firebaseio.com",
+  projectId: "embarques-mascotas",
+  storageBucket: "embarques-mascotas.firebasestorage.app",
+  messagingSenderId: "860212111367",
+  appId: "1:860212111367:web:6a020f94ef6a468af922a2",
+  measurementId: "G-14343M8CS2"
+};
+
+const DEFAULT_LIMITES={"NISSAN":30,"ISUZU":30,"TORTON":40,"TRAILER 30 TON":50,"TRAILER 34 TON":80};
+let LIMITES={...DEFAULT_LIMITES};
+let DATA=[], fbCfgObj=null;
+let fb=null, fbData=null, fbCfg=null;
+const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', APPCFG_KEY='cargApp_fb';
+let openId=null, tick=null;
+
+/* ---- cálculo compartido ---- */
+function toMin(h){ if(!h)return null; const p=h.split(':'); return (+p[0])*60+(+p[1]); }
+function minToHM(m){ if(m==null||isNaN(m))return ''; m=((Math.round(m)%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+function dur(a,b){ const x=toMin(a),y=toMin(b); if(x==null||y==null)return null; let d=y-x; if(d<0)d+=1440; return d; }
+function limMin(t){ return LIMITES[(t||'').toUpperCase().trim()] ?? null; }
+function nowHM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function elapsedSecs(hhmm){ if(!hhmm)return 0; const p=hhmm.split(':'); const d=new Date(); let s=(d.getHours()*3600+d.getMinutes()*60+d.getSeconds())-((+p[0])*3600+(+p[1])*60); if(s<0)s+=86400; return s; }
+function fmtHMS(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
+function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function isDesp(r){ return r.despachado===true||r.despachado==='1'||r.despachado===1; }
+function state(r){
+  if(isDesp(r) || (r.inicioCarga&&r.finCarga)) return 'done';
+  if(r.inicioCarga && !r.finCarga) return 'proc';
+  return 'pend';
+}
+
+/* ---- render lista ---- */
+function forDate(){
+  const d=document.getElementById('theDate').value;
+  const q=(document.getElementById('q').value||'').toLowerCase();
+  return DATA.filter(r=>{
+    const rd = r.fechaCarga || r.fechaProg;
+    if(d && rd!==d && r.fechaProg!==d) return false;
+    if(q){ const blob=[r.cliente,r.pedido,r.eco,r.anden,r.destino,r.operador].join(' ').toLowerCase(); if(!blob.includes(q))return false; }
+    return true;
+  }).sort((a,b)=> (a.horaProg||'').localeCompare(b.horaProg||''));
+}
+function render(){
+  const rows=forDate();
+  let p=0,pr=0,dn=0;
+  const html=rows.map(r=>{
+    const s=state(r); if(s==='pend')p++; else if(s==='proc')pr++; else dn++;
+    const badge={pend:['b-pend','PENDIENTE'],proc:['b-proc','EN CARGA'],done:['b-ok','TERMINADO']}[s];
+    let extra='';
+    if(s==='done'){ const c=dur(r.inicioCarga,r.finCarga), lim=limMin(r.tipo); if(c!=null&&lim!=null){ const late=c>lim; extra=`<span class="badge ${late?'b-late':'b-ok'}" style="margin-left:6px">${late?'RETRASO':'A TIEMPO'} ${minToHM(c)}</span>`; } }
+    return `<div class="card" onclick="openSheet('${r.id}')">
+      <div class="top"><div><div class="cli">${r.cliente||'(sin cliente)'}</div>
+        <div class="meta"><span class="chip">🕐 ${r.horaProg||'--:--'}</span><span class="chip">Andén ${r.anden||'-'}</span><span class="chip">${r.tipo||'—'}</span></div>
+        <div class="meta">Pedido ${r.pedido||'—'} · ${r.destino||''} ${r.eco?'· '+r.eco:''}</div></div>
+        <div style="text-align:right"><span class="badge ${badge[0]}">${badge[1]}</span>${extra}</div></div></div>`;
+  }).join('');
+  document.getElementById('list').innerHTML = rows.length? html : `<div class="empty">Sin embarques programados para esta fecha.<br><span class="hint">Cambia la fecha arriba o revisa la conexión.</span></div>`;
+  document.getElementById('cPend').textContent=p; document.getElementById('cProc').textContent=pr; document.getElementById('cDone').textContent=dn;
+  if(openId){ const r=DATA.find(x=>x.id===openId); if(r) fillSheet(r); }
+}
+
+/* ---- detalle ---- */
+function openSheet(id){ openId=id; const r=DATA.find(x=>x.id===id); if(!r)return; document.getElementById('sheet').classList.add('show'); fillSheet(r); startTick(); }
+function closeSheet(){ openId=null; document.getElementById('sheet').classList.remove('show'); stopTick(); }
+function fillSheet(r){
+  document.getElementById('dCli').textContent=r.cliente||'(sin cliente)';
+  document.getElementById('dMeta').innerHTML=`Pedido ${r.pedido||'—'} · ${r.destino||''}<br>Andén <b>${r.anden||'-'}</b> · ${r.tipo||'—'} · Eco ${r.eco||'—'} · Prog ${r.horaProg||'--:--'}`;
+  const s=state(r), lim=limMin(r.tipo);
+  let body='';
+  // timer
+  let timerHM='00:00:00', running=false;
+  if(r.inicioCarga && !r.finCarga){ running=true; timerHM=fmtHMS(elapsedSecs(r.inicioCarga)); }
+  else if(r.inicioCarga && r.finCarga){ timerHM=minToHM(dur(r.inicioCarga,r.finCarga)); }
+  body+=`<div class="timerbox"><div class="lbl">${running?'⏱ Cargando… tiempo transcurrido':'Tiempo de carga'}</div><div class="big" id="timerBig" style="color:${running?'var(--warn)':'var(--txt)'}">${timerHM}</div><div class="lbl">Límite ${r.tipo||''}: ${lim!=null?lim+' min':'—'}</div></div>`;
+  body+=`<div class="stamps"><div class="st">Colocación<b>${r.colocacion||'--:--'}</b></div><div class="st">Inicio<b>${r.inicioCarga||'--:--'}</b></div><div class="st">Fin<b>${r.finCarga||'--:--'}</b></div></div>`;
+  // registrar colocación (ingreso al andén) si aún no se ha marcado y no está terminado
+  if(s!=='done' && !r.colocacion){ body+=`<button class="bigbtn bg-dis" onclick="stampColocacion('${r.id}')">📍 Registrar colocación (${nowHM()})</button>`; }
+  // kg cargados y sacos (editable en cualquier momento; fluye al programador)
+  body+=`<div class="stamps" style="margin-top:12px">
+    <div class="field" style="flex:1"><label>Kg cargados</label><input type="number" inputmode="numeric" value="${r.kilos!=null&&r.kilos!==''?r.kilos:''}" placeholder="0" onchange="setField('${r.id}','kilos',this.value)"></div>
+    <div class="field" style="flex:1"><label>Sacos</label><input type="number" inputmode="numeric" value="${r.sacos!=null&&r.sacos!==''?r.sacos:''}" placeholder="0" onchange="setField('${r.id}','sacos',this.value)"></div>
+  </div>`;
+  // status line
+  if(s==='done'){ const c=dur(r.inicioCarga,r.finCarga); if(c!=null&&lim!=null){ const late=c>lim; body+=`<div class="statusline" style="background:${late?'var(--latebg)':'var(--okbg)'};color:${late?'var(--late)':'var(--ok)'}">${late?`⚠ RETRASADO (+${c-lim} min)${r.motivo?' · '+r.motivo:''}`:'✓ A TIEMPO'}</div>`; } }
+  // buttons
+  if(s==='pend'){ body+=`<button class="bigbtn bg-start" onclick="startLoad('${r.id}')">▶ Iniciar carga (${nowHM()})</button>`; }
+  else if(s==='proc'){ body+=`<button class="bigbtn bg-stop" onclick="stopLoad('${r.id}')">■ Finalizar carga</button>`; body+=`<button class="bigbtn bg-dis" onclick="undoStart('${r.id}')">Deshacer inicio</button>`; }
+  else { if(!isDesp(r)) body+=`<button class="bigbtn bg-done" onclick="dispatch('${r.id}')">✓ Marcar despachado</button>`; else body+=`<div class="statusline" style="background:#123522;color:var(--ok)">🚚 Despachado</div>`; }
+  document.getElementById('sheetBody').innerHTML=body;
+}
+function startTick(){ stopTick(); tick=setInterval(()=>{ if(!openId)return; const r=DATA.find(x=>x.id===openId); if(r&&r.inicioCarga&&!r.finCarga){ const el=document.getElementById('timerBig'); if(el)el.textContent=fmtHMS(elapsedSecs(r.inicioCarga)); } },1000); }
+function stopTick(){ if(tick){clearInterval(tick);tick=null;} }
+
+/* ---- acciones ---- */
+function upd(r){ const i=DATA.findIndex(x=>x.id===r.id); if(i>=0)DATA[i]=r; persist(r); render(); }
+function stampColocacion(id){ const r=DATA.find(x=>x.id===id); r.colocacion=nowHM(); upd(r); toast('Colocación registrada 📍'); }
+function setField(id,field,val){ const r=DATA.find(x=>x.id===id); if(!r)return; r[field]=(val===''?'':val); persist(r); const i=DATA.findIndex(x=>x.id===id); if(i>=0)DATA[i]=r; }
+function startLoad(id){ const r=DATA.find(x=>x.id===id); r.inicioCarga=nowHM(); if(!r.colocacion)r.colocacion=nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); upd(r); toast('Carga iniciada ⏱'); }
+function undoStart(id){ const r=DATA.find(x=>x.id===id); r.inicioCarga=''; upd(r); toast('Inicio deshecho'); }
+function stopLoad(id){
+  const r=DATA.find(x=>x.id===id); const fin=nowHM(); const c=dur(r.inicioCarga,fin), lim=limMin(r.tipo);
+  if(c!=null&&lim!=null&&c>lim){ // retraso -> pedir motivo
+    pendingStop={id,fin}; const sel=document.getElementById('motivoSel');
+    sel.innerHTML=MOTIVOS.map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
+    document.getElementById('motivoModal').classList.add('show'); return;
+  }
+  r.finCarga=fin; upd(r); toast('Carga finalizada ✓');
+}
+let pendingStop=null;
+const MOTIVOS=[{cod:"OP-01",desc:"Producto no listo"},{cod:"OP-02",desc:"Falta de personal"},{cod:"OP-03",desc:"Fallo de equipo"},{cod:"TR-01",desc:"Malas condiciones de la unidad"},{cod:"TR-02",desc:"Llegada tardía del chofer"},{cod:"TR-03",desc:"Documentación incompleta"},{cod:"SYS-01",desc:"Facturación / pedido"},{cod:"CAL-01",desc:"Rechazo por calidad"},{cod:"MASC-01",desc:"Planta lo manda tarde"}];
+function confirmMotivo(){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=document.getElementById('motivoSel').value; document.getElementById('motivoModal').classList.remove('show'); upd(r); toast('Finalizado con motivo'); pendingStop=null; }
+function dispatch(id){ const r=DATA.find(x=>x.id===id); r.despachado=true; r.horaSalida=r.horaSalida||nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); upd(r); toast('🚚 Despachado'); }
+
+/* ---- persistencia ---- */
+function persist(r){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fbData){ fbData.child(r.id).set(JSON.parse(JSON.stringify(r))); } }
+function loadLocal(){
+  try{ const c=localStorage.getItem(CFG_KEY); if(c){ const o=JSON.parse(c); if(o.limites)LIMITES=o.limites; } }catch(e){}
+  try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=JSON.parse(d); return; } }catch(e){}
+  DATA=[];
+}
+
+/* ---- firebase ---- */
+function setConn(s,t){ const c=document.getElementById('conn'); c.className='conn '+s; document.getElementById('connTxt').textContent=t; }
+function getAppCfg(){ try{ const s=localStorage.getItem(APPCFG_KEY); if(s) return JSON.parse(s); }catch(e){} if(FIREBASE_CONFIG&&FIREBASE_CONFIG.databaseURL) return FIREBASE_CONFIG; return null; }
+function initFirebase(){
+  const cfg=getAppCfg();
+  if(!cfg||!cfg.databaseURL){ setConn('local','Local'); return; }
+  loadFbScripts(()=>{ try{
+    if(!fb) fb=firebase.initializeApp(cfg,'carg'+Date.now());
+    const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config');
+    setConn('online','Conectando…');
+    fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
+    fbCfg.on('value',snap=>{ const v=snap.val(); if(v&&v.limites)LIMITES=v.limites; });
+  }catch(e){ console.error(e); setConn('local','Local (error)'); } });
+}
+let fbLoaded=false;
+function loadFbScripts(cb){ if(fbLoaded||window.firebase){fbLoaded=true;return cb();}
+  const s1=document.createElement('script'); s1.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
+  s1.onload=()=>{ const s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'; s2.onload=()=>{fbLoaded=true;cb();}; s2.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s2); };
+  s1.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s1);
+}
+function openCfg(){ const c=getAppCfg(); document.getElementById('cfgFb').value=c?JSON.stringify(c,null,2):''; document.getElementById('cfgModal').classList.add('show'); }
+function saveCfg(){ const t=document.getElementById('cfgFb').value.trim(); if(!t){ localStorage.removeItem(APPCFG_KEY); document.getElementById('cfgModal').classList.remove('show'); toast('Modo local'); setConn('local','Local'); return; } try{ const o=JSON.parse(t); localStorage.setItem(APPCFG_KEY,JSON.stringify(o)); document.getElementById('cfgModal').classList.remove('show'); toast('Guardado, conectando…'); initFirebase(); }catch(e){ toast('JSON inválido'); } }
+
+/* ---- util ---- */
+let tT; function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),1600); }
+document.getElementById('sheet').addEventListener('click',e=>{ if(e.target.id==='sheet')closeSheet(); });
+
+/* ---- init ---- */
+document.getElementById('theDate').value=todayISO();
+loadLocal();
+initFirebase();
+render();
+</script>
+</body>
+</html>
