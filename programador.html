@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Programador de Embarques · Planta de Alimentos para Mascotas</title>
+<style>
+  :root{
+    --bg:#0d1520;--panel:#15202e;--panel2:#1b2a3a;--line:#28394d;
+    --txt:#e8eef5;--muted:#8ea3ba;--accent:#3b9dff;--accent2:#1f6feb;
+    --ok:#2ecc71;--okbg:#123522;--late:#ff5c5c;--latebg:#3a1414;
+    --warn:#ffb020;--warnbg:#3a2c10;--proc:#8a97a8;--procbg:#212c38;
+    --purple:#a06bff;--cyan:#28c8d8;
+    --radius:12px;--shadow:0 8px 30px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:13.5px}
+  header{background:linear-gradient(120deg,#11203a,#0d3b66);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+  header h1{font-size:16px;margin:0}
+  header .sub{color:#b9d4f0;font-size:11px;margin-top:1px}
+  .logo{width:36px;height:36px;border-radius:9px;background:#0d3b66;display:grid;place-items:center;font-size:19px;border:1px solid #2f5a8a}
+  .toolbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+  button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);padding:7px 13px;border-radius:8px;font-size:12.5px;transition:.15s}
+  button:hover{border-color:var(--accent);background:#223349}
+  button.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  button.primary:hover{background:#2a7ef0}
+  button.ghost{background:transparent}
+  button.lock{border-color:#3a2c10;color:var(--warn)}
+  button.lock.open{border-color:var(--ok);color:var(--ok)}
+  .conn{font-size:11px;padding:4px 9px;border-radius:20px;border:1px solid var(--line);display:inline-flex;gap:6px;align-items:center}
+  .conn .d{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .conn.online .d{background:var(--ok)} .conn.local .d{background:var(--warn)}
+  main{padding:14px 20px;max-width:1600px;margin:0 auto}
+  .periodbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:11px 14px;margin-bottom:12px}
+  .periodbar .f{display:flex;flex-direction:column;gap:4px}
+  label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  input,select,textarea{background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:7px 9px;border-radius:7px;font-size:12.5px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  .presets{display:flex;gap:5px;flex-wrap:wrap}
+  .presets button{padding:6px 10px;font-size:12px}
+  .presets button.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .spacer{flex:1}
+  .tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
+  .tabs button{border-radius:9px 9px 0 0;border-bottom:2px solid transparent;padding:9px 18px}
+  .tabs button.active{background:var(--panel);border-color:var(--line);border-bottom:2px solid var(--accent);color:#fff}
+  .view{display:none} .view.show{display:block}
+  /* KPIs */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+  .kpi .lbl{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px}
+  .kpi .val{font-size:24px;font-weight:700;margin-top:5px}
+  .kpi .foot{font-size:10.5px;color:var(--muted);margin-top:3px}
+  .kpi.ok .val{color:var(--ok)}.kpi.late .val{color:var(--late)}.kpi.blue .val{color:var(--accent)}.kpi.pur .val{color:var(--purple)}.kpi.warn .val{color:var(--warn)}
+  .bar{height:6px;border-radius:6px;background:#22303f;margin-top:7px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--ok)}
+  /* charts */
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+  .card h3{margin:0 0 12px;font-size:13px;color:#cfe0f2;font-weight:600}
+  .chart{width:100%}
+  /* table */
+  .tablewrap{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:auto;max-height:64vh}
+  table{border-collapse:collapse;width:100%;min-width:1500px}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{position:sticky;top:0;background:#182634;z-index:2;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:#a9bdd4;cursor:pointer}
+  th:hover{color:#fff}
+  tbody tr:hover{background:#172533}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:600;display:inline-block}
+  .p-ok{background:var(--okbg);color:var(--ok)}.p-late{background:var(--latebg);color:var(--late)}
+  .p-proc{background:var(--procbg);color:var(--proc)}.p-warn{background:var(--warnbg);color:var(--warn)}
+  .sem{width:13px;height:13px;border-radius:50%;display:inline-block;vertical-align:middle}
+  .carry{background:#2a1e08!important;border-left:3px solid var(--warn)}
+  .muted{color:var(--muted)} .code{font-family:ui-monospace,monospace;font-size:11.5px}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(4,9,15,.75);display:none;align-items:flex-start;justify-content:center;padding:24px 12px;z-index:60;overflow:auto}
+  .overlay.show{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);width:100%;max-width:900px}
+  .modal.sm{max-width:420px}
+  .modal h2{margin:0;padding:14px 18px;border-bottom:1px solid var(--line);font-size:15px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;padding:16px 18px}
+  .grid .full{grid-column:1/-1}.grid .half{grid-column:span 2}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .sech{grid-column:1/-1;font-size:12px;font-weight:700;color:#cfe0f2;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;background:#12202f;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;gap:8px;margin-top:4px}
+  #execHeader{cursor:pointer;user-select:none}
+  #execHeader:hover{border-color:var(--accent)}
+  .execfld{display:none}
+  .grid.showexec .execfld{display:flex}
+  .grid.showexec #delayWrap{display:none}
+  .calcbox{background:#0d1a27;border:1px dashed var(--line);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+  .calcbox b{color:var(--txt)}
+  .actions{display:flex;justify-content:space-between;gap:10px;padding:13px 18px;border-top:1px solid var(--line)}
+  .hint{font-size:11px;color:var(--muted)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:8px 2px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .protected{display:none} .protected.show{display:inline-flex}
+  footer{padding:14px 20px;color:var(--muted);font-size:11px;text-align:center;border-top:1px solid var(--line);margin-top:18px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#123522;color:#c9ffdf;border:1px solid #2ecc71;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none;z-index:99}
+  .toast.show{opacity:1}
+  @media(max-width:760px){.grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:11px">
+    <div class="logo">🐾</div>
+    <div>
+      <h1>Programador de Embarques</h1>
+      <div class="sub">Planta de alimentos para mascotas · control operacional de carga</div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <span class="conn local" id="conn"><span class="d"></span><span id="connTxt">Local</span></span>
+    <button class="primary" onclick="openForm()">＋ Programar embarque</button>
+    <button onclick="exportCSV()">⬇ CSV</button>
+    <button class="ghost protected" data-prot onclick="exportJSON()">💾 Respaldo</button>
+    <button class="ghost protected" data-prot data-master onclick="document.getElementById('impF').click()">📂 Cargar</button>
+    <input type="file" id="impF" accept=".json" style="display:none" onchange="importJSON(event)">
+    <button class="ghost protected" data-prot data-master onclick="openConfig()">⚙ Configuración</button>
+    <button class="lock" id="lockBtn" onclick="toggleLock()">🔒 Superusuario</button>
+  </div>
+</header>
+
+<main>
+  <!-- PERIOD BAR -->
+  <div class="periodbar">
+    <div class="f"><label>Desde</label><input type="date" id="pFrom" onchange="markCustom();render()"></div>
+    <div class="f"><label>Hasta</label><input type="date" id="pTo" onchange="markCustom();render()"></div>
+    <div class="f"><label>Periodo rápido</label>
+      <div class="presets" id="presets">
+        <button data-p="hoy">Hoy</button><button data-p="ayer">Ayer</button>
+        <button data-p="semana" class="active">Semana</button><button data-p="mes">Mes</button>
+        <button data-p="todo">Todo</button>
+      </div>
+    </div>
+    <div class="f"><label>Ver por fecha</label>
+      <select id="dateMode" onchange="render()">
+        <option value="prog">Programada</option>
+        <option value="carga">Carga real</option>
+      </select></div>
+    <div class="f"><label>Buscar</label><input id="fq" placeholder="Cliente, pedido, eco, destino…" oninput="render()"></div>
+    <div class="spacer"></div>
+    <div class="f"><label>Estatus</label><select id="fest" onchange="render()">
+      <option value="">Todos</option><option>A TIEMPO</option><option>RETRASADO</option><option>EN PROCESO</option><option>PENDIENTE</option>
+    </select></div>
+    <div class="f"><label>Turno</label><select id="fturno" onchange="render()"></select></div>
+  </div>
+
+  <div class="tabs">
+    <button data-v="tabla" class="active" onclick="setView('tabla')">📋 Programación</button>
+    <button data-v="dash" onclick="setView('dash')">📊 Tablero</button>
+    <button data-v="arrastre" onclick="setView('arrastre')">⚠️ Arrastres y pendientes <span id="arrCount" class="pill p-warn" style="margin-left:4px"></span></button>
+    <button data-v="flota" onclick="setView('flota')">🚚 Flota y mantenimiento <span id="flotaCount" class="pill p-late" style="margin-left:4px"></span></button>
+    <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div class="view show" id="v-tabla">
+    <div class="legend">
+      <span><span class="sem" style="background:var(--ok)"></span>Ingreso puntual</span>
+      <span><span class="sem" style="background:var(--warn)"></span>Tolerancia</span>
+      <span><span class="sem" style="background:var(--late)"></span>Fuera de ventana</span>
+      <span><span class="dot" style="background:var(--warn)"></span>Arrastre (cargó otro día)</span>
+      <span class="muted">· Clic en una fila para ver/editar</span>
+    </div>
+    <div class="tablewrap"><table><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div class="view" id="v-dash">
+    <div class="kpis" id="kpis"></div>
+    <div class="card" style="margin-bottom:14px"><h3>🗺️ Mapa de destinos — toneladas por estado</h3><div id="chMapa"></div></div>
+    <div class="charts">
+      <div class="card"><h3>Toneladas por día — programado vs cargado</h3><div class="chart" id="chTon"></div></div>
+      <div class="card"><h3>Estatus de CARGA (equipo)</h3><div class="chart" id="chEst"></div></div>
+      <div class="card"><h3>Estatus de SALIDA (vs programado)</h3><div class="chart" id="chSalida"></div></div>
+      <div class="card"><h3>Embarques por turno</h3><div class="chart" id="chTurno"></div></div>
+      <div class="card"><h3>Top destinos (toneladas)</h3><div class="chart" id="chDest"></div></div>
+      <div class="card"><h3>Motivos de retraso</h3><div class="chart" id="chMotivo"></div></div>
+      <div class="card"><h3>Tiempo promedio de carga por tipo de unidad</h3><div class="chart" id="chTipo"></div></div>
+      <div class="card"><h3>Carga por cargador (toneladas)</h3><div class="chart" id="chCargador"></div></div>
+      <div class="card"><h3>Productividad por cargador (kg/min)</h3><div class="chart" id="chCargadorKgm"></div></div>
+    </div>
+  </div>
+
+  <!-- CARRYOVER VIEW -->
+  <div class="view" id="v-arrastre">
+    <div class="legend"><span class="muted">Camiones programados en el periodo (o antes) que siguen <b>pendientes</b>, y unidades que se <b>cargaron en fecha distinta</b> a la programada. Así no pierdes de vista un carro que se arrastró de un día a otro.</span></div>
+    <div class="tablewrap"><table><thead><tr id="theadA"></tr></thead><tbody id="tbodyA"></tbody></table></div>
+  </div>
+
+  <!-- AUDIT VIEW (solo master) -->
+  <div class="view" id="v-audit">
+    <div class="kpis" id="auditKpis"></div>
+    <div class="legend"><span class="muted">Registro confidencial de <b>ediciones</b> hechas en el programador después de que el dato se capturó. Las filas en <b style="color:var(--late)">rojo</b> son posibles maquillajes: cambios que redujeron el tiempo de carga, bajaron los kilos, o convirtieron un RETRASADO en A TIEMPO.</span></div>
+    <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><input type="checkbox" id="onlyMaq" onchange="renderAudit()" style="width:auto"> Solo posibles maquillajes</label>
+      <div class="spacer"></div>
+      <button class="ghost" onclick="exportAudit()">⬇ Exportar auditoría (CSV)</button>
+    </div>
+    <div class="tablewrap"><table style="min-width:1000px"><thead><tr id="theadAu"></tr></thead><tbody id="tbodyAu"></tbody></table></div>
+  </div>
+
+  <!-- FLOTA VIEW (mantenimiento / seguros / verificaciones) -->
+  <div class="view" id="v-flota">
+    <div class="kpis" id="flotaKpis"></div>
+    <div style="display:flex;gap:8px;margin:2px 0 12px;flex-wrap:wrap;align-items:center">
+      <button class="primary protected" data-prot onclick="openFlotaForm()">＋ Registrar servicio / trámite</button>
+      <button class="ghost" onclick="exportFlotaCSV()">⬇ CSV flota</button>
+      <div class="legend" style="margin:0">
+        <span><span class="dot" style="background:#ff5c5c"></span>Vencido</span>
+        <span><span class="dot" style="background:#ff9f43"></span>Urgente (≤7 días / ≤10 mil km)</span>
+        <span><span class="dot" style="background:#ffd23f"></span>Próximo (≤30 días / ≤25 mil km)</span>
+        <span><span class="dot" style="background:#2ecc71"></span>Al día</span>
+      </div>
+    </div>
+    <div id="flotaCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;margin-bottom:18px"></div>
+    <div class="card" style="padding:0">
+      <h3 style="padding:12px 16px 0">🗂️ Historial de servicios, verificaciones y seguros</h3>
+      <div class="legend" style="padding:0 16px"><span class="muted">Clic en una fila para editar. El estatus de servicio usa el último kilometraje registrado de cada unidad.</span></div>
+      <div class="tablewrap" style="border:none;max-height:52vh"><table style="min-width:980px"><thead><tr id="theadFl"></tr></thead><tbody id="tbodyFl"></tbody></table></div>
+    </div>
+  </div>
+</main>
+
+<!-- FORM MODAL -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modalTitle">Programar embarque</h2>
+    <div class="grid">
+      <div class="sech full">📋 Datos de programación</div>
+      <div class="field"><label>N° de pedido</label><input id="f_pedido"></div>
+      <div class="field half"><label>Cliente</label><input id="f_cliente" list="dl_cli"></div>
+      <div class="field"><label>Familia</label><select id="f_familia"><option value="">—</option><option>M</option><option>MIX</option><option>P</option></select></div>
+      <div class="field"><label>Destino</label><input id="f_destino" list="dl_dest"></div>
+      <div class="field"><label>Estado destino</label><input id="f_estado"></div>
+      <div class="field"><label>Operador / chofer</label><input id="f_operador"></div>
+      <div class="field"><label># Económico</label><input id="f_eco" oninput="recalc()"></div>
+      <div class="field"><label>Tipo de unidad</label><select id="f_tipo" onchange="recalc()"></select></div>
+      <div class="field"><label>Peso programado (kg)</label><input type="number" id="f_peso"></div>
+      <div class="field"><label>Andén</label><input id="f_anden"></div>
+      <div class="field"><label>Fecha programada</label><input type="date" id="f_fechaProg" onchange="recalc()"></div>
+      <div class="field"><label>Hora de cita (programada)</label><input type="time" id="f_horaProg" onchange="recalc()"></div>
+      <div class="field"><label>Salida programada</label><input type="time" id="f_horaSalidaProg" onchange="recalc()"></div>
+      <div class="field"><label>Turno</label><select id="f_turno"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>A</option><option>B</option><option>C</option></select></div>
+      <div class="field"><label>Cargador 1</label><input id="f_cargador" list="dl_carg"></div>
+      <div class="field"><label>Cargador 2</label><input id="f_cargador2"></div>
+      <div class="field"><label>Montacarguista</label><input id="f_monta"></div>
+      <div class="field"><label>Candado</label><input id="f_candado"></div>
+
+      <div class="sech full" id="execHeader" onclick="toggleExec()">
+        🚚 Ejecución de carga <span style="font-weight:400;color:var(--muted)">— normalmente la registran los cargadores en la app (opcional)</span>
+        <span id="execToggle" style="margin-left:auto;color:var(--accent)">▸ Mostrar</span>
+      </div>
+      <div class="field execfld"><label>Colocación (ingreso)</label><input type="time" id="f_colocacion" onchange="recalc()"></div>
+      <div class="field execfld"><label>Inicio de carga</label><input type="time" id="f_inicioCarga" onchange="recalc()"></div>
+      <div class="field execfld"><label>Fin de carga</label><input type="time" id="f_finCarga" onchange="recalc()"></div>
+      <div class="field execfld"><label>Liberación SAP</label><input type="time" id="f_libSAP"></div>
+      <div class="field execfld"><label>Hora de salida</label><input type="time" id="f_horaSalida"></div>
+      <div class="field execfld"><label>Kilos cargados</label><input type="number" id="f_kilos" oninput="recalc()"></div>
+      <div class="field execfld"><label>Sacos</label><input type="number" id="f_sacos"></div>
+      <div class="field execfld"><label>Fecha de carga real</label><input type="date" id="f_fechaCarga"></div>
+      <div class="field execfld"><label>¿Despachado?</label><select id="f_despachado"><option value="">No</option><option value="1">Sí</option></select></div>
+      <div class="field half execfld" id="delayWrap" style="display:none"><label>Motivo de retraso</label><select id="f_motivo"></select></div>
+      <div class="field full"><label>Observaciones</label><textarea id="f_obs" rows="2"></textarea></div>
+      <div class="calcbox full" id="calcbox"></div>
+    </div>
+    <div class="actions">
+      <button class="ghost protected" data-prot data-master style="color:var(--late)" id="delBtn" onclick="deleteRow()">🗑 Borrar (master)</button>
+      <button class="ghost protected" data-prot style="color:var(--warn)" id="cancelBtn" onclick="cancelPedido()">🚫 Cancelar pedido</button>
+      <div style="display:flex;gap:9px;margin-left:auto">
+        <button class="ghost" onclick="closeForm()">Cerrar</button>
+        <button class="primary protected" data-prot id="saveBtn" onclick="saveRow()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN MODAL -->
+<div class="overlay" id="loginOverlay">
+  <div class="modal sm">
+    <h2>🔒 Acceso de superusuario</h2>
+    <div style="padding:16px 18px">
+      <p class="hint" style="margin-top:0">Ingresa la contraseña para habilitar menús críticos: configuración de tiempos, respaldos, eliminación y restablecer datos.</p>
+      <input type="password" id="pwd" placeholder="Contraseña" style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="pwdErr" style="color:var(--late);font-size:12px;margin-top:6px;display:none">Contraseña incorrecta</div>
+    </div>
+    <div class="actions"><span class="hint">Por defecto: <b>admin123</b></span>
+      <button class="primary" onclick="doLogin()">Entrar</button></div>
+  </div>
+</div>
+
+<!-- CONFIG MODAL -->
+<div class="overlay" id="cfgOverlay">
+  <div class="modal">
+    <h2>⚙ Configuración (superusuario)</h2>
+    <div style="padding:16px 18px">
+      <h3 style="margin:0 0 8px;font-size:13px">Tiempos máximos de carga por tipo de unidad</h3>
+      <div id="cfgBody"></div>
+      <hr style="border-color:var(--line);margin:16px 0">
+      <h3 style="margin:0 0 8px;font-size:13px">Tolerancia del semáforo de ingreso</h3>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <div class="field"><label>Puntual: hasta (min de diferencia)</label><input type="number" id="cfgSemV" style="width:90px"></div>
+        <div class="field"><label>Tolerancia: hasta (min)</label><input type="number" id="cfgSemA" style="width:90px"></div>
+        <span class="hint">Más de eso = fuera de ventana (rojo).</span>
+      </div>
+      <hr style="border-color:var(--line);margin:16px 0">
+      <h3 style="margin:0 0 8px;font-size:13px">Seguridad y datos</h3>
+      <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+        <div class="field"><label>Cambiar contraseña</label><input type="text" id="cfgPwd" placeholder="Nueva contraseña"></div>
+        <button class="ghost" onclick="savePwd()">Actualizar contraseña</button>
+        <button class="ghost" onclick="resetData()">↺ Restablecer a datos de ejemplo</button>
+        <button class="ghost" style="color:var(--late);border-color:var(--late)" onclick="clearAll()">🗑️ Vaciar todo (empezar de cero)</button>
+      </div>
+      <div id="masterCfg" style="display:none;margin-top:10px;padding:10px;border:1px dashed var(--late);border-radius:8px">
+        <div style="font-size:12px;color:var(--late);margin-bottom:6px">🕵️ Área master (solo tú ves esto)</div>
+        <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+          <div class="field"><label>Cambiar contraseña MASTER</label><input type="text" id="cfgMasterPwd" placeholder="Nueva contraseña master"></div>
+          <button class="ghost" onclick="saveMasterPwd()">Actualizar master</button>
+        </div>
+        <hr style="border-color:var(--line);margin:12px 0">
+        <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">👥 Usuarios de la app (cargadores) — nombre y PIN</div>
+        <p class="hint" style="margin-top:0">Solo estos usuarios podrán registrar en la app, con su PIN. Se sincronizan a los celulares.</p>
+        <div id="usersBody"></div>
+      </div>
+      <hr style="border-color:var(--line);margin:16px 0">
+      <h3 style="margin:0 0 8px;font-size:13px">Conexión en la nube (Firebase)</h3>
+      <p class="hint" style="margin-top:0">Pega aquí la configuración de tu proyecto de Firebase para sincronizar en tiempo real con la app de cargadores. Si lo dejas vacío, funciona en modo local en este equipo.</p>
+      <textarea id="cfgFb" rows="7" style="width:100%;font-family:ui-monospace,monospace;font-size:11.5px" placeholder='{
+  "apiKey": "…",
+  "databaseURL": "https://TU-PROYECTO-default-rtdb.firebaseio.com",
+  "projectId": "…"
+}'></textarea>
+    </div>
+    <div class="actions"><span class="hint">Los cambios se guardan y se sincronizan.</span>
+      <button class="primary" onclick="saveConfig()">Guardar configuración</button></div>
+  </div>
+</div>
+
+<!-- FLOTA FORM MODAL -->
+<div class="overlay" id="flotaOverlay">
+  <div class="modal" style="max-width:640px">
+    <h2 id="flotaModalTitle">Registrar servicio / trámite</h2>
+    <div class="grid" style="grid-template-columns:repeat(2,1fr)">
+      <div class="field"><label>Fecha del registro</label><input type="date" id="fl_fecha"></div>
+      <div class="field"><label>Tipo de unidad</label><input id="fl_tipo" list="dl_flTipo" placeholder="TRAILER, TORTON…"></div>
+      <div class="field"><label># Económico</label><input id="fl_eco" list="dl_flEco" placeholder="1431" oninput="flotaRecalc()"></div>
+      <div class="field"><label>Tipo de trámite / servicio</label><select id="fl_tramite" onchange="flotaTramiteChange()"></select></div>
+      <div class="field"><label>Kilometraje actual</label><input type="number" id="fl_kmActual" placeholder="358296" oninput="flotaRecalc()"></div>
+      <div class="field"><label>Próximo kilometraje (servicio)</label><input type="number" id="fl_kmProximo" placeholder="opcional (auto +20,000)"></div>
+      <div class="field half"><label>Vencimiento (seguro / verificación)</label><input type="date" id="fl_venc"></div>
+      <div class="field full"><label>Notas / observaciones</label><textarea id="fl_notas" rows="2"></textarea></div>
+      <div class="calcbox full" id="flotaCalc"></div>
+    </div>
+    <div class="actions">
+      <button class="ghost protected" data-prot style="color:var(--late)" id="flotaDelBtn" onclick="deleteFlotaRow()">🗑 Borrar registro</button>
+      <div style="display:flex;gap:9px;margin-left:auto">
+        <button class="ghost" onclick="closeFlotaForm()">Cerrar</button>
+        <button class="primary protected" data-prot onclick="saveFlotaRow()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<datalist id="dl_cli"></datalist><datalist id="dl_dest"></datalist><datalist id="dl_carg"></datalist>
+<datalist id="dl_flTipo"></datalist><datalist id="dl_flEco"></datalist>
+<div class="toast" id="toast"></div>
+<footer id="footer">Programador de embarques · modo local. Conecta Firebase en ⚙ Configuración para sincronizar con la app de cargadores.</footer>
+
+<script>
+/* ============================================================
+   👇 PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE (una sola vez)
+   Reemplaza  null  por el objeto { ... } que copiaste de Firebase.
+   Debe incluir "databaseURL". Ejemplo:
+   const FIREBASE_CONFIG = {
+     apiKey:"…", databaseURL:"https://tu-proyecto-default-rtdb.firebaseio.com", projectId:"…"
+   };
+   Si lo dejas en null, funciona en modo local (un solo equipo).
+============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBYa3yZxWML-rwxKwuXp_gTyOTkisUKe8w",
+  authDomain: "embarques-mascotas.firebaseapp.com",
+  databaseURL: "https://embarques-mascotas-default-rtdb.firebaseio.com",
+  projectId: "embarques-mascotas",
+  storageBucket: "embarques-mascotas.firebasestorage.app",
+  messagingSenderId: "860212111367",
+  appId: "1:860212111367:web:6a020f94ef6a468af922a2",
+  measurementId: "G-14343M8CS2"
+};
+
+/* ================= CONFIG / CATÁLOGOS ================= */
+const DEFAULT_LIMITES = {"NISSAN":30,"ISUZU":30,"TORTON":40,"TRAILER 30 TON":50,"TRAILER 34 TON":80};
+let CFG = { limites:{...DEFAULT_LIMITES}, semV:15, semA:30, pwd:"admin123", masterPwd:"master-2026", firebase:null, users:[{name:"CARGADOR 1",pin:"1111"}] };
+const MOTIVOS = [
+  {cod:"OP-01",desc:"Falta de mercancía / Producto no listo"},
+  {cod:"OP-02",desc:"Falta de personal (montacarguistas/auxiliares)"},
+  {cod:"OP-03",desc:"Fallo de equipo (montacargas/rampa)"},
+  {cod:"OP-04",desc:"Reproceso / reacomodo de tarima"},
+  {cod:"OP-05",desc:"Producto mal etiquetado / cambio de lote"},
+  {cod:"OP-06",desc:"Montacargas ocupado en otra maniobra"},
+  {cod:"OP-07",desc:"Andén ocupado / saturación de andenes"},
+  {cod:"OP-08",desc:"Falta de tarimas / material de empaque"},
+  {cod:"TR-01",desc:"Malas condiciones de la unidad"},
+  {cod:"TR-02",desc:"Llegada tardía (pérdida de ventana de cita)"},
+  {cod:"TR-03",desc:"Documentación incompleta del chofer"},
+  {cod:"TR-04",desc:"Chofer no se presentó / cambió unidad"},
+  {cod:"TR-05",desc:"Unidad sucia / requiere lavado o fumigación"},
+  {cod:"SYS-01",desc:"Falta de pagos / facturación / pedido"},
+  {cod:"SYS-02",desc:"Caída de sistema (SAP/WMS)"},
+  {cod:"SYS-03",desc:"Error en pedido / diferencia de cantidades"},
+  {cod:"CAL-01",desc:"Rechazo por calidad"},
+  {cod:"CAL-02",desc:"Producto dañado / húmedo detectado"},
+  {cod:"MEC-01",desc:"Falla mecánica de la unidad"},
+  {cod:"CLI-01",desc:"Cambio de última hora del cliente"},
+  {cod:"CLI-02",desc:"Cita reprogramada por el cliente"},
+  {cod:"CLIMA-01",desc:"Lluvia / condiciones climáticas"},
+  {cod:"SEG-01",desc:"Revisión de seguridad / inspección"},
+  {cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"},
+];
+// mapa código -> descripción, para mostrar el motivo específico en tablero y tabla
+const MOTIVO_MAP = Object.fromEntries(MOTIVOS.map(m=>[m.cod, m.desc]));
+// descripción legible: si es un código conocido devuelve su texto; si es texto libre lo deja igual
+function motivoDesc(v){ if(v==null||v==='') return ''; const s=String(v).trim(); return MOTIVO_MAP[s] || MOTIVO_MAP[s.toUpperCase()] || s; }
+// etiqueta completa "COD · descripción" para tooltips/celdas
+function motivoFull(v){ if(v==null||v==='') return ''; const s=String(v).trim(); return MOTIVO_MAP[s] ? (s+' · '+MOTIVO_MAP[s]) : s; }
+
+/* ================= PARÁMETROS DE FLOTA (mantenimiento / seguros / verificaciones) ================= */
+/* Ventanas de alerta (mismas reglas que el Excel de Control de Flota).
+   Fechas (Seguro / Verificaciones): días para vencer.  Servicio: kilómetros restantes. */
+const FLOTA_PARAMS = {
+  kmInterval:20000,  // cada cuántos km toca servicio (si no capturas "Próximo km")
+  kmUrg:10000,       // <= km restantes  -> URGENTE
+  kmProx:25000,      // <= km restantes  -> PRÓXIMO
+  dVenc:0,           // <= días -> VENCIDO
+  dUrg:7,            // <= días -> URGENTE
+  dProx:30           // <= días -> PRÓXIMO
+};
+const FLOTA_TRAMITES = ["Servicio","Seguro","Verificacion de humo","Verificacion de fisiomecanica","Otro"];
+const FLOTA_ST = {
+  VENCIDO:{t:'VENCIDO',   c:'#ff5c5c', bg:'#3a1414', sev:5},
+  URGENTE:{t:'URGENTE',   c:'#ff9f43', bg:'#3a2610', sev:4},
+  PROXIMO:{t:'PRÓXIMO',   c:'#ffd23f', bg:'#39340f', sev:3},
+  ALDIA:  {t:'AL DÍA',    c:'#2ecc71', bg:'#123522', sev:1},
+  SIN:    {t:'SIN REGISTRO',c:'#8ea3ba',bg:'#212c38', sev:2}
+};
+// datos semilla tomados del Excel "Control de Flota y Alertas de Mantenimiento"
+const FLOTA_SEED = [
+  {id:'fl1',fecha:'2026-07-18',tipo:'TRAILER',eco:'1431',tramite:'Servicio',kmActual:358296,kmProximo:378296,vencimiento:'',notas:'Póliza HDI'},
+  {id:'fl2',fecha:'2026-07-21',tipo:'TRAILER',eco:'1431',tramite:'Seguro',kmActual:'',kmProximo:'',vencimiento:'2026-12-09',notas:'Póliza Quálitas renovada'},
+  {id:'fl3',fecha:'2026-07-21',tipo:'TRAILER',eco:'1431',tramite:'Verificacion de humo',kmActual:'',kmProximo:'',vencimiento:'2026-07-22',notas:'Verificación Ambiental CDMX - Holograma 0'},
+  {id:'fl4',fecha:'2026-07-21',tipo:'TRAILER',eco:'1431',tramite:'Verificacion de fisiomecanica',kmActual:'',kmProximo:'',vencimiento:'2026-07-23',notas:'Mantenimiento preventivo 250 hrs'},
+  {id:'fl5',fecha:'2026-07-21',tipo:'TORTON',eco:'2081',tramite:'Servicio',kmActual:302693,kmProximo:322693,vencimiento:'',notas:'Frenos y alineación'},
+  {id:'fl6',fecha:'2026-07-21',tipo:'TORTON',eco:'2081',tramite:'Seguro',kmActual:'',kmProximo:'',vencimiento:'2026-12-09',notas:'Próxima verificación del periodo'},
+  {id:'fl7',fecha:'2026-07-21',tipo:'TORTON',eco:'2081',tramite:'Verificacion de humo',kmActual:'',kmProximo:'',vencimiento:'2026-07-25',notas:''},
+  {id:'fl8',fecha:'2026-07-21',tipo:'TORTON',eco:'2081',tramite:'Verificacion de fisiomecanica',kmActual:'',kmProximo:'',vencimiento:'2026-07-25',notas:''}
+];
+const SEED = [{"id": "p0", "pedido": 387191, "cliente": "NOE MEDINA CARRILLO", "destino": "ZACATECAS", "estado": "AGUASCALIENTES", "peso": 32994, "operador": "RAFAEL LARA (CARFER)", "eco": "TCF-27", "tipo": "TRAILER 34 TON", "familia": "MIX", "fechaProg": "2026-06-29", "horaProg": "01:00", "anden": 1, "cargador": "415", "cargador2": "", "monta": "11683", "monta2": "", "candado": "MASCOTAS", "colocacion": "02:00", "inicioCarga": "02:43", "finCarga": "03:22", "libSAP": "03:39", "horaSalida": "04:00", "turno": "3", "kilos": 32994, "sacos": "", "motivo": "RECHAZO POR CALIDAD", "obs": "", "fechaCarga": "2026-06-29", "despachado": true}, {"id": "p1", "pedido": 386995, "cliente": "GUADALUPE LILIANA ZARCO MORALES", "destino": "ARTEAGA", "estado": "BAJA CALIFORNIA", "peso": 18019, "operador": "JOSE ANTONIO NAVARRO GARCIA", "eco": "TO-59", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-06-30", "horaProg": "02:00", "anden": 1, "cargador": "1121", "cargador2": "", "monta": "10701", "monta2": "", "candado": "13061", "colocacion": "01:50", "inicioCarga": "02:43", "finCarga": "03:22", "libSAP": "03:39", "horaSalida": "03:39", "turno": "3", "kilos": 18019, "sacos": "", "motivo": "FALLA MECANICA", "obs": "", "fechaCarga": "2026-06-30", "despachado": true}, {"id": "p2", "pedido": 387218, "cliente": "SALVADOR VELAZQUEZ GARCIA", "destino": "COLIMA", "estado": "BAJA CALIFORNIA SUR", "peso": 14375, "operador": "OSCAR OSVALDO ORTEGA MENDOZA", "eco": "TO-70", "tipo": "TRAILER 30 TON", "familia": "M", "fechaProg": "2026-07-01", "horaProg": "03:00", "anden": 3, "cargador": "10361", "cargador2": "950", "monta": "RIGO", "monta2": "11827", "candado": "13092", "colocacion": "14:52", "inicioCarga": "17:07", "finCarga": "20:09", "libSAP": "20:09", "horaSalida": "20:09", "turno": "2", "kilos": 14375, "sacos": "", "motivo": "MASCOTAS LO MANDA TARDE", "obs": "", "fechaCarga": "2026-07-01", "despachado": true}, {"id": "p3", "pedido": 387222, "cliente": "IGNACIO LOPEZ VILLA", "destino": "COLIMA", "estado": "CAMPECHE", "peso": 3600, "operador": "OSCAR OSVALDO ORTEGA MENDOZA", "eco": "TO-70", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-02", "horaProg": "03:00", "anden": 2, "cargador": "10850", "cargador2": "", "monta": "10416", "monta2": "", "candado": "13097", "colocacion": "14:52", "inicioCarga": "17:07", "finCarga": "20:09", "libSAP": "20:09", "horaSalida": "20:09", "turno": "2", "kilos": 3600, "sacos": "", "motivo": "FALLA MECANICA", "obs": "", "fechaCarga": "2026-07-02", "despachado": true}, {"id": "p4", "pedido": 387351, "cliente": "FRANCISCO JAVIER PARADA ROMO", "destino": "AGUASCALIENTES", "estado": "CHIAPAS", "peso": 18034, "operador": "ALEJANDRO SOLIS OCHOA", "eco": "TO-66", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-03", "horaProg": "04:00", "anden": 3, "cargador": "12099", "cargador2": "", "monta": "600", "monta2": "", "candado": "", "colocacion": "23:53", "inicioCarga": "00:59", "finCarga": "04:35", "libSAP": "04:39", "horaSalida": "04:39", "turno": "3", "kilos": 18034, "sacos": "", "motivo": "LOGISTCIA DE CASA", "obs": "", "fechaCarga": "2026-07-04", "despachado": true}, {"id": "p5", "pedido": 387360, "cliente": "JOSE LUIS GARCIA OLVERA", "destino": "TECARIO", "estado": "CHIHUAHUA", "peso": 18000, "operador": "ADRIAN MACIAS", "eco": "TO-42", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-04", "horaProg": "04:00", "anden": 4, "cargador": "181", "cargador2": "", "monta": "11857", "monta2": "", "candado": "13031", "colocacion": "20:11", "inicioCarga": "23:54", "finCarga": "02:50", "libSAP": "02:58", "horaSalida": "02:58", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-04", "despachado": true}, {"id": "p6", "pedido": 387343, "cliente": "CARLOS RAYA ESPINOSA", "destino": "URUAPAN", "estado": "COAHUILA", "peso": 18035, "operador": "CHRISTIAN RUIZ RODRIGUEZ", "eco": "TO-56", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-05", "horaProg": "04:00", "anden": 5, "cargador": "263", "cargador2": "181", "monta": "12026", "monta2": "767", "candado": "", "colocacion": "00:52", "inicioCarga": "02:43", "finCarga": "04:22", "libSAP": "04:28", "horaSalida": "04:28", "turno": "3", "kilos": 18035, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-05", "despachado": true}, {"id": "p7", "pedido": 387224, "cliente": "MARIA GUADALUPE RODRIGUEZ RODRIGUEZ", "destino": "CASTILLO", "estado": "COLIMA", "peso": 32000, "operador": "PEDRO GONZALEZ (CARFER)", "eco": "TCF-04", "tipo": "TRAILER 34 TON", "familia": "M", "fechaProg": "2026-07-06", "horaProg": "05:00", "anden": 8, "cargador": "1997", "cargador2": "257", "monta": "", "monta2": "12069", "candado": "13013", "colocacion": "23:53", "inicioCarga": "00:59", "finCarga": "04:35", "libSAP": "04:39", "horaSalida": "04:39", "turno": "3", "kilos": 32000, "sacos": "", "motivo": "ALTA DEMANDA DE PRODUCTO", "obs": "", "fechaCarga": "2026-07-06", "despachado": true}, {"id": "p8", "pedido": 387127, "cliente": "MANUEL ALEJANDRO AGUILERA PRIETO", "destino": "JUVENTINO ROSAS", "estado": "DURANGO", "peso": 30000, "operador": "GERARDO CEJA (CARFER)", "eco": "TCF-19", "tipo": "TRAILER 34 TON", "familia": "MIX", "fechaProg": "2026-07-07", "horaProg": "05:00", "anden": 9, "cargador": "63", "cargador2": "", "monta": "10606", "monta2": "", "candado": "13125", "colocacion": "20:11", "inicioCarga": "23:54", "finCarga": "02:50", "libSAP": "02:58", "horaSalida": "02:58", "turno": "3", "kilos": 30000, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-07", "despachado": true}, {"id": "p9", "pedido": 387223, "cliente": "DUACER", "destino": "VALLE DE GUADALUPE", "estado": "ESTADO DE MEXICO", "peso": 35067, "operador": "JUAN JOSE MARTINEZ (CARFER)", "eco": "TCF-08", "tipo": "TRAILER 34 TON", "familia": "P", "fechaProg": "2026-07-08", "horaProg": "05:00", "anden": 6, "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "20:11", "inicioCarga": "23:54", "finCarga": "02:50", "libSAP": "02:58", "horaSalida": "02:58", "turno": "3", "kilos": 35067, "sacos": "", "motivo": "ALTA DEMANDA DE PRODUCTO", "obs": "", "fechaCarga": "2026-07-08", "despachado": true}, {"id": "p10", "pedido": 387254, "cliente": "JUANITA GUTIERREZ CAMACHO", "destino": "AMECA", "estado": "GUANAJUATO", "peso": 18005, "operador": "JOSE ANTONIO SAHAGUN MARTINEZ", "eco": "TO-46", "tipo": "TRAILER 30 TON", "familia": "M", "fechaProg": "2026-07-09", "horaProg": "05:00", "anden": 11, "cargador": "1513", "cargador2": "", "monta": "RIGO", "monta2": "", "candado": "13099", "colocacion": "00:52", "inicioCarga": "02:43", "finCarga": "04:22", "libSAP": "04:28", "horaSalida": "04:28", "turno": "3", "kilos": 18005, "sacos": "", "motivo": "LOGISTCIA DE CASA", "obs": "", "fechaCarga": "2026-07-09", "despachado": true}, {"id": "p11", "pedido": 387253, "cliente": "GUSTAVO GARCIA RODRIGUEZ", "destino": "ANTUNEZ MPIO PARACUARO ", "estado": "GUERRERO", "peso": 18010, "operador": "GILBERTO VILLARRUEL RAMIREZ", "eco": "TC-17", "tipo": "TORTON", "familia": "P", "fechaProg": "2026-06-29", "horaProg": "05:00", "anden": 7, "cargador": "1851", "cargador2": "10089", "monta": "10416", "monta2": "10606", "candado": "13022", "colocacion": "03:35", "inicioCarga": "03:45", "finCarga": "04:43", "libSAP": "04:50", "horaSalida": "04:50", "turno": "3", "kilos": 18010, "sacos": "", "motivo": "UNIDAD EN OTRO VIAJE", "obs": "", "fechaCarga": "2026-06-29", "despachado": true}, {"id": "p12", "pedido": 387092, "cliente": "GERARDO RAUL BARRAGAN BARRAGAN", "destino": "AYUTLA", "estado": "HIDALGO", "peso": 18035, "operador": "MARIO GODÍNEZ LOPEZ", "eco": "TO-51", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-06-30", "horaProg": "05:00", "anden": 13, "cargador": "950", "cargador2": "", "monta": "11683", "monta2": "", "candado": "13032", "colocacion": "03:35", "inicioCarga": "03:45", "finCarga": "04:43", "libSAP": "04:50", "horaSalida": "04:50", "turno": "3", "kilos": 18035, "sacos": "", "motivo": "FALLA MECANICA", "obs": "", "fechaCarga": "2026-06-30", "despachado": true}, {"id": "p13", "pedido": 387101, "cliente": "LUIS ERNESTO QUEZADA ZARAGOZA", "destino": "CD. MANUEL DOBLADO", "estado": "JALISCO", "peso": 18010, "operador": "VICTOR MANUEL CHAVARRIA GODINEZ", "eco": "TO-60", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-01", "horaProg": "05:00", "anden": 8, "cargador": "415", "cargador2": "", "monta": "12069", "monta2": "", "candado": "MASCOTAS", "colocacion": "03:35", "inicioCarga": "03:45", "finCarga": "04:43", "libSAP": "04:50", "horaSalida": "04:50", "turno": "3", "kilos": 18010, "sacos": "", "motivo": "FALLA MECANICA", "obs": "", "fechaCarga": "2026-07-02", "despachado": true}, {"id": "p14", "pedido": 386955, "cliente": "YESENIA CAMPOS FIGUEROA", "destino": "COLOTLAN", "estado": "MICHOACAN", "peso": 18000, "operador": "JULIAN ZUNO", "eco": "TO-27", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-02", "horaProg": "05:00", "anden": 10, "cargador": "1729", "cargador2": "", "monta": "11824", "monta2": "", "candado": "13027", "colocacion": "03:35", "inicioCarga": "03:45", "finCarga": "04:43", "libSAP": "04:50", "horaSalida": "04:50", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "UNIDAD EN OTRO VIAJE", "obs": "", "fechaCarga": "2026-07-02", "despachado": true}, {"id": "p15", "pedido": 386831, "cliente": "SAUL CLARETT CARO VELAZQUEZ", "destino": "GUADALAJARA", "estado": "MORELOS", "peso": 18000, "operador": "ALEJANDRO MARTINEZ LOPEZ", "eco": "TO-35", "tipo": "TRAILER 30 TON", "familia": "M", "fechaProg": "2026-07-03", "horaProg": "05:00", "anden": 11, "cargador": "10850", "cargador2": "1417", "monta": "12026", "monta2": "767", "candado": "13018", "colocacion": "03:35", "inicioCarga": "03:45", "finCarga": "04:43", "libSAP": "04:50", "horaSalida": "04:50", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "PECUARIOS LO MANDA TARDE", "obs": "", "fechaCarga": "2026-07-03", "despachado": true}, {"id": "p16", "pedido": 387366, "cliente": "DANA SUZET RICO GUERRERO", "destino": "JERECUARO", "estado": "NAYARIT", "peso": 18015, "operador": "DAVID MALDONADO GONZALEZ", "eco": "TO-48", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-04", "horaProg": "05:00", "anden": 12, "cargador": "1490", "cargador2": "1851", "monta": "1732", "monta2": "10416", "candado": "13019", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18015, "sacos": "", "motivo": "MASCOTAS LO MANDA TARDE", "obs": "", "fechaCarga": "2026-07-04", "despachado": true}, {"id": "p17", "pedido": 387357, "cliente": "OSCAR ZAMORA VILLASEÑOR", "destino": "LAGOS DE MORENO", "estado": "NUEVO LEON", "peso": 18005, "operador": "OSWALDO RAMIREZ", "eco": "TO-73", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-05", "horaProg": "05:00", "anden": 18, "cargador": "1313", "cargador2": "", "monta": "11827", "monta2": "", "candado": "13030", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18005, "sacos": "", "motivo": "PECUARIOS LO MANDA TARDE", "obs": "", "fechaCarga": "2026-07-05", "despachado": true}, {"id": "p18", "pedido": 387363, "cliente": "BALANCEADOS EL RINCON", "destino": "LEON ", "estado": "OAXACA", "peso": 18000, "operador": "EDUARDO MENDEZ", "eco": "TO-38", "tipo": "TRAILER 30 TON", "familia": "MIX", "fechaProg": "2026-07-06", "horaProg": "05:00", "anden": 19, "cargador": "1546", "cargador2": "", "monta": "JULIO", "monta2": "", "candado": "13015", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "MASCOTAS LO MANDA TARDE", "obs": "", "fechaCarga": "2026-07-06", "despachado": true}, {"id": "p19", "pedido": 387026, "cliente": "REGINALDO BUCIO BARAJAS", "destino": "MORELIA", "estado": "PUEBLA", "peso": 18000, "operador": "EMMANNUEL MATA", "eco": "TO-33", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-07", "horaProg": "05:00", "anden": "AF", "cargador": "10850", "cargador2": "", "monta": "10416", "monta2": "", "candado": "13036", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "UNIDAD EN OTRO VIAJE", "obs": "", "fechaCarga": "2026-07-07", "despachado": true}, {"id": "p20", "pedido": 387137, "cliente": "ABARROTERA DE PATZCUARO", "destino": "PATZCUARO", "estado": "QUERETARO", "peso": 18000, "operador": "JOSE LUIS VELAZQUEZ", "eco": "TO-57", "tipo": "TRAILER 30 TON", "familia": "M", "fechaProg": "2026-07-08", "horaProg": "05:00", "anden": "LB", "cargador": "257", "cargador2": "", "monta": "11683", "monta2": "", "candado": "13029", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "FALLA MECANICA", "obs": "", "fechaCarga": "2026-07-08", "despachado": true}, {"id": "p21", "pedido": 387192, "cliente": "LETICIA HERNADEZ RICO", "destino": "PUREPERO", "estado": "QUINTANA ROO", "peso": 17990, "operador": "JOSE MANUEL HARO", "eco": "TO-47", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-09", "horaProg": "05:00", "anden": 2, "cargador": "10850", "cargador2": "", "monta": "11683", "monta2": "", "candado": "13012", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 17990, "sacos": "", "motivo": "LOGISTCIA DE CASA", "obs": "", "fechaCarga": "2026-07-09", "despachado": true}, {"id": "p22", "pedido": 387209, "cliente": "ENRIQUE GUTIERREZ ORNELAS", "destino": "SANTA ROSA JAUREGUI", "estado": "SAN LUIS POTOSÍ", "peso": 18000, "operador": "LUIS ERNESTO TREJO MARTINEZ", "eco": "TC-02", "tipo": "TORTON", "familia": "P", "fechaProg": "2026-06-29", "horaProg": "05:00", "anden": 3, "cargador": "415", "cargador2": "", "monta": "11827", "monta2": "", "candado": "13026", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "EMBARQUE RETRASO", "obs": "", "fechaCarga": "2026-06-30", "despachado": true}, {"id": "p23", "pedido": 387275, "cliente": "GERARDO OCHOA ROJAS", "destino": "TARETAN", "estado": "SINALOA", "peso": 18000, "operador": "CARLOS ANTONIO OCHOA HERNANDEZ", "eco": "TO-71", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-06-30", "horaProg": "05:00", "anden": 4, "cargador": "", "cargador2": "", "monta": "11824", "monta2": "", "candado": "13064", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-06-30", "despachado": true}, {"id": "p24", "pedido": 387298, "cliente": "OSVALDO HERNANDEZ PIMIENTA", "destino": "TECOLOTLAN", "estado": "SONORA", "peso": 18005, "operador": "DANIEL ISCAREÑO", "eco": "TO-67", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-01", "horaProg": "05:00", "anden": 5, "cargador": "", "cargador2": "", "monta": "11824", "monta2": "", "candado": "13064", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18005, "sacos": "", "motivo": "ALTA DEMANDA DE PRODUCTO", "obs": "", "fechaCarga": "2026-07-01", "despachado": true}, {"id": "p25", "pedido": 387031, "cliente": "MOISES LOPEZ DOMINGUEZ", "destino": "URIANGATO", "estado": "TABASCO", "peso": 18000, "operador": "ARMANDO GÓMEZ GONZALEZ", "eco": "TO-28", "tipo": "TRAILER 30 TON", "familia": "M", "fechaProg": "2026-07-02", "horaProg": "05:00", "anden": 6, "cargador": "1668", "cargador2": "", "monta": "1732", "monta2": "", "candado": "13016", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-02", "despachado": true}, {"id": "p26", "pedido": 387310, "cliente": "DAVID BARRAGAN ALVAREZ", "destino": "URUAPAN", "estado": "TAMAULIPAS", "peso": 17995, "operador": "MARCO PEREZ", "eco": "TO-72", "tipo": "TRAILER 30 TON", "familia": "M", "fechaProg": "2026-07-03", "horaProg": "05:00", "anden": 7, "cargador": "LUCIANO", "cargador2": "", "monta": "MIGUE", "monta2": "", "candado": "13011", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 17995, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-03", "despachado": true}, {"id": "p27", "pedido": 387214, "cliente": "PEQUEÑOS PRODUCTORES DE LECHE DE SAN AGUSTIN", "destino": "JAMAY", "estado": "TLAXCALA", "peso": 5280, "operador": "JUAN PABLO SALAZAR SAHAGUN", "eco": "RA-17", "tipo": "TORTON", "familia": "P", "fechaProg": "2026-07-04", "horaProg": "05:00", "anden": 8, "cargador": "10245", "cargador2": "", "monta": "11719", "monta2": "", "candado": "13027", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 5280, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-04", "despachado": true}, {"id": "p28", "pedido": 387065, "cliente": "CARLOS ALBERTO JIMENEZ GOMEZ", "destino": "CAPILLA DE GUADALUPE,", "estado": "VERACRUZ", "peso": 18000, "operador": "LUIS ARTURO MALDONADO LOPEZ", "eco": "TC-14", "tipo": "TORTON", "familia": "M", "fechaProg": "2026-07-05", "horaProg": "05:00", "anden": 9, "cargador": "10245", "cargador2": "", "monta": "11719", "monta2": "", "candado": "13027", "colocacion": "17:14", "inicioCarga": "23:54", "finCarga": "04:31", "libSAP": "04:31", "horaSalida": "04:31", "turno": "3", "kilos": 18000, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-05", "despachado": true}, {"id": "p29", "pedido": 387186, "cliente": "PEDRO RUBIO GUTIERREZ", "destino": "MAGDALENA", "estado": "YUCATÁN", "peso": 81004, "operador": "VICTOR BECERRA", "eco": "TO-74", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-06", "horaProg": "06:00", "anden": 10, "cargador": "253", "cargador2": "", "monta": "600", "monta2": "", "candado": "13024", "colocacion": "03:35", "inicioCarga": "03:45", "finCarga": "04:43", "libSAP": "04:50", "horaSalida": "04:50", "turno": "3", "kilos": 81004, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-06", "despachado": true}, {"id": "p30", "pedido": 387169, "cliente": "PUERTA DE PALO DULCE", "destino": "PUERTA PALO DULCE", "estado": "ZACATECAS", "peso": 7720, "operador": "EDUARDO VAZQUEZ", "eco": "TO-29", "tipo": "TRAILER 30 TON", "familia": "P", "fechaProg": "2026-07-07", "horaProg": "06:00", "anden": 11, "cargador": "LUCIANO", "cargador2": "", "monta": "MIGUE", "monta2": "", "candado": "13070", "colocacion": "03:35", "inicioCarga": "03:45", "finCarga": "04:43", "libSAP": "04:50", "horaSalida": "04:50", "turno": "3", "kilos": 7720, "sacos": "", "motivo": "CARFER RETRASO", "obs": "", "fechaCarga": "2026-07-07", "despachado": true}, {"id": "p31", "pedido": 386564, "cliente": "FELIPE SANCHEZ", "destino": "", "estado": "VERACRUZ", "peso": 35000, "operador": "JOSE MANUEL", "eco": "EX", "tipo": "TORTON", "familia": "M", "fechaProg": "2026-07-08", "horaProg": "", "anden": 7, "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "03:22", "inicioCarga": "04:32", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p32", "pedido": 386983, "cliente": "OLGA OLIVIA", "destino": "", "estado": "VERACRUZ", "peso": 30395, "operador": "EDUARDO", "eco": "EX", "tipo": "TORTON", "familia": "M", "fechaProg": "2026-07-09", "horaProg": "", "anden": 6, "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "03:47", "inicioCarga": "03:47", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p33", "pedido": 387176, "cliente": "ALFONSO ZEPEDA FONSECA", "destino": "", "estado": "VERACRUZ", "peso": 35000, "operador": "JUAN CARLOS", "eco": "FLE", "tipo": "TORTON", "familia": "M", "fechaProg": "2026-06-29", "horaProg": "", "anden": 4, "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "07:01", "inicioCarga": "07:10", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p34", "pedido": 387213, "cliente": "CASA AYALA DEL NOROESTE", "destino": "", "estado": "VERACRUZ", "peso": 37227, "operador": "RICARDO LOPEZ", "eco": "FLE", "tipo": "TORTON", "familia": "M", "fechaProg": "2026-06-30", "horaProg": "", "anden": 10, "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "04:01", "inicioCarga": "04:50", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p35", "pedido": 387268, "cliente": "BODEGAS LA PRIMAVERA", "destino": "", "estado": "VERACRUZ", "peso": 12800, "operador": "VIENE DE PEC", "eco": "EX", "tipo": "TORTON", "familia": "M", "fechaProg": "2026-07-01", "horaProg": "", "anden": "AF", "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "03:22", "inicioCarga": "04:32", "finCarga": "05:00", "libSAP": "05:07", "horaSalida": "05:07", "turno": "3", "kilos": 12800, "sacos": "", "motivo": "", "obs": "", "fechaCarga": "2026-07-01", "despachado": true}, {"id": "p36", "pedido": 387202, "cliente": "EL NOGAL PANUCO", "destino": "", "estado": "VERACRUZ", "peso": 10300, "operador": "VIENE DE PEC", "eco": "EX", "tipo": "TORTON", "familia": "MIX", "fechaProg": "2026-07-02", "horaProg": "", "anden": 12, "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "05:11", "inicioCarga": "05:20", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p37", "pedido": 387216, "cliente": "ALMACENADORA FEVASA", "destino": "", "estado": "VERACRUZ", "peso": 25000, "operador": "JUAN AYALA", "eco": "EX", "tipo": "TORTON", "familia": "M", "fechaProg": "2026-07-03", "horaProg": "", "anden": 5, "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "05:46", "inicioCarga": "05:50", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p38", "pedido": "CODIGO DE COLORES", "cliente": "", "destino": "", "estado": "", "peso": "", "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-04", "horaProg": "", "anden": "", "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "", "inicioCarga": "", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p39", "pedido": "", "cliente": "VIAJES TARDEROS", "destino": "", "estado": "", "peso": "", "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-05", "horaProg": "", "anden": "", "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "", "inicioCarga": "", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p40", "pedido": "", "cliente": "SEGUNDOS VIAJES", "destino": "", "estado": "", "peso": "", "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-06", "horaProg": "", "anden": "", "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "", "inicioCarga": "", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p41", "pedido": "", "cliente": "VIAJES TEMPRANEROS", "destino": "", "estado": "", "peso": "", "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-07", "horaProg": "", "anden": "", "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "", "inicioCarga": "", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "p42", "pedido": "", "cliente": "VIAJES TEMPRANEROS PRIORITARIOS", "destino": "", "estado": "", "peso": "", "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-08", "horaProg": "", "anden": "", "cargador": "", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "", "inicioCarga": "", "finCarga": "", "libSAP": "", "horaSalida": "", "turno": "", "kilos": "", "sacos": "", "motivo": "", "obs": "", "fechaCarga": "", "despachado": false}, {"id": "c0", "pedido": "", "cliente": "LUPITAS", "destino": "", "estado": "", "peso": 15475, "operador": "", "eco": "", "tipo": "ISUZU", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "20:30", "inicioCarga": "20:30", "finCarga": "21:40", "libSAP": "", "horaSalida": "21:40", "turno": "", "kilos": 15475, "sacos": 619, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "TAZ"}, {"id": "c1", "pedido": "", "cliente": "LUPITAS", "destino": "", "estado": "", "peso": 15475, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "18:00", "inicioCarga": "18:00", "finCarga": "19:30", "libSAP": "", "horaSalida": "19:30", "turno": "", "kilos": 15475, "sacos": 619, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "TAZ"}, {"id": "c2", "pedido": "", "cliente": "ALMA ROSA SILVIA", "destino": "", "estado": "", "peso": 7660, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:45", "inicioCarga": "16:45", "finCarga": "17:55", "libSAP": "", "horaSalida": "17:55", "turno": "", "kilos": 7660, "sacos": 359, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c3", "pedido": "", "cliente": "JUAN ANTONIO CORTINA", "destino": "", "estado": "", "peso": 14580, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "13:25", "inicioCarga": "13:25", "finCarga": "16:40", "libSAP": "", "horaSalida": "16:40", "turno": "", "kilos": 14580, "sacos": 590, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "DAGO"}, {"id": "c4", "pedido": "", "cliente": "DESPACHO LA CENTRAL", "destino": "", "estado": "", "peso": 725, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "12:45", "inicioCarga": "12:45", "finCarga": "14:40", "libSAP": "", "horaSalida": "14:40", "turno": "", "kilos": 725, "sacos": 145, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "AUTOCONSUMO"}, {"id": "c5", "pedido": "", "cliente": "ISIDRO JAVIER VALDEZ", "destino": "", "estado": "", "peso": 24640, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "09:15", "inicioCarga": "09:15", "finCarga": "11:50", "libSAP": "", "horaSalida": "11:50", "turno": "", "kilos": 24640, "sacos": 1232, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c6", "pedido": "", "cliente": "CAMPESINO HORACIO", "destino": "", "estado": "", "peso": 34440, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "08:45", "inicioCarga": "08:45", "finCarga": "14:10", "libSAP": "", "horaSalida": "14:10", "turno": "", "kilos": 34440, "sacos": 1551, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c7", "pedido": "", "cliente": "FORRAJERA 19 HNOS", "destino": "", "estado": "", "peso": 4500, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "09:00", "inicioCarga": "09:00", "finCarga": "10:05", "libSAP": "", "horaSalida": "10:05", "turno": "", "kilos": 4500, "sacos": 300, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "AUTOCONSUMO"}, {"id": "c8", "pedido": "", "cliente": "BRAMBILA", "destino": "", "estado": "", "peso": 34905, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "06:00", "inicioCarga": "06:00", "finCarga": "09:40", "libSAP": "", "horaSalida": "09:40", "turno": "", "kilos": 34905, "sacos": 1437, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c9", "pedido": "", "cliente": "SERGIO RICARDO VALENTIN T", "destino": "", "estado": "", "peso": 31565, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "18:55", "inicioCarga": "18:55", "finCarga": "21:00", "libSAP": "", "horaSalida": "21:00", "turno": "", "kilos": 31565, "sacos": 1538, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c10", "pedido": "", "cliente": "ERIK BARRAGAN", "destino": "", "estado": "", "peso": 15445, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-01", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "06:28", "inicioCarga": "06:28", "finCarga": "07:37", "libSAP": "", "horaSalida": "07:37", "turno": "", "kilos": 15445, "sacos": 639, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-01", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c11", "pedido": "", "cliente": "FORRAJERA 19 HNOS", "destino": "", "estado": "", "peso": 7680, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "08:40", "inicioCarga": "08:40", "finCarga": "09:30", "libSAP": "", "horaSalida": "09:30", "turno": "", "kilos": 7680, "sacos": 384, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "AUTOCONSUMO"}, {"id": "c12", "pedido": "", "cliente": "BRAMBILA", "destino": "", "estado": "", "peso": 16475, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "08:15", "inicioCarga": "08:15", "finCarga": "09:35", "libSAP": "", "horaSalida": "09:35", "turno": "", "kilos": 16475, "sacos": 761, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c13", "pedido": "", "cliente": "MARTIN GARCIA", "destino": "", "estado": "", "peso": 30600, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "08:45", "inicioCarga": "08:45", "finCarga": "11:50", "libSAP": "", "horaSalida": "11:50", "turno": "", "kilos": 30600, "sacos": 1530, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "VICTOR"}, {"id": "c14", "pedido": "", "cliente": "FORRAJERA 19 HNOS", "destino": "", "estado": "", "peso": 9600, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "10:00", "inicioCarga": "10:00", "finCarga": "11:40", "libSAP": "", "horaSalida": "11:40", "turno": "", "kilos": 9600, "sacos": 384, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "AUTOCONSUMO"}, {"id": "c15", "pedido": "", "cliente": "FORRAJES EL DOLLAR", "destino": "", "estado": "", "peso": 15295, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "11:30", "inicioCarga": "11:30", "finCarga": "13:10", "libSAP": "", "horaSalida": "13:10", "turno": "", "kilos": 15295, "sacos": 763, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c16", "pedido": "", "cliente": "ALIMENTOS JUDA", "destino": "", "estado": "", "peso": 34680, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "13:20", "inicioCarga": "13:20", "finCarga": "16:15", "libSAP": "", "horaSalida": "16:15", "turno": "", "kilos": 34680, "sacos": 1734, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c17", "pedido": "", "cliente": "CARLOS EDUARDO SALAZAR", "destino": "", "estado": "", "peso": 3075, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:20", "inicioCarga": "16:20", "finCarga": "16:50", "libSAP": "", "horaSalida": "16:50", "turno": "", "kilos": 3075, "sacos": 123, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c18", "pedido": "", "cliente": "XENIA GABRIELA ESCALERA", "destino": "", "estado": "", "peso": 5100, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:40", "inicioCarga": "16:40", "finCarga": "17:10", "libSAP": "", "horaSalida": "17:10", "turno": "", "kilos": 5100, "sacos": 255, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c19", "pedido": "", "cliente": "ALFREDO VELAZQUEZ", "destino": "", "estado": "", "peso": 16480, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:30", "inicioCarga": "16:30", "finCarga": "20:35", "libSAP": "", "horaSalida": "20:35", "turno": "", "kilos": 16480, "sacos": 751, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c20", "pedido": "", "cliente": "SANTA PAULA", "destino": "", "estado": "", "peso": 15475, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:25", "inicioCarga": "16:25", "finCarga": "21:30", "libSAP": "", "horaSalida": "21:30", "turno": "", "kilos": 15475, "sacos": 619, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "TAZ"}, {"id": "c21", "pedido": "", "cliente": "LUIS CORREA", "destino": "", "estado": "", "peso": 16880, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "18:50", "inicioCarga": "18:50", "finCarga": "22:35", "libSAP": "", "horaSalida": "22:35", "turno": "", "kilos": 16880, "sacos": 680, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c22", "pedido": "", "cliente": "ALFREDO ROJO", "destino": "", "estado": "", "peso": 16400, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "20:40", "inicioCarga": "20:40", "finCarga": "23:00", "libSAP": "", "horaSalida": "23:00", "turno": "", "kilos": 16400, "sacos": 656, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c23", "pedido": "", "cliente": "RICARDO MORENO", "destino": "", "estado": "", "peso": 33670, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "01:50", "inicioCarga": "01:50", "finCarga": "04:05", "libSAP": "", "horaSalida": "04:05", "turno": "", "kilos": 33670, "sacos": 1670, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "VICTOR"}, {"id": "c24", "pedido": "", "cliente": "OSCAR FLORES", "destino": "", "estado": "", "peso": 15400, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-02", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:35", "inicioCarga": "16:35", "finCarga": "19:35", "libSAP": "", "horaSalida": "19:35", "turno": "", "kilos": 15400, "sacos": 729, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-02", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c25", "pedido": "", "cliente": "EXPRESS", "destino": "", "estado": "", "peso": 380, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "09:35", "inicioCarga": "09:35", "finCarga": "09:55", "libSAP": "", "horaSalida": "09:55", "turno": "", "kilos": 380, "sacos": 26, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "AUTOCONSUMO"}, {"id": "c26", "pedido": "", "cliente": "ALEJANDRO VAZQUEZ", "destino": "", "estado": "", "peso": 30010, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "08:25", "inicioCarga": "08:25", "finCarga": "13:25", "libSAP": "", "horaSalida": "13:25", "turno": "", "kilos": 30010, "sacos": 1532, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c27", "pedido": "", "cliente": "SALVADOR ANGUIANO", "destino": "", "estado": "", "peso": 7140, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "12:10", "inicioCarga": "12:10", "finCarga": "13:50", "libSAP": "", "horaSalida": "13:50", "turno": "", "kilos": 7140, "sacos": 357, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c28", "pedido": "", "cliente": "ISIDRO JAVIER VALDEZ", "destino": "", "estado": "", "peso": 26010, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "13:35", "inicioCarga": "13:35", "finCarga": "16:25", "libSAP": "", "horaSalida": "16:25", "turno": "", "kilos": 26010, "sacos": 1275, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c29", "pedido": "", "cliente": "COMERCIAL PRODUMEX", "destino": "", "estado": "", "peso": 17580, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:45", "inicioCarga": "16:45", "finCarga": "18:35", "libSAP": "", "horaSalida": "18:35", "turno": "", "kilos": 17580, "sacos": 866, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c30", "pedido": "", "cliente": "FRANCISCO JAVIER VALDIVIA", "destino": "", "estado": "", "peso": 9200, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "18:35", "inicioCarga": "18:35", "finCarga": "19:20", "libSAP": "", "horaSalida": "19:20", "turno": "", "kilos": 9200, "sacos": 419, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c31", "pedido": "", "cliente": "ALFREDO ROJO", "destino": "", "estado": "", "peso": 16370, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "17:35", "inicioCarga": "17:35", "finCarga": "20:50", "libSAP": "", "horaSalida": "20:50", "turno": "", "kilos": 16370, "sacos": 716, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c32", "pedido": "", "cliente": "RODRIGO ROMO", "destino": "", "estado": "", "peso": 16465, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "17:50", "inicioCarga": "17:50", "finCarga": "21:55", "libSAP": "", "horaSalida": "21:55", "turno": "", "kilos": 16465, "sacos": 690, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c33", "pedido": "", "cliente": "BRENDA GOMEZ", "destino": "", "estado": "", "peso": 16420, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "17:40", "inicioCarga": "17:40", "finCarga": "22:30", "libSAP": "", "horaSalida": "22:30", "turno": "", "kilos": 16420, "sacos": 739, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c34", "pedido": "", "cliente": "PROVEEDORA PUTZ", "destino": "", "estado": "", "peso": 34680, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-03", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "06:15", "inicioCarga": "06:15", "finCarga": "08:55", "libSAP": "", "horaSalida": "08:55", "turno": "", "kilos": 34680, "sacos": 1734, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-03", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c35", "pedido": "", "cliente": "EXPRESS", "destino": "", "estado": "", "peso": 320, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-04", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "10:45", "inicioCarga": "10:45", "finCarga": "11:00", "libSAP": "", "horaSalida": "11:00", "turno": "", "kilos": 320, "sacos": 18, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-04", "despachado": true, "vendedor": "AUTOCONSUMO"}, {"id": "c36", "pedido": "", "cliente": "SUPER OFERTAS BRAVO", "destino": "", "estado": "", "peso": 16580, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-04", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "14:40", "inicioCarga": "14:40", "finCarga": "16:45", "libSAP": "", "horaSalida": "16:45", "turno": "", "kilos": 16580, "sacos": 689, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-04", "despachado": true, "vendedor": "AUTOCONSUMO"}, {"id": "c37", "pedido": "", "cliente": "SUPER OFERTAS BRAVO", "destino": "", "estado": "", "peso": 16580, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-04", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "17:00", "inicioCarga": "17:00", "finCarga": "18:50", "libSAP": "", "horaSalida": "18:50", "turno": "", "kilos": 16580, "sacos": 709, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-04", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c38", "pedido": "", "cliente": "ROBERTO CARLOS SANCHEZ", "destino": "", "estado": "", "peso": 30610, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-04", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "11:39", "inicioCarga": "11:39", "finCarga": "14:31", "libSAP": "", "horaSalida": "14:31", "turno": "", "kilos": 30610, "sacos": 1513, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-04", "despachado": true, "vendedor": "VICTOR"}, {"id": "c39", "pedido": "", "cliente": "JUAN DIEGO MANZANO", "destino": "", "estado": "", "peso": 34680, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-06", "horaProg": "", "anden": "", "cargador": "LUIS O", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "08:25", "inicioCarga": "08:25", "finCarga": "10:55", "libSAP": "", "horaSalida": "10:55", "turno": "", "kilos": 34680, "sacos": 1734, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-06", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c40", "pedido": "", "cliente": "BRAMBILA", "destino": "", "estado": "", "peso": 16025, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-06", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "13:35", "inicioCarga": "13:35", "finCarga": "14:50", "libSAP": "", "horaSalida": "14:50", "turno": "", "kilos": 16025, "sacos": 653, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-06", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c41", "pedido": "", "cliente": "GRANOS Y SEMILLAS JUAN PABLO", "destino": "", "estado": "", "peso": 16255, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-06", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "15:50", "inicioCarga": "15:50", "finCarga": "18:05", "libSAP": "", "horaSalida": "18:05", "turno": "", "kilos": 16255, "sacos": 811, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-06", "despachado": true, "vendedor": "VICTOR"}, {"id": "c42", "pedido": "", "cliente": "FORRAJERA ELIZONDO", "destino": "", "estado": "", "peso": 33775, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-06", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "16:30", "inicioCarga": "16:30", "finCarga": "20:35", "libSAP": "", "horaSalida": "20:35", "turno": "", "kilos": 33775, "sacos": 1651, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-06", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c43", "pedido": "", "cliente": "ALFREDO VELAZQUEZ", "destino": "", "estado": "", "peso": 16435, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-06", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "18:15", "inicioCarga": "18:15", "finCarga": "21:55", "libSAP": "", "horaSalida": "21:55", "turno": "", "kilos": 16435, "sacos": 738, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-06", "despachado": true, "vendedor": "ARMANDO"}, {"id": "c44", "pedido": "", "cliente": "ALFREDO ROJO", "destino": "", "estado": "", "peso": 16540, "operador": "", "eco": "", "tipo": "TORTON", "familia": "", "fechaProg": "2026-07-06", "horaProg": "", "anden": "", "cargador": "ALFREDO", "cargador2": "", "monta": "", "monta2": "", "candado": "", "colocacion": "20:55", "inicioCarga": "20:55", "finCarga": "23:10", "libSAP": "", "horaSalida": "23:10", "turno": "", "kilos": 16540, "sacos": 762, "motivo": "", "obs": "bien", "fechaCarga": "2026-07-06", "despachado": true, "vendedor": "ARMANDO"}];
+
+/* ================= ESTADO ================= */
+let DATA = [];
+let FLOTA = [];           // registros de mantenimiento/seguros/verificaciones
+let flotaEditId = null;   // registro de flota en edición
+let unlocked = false;
+let isMaster = false;
+let AUDIT = [];
+let sortK='fechaProg', sortDir=1;
+let curView='tabla';
+const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', AUDIT_KEY='progEmbarques_audit_v1', FLOTA_KEY='progEmbarques_flota_v1';
+let fb=null, fbData=null, fbCfg=null, fbAudit=null, fbFlota=null;
+const AUDIT_FIELDS = ['colocacion','inicioCarga','finCarga','kilos','sacos','motivo','despachado','tipo','peso','horaSalida','horaSalidaProg','horaProg','libSAP'];
+const AUDIT_LABELS = {colocacion:'Colocación',inicioCarga:'Inicio carga',finCarga:'Fin carga',kilos:'Kg cargados',sacos:'Sacos',motivo:'Motivo',despachado:'Despachado',tipo:'Tipo unidad',peso:'Peso prog',horaSalida:'Hora salida',horaSalidaProg:'Salida programada',horaProg:'Hora de cita',libSAP:'Lib. SAP'};
+
+/* ================= CÁLCULO ================= */
+function toMin(h){ if(!h) return null; const p=h.split(':'); return (+p[0])*60+(+p[1]); }
+function minToHM(m){ if(m==null||isNaN(m)) return ''; m=((Math.round(m)%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+function dur(a,b){ const x=toMin(a),y=toMin(b); if(x==null||y==null) return null; let d=y-x; if(d<0)d+=1440; return d; }
+function limMin(t){ return CFG.limites[(t||'').toUpperCase().trim()] ?? null; }
+function calc(r){
+  const permit=limMin(r.tipo);
+  const despachado = r.despachado===true||r.despachado==='1'||r.despachado===1;
+  const cancelado = r.cancelado===true;
+  // ---- INTERVALOS (cada uno con definición única) ----
+  const espera=dur(r.colocacion, r.inicioCarga);        // espera en andén: colocación -> inicio
+  const carga=dur(r.inicioCarga, r.finCarga);           // tiempo de carga: inicio -> fin (equipo)
+  const liberacion=dur(r.finCarga, r.libSAP);           // liberación: fin -> lib SAP
+  const permanencia=dur(r.colocacion, r.horaSalida);    // permanencia total: colocación -> salida
+  const horaLimite=(toMin(r.inicioCarga)!=null&&permit!=null)?minToHM(toMin(r.inicioCarga)+permit):''; // límite de carga
+  // salida programada: campo propio; si no hay, se estima con cita + tiempo permitido
+  const salidaProg = r.horaSalidaProg || ((toMin(r.horaProg)!=null&&permit!=null)?minToHM(toMin(r.horaProg)+permit):'');
+  const salidaReal = r.horaSalida || r.finCarga || '';   // salida real (o fin de carga como aún-en-anden)
+  // ---- ESTATUS DE CARGA (rendimiento del equipo) ----
+  let estatusCarga, retrasoCarga=null;
+  if(cancelado) estatusCarga='CANCELADO';
+  else if(carga==null) estatusCarga = r.inicioCarga?'EN PROCESO':'PENDIENTE';
+  else if(permit==null) estatusCarga='—';
+  else if(carga<=permit) estatusCarga='A TIEMPO';
+  else { estatusCarga='LENTA'; retrasoCarga=carga-permit; }
+  // ---- ESTATUS DE SALIDA (cumplimiento vs salida programada) ----
+  let estatusSalida='PENDIENTE', retrasoSalida=null, adelantoSalida=null;
+  if(cancelado) estatusSalida='CANCELADO';
+  else if(salidaProg && salidaReal){ const d=dur2(salidaProg, salidaReal);
+    if(d>0){ estatusSalida='TARDE'; retrasoSalida=d; }
+    else { estatusSalida='A TIEMPO'; if(d<0) adelantoSalida=-d; } }
+  // ---- ESTATUS GENERAL (para filtros/color) ----
+  let estatus, retraso=null, motivoRetraso='';
+  if(cancelado) estatus='CANCELADO';
+  else if(carga==null) estatus = r.inicioCarga?'EN PROCESO':'PENDIENTE';
+  else if(estatusCarga==='LENTA' || estatusSalida==='TARDE'){ estatus='RETRASADO'; retraso=Math.max(retrasoCarga||0, retrasoSalida||0);
+    motivoRetraso=(estatusCarga==='LENTA'&&estatusSalida==='TARDE')?'carga y salida':(estatusCarga==='LENTA'?'carga lenta':'salió tarde'); }
+  else estatus='A TIEMPO';
+  // semáforo de ingreso: colocación real vs cita programada
+  let sem='',semDif=null;
+  if(r.horaProg && r.colocacion){ semDif=dur2(r.horaProg,r.colocacion); const a=Math.abs(semDif); sem = a<=CFG.semV?'ok':(a<=CFG.semA?'warn':'late'); }
+  const kgmin=(carga&&r.kilos)?Number(r.kilos)/carga:null;
+  const muerto=espera;
+  const carry = despachado && r.fechaCarga && r.fechaProg && r.fechaCarga!==r.fechaProg;
+  return {permit,carga,espera,liberacion,permanencia,horaLimite,salidaProg,salidaReal,
+    estatus,estatusCarga,estatusSalida,retraso,retrasoCarga,retrasoSalida,adelantoSalida,motivoRetraso,
+    sem,semDif,kgmin,muerto,despachado,carry,cancelado};
+}
+function dur2(a,b){ const x=toMin(a),y=toMin(b); if(x==null||y==null) return null; let d=y-x; if(d>720)d-=1440; if(d<-720)d+=1440; return d; }
+function weekBounds(d){ const dt=new Date(d+'T00:00:00'); const day=(dt.getDay()+6)%7; const mon=new Date(dt); mon.setDate(dt.getDate()-day); const sun=new Date(mon); sun.setDate(mon.getDate()+6); return [iso(mon),iso(sun)]; }
+function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+const TODAY=iso(new Date());   // fecha real de hoy (zona local), se calcula al abrir
+
+/* ================= PERIODO ================= */
+function setPreset(p){
+  const t=TODAY, dt=new Date(t+'T00:00:00');
+  let from=t,to=t;
+  if(p==='hoy'){ from=to=t; }
+  else if(p==='ayer'){ const y=new Date(dt); y.setDate(dt.getDate()-1); from=to=iso(y); }
+  else if(p==='semana'){ [from,to]=weekBounds(t); }
+  else if(p==='mes'){ from=iso(new Date(dt.getFullYear(),dt.getMonth(),1)); to=iso(new Date(dt.getFullYear(),dt.getMonth()+1,0)); }
+  else if(p==='todo'){ from=''; to=''; }
+  document.getElementById('pFrom').value=from; document.getElementById('pTo').value=to;
+  document.querySelectorAll('#presets button').forEach(b=>b.classList.toggle('active',b.dataset.p===p));
+  render();
+}
+function markCustom(){ document.querySelectorAll('#presets button').forEach(b=>b.classList.remove('active')); }
+document.querySelectorAll('#presets button').forEach(b=>b.onclick=()=>setPreset(b.dataset.p));
+
+function inPeriod(r){
+  const from=document.getElementById('pFrom').value, to=document.getElementById('pTo').value;
+  const mode=document.getElementById('dateMode').value;
+  const d = mode==='carga' ? (r.fechaCarga||r.fechaProg) : r.fechaProg;
+  if(from && (!d || d<from)) return false;
+  if(to && (!d || d>to)) return false;
+  return true;
+}
+
+/* ================= FILTRO / SORT ================= */
+function rowsFor(list){
+  const q=(document.getElementById('fq').value||'').toLowerCase();
+  const fe=document.getElementById('fest').value, ft=document.getElementById('fturno').value;
+  return list.map(r=>({r,cv:calc(r)})).filter(({r,cv})=>{
+    if(q){ const blob=[r.cliente,r.pedido,r.eco,r.destino,r.operador,r.cargador,r.vendedor].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
+    if(fe && cv.estatus!==fe) return false;
+    if(ft && String(r.turno||'')!==ft) return false;
+    return true;
+  });
+}
+function sortRows(rows){
+  rows.sort((a,b)=>{
+    let x = sortK in a.cv ? a.cv[sortK] : a.r[sortK];
+    let y = sortK in b.cv ? b.cv[sortK] : b.r[sortK];
+    if(x==null)x=''; if(y==null)y='';
+    if(!isNaN(parseFloat(x))&&!isNaN(parseFloat(y))&&typeof x!=='string'){}
+    if(typeof x==='number'||typeof y==='number'){x=+x||0;y=+y||0;}
+    return (x>y?1:x<y?-1:0)*sortDir;
+  });
+  return rows;
+}
+function setSort(k){ if(sortK===k)sortDir*=-1; else{sortK=k;sortDir=1;} render(); }
+
+/* ================= COLUMNAS TABLA ================= */
+const COLS=[
+  {k:'sem',t:'',calc:1},{k:'fechaProg',t:'F. Prog'},{k:'horaProg',t:'Cita'},{k:'horaSalidaProg',t:'Sal. prog'},{k:'pedido',t:'Pedido'},
+  {k:'cliente',t:'Cliente'},{k:'destino',t:'Destino'},{k:'tipo',t:'Unidad'},{k:'eco',t:'Eco'},
+  {k:'anden',t:'Andén'},{k:'turno',t:'Turno'},{k:'colocacion',t:'Coloc.'},{k:'inicioCarga',t:'Inicio'},
+  {k:'finCarga',t:'Fin'},{k:'horaSalida',t:'Salida'},{k:'carga',t:'T.Carga',calc:1},
+  {k:'estatusCarga',t:'Carga',calc:1},{k:'estatusSalida',t:'Salida ✓',calc:1},
+  {k:'peso',t:'Kg prog',num:1},{k:'kilos',t:'Kg cargados',num:1},{k:'fechaCarga',t:'F. Carga'},
+  {k:'motivo',t:'Motivo'},{k:'cargador',t:'Cargador'}
+];
+function pill(estatus){ const m={'A TIEMPO':'p-ok','RETRASADO':'p-late','LENTA':'p-late','TARDE':'p-late','EN PROCESO':'p-proc','PENDIENTE':'p-warn','CANCELADO':'p-proc','—':'p-proc'}; return `<span class="pill ${m[estatus]||'p-proc'}">${estatus}</span>`; }
+function cellHTML(r,c,cv){
+  if(c.k==='sem'){ return cv.sem?`<span class="sem" style="background:var(--${cv.sem})" title="Dif ${cv.semDif} min vs cita"></span>`:''; }
+  if(c.calc){
+    if(c.k==='carga') return cv.carga==null?'<span class="muted">—</span>':minToHM(cv.carga)+(cv.retrasoCarga?` <span style="color:var(--late)">(+${cv.retrasoCarga}m)</span>`:'');
+    if(c.k==='estatusCarga') return pill(cv.estatusCarga);
+    if(c.k==='estatusSalida') return pill(cv.estatusSalida)+(cv.retrasoSalida?` <span class="muted">+${cv.retrasoSalida}m</span>`:'');
+  }
+  let v=r[c.k];
+  if(v===''||v==null) return '<span class="muted">—</span>';
+  if(c.k==='motivo') return `<span title="${motivoFull(v)}">${motivoDesc(v)}</span>`;
+  if(c.num) return Number(v).toLocaleString('es-MX');
+  return String(v);
+}
+
+/* ================= RENDER ================= */
+function render(){
+  saveCfgLocal();
+  // headers
+  document.getElementById('thead').innerHTML = COLS.map(c=>`<th onclick="setSort('${c.k}')">${c.t}${sortK===c.k?(sortDir>0?' ▲':' ▼'):''}</th>`).join('');
+  const inP = DATA.filter(inPeriod);
+  const rows = sortRows(rowsFor(inP));
+  const tb=document.getElementById('tbody');
+  tb.innerHTML = rows.length? rows.map(({r,cv})=>`<tr class="${cv.carry?'carry':''}" style="${cv.cancelado?'opacity:.5;text-decoration:line-through':''}" onclick="openForm('${r.id}')">${COLS.map(c=>`<td class="${c.num?'num':''}">${cellHTML(r,c,cv)}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${COLS.length}" class="empty">Sin embarques en este periodo.</td></tr>`;
+  renderKPIs(rows);
+  renderCharts(rows);
+  renderCarry();
+  renderFlota();
+  refreshOptions();
+}
+
+/* ================= KPIs ================= */
+function renderKPIs(rowsAll){
+  const canceladas=rowsAll.filter(x=>x.cv.cancelado).length;
+  const rows=rowsAll.filter(x=>!x.cv.cancelado);   // los cancelados no cuentan en indicadores
+  const cvs=rows.map(x=>x.cv);
+  const total=rows.length;
+  const desp=cvs.filter(c=>c.despachado).length;
+  const pend=rows.filter(x=>!x.cv.despachado).length;
+  // rendimiento de carga (equipo)
+  const finC=cvs.filter(c=>c.estatusCarga==='A TIEMPO'||c.estatusCarga==='LENTA');
+  const okC=cvs.filter(c=>c.estatusCarga==='A TIEMPO').length;
+  const pctC=finC.length?Math.round(okC/finC.length*100):0;
+  // cumplimiento de salida (schedule)
+  const finS=cvs.filter(c=>c.estatusSalida==='A TIEMPO'||c.estatusSalida==='TARDE');
+  const okS=cvs.filter(c=>c.estatusSalida==='A TIEMPO').length;
+  const tardeS=cvs.filter(c=>c.estatusSalida==='TARDE').length;
+  const pctS=finS.length?Math.round(okS/finS.length*100):0;
+  const tonProg=rows.reduce((s,x)=>s+(Number(x.r.peso)||0),0);
+  const tonCarg=rows.reduce((s,x)=>s+(Number(x.r.kilos)||0),0);
+  const cumpl=tonProg?Math.round(tonCarg/tonProg*100):0;
+  const avg=finC.length?Math.round(finC.reduce((s,c)=>s+c.carga,0)/finC.length):0;
+  const carry=cvs.filter(c=>c.carry).length;
+  const muertos=cvs.filter(c=>c.muerto!=null&&c.muerto>=0);
+  const avgMuerto=muertos.length?Math.round(muertos.reduce((s,c)=>s+c.muerto,0)/muertos.length):0;
+  const perms=cvs.filter(c=>c.permanencia!=null&&c.permanencia>=0);
+  const avgPerm=perms.length?Math.round(perms.reduce((s,c)=>s+c.permanencia,0)/perms.length):0;
+  const kgm=cvs.filter(c=>c.kgmin).map(c=>c.kgmin);
+  const avgKgm=kgm.length?Math.round(kgm.reduce((a,b)=>a+b,0)/kgm.length):0;
+  const K=[
+    {lbl:'Embarques',val:total,foot:`${desp} despachados · ${pend} pendientes${canceladas?` · ${canceladas} cancelados`:''}`,cls:'blue'},
+    {lbl:'% Salidas a tiempo',val:pctS+'%',foot:`${okS} de ${finS.length} · ${tardeS} tarde`,cls:'ok',bar:pctS},
+    {lbl:'% Carga a tiempo',val:pctC+'%',foot:`equipo · ${okC} de ${finC.length}`,cls:'pur',bar:pctC},
+    {lbl:'% Cumplimiento ton',val:cumpl+'%',foot:`${(tonCarg/1000).toFixed(1)} / ${(tonProg/1000).toFixed(1)} ton`,cls:''},
+    {lbl:'Tiempo prom. carga',val:minToHM(avg),foot:'inicio → fin (equipo)',cls:''},
+    {lbl:'Tiempo muerto andén',val:minToHM(avgMuerto),foot:'colocación → inicio',cls:'warn'},
+    {lbl:'Permanencia prom.',val:minToHM(avgPerm),foot:'colocación → salida',cls:'warn'},
+    {lbl:'Productividad',val:avgKgm.toLocaleString('es-MX'),foot:'kg por minuto (prom.)',cls:'ok'},
+  ];
+  document.getElementById('kpis').innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot||''}</div>${k.bar!=null?`<div class="bar"><i style="width:${k.bar}%"></i></div>`:''}</div>`).join('');
+}
+
+/* ================= CHARTS (SVG propio) ================= */
+function svgBars(data, opts={}){
+  // data: [{label, values:[{v,color}]}] grouped bars OR [{label,v,color}]
+  const W=Math.max(320, (opts.wPer||46)*data.length+60), H=opts.h||210, pad=30, top=14, bw=opts.wPer||46;
+  const grouped = data[0] && data[0].values;
+  let max=0;
+  data.forEach(d=> grouped? d.values.forEach(x=>max=Math.max(max,x.v)) : max=Math.max(max,d.v));
+  max=max||1;
+  const chart=[];
+  data.forEach((d,i)=>{
+    const x0=50+i*bw;
+    if(grouped){
+      const n=d.values.length, sub=(bw-14)/n;
+      d.values.forEach((x,j)=>{
+        const h=(x.v/max)*(H-top-pad);
+        chart.push(`<rect x="${x0+8+j*sub}" y="${H-pad-h}" width="${sub-3}" height="${h}" fill="${x.color}" rx="2"><title>${d.label}: ${x.v.toLocaleString('es-MX')}</title></rect>`);
+      });
+    } else {
+      const h=(d.v/max)*(H-top-pad);
+      chart.push(`<rect x="${x0+8}" y="${H-pad-h}" width="${bw-14}" height="${h}" fill="${d.color||'var(--accent)'}" rx="2"><title>${d.label}: ${d.v.toLocaleString('es-MX')}</title></rect>`);
+      if(opts.showVal) chart.push(`<text x="${x0+8+(bw-14)/2}" y="${H-pad-h-4}" fill="#cfe0f2" font-size="10" text-anchor="middle">${d.v.toLocaleString('es-MX')}</text>`);
+    }
+    chart.push(`<text x="${x0+bw/2}" y="${H-pad+14}" fill="#8ea3ba" font-size="10" text-anchor="middle">${String(d.label).slice(0,10)}</text>`);
+  });
+  // y gridlines
+  for(let g=0;g<=4;g++){ const y=top+ (H-top-pad)*g/4; const val=Math.round(max*(1-g/4)); chart.unshift(`<line x1="46" y1="${y}" x2="${W}" y2="${y}" stroke="#22303f"/><text x="42" y="${y+3}" fill="#5f7186" font-size="9" text-anchor="end">${val>999?(val/1000).toFixed(0)+'k':val}</text>`); }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="overflow:visible">${chart.join('')}</svg>`;
+}
+function svgDonut(parts, opts={}){
+  const total=parts.reduce((s,p)=>s+p.v,0)||1, R=70, r=44, cx=90, cy=90; let a=-Math.PI/2; const seg=[];
+  parts.forEach(p=>{ const frac=p.v/total, a2=a+frac*2*Math.PI;
+    const x1=cx+R*Math.cos(a),y1=cy+R*Math.sin(a),x2=cx+R*Math.cos(a2),y2=cy+R*Math.sin(a2);
+    const xi2=cx+r*Math.cos(a2),yi2=cy+r*Math.sin(a2),xi1=cx+r*Math.cos(a),yi1=cy+r*Math.sin(a);
+    const large=frac>.5?1:0;
+    seg.push(`<path d="M${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} L${xi2} ${yi2} A${r} ${r} 0 ${large} 0 ${xi1} ${yi1} Z" fill="${p.color}"><title>${p.label}: ${p.v}</title></path>`);
+    a=a2;
+  });
+  const leg=parts.map(p=>`<div style="display:flex;align-items:center;gap:6px;font-size:11.5px"><span class="dot" style="background:${p.color}"></span>${p.label} <b style="margin-left:auto">${p.v}</b></div>`).join('');
+  return `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><svg viewBox="0 0 180 180" width="180" height="180">${seg.join('')}<text x="90" y="86" fill="#e8eef5" font-size="22" font-weight="700" text-anchor="middle">${total}</text><text x="90" y="104" fill="#8ea3ba" font-size="10" text-anchor="middle">total</text></svg><div style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:7px">${leg}</div></div>`;
+}
+/* ===== Mapa grid de estados de México ===== */
+const EDO_POS={ // [fila,col] aproximado geográficamente
+ 'BAJA CALIFORNIA':[0,0],'SONORA':[0,1],'CHIHUAHUA':[0,2],'COAHUILA':[0,3],'NUEVO LEON':[0,4],'TAMAULIPAS':[0,5],
+ 'BAJA CALIFORNIA SUR':[1,0],'SINALOA':[1,1],'DURANGO':[1,2],'ZACATECAS':[1,3],'SAN LUIS POTOSI':[1,4],
+ 'NAYARIT':[2,1],'JALISCO':[2,2],'AGUASCALIENTES':[2,3],'GUANAJUATO':[2,4],'QUERETARO':[2,5],'HIDALGO':[2,6],'VERACRUZ':[2,7],'YUCATAN':[2,8],
+ 'COLIMA':[3,1],'MICHOACAN':[3,2],'MEXICO':[3,3],'CIUDAD DE MEXICO':[3,4],'TLAXCALA':[3,5],'PUEBLA':[3,6],'TABASCO':[3,7],'CAMPECHE':[3,8],'QUINTANA ROO':[2,9],
+ 'GUERRERO':[4,2],'MORELOS':[4,4],'OAXACA':[4,5],'CHIAPAS':[4,7] };
+const EDO_ABBR={'BAJA CALIFORNIA':'BC','SONORA':'SON','CHIHUAHUA':'CHIH','COAHUILA':'COAH','NUEVO LEON':'NL','TAMAULIPAS':'TAM','BAJA CALIFORNIA SUR':'BCS','SINALOA':'SIN','DURANGO':'DGO','ZACATECAS':'ZAC','SAN LUIS POTOSI':'SLP','NAYARIT':'NAY','JALISCO':'JAL','AGUASCALIENTES':'AGS','GUANAJUATO':'GTO','QUERETARO':'QRO','HIDALGO':'HGO','VERACRUZ':'VER','YUCATAN':'YUC','COLIMA':'COL','MICHOACAN':'MICH','MEXICO':'MEX','CIUDAD DE MEXICO':'CDMX','TLAXCALA':'TLAX','PUEBLA':'PUE','TABASCO':'TAB','CAMPECHE':'CAMP','QUINTANA ROO':'QROO','GUERRERO':'GRO','MORELOS':'MOR','OAXACA':'OAX','CHIAPAS':'CHIS'};
+function normEdo(s){ return (s||'').toString().toUpperCase().trim().replace('MÉXICO','MEXICO').replace('CIUDAD DE MÉXICO','CIUDAD DE MEXICO').replace('QUERÉTARO','QUERETARO').replace('MICHOACÁN','MICHOACAN').replace('NUEVO LEÓN','NUEVO LEON').replace('YUCATÁN','YUCATAN').replace('SAN LUIS POTOSÍ','SAN LUIS POTOSI'); }
+function renderMapa(rows){
+  const byEdo={}; rows.forEach(({r})=>{ const e=normEdo(r.estado); if(!e||!EDO_POS[e])return; byEdo[e]=(byEdo[e]||0)+(Number(r.peso)||Number(r.kilos)||0); });
+  const max=Math.max(1,...Object.values(byEdo));
+  const cell=58, gap=5, cols=10, rowsN=5, W=cols*(cell+gap)+4, H=rowsN*(cell+gap)+4;
+  let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px">`;
+  Object.keys(EDO_POS).forEach(e=>{
+    const [rr,cc]=EDO_POS[e]; const x=cc*(cell+gap)+2, y=rr*(cell+gap)+2;
+    const v=byEdo[e]||0; const t=v/max;
+    const col = v>0 ? `rgba(59,157,255,${(0.2+t*0.8).toFixed(2)})` : '#182634';
+    const txtc = v>0 && t>0.55 ? '#fff':'#9fb4cc';
+    svg+=`<g><rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="7" fill="${col}" stroke="#2a3b4f"><title>${e}: ${(v/1000).toFixed(1)} ton</title></rect>`+
+      `<text x="${x+cell/2}" y="${y+cell/2-2}" fill="${txtc}" font-size="11" font-weight="700" text-anchor="middle">${EDO_ABBR[e]}</text>`+
+      `<text x="${x+cell/2}" y="${y+cell/2+12}" fill="${txtc}" font-size="9" text-anchor="middle">${v>0?(v/1000).toFixed(1)+'t':''}</text></g>`;
+  });
+  svg+='</svg>';
+  const total=Object.values(byEdo).reduce((a,b)=>a+b,0);
+  const top=Object.entries(byEdo).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k} (${(v/1000).toFixed(1)}t)`).join(' · ');
+  document.getElementById('chMapa').innerHTML = total>0? svg+`<div class="hint" style="margin-top:8px">Total ${(total/1000).toFixed(1)} ton en ${Object.keys(byEdo).length} estados. Top: ${top}. <span style="color:var(--muted)">Intensidad = toneladas.</span></div>` : '<div class="empty" style="padding:24px">Sin estados destino capturados en el periodo. Llena el campo "Estado destino" al programar.</div>';
+}
+
+function renderCharts(rows){
+  renderMapa(rows);
+  // ton por día prog vs cargado
+  const mode=document.getElementById('dateMode').value;
+  const byDay={};
+  rows.forEach(({r})=>{ const dP=r.fechaProg||'—'; byDay[dP]=byDay[dP]||{prog:0,carg:0}; byDay[dP].prog+=Number(r.peso)||0;
+    const dC=r.fechaCarga||r.fechaProg||'—'; byDay[dC]=byDay[dC]||{prog:0,carg:0}; byDay[dC].carg+=Number(r.kilos)||0; });
+  const days=Object.keys(byDay).filter(d=>d!=='—').sort();
+  document.getElementById('chTon').innerHTML = days.length? svgBars(days.map(d=>({label:d.slice(5),values:[{v:Math.round(byDay[d].prog/1000),color:'#3b9dff'},{v:Math.round(byDay[d].carg/1000),color:'#2ecc71'}]})),{h:210})
+    +`<div class="legend" style="margin-top:6px"><span><span class="dot" style="background:#3b9dff"></span>Programado (ton)</span><span><span class="dot" style="background:#2ecc71"></span>Cargado (ton)</span></div>` : emptyChart();
+  // estatus donut CARGA (equipo)
+  const cvs=rows.map(x=>x.cv);
+  const est=[
+    {label:'A tiempo',v:cvs.filter(c=>c.estatusCarga==='A TIEMPO').length,color:'#2ecc71'},
+    {label:'Carga lenta',v:cvs.filter(c=>c.estatusCarga==='LENTA').length,color:'#ff5c5c'},
+    {label:'En proceso',v:cvs.filter(c=>c.estatusCarga==='EN PROCESO').length,color:'#8a97a8'},
+    {label:'Pendiente',v:cvs.filter(c=>c.estatusCarga==='PENDIENTE').length,color:'#ffb020'},
+  ].filter(p=>p.v>0);
+  document.getElementById('chEst').innerHTML = est.length? svgDonut(est) : emptyChart();
+  // estatus donut SALIDA (vs programado)
+  const estS=[
+    {label:'Salió a tiempo',v:cvs.filter(c=>c.estatusSalida==='A TIEMPO').length,color:'#2ecc71'},
+    {label:'Salió tarde',v:cvs.filter(c=>c.estatusSalida==='TARDE').length,color:'#ff5c5c'},
+    {label:'Pendiente',v:cvs.filter(c=>c.estatusSalida==='PENDIENTE').length,color:'#ffb020'},
+  ].filter(p=>p.v>0);
+  document.getElementById('chSalida').innerHTML = estS.length? svgDonut(estS) : emptyChart();
+  // por turno
+  const turnos={}; rows.forEach(({r})=>{ const t=r.turno||'S/T'; turnos[t]=(turnos[t]||0)+1; });
+  const tk=Object.keys(turnos).sort();
+  document.getElementById('chTurno').innerHTML = tk.length? svgBars(tk.map(t=>({label:'Turno '+t,v:turnos[t],color:'#a06bff'})),{showVal:1,h:190}) : emptyChart();
+  // top destinos
+  const dest={}; rows.forEach(({r})=>{ if(!r.destino)return; dest[r.destino]=(dest[r.destino]||0)+(Number(r.peso)||0); });
+  const dk=Object.entries(dest).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  document.getElementById('chDest').innerHTML = dk.length? svgBars(dk.map(([k,v])=>({label:k,v:Math.round(v/1000),color:'#28c8d8'})),{showVal:1,h:200}) : emptyChart();
+  // motivos — desglose específico por descripción completa (no solo el código)
+  const mot={}; rows.forEach(({r,cv})=>{ if(cv.estatus==='RETRASADO'||r.motivo){ const m=motivoDesc(r.motivo)||'Sin especificar'; mot[m]=(mot[m]||0)+1; } });
+  const mk=Object.entries(mot).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('chMotivo').innerHTML = mk.length? hBars(mk.map(([k,v])=>({label:k,v})),'#ff5c5c') : emptyChart();
+  // tiempo por tipo
+  const tipo={}; rows.forEach(({r,cv})=>{ if(cv.carga!=null){ const t=r.tipo||'—'; tipo[t]=tipo[t]||{s:0,n:0}; tipo[t].s+=cv.carga; tipo[t].n++; } });
+  const tpk=Object.keys(tipo);
+  document.getElementById('chTipo').innerHTML = tpk.length? svgBars(tpk.map(t=>({label:t.replace('TRAILER ','T'),v:Math.round(tipo[t].s/tipo[t].n),color:'#ffb020'})),{showVal:1,h:190,wPer:70}) : emptyChart();
+  // carga por cargador (ton) + productividad por cargador (kg/min)
+  const carg={};
+  rows.forEach(({r,cv})=>{ const who=(r.ultimoUsuario||r.cargador||'').toString().trim(); if(!who)return; carg[who]=carg[who]||{ton:0,kgm:[],n:0}; carg[who].ton+=Number(r.kilos)||0; if(cv.kgmin)carg[who].kgm.push(cv.kgmin); carg[who].n++; });
+  const ck=Object.entries(carg).sort((a,b)=>b[1].ton-a[1].ton).slice(0,10);
+  document.getElementById('chCargador').innerHTML = ck.length? svgBars(ck.map(([k,v])=>({label:k.split(' ')[0],v:Math.round(v.ton/1000*10)/10,color:'#2ecc71'})),{showVal:1,h:200,wPer:66}) : emptyChart();
+  const ckm=Object.entries(carg).filter(([k,v])=>v.kgm.length).map(([k,v])=>[k,Math.round(v.kgm.reduce((a,b)=>a+b,0)/v.kgm.length)]).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('chCargadorKgm').innerHTML = ckm.length? svgBars(ckm.map(([k,v])=>({label:k.split(' ')[0],v,color:'#3b9dff'})),{showVal:1,h:200,wPer:66}) : emptyChart();
+}
+function emptyChart(){ return '<div class="empty" style="padding:24px">Sin datos en el periodo.</div>'; }
+/* barras horizontales con etiqueta completa (para textos largos, p.ej. motivos) */
+function hBars(data, color){
+  const max=Math.max(1,...data.map(d=>d.v));
+  const tot=data.reduce((s,d)=>s+d.v,0)||1;
+  return `<div style="display:flex;flex-direction:column;gap:8px">`+data.map(d=>{
+    const pct=Math.round(d.v/max*100), share=Math.round(d.v/tot*100);
+    return `<div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
+        <span style="color:#cfe0f2">${String(d.label)}</span>
+        <span class="muted"><b style="color:#e8eef5">${d.v}</b> · ${share}%</span></div>
+      <div style="height:9px;border-radius:6px;background:#22303f;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:${color||'var(--accent)'}"></i></div>
+    </div>`;
+  }).join('')+`</div>`;
+}
+
+/* ================= ARRASTRES / PENDIENTES ================= */
+const COLSA=[{k:'estado2',t:'Situación'},{k:'fechaProg',t:'Programado'},{k:'fechaCarga',t:'Cargó'},{k:'pedido',t:'Pedido'},{k:'cliente',t:'Cliente'},{k:'destino',t:'Destino'},{k:'tipo',t:'Unidad'},{k:'eco',t:'Eco'},{k:'anden',t:'Andén'},{k:'motivo',t:'Motivo'}];
+function carryList(){
+  const to=document.getElementById('pTo').value || TODAY;
+  return DATA.map(r=>({r,cv:calc(r)})).filter(({r,cv})=>{
+    const pendPast = !cv.despachado && r.fechaProg && r.fechaProg<=to; // programado y aún no sale
+    return cv.carry || pendPast;
+  }).map(o=>{ o.situ = o.cv.carry?'ARRASTRE':(o.r.fechaProg<TODAY?'PENDIENTE (vencido)':'PENDIENTE'); return o; })
+    .sort((a,b)=>(a.r.fechaProg||'').localeCompare(b.r.fechaProg||''));
+}
+function renderCarry(){
+  const list=carryList();
+  document.getElementById('arrCount').textContent=list.length||'';
+  document.getElementById('theadA').innerHTML=COLSA.map(c=>`<th>${c.t}</th>`).join('');
+  const tb=document.getElementById('tbodyA');
+  tb.innerHTML = list.length? list.map(({r,situ})=>{
+    const cls = situ==='ARRASTRE'?'p-warn':(situ.includes('vencido')?'p-late':'p-proc');
+    return `<tr class="${situ==='ARRASTRE'?'carry':''}" onclick="openForm('${r.id}')">`+
+      `<td><span class="pill ${cls}">${situ}</span></td>`+
+      COLSA.slice(1).map(c=>{let v=r[c.k]; if(c.k==='motivo'&&v) v=`<span title="${motivoFull(v)}">${motivoDesc(v)}</span>`; return `<td>${v||'<span class=muted>—</span>'}</td>`}).join('')+`</tr>`;
+  }).join('') : `<tr><td colspan="${COLSA.length}" class="empty">Sin arrastres ni pendientes. 👍</td></tr>`;
+}
+
+/* ================= VISTA AUDITORÍA (master) ================= */
+const COLSAU=[{k:'ts',t:'Fecha y hora'},{k:'origen',t:'Origen'},{k:'by',t:'Usuario'},{k:'pedido',t:'Pedido'},{k:'cliente',t:'Cliente'},{k:'label',t:'Campo'},{k:'from',t:'Original'},{k:'to',t:'Nuevo'},{k:'flag',t:'Señal'}];
+function fmtTs(iso){ try{ const d=new Date(iso); return d.toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return iso; } }
+function renderAudit(){
+  const onlyMaq=document.getElementById('onlyMaq') && document.getElementById('onlyMaq').checked;
+  let list=[...AUDIT].reverse();
+  if(onlyMaq) list=list.filter(a=>a.maquillaje);
+  const maqTotal=AUDIT.filter(a=>a.maquillaje).length;
+  const ac=document.getElementById('audCount'); if(ac) ac.textContent=maqTotal||'';
+  // KPIs de auditoría
+  const editsTiempo=AUDIT.filter(a=>a.field==='finCarga'||a.field==='inicioCarga').length;
+  const editsKilos=AUDIT.filter(a=>a.field==='kilos').length;
+  document.getElementById('auditKpis').innerHTML=[
+    {lbl:'Ediciones totales',val:AUDIT.length,cls:'blue'},
+    {lbl:'Posibles maquillajes',val:maqTotal,cls:'late'},
+    {lbl:'Ediciones de tiempos',val:editsTiempo,cls:'warn'},
+    {lbl:'Ediciones de kilos',val:editsKilos,cls:'warn'},
+  ].map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div></div>`).join('');
+  document.getElementById('theadAu').innerHTML=COLSAU.map(c=>`<th>${c.t}</th>`).join('');
+  const tb=document.getElementById('tbodyAu');
+  tb.innerHTML = list.length? list.map(a=>{ const org=a.origen==='app'?'<span class="pill p-proc">App</span>':'<span class="pill p-warn">Program.</span>';
+    return `<tr ${a.maquillaje?'style="background:#2a1010"':''}>`+
+    `<td class="muted">${fmtTs(a.ts)}</td><td>${org}</td><td>${a.by||'—'}</td><td>${a.pedido||'—'}</td><td>${a.cliente||'—'}</td>`+
+    `<td>${a.label}</td><td class="muted">${a.from||'(vacío)'}</td><td><b>${a.to||'(vacío)'}</b></td>`+
+    `<td>${a.maquillaje?'<span class="pill p-late">⚠ REVISAR</span>':(a.estatusAntes&&a.estatusAntes!==a.estatusDespues?`<span class="pill p-warn">${a.estatusAntes}→${a.estatusDespues}</span>`:'<span class="muted">—</span>')}</td></tr>`;
+  }).join('') : `<tr><td colspan="${COLSAU.length}" class="empty">Sin movimientos registrados. Todo limpio. ✅</td></tr>`;
+}
+function exportAudit(){
+  const H=['FechaHora','Pedido','Cliente','Campo','ValorOriginal','NuevoValor','PosibleMaquillaje','EstatusAntes','EstatusDespues'];
+  const L=[H.join(',')];
+  AUDIT.forEach(a=>{ const row=[a.ts,a.pedido,a.cliente,a.label,a.from,a.to,a.maquillaje?'SI':'',a.estatusAntes,a.estatusDespues]
+    .map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}); L.push(row.join(',')); });
+  dlBlob(new Blob(['﻿'+L.join('\n')],{type:'text/csv;charset=utf-8'}),'auditoria_embarques.csv'); toast('Auditoría exportada');
+}
+
+/* ================= FORM ================= */
+let editId=null;
+function openForm(id){
+  if(!id && !requireUnlock()) return;   // programar requiere sesión
+  editId=id||null;
+  const rec0 = id? DATA.find(x=>x.id===id) : null;
+  document.getElementById('modalTitle').textContent=id?(rec0&&rec0.cancelado?'Pedido CANCELADO':'Editar embarque'):'Programar embarque';
+  document.getElementById('delBtn').style.display=(id&&isMaster)?'inline-flex':'none';
+  document.getElementById('cancelBtn').style.display=(id&&unlocked&&!(rec0&&rec0.cancelado))?'inline-flex':'none';
+  document.getElementById('saveBtn').style.display=unlocked?'inline-flex':'none';
+  document.getElementById('f_tipo').innerHTML='<option value="">—</option>'+Object.keys(CFG.limites).map(t=>`<option>${t}</option>`).join('');
+  document.getElementById('f_motivo').innerHTML='<option value="">—</option>'+MOTIVOS.map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
+  const r=id?DATA.find(x=>x.id===id):{};
+  const S=(k,d='')=>{ const v=r[k]; return v==null?d:v; };
+  const set=(f,k,d='')=>document.getElementById(f).value=S(k,d);
+  set('f_pedido','pedido'); set('f_cliente','cliente'); set('f_familia','familia'); set('f_destino','destino');
+  set('f_estado','estado'); set('f_operador','operador'); set('f_eco','eco'); set('f_tipo','tipo');
+  set('f_peso','peso'); set('f_anden','anden'); set('f_fechaProg','fechaProg',TODAY); set('f_horaProg','horaProg'); set('f_horaSalidaProg','horaSalidaProg');
+  set('f_turno','turno'); set('f_cargador','cargador'); set('f_cargador2','cargador2'); set('f_monta','monta');
+  set('f_candado','candado'); set('f_colocacion','colocacion'); set('f_inicioCarga','inicioCarga'); set('f_finCarga','finCarga');
+  set('f_libSAP','libSAP'); set('f_horaSalida','horaSalida'); set('f_kilos','kilos'); set('f_sacos','sacos');
+  set('f_fechaCarga','fechaCarga'); set('f_motivo','motivo'); set('f_obs','obs');
+  document.getElementById('f_despachado').value = (r.despachado===true||r.despachado==='1'||r.despachado===1)?'1':'';
+  const hasExec = !!(r.colocacion||r.inicioCarga||r.finCarga||r.kilos||r.sacos||r.horaSalida||r.libSAP||(r.despachado===true||r.despachado==='1'||r.despachado===1));
+  toggleExec(hasExec);
+  recalc();
+  document.getElementById('overlay').classList.add('show');
+}
+let execOpen=false;
+function toggleExec(force){
+  execOpen = (force===undefined)? !execOpen : force;
+  const grid=document.querySelector('#overlay .grid');
+  if(grid) grid.classList.toggle('showexec', execOpen);
+  const t=document.getElementById('execToggle'); if(t) t.textContent = execOpen? '▾ Ocultar' : '▸ Mostrar';
+  if(execOpen) recalc();
+}
+function closeForm(){ document.getElementById('overlay').classList.remove('show'); }
+function readForm(){
+  const g=id=>document.getElementById(id).value;
+  return { pedido:g('f_pedido').trim(),cliente:g('f_cliente').trim(),familia:g('f_familia'),destino:g('f_destino').trim(),
+    estado:g('f_estado').trim(),operador:g('f_operador').trim(),eco:g('f_eco').trim(),tipo:g('f_tipo'),
+    peso:g('f_peso'),anden:g('f_anden').trim(),fechaProg:g('f_fechaProg'),horaProg:g('f_horaProg'),horaSalidaProg:g('f_horaSalidaProg'),turno:g('f_turno'),
+    cargador:g('f_cargador').trim(),cargador2:g('f_cargador2').trim(),monta:g('f_monta').trim(),candado:g('f_candado').trim(),
+    colocacion:g('f_colocacion'),inicioCarga:g('f_inicioCarga'),finCarga:g('f_finCarga'),libSAP:g('f_libSAP'),horaSalida:g('f_horaSalida'),
+    kilos:g('f_kilos'),sacos:g('f_sacos'),fechaCarga:g('f_fechaCarga'),despachado:g('f_despachado')==='1',motivo:g('f_motivo'),obs:g('f_obs').trim() };
+}
+function recalc(){
+  const r=readForm(), cv=calc(r);
+  const color=cv.estatus==='A TIEMPO'?'var(--ok)':cv.estatus==='RETRASADO'?'var(--late)':'var(--proc)';
+  const semTxt=cv.sem?`<span class="sem" style="background:var(--${cv.sem});display:inline-block;margin-right:4px"></span>${cv.semDif>0?'+':''}${cv.semDif} min`:'—';
+  const cc=cv.estatusCarga==='A TIEMPO'?'var(--ok)':cv.estatusCarga==='LENTA'?'var(--late)':'var(--proc)';
+  const cs=cv.estatusSalida==='A TIEMPO'?'var(--ok)':cv.estatusSalida==='TARDE'?'var(--late)':'var(--proc)';
+  document.getElementById('calcbox').innerHTML=`
+    <div style="width:100%;color:#cfe0f2;font-weight:600;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:2px">⏱ RENDIMIENTO DE CARGA (equipo)</div>
+    <div>Tiempo permitido (${r.tipo||'—'}): <b>${cv.permit!=null?cv.permit+' min':'—'}</b></div>
+    <div>Espera en andén: <b>${cv.espera!=null?minToHM(cv.espera):'—'}</b></div>
+    <div>Tiempo de carga: <b>${cv.carga!=null?minToHM(cv.carga):'—'}</b> (límite ${cv.horaLimite||'—'})</div>
+    <div>Estatus de carga: <b style="color:${cc}">${cv.estatusCarga}${cv.retrasoCarga?` (+${cv.retrasoCarga}m)`:''}</b></div>
+    <div>Kg/min: <b>${cv.kgmin!=null?Math.round(cv.kgmin).toLocaleString('es-MX'):'—'}</b></div>
+    <div style="width:100%;color:#cfe0f2;font-weight:600;border-bottom:1px solid var(--line);padding-bottom:4px;margin:6px 0 2px">🚚 CUMPLIMIENTO DE SALIDA</div>
+    <div>Salida programada: <b>${cv.salidaProg||'—'}</b></div>
+    <div>Salida real: <b>${cv.salidaReal||'—'}</b></div>
+    <div>Estatus de salida: <b style="color:${cs}">${cv.estatusSalida}${cv.retrasoSalida?` (+${cv.retrasoSalida}m tarde)`:cv.adelantoSalida?` (${cv.adelantoSalida}m antes)`:''}</b></div>
+    <div>Semáforo de ingreso: <b>${semTxt}</b></div>
+    <div>Permanencia total: <b>${cv.permanencia!=null?minToHM(cv.permanencia):'—'}</b></div>`;
+  document.getElementById('delayWrap').style.display=cv.estatus==='RETRASADO'?'flex':'none';
+  // auto-set fechaCarga when despachado y vacío
+  if(r.despachado && !document.getElementById('f_fechaCarga').value){ document.getElementById('f_fechaCarga').value=r.fechaProg||TODAY; }
+}
+['f_despachado'].forEach(id=>document.getElementById(id).addEventListener('change',recalc));
+function saveRow(){
+  if(!requireUnlock()) return;
+  const r=readForm();
+  if(!r.cliente && !r.pedido){ toast('Captura al menos cliente o pedido'); return; }
+  if(!r.fechaProg) r.fechaProg=TODAY;
+  if(editId){
+    const i=DATA.findIndex(x=>x.id===editId); const prev=DATA[i]||{};
+    auditDiff(prev, r);                 // registra cambios a campos sensibles ANTES de aplicar
+    r.id=editId; DATA[i]={...DATA[i],...r};
+  }
+  else { r.id='r'+Date.now(); DATA.push(r); }
+  persist(r.id, DATA.find(x=>x.id===(editId||r.id)));
+  closeForm(); render(); toast('Guardado ✓');
+}
+function cancelPedido(){
+  if(!editId || !requireUnlock()) return;
+  const i=DATA.findIndex(x=>x.id===editId); if(i<0)return; const r=DATA[i];
+  if(!confirm('Marcar este pedido como CANCELADO. Seguirá visible (tachado) y queda registrado. ¿Continuar?'))return;
+  const prev={...r};
+  r.cancelado=true; r.canceladoAt=new Date().toISOString();
+  // registrar en auditoría
+  const entry={ ts:new Date().toISOString(), id:r.id, pedido:r.pedido||'', cliente:r.cliente||'', field:'cancelado', label:'Cancelación de pedido', from:'activo', to:'CANCELADO', maquillaje:false, estatusAntes:calc(prev).estatus, estatusDespues:'CANCELADO', by:'superusuario', origen:'programador' };
+  AUDIT.push(entry); if(fbAudit){ try{ fbAudit.push(sanitize(entry)); }catch(e){} }
+  try{ localStorage.setItem(AUDIT_KEY, JSON.stringify(AUDIT.slice(-2000))); }catch(e){}
+  persist(r.id, r); closeForm(); render(); toast('Pedido cancelado');
+}
+function requireMaster(){ if(!isMaster){ toast('Solo el usuario master'); return false; } return true; }
+function auditPush(entry){ AUDIT.push(entry); if(fbAudit){ try{ fbAudit.push(sanitize(entry)); }catch(e){} } try{ localStorage.setItem(AUDIT_KEY, JSON.stringify(AUDIT.slice(-2000))); }catch(e){} }
+function auditConfig(oldL,newL,oldSV,newSV,oldSA,newSA){
+  const by=isMaster?'master':'superusuario';
+  Object.keys({...oldL,...newL}).forEach(k=>{
+    const a=oldL[k], b=newL[k];
+    if(a!==b){ const maq=(a!=null&&b!=null&&b>a); // aumentar el tiempo permitido = aflojar el estándar (posible maquillaje)
+      auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'limite_'+k,label:'Tiempo límite '+k,from:(a!=null?a+' min':'(nuevo)'),to:(b!=null?b+' min':'(eliminado)'),maquillaje:maq,estatusAntes:'',estatusDespues:'',by,origen:'programador'}); }
+  });
+  if(oldSV!==newSV) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'tolPuntual',label:'Tolerancia puntual',from:oldSV+' min',to:newSV+' min',maquillaje:(newSV>oldSV),estatusAntes:'',estatusDespues:'',by,origen:'programador'});
+  if(oldSA!==newSA) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'tolVentana',label:'Tolerancia ventana',from:oldSA+' min',to:newSA+' min',maquillaje:(newSA>oldSA),estatusAntes:'',estatusDespues:'',by,origen:'programador'});
+}
+/* ================= AUDITORÍA ================= */
+function normVal(v){ if(v===true)return 'Sí'; if(v===false||v===''||v==null)return v===false?'No':''; return String(v); }
+function auditDiff(prev, next){
+  AUDIT_FIELDS.forEach(f=>{
+    const a=normVal(prev[f]), b=normVal(next[f]);
+    if(a!==b && !(a===''&&b==='')){
+      // ¿esta edición "maquilla" un retraso? comparar estatus antes/después
+      const before=calc(prev), afterRec={...prev,...next}, after=calc(afterRec);
+      const maquillaje = (before.estatus==='RETRASADO' && after.estatus==='A TIEMPO') ||
+                         (f==='finCarga' && before.carga!=null && after.carga!=null && after.carga<before.carga) ||
+                         (f==='kilos' && Number(a||0)>0 && Number(b||0)<Number(a||0));
+      const entry={ ts:new Date().toISOString(), id:prev.id||next.id||'', pedido:prev.pedido||next.pedido||'', cliente:prev.cliente||next.cliente||'',
+        field:f, label:AUDIT_LABELS[f]||f, from:a, to:b, maquillaje,
+        estatusAntes:before.estatus, estatusDespues:after.estatus, by:(isMaster?'master':'superusuario'), origen:'programador' };
+      AUDIT.push(entry);
+      if(fbAudit){ try{ fbAudit.push(sanitize(entry)); }catch(e){} }
+    }
+  });
+  try{ localStorage.setItem(AUDIT_KEY, JSON.stringify(AUDIT.slice(-2000))); }catch(e){}
+}
+function deleteRow(){
+  if(!editId) return; if(!requireMaster()) return;
+  if(!confirm('Borrar PERMANENTEMENTE este pedido. No se puede deshacer. ¿Continuar?'))return;
+  const rec=DATA.find(x=>x.id===editId)||{};
+  const entry={ ts:new Date().toISOString(), id:editId, pedido:rec.pedido||'', cliente:rec.cliente||'', field:'borrado', label:'Borrado permanente', from:'existía', to:'BORRADO', maquillaje:true, estatusAntes:calc(rec).estatus, estatusDespues:'BORRADO', by:'master', origen:'programador' };
+  AUDIT.push(entry); if(fbAudit){ try{ fbAudit.push(sanitize(entry)); }catch(e){} } try{ localStorage.setItem(AUDIT_KEY, JSON.stringify(AUDIT.slice(-2000))); }catch(e){}
+  const removed=editId; DATA=DATA.filter(x=>x.id!==editId);
+  persistDelete(removed); closeForm(); render(); toast('Pedido borrado');
+}
+
+/* ================= SUPERUSUARIO ================= */
+function toggleLock(){
+  if(unlocked){ unlocked=false; isMaster=false; applyLock(); toast('Sesión cerrada'); }
+  else { document.getElementById('pwd').value=''; document.getElementById('pwdErr').style.display='none'; document.getElementById('loginOverlay').classList.add('show'); setTimeout(()=>document.getElementById('pwd').focus(),50); }
+}
+function doLogin(){
+  const v=document.getElementById('pwd').value;
+  if(CFG.masterPwd && v===CFG.masterPwd){ unlocked=true; isMaster=true; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Acceso master ✓'); }
+  else if(v===CFG.pwd){ unlocked=true; isMaster=false; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Superusuario habilitado ✓'); }
+  else document.getElementById('pwdErr').style.display='block';
+}
+function applyLock(){
+  document.querySelectorAll('[data-prot]').forEach(el=>{ const m=el.hasAttribute('data-master'); el.classList.toggle('show', m?isMaster:unlocked); });
+  const b=document.getElementById('lockBtn'); b.classList.toggle('open',unlocked); b.textContent=unlocked?(isMaster?'🕵️ Master activo':'🔓 Superusuario activo'):'🔒 Superusuario / Master';
+  // pestaña de auditoría: solo visible para master
+  const at=document.getElementById('tabAudit'); if(at) at.style.display=isMaster?'inline-flex':'none';
+  const pm=document.getElementById('masterCfg'); if(pm) pm.style.display=isMaster?'block':'none';
+  if(!isMaster && curView==='audit') setView('tabla');
+  if(isMaster) renderAudit();
+}
+function requireUnlock(){ if(!unlocked){ toast('Requiere superusuario'); toggleLock(); return false; } return true; }
+
+/* ================= CONFIG ================= */
+function openConfig(){ if(!requireMaster())return; buildCfg(); document.getElementById('cfgOverlay').classList.add('show'); }
+function buildCfg(){
+  document.getElementById('cfgBody').innerHTML=Object.entries(CFG.limites).map(([k,v])=>`
+    <div style="display:flex;gap:9px;align-items:center;margin-bottom:7px">
+      <input value="${k}" class="cfgKey" style="flex:1"><input type="number" value="${v}" class="cfgVal" style="width:80px"><span class="hint">min</span></div>`).join('')
+    +`<button class="ghost" onclick="addCfgRow()">＋ Agregar tipo</button>`;
+  document.getElementById('cfgSemV').value=CFG.semV; document.getElementById('cfgSemA').value=CFG.semA;
+  document.getElementById('cfgFb').value=CFG.firebase?JSON.stringify(CFG.firebase,null,2):'';
+  buildUsers();
+}
+function buildUsers(){
+  const ub=document.getElementById('usersBody'); if(!ub) return;
+  const rows=(CFG.users||[]).map(u=>userRow(u.name,u.pin)).join('');
+  ub.innerHTML=rows+`<button class="ghost" onclick="addUserRow()">＋ Agregar usuario</button>`;
+}
+function userRow(name,pin){ return `<div style="display:flex;gap:9px;align-items:center;margin-bottom:7px">
+  <input value="${(name||'').replace(/"/g,'&quot;')}" class="uName" placeholder="Nombre del cargador" style="flex:1">
+  <input value="${(pin||'')}" class="uPin" placeholder="PIN" inputmode="numeric" style="width:90px">
+  <button class="ghost" style="color:var(--late);padding:6px 9px" onclick="this.parentElement.remove()">✕</button></div>`; }
+function addUserRow(){ const ub=document.getElementById('usersBody'); const d=document.createElement('div'); d.innerHTML=userRow('',''); ub.insertBefore(d.firstChild, ub.lastChild); }
+function addCfgRow(){ const d=document.createElement('div'); d.style.cssText='display:flex;gap:9px;align-items:center;margin-bottom:7px'; d.innerHTML='<input value="" class="cfgKey" placeholder="TIPO" style="flex:1"><input type="number" value="30" class="cfgVal" style="width:80px"><span class="hint">min</span>'; const b=document.getElementById('cfgBody'); b.insertBefore(d,b.lastChild); }
+function saveConfig(){
+  const keys=[...document.querySelectorAll('.cfgKey')],vals=[...document.querySelectorAll('.cfgVal')];
+  const n={}; keys.forEach((k,i)=>{const kk=k.value.trim().toUpperCase(); if(kk)n[kk]=Number(vals[i].value)||0;});
+  const newSemV=Number(document.getElementById('cfgSemV').value)||15, newSemA=Number(document.getElementById('cfgSemA').value)||30;
+  auditConfig(CFG.limites, n, CFG.semV, newSemV, CFG.semA, newSemA);   // registrar cambios de estándares
+  CFG.limites=n; CFG.semV=newSemV; CFG.semA=newSemA;
+  // usuarios de la app (solo master edita)
+  if(isMaster){ const uN=[...document.querySelectorAll('.uName')], uP=[...document.querySelectorAll('.uPin')];
+    const us=[]; uN.forEach((el,i)=>{ const nm=el.value.trim(); const pn=(uP[i].value||'').trim(); if(nm&&pn) us.push({name:nm,pin:pn}); });
+    CFG.users=us; }
+  const fbtxt=document.getElementById('cfgFb').value.trim();
+  let reinit=false;
+  if(fbtxt){ try{ const parsed=JSON.parse(fbtxt); if(JSON.stringify(parsed)!==JSON.stringify(CFG.firebase)){CFG.firebase=parsed;reinit=true;} }catch(e){ toast('JSON de Firebase inválido'); return; } }
+  else if(CFG.firebase){ CFG.firebase=null; reinit=true; }
+  persistCfg(); document.getElementById('cfgOverlay').classList.remove('show'); render(); toast('Configuración guardada');
+  if(reinit) initFirebase();
+}
+function savePwd(){ const v=document.getElementById('cfgPwd').value.trim(); if(v.length<4){toast('Mínimo 4 caracteres');return;} CFG.pwd=v; persistCfg(); document.getElementById('cfgPwd').value=''; toast('Contraseña actualizada'); }
+function saveMasterPwd(){ if(!isMaster)return; const v=document.getElementById('cfgMasterPwd').value.trim(); if(v.length<4){toast('Mínimo 4 caracteres');return;} CFG.masterPwd=v; persistCfg(); document.getElementById('cfgMasterPwd').value=''; toast('Contraseña master actualizada'); }
+function resetData(){ if(!requireMaster())return; if(!confirm('Esto borra los cambios y regresa a los datos de ejemplo. ¿Continuar?'))return;
+  DATA=normalize(JSON.parse(JSON.stringify(SEED))); CFG.limites={...DEFAULT_LIMITES};
+  persistAll(); render(); toast('Datos restablecidos'); }
+function clearAll(){ if(!requireMaster())return;
+  if(!confirm('Esto deja TODO en blanco: borra todos los embarques aquí y en la nube (Firebase). Esta acción no se puede deshacer. ¿Continuar?'))return;
+  DATA=[];
+  try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){}
+  if(fb&&fbData){ fbData.set(null); if(fbCfg) fbCfg.update({seeded:true}); }
+  document.getElementById('cfgOverlay').classList.remove('show');
+  render(); toast('Todo vacío — listo para empezar de cero'); }
+
+/* ================= EXPORT/IMPORT ================= */
+function exportJSON(){ if(!requireUnlock())return; dlBlob(new Blob([JSON.stringify({cfg:CFG,data:DATA},null,2)],{type:'application/json'}),'respaldo_embarques.json'); toast('Respaldo descargado'); }
+function importJSON(e){ if(!requireUnlock())return; const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+  rd.onload=()=>{ try{ const o=JSON.parse(rd.result); DATA=normalize(Array.isArray(o)?o:(o.data||[])); if(o.cfg)CFG={...CFG,...o.cfg}; persistAll(); render(); toast('Respaldo cargado ✓'); }catch(err){ toast('Archivo inválido'); } };
+  rd.readAsText(f); e.target.value=''; }
+function exportCSV(){
+  const H=['F.Prog','Cita','SalidaProg','Pedido','Cliente','Destino','Estado','Unidad','Eco','Anden','Turno','Operador','Colocacion','Inicio','Fin','SalidaReal','EsperaAnden','T.Carga','EstatusCarga','EstatusSalida','RetrasoSalidaMin','Permanencia','Semaforo','KgProg','KgCargado','KgMin','F.Carga','Despachado','Motivo','Cargador','Obs'];
+  const inP=DATA.filter(inPeriod), rows=sortRows(rowsFor(inP));
+  const L=[H.join(',')];
+  rows.forEach(({r,cv})=>{ const row=[r.fechaProg,r.horaProg,cv.salidaProg,r.pedido,r.cliente,r.destino,r.estado,r.tipo,r.eco,r.anden,r.turno,r.operador,r.colocacion,r.inicioCarga,r.finCarga,cv.salidaReal,cv.espera!=null?minToHM(cv.espera):'',cv.carga!=null?minToHM(cv.carga):'',cv.estatusCarga,cv.estatusSalida,cv.retrasoSalida||'',cv.permanencia!=null?minToHM(cv.permanencia):'',cv.sem||'',r.peso,r.kilos,cv.kgmin!=null?Math.round(cv.kgmin):'',r.fechaCarga,cv.despachado?'SI':'NO',r.motivo,r.cargador,r.obs]
+    .map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}); L.push(row.join(',')); });
+  dlBlob(new Blob(['﻿'+L.join('\n')],{type:'text/csv;charset=utf-8'}),'programacion_embarques.csv'); toast('CSV descargado');
+}
+function dlBlob(b,n){ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=n; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+
+/* ================= PERSISTENCIA (local + firebase) ================= */
+function normalize(arr){ arr.forEach((r,i)=>{ if(!r.id)r.id='r'+i+'_'+Math.random().toString(36).slice(2,6); }); return arr; }
+function saveCfgLocal(){} // noop placeholder to keep render happy
+function persistCfg(){ try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbCfg){ fbCfg.set(sanitize(CFG)); } }
+function persist(id,rec){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fb&&fbData&&rec){ fbData.child(id).set(sanitize(rec)); } }
+function persistDelete(id){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fb&&fbData){ fbData.child(id).remove(); } }
+function persistAll(){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbData){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); fbCfg.set(sanitize(CFG)); } }
+function sanitize(o){ return JSON.parse(JSON.stringify(o)); }
+
+function loadLocal(){
+  try{ const c=localStorage.getItem(CFG_KEY); if(c) CFG={...CFG,...JSON.parse(c)}; }catch(e){}
+  try{ const a=localStorage.getItem(AUDIT_KEY); if(a) AUDIT=JSON.parse(a); }catch(e){}
+  loadFlotaLocal();
+  try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=normalize(JSON.parse(d)); return; } }catch(e){}
+  DATA=normalize(JSON.parse(JSON.stringify(SEED)));
+  try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}
+}
+function loadFlotaLocal(){
+  try{ const f=localStorage.getItem(FLOTA_KEY); if(f!=null){ FLOTA=normalize(JSON.parse(f)); return; } }catch(e){}
+  FLOTA=normalize(JSON.parse(JSON.stringify(FLOTA_SEED)));
+  try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){}
+}
+// si pegaste la config arriba y aún no hay una guardada, úsala automáticamente
+function applyHardcodedFb(){ try{ if(FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL && !CFG.firebase){ CFG.firebase=FIREBASE_CONFIG; } }catch(e){} }
+
+/* ================= FIREBASE ================= */
+function setConn(state,txt){ const c=document.getElementById('conn'); c.className='conn '+state; document.getElementById('connTxt').textContent=txt; }
+function initFirebase(){
+  if(!CFG.firebase || !CFG.firebase.databaseURL){ setConn('local','Local'); document.getElementById('footer').textContent='Programador de embarques · modo local. Conecta Firebase en ⚙ Configuración para sincronizar con la app de cargadores.'; return; }
+  loadFbScripts(()=>{
+    try{
+      if(!fb){ fb = firebase.initializeApp(CFG.firebase, 'prog'+Date.now()); }
+      const db = firebase.database(fb);
+      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota');
+      setConn('online','Conectando…');
+      // sembrar datos de ejemplo SOLO la primera vez (marca "seeded" en la nube).
+      // Tras vaciar todo, la marca queda puesta y ya no se vuelve a sembrar.
+      Promise.all([fbData.once('value'), fbCfg.once('value')]).then(([ds,cs])=>{
+        const cv=cs.val()||{};
+        if(!ds.exists() && !cv.seeded){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); fbCfg.update({...sanitize(CFG), seeded:true}); }
+      });
+      // sembrar flota la primera vez (marca "flotaSeeded" independiente)
+      Promise.all([fbFlota.once('value'), fbCfg.once('value')]).then(([fs,cs])=>{
+        const cv=cs.val()||{};
+        if(!fs.exists() && !cv.flotaSeeded){ const o={}; FLOTA.forEach(r=>o[r.id]=sanitize(r)); fbFlota.set(o); fbCfg.update({flotaSeeded:true}); }
+      });
+      fbData.on('value', snap=>{ const val=snap.val(); if(val){ DATA=normalize(Object.values(val)); render(); } setConn('online','Nube conectada'); document.getElementById('footer').textContent='Programador de embarques · sincronizado en tiempo real con la app de cargadores (Firebase).'; });
+      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; } });
+      fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster) renderAudit(); } });
+      fbFlota.on('value', snap=>{ const v=snap.val(); if(v){ FLOTA=normalize(Object.values(v)); try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} } renderFlota(); },
+        err=>{ console.error('flota:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "flota" en las reglas de Firebase'); });
+    }catch(e){ console.error(e); setConn('local','Local (error nube)'); toast('No se pudo conectar a Firebase'); }
+  });
+}
+let fbLoaded=false;
+function loadFbScripts(cb){
+  if(fbLoaded||window.firebase){ fbLoaded=true; return cb(); }
+  const s1=document.createElement('script'); s1.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
+  s1.onload=()=>{ const s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'; s2.onload=()=>{fbLoaded=true;cb();}; s2.onerror=()=>{setConn('local','Local (sin internet)');}; document.head.appendChild(s2); };
+  s1.onerror=()=>{ setConn('local','Local (sin internet)'); };
+  document.head.appendChild(s1);
+}
+
+/* ================= OPCIONES / DATALISTS ================= */
+function uniq(k){ return [...new Set(DATA.map(r=>(r[k]||'').toString().trim()).filter(Boolean))].sort(); }
+function refreshOptions(){
+  fill('fturno',[...new Set(DATA.map(r=>String(r.turno||'')).filter(Boolean))].sort());
+  fill('f_tipo_dummy',[]); // noop
+  dl('dl_cli',uniq('cliente')); dl('dl_dest',uniq('destino')); dl('dl_carg',uniq('cargador'));
+}
+function fill(id,arr){ const el=document.getElementById(id); if(!el)return; const cur=el.value; el.innerHTML='<option value="">Todos</option>'+arr.map(v=>`<option>${v}</option>`).join(''); if(arr.includes(cur))el.value=cur; }
+function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
+
+/* ================= VISTAS ================= */
+function setView(v){ if(v==='audit'&&!isMaster)return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); }
+
+/* ================================================================
+   ================= FLOTA / MANTENIMIENTO ========================
+   Control de servicios, seguros y verificaciones por unidad, con
+   tablero de alertas (VENCIDO / URGENTE / PRÓXIMO / AL DÍA).
+   Réplica de la lógica del Excel "Control de Flota y Alertas".
+================================================================ */
+function flotaDays(vencISO){ if(!vencISO) return null; const t=new Date(TODAY+'T00:00:00'), v=new Date(vencISO+'T00:00:00'); if(isNaN(v)) return null; return Math.round((v-t)/86400000); }
+function flotaNum(v){ if(v===''||v==null) return null; const n=Number(v); return isNaN(n)?null:n; }
+// último registro (por fecha) de una unidad para cierto trámite
+function flotaLast(eco, tramite){
+  const list=FLOTA.filter(r=>String(r.eco).trim()===String(eco).trim() && (r.tramite||'')===tramite)
+    .sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  return list.length? list[list.length-1] : null;
+}
+// estatus por FECHA (seguro / verificaciones)
+function flotaDateStatus(eco, tramite){
+  const r=flotaLast(eco, tramite);
+  if(!r || !r.vencimiento) return {st:FLOTA_ST.SIN, days:null, rec:r};
+  const d=flotaDays(r.vencimiento);
+  let st=FLOTA_ST.ALDIA;
+  if(d<=FLOTA_PARAMS.dVenc) st=FLOTA_ST.VENCIDO;
+  else if(d<=FLOTA_PARAMS.dUrg) st=FLOTA_ST.URGENTE;
+  else if(d<=FLOTA_PARAMS.dProx) st=FLOTA_ST.PROXIMO;
+  return {st, days:d, rec:r, venc:r.vencimiento};
+}
+// estatus por KILÓMETROS (servicio)
+function flotaKmStatus(eco){
+  const r=flotaLast(eco, 'Servicio');
+  if(!r) return {st:FLOTA_ST.SIN, rem:null, rec:null};
+  // kilometraje actual = mayor kilometraje registrado de la unidad (odómetro sube)
+  const kms=FLOTA.filter(x=>String(x.eco).trim()===String(eco).trim()).map(x=>flotaNum(x.kmActual)).filter(n=>n!=null);
+  const cur = kms.length? Math.max(...kms) : flotaNum(r.kmActual);
+  const next = flotaNum(r.kmProximo) != null ? flotaNum(r.kmProximo) : ((flotaNum(r.kmActual)||0) + FLOTA_PARAMS.kmInterval);
+  if(cur==null || next==null) return {st:FLOTA_ST.SIN, rem:null, rec:r};
+  const rem = next - cur;
+  let st=FLOTA_ST.ALDIA;
+  if(rem<=0) st=FLOTA_ST.VENCIDO;
+  else if(rem<=FLOTA_PARAMS.kmUrg) st=FLOTA_ST.URGENTE;
+  else if(rem<=FLOTA_PARAMS.kmProx) st=FLOTA_ST.PROXIMO;
+  return {st, rem, rec:r, cur, next};
+}
+function flotaUnits(){
+  const map={};
+  FLOTA.forEach(r=>{ const k=String(r.eco||'').trim(); if(!k)return; if(!map[k]) map[k]={eco:k, tipo:r.tipo||'', fecha:r.fecha||''};
+    if((r.fecha||'')>=map[k].fecha){ map[k].tipo=r.tipo||map[k].tipo; map[k].fecha=r.fecha||map[k].fecha; } });
+  return Object.values(map).sort((a,b)=>String(a.eco).localeCompare(String(b.eco),'es',{numeric:true}));
+}
+function stPill(st){ return `<span class="pill" style="background:${st.bg};color:${st.c}">${st.t}</span>`; }
+function flotaUnitData(u){
+  const seguro=flotaDateStatus(u.eco,'Seguro');
+  const humo=flotaDateStatus(u.eco,'Verificacion de humo');
+  const fisio=flotaDateStatus(u.eco,'Verificacion de fisiomecanica');
+  const serv=flotaKmStatus(u.eco);
+  const cats=[
+    {lbl:'Seguro', ic:'🛡️', d:seguro, kind:'date'},
+    {lbl:'Verif. humo', ic:'💨', d:humo, kind:'date'},
+    {lbl:'Verif. físico-mecánica', ic:'🔧', d:fisio, kind:'date'},
+    {lbl:'Servicio', ic:'🛠️', d:serv, kind:'km'}
+  ];
+  const worst=cats.reduce((m,c)=> c.d.st.sev>m.sev?c.d.st:m, FLOTA_ST.ALDIA);
+  return {cats, worst, seguro, humo, fisio, serv};
+}
+function flotaDetailText(c){
+  const d=c.d;
+  if(d.st===FLOTA_ST.SIN) return 'Sin registro';
+  if(c.kind==='date'){ const n=d.days; const f=d.venc? d.venc.split('-').reverse().join('/') : '';
+    if(n==null) return f;
+    if(n<0) return `venció hace ${Math.abs(n)} d · ${f}`;
+    if(n===0) return `vence HOY · ${f}`;
+    return `en ${n} días · ${f}`;
+  } else { const r=d.rem; if(r==null) return '—';
+    if(r<=0) return `pasado por ${Math.abs(r).toLocaleString('es-MX')} km`;
+    return `faltan ${r.toLocaleString('es-MX')} km`;
+  }
+}
+function flotaAccion(ud){
+  const bad=ud.cats.filter(c=>c.d.st.sev>=FLOTA_ST.PROXIMO.sev).sort((a,b)=>b.d.st.sev-a.d.st.sev);
+  if(!bad.length){ const sin=ud.cats.filter(c=>c.d.st===FLOTA_ST.SIN); return sin.length? {c:FLOTA_ST.SIN.c, t:`Falta capturar: ${sin.map(x=>x.lbl).join(', ')}`} : {c:FLOTA_ST.ALDIA.c, t:'Todo al día ✓'}; }
+  const t=bad.map(c=>`${c.lbl}: ${c.d.st.t.toLowerCase()}`).join(' · ');
+  return {c:bad[0].d.st.c, t};
+}
+function renderFlota(){
+  const units=flotaUnits();
+  // ---- tablero de alertas: KPIs ----
+  let nVenc=0,nUrg=0,nProx=0,nAldia=0,nSin=0;
+  const uds=units.map(u=>{ const ud=flotaUnitData(u); const w=ud.worst;
+    if(w===FLOTA_ST.VENCIDO)nVenc++; else if(w===FLOTA_ST.URGENTE)nUrg++; else if(w===FLOTA_ST.PROXIMO)nProx++; else if(w===FLOTA_ST.SIN)nSin++; else nAldia++;
+    return {u,ud}; });
+  const alertas=nVenc+nUrg;
+  const fc=document.getElementById('flotaCount'); if(fc) fc.textContent=alertas||'';
+  const K=[
+    {lbl:'Unidades', val:units.length, foot:'en control de flota', cls:'blue'},
+    {lbl:'Vencidos', val:nVenc, foot:'requieren acción inmediata', cls:'late'},
+    {lbl:'Urgentes', val:nUrg, foot:'≤ 7 días / ≤ 10 mil km', cls:'warn'},
+    {lbl:'Próximos', val:nProx, foot:'≤ 30 días / ≤ 25 mil km', cls:'warn'},
+    {lbl:'Al día', val:nAldia, foot:'sin pendientes', cls:'ok'}
+  ];
+  document.getElementById('flotaKpis').innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot}</div></div>`).join('');
+  // ---- tarjetas por unidad ----
+  const order={[FLOTA_ST.VENCIDO.t]:0,[FLOTA_ST.URGENTE.t]:1,[FLOTA_ST.PROXIMO.t]:2,[FLOTA_ST.SIN.t]:3,[FLOTA_ST.ALDIA.t]:4};
+  uds.sort((a,b)=> (b.ud.worst.sev-a.ud.worst.sev) || String(a.u.eco).localeCompare(String(b.u.eco),'es',{numeric:true}));
+  document.getElementById('flotaCards').innerHTML = uds.length? uds.map(({u,ud})=>{
+    const acc=flotaAccion(ud);
+    const rows=ud.cats.map(c=>`<div style="display:flex;align-items:center;gap:8px;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)">
+      <span style="min-width:150px"><span style="opacity:.8">${c.ic}</span> ${c.lbl}</span>
+      <span style="flex:1;text-align:right;font-size:11px;color:var(--muted)">${flotaDetailText(c)}</span>
+      ${stPill(c.d.st)}</div>`).join('');
+    return `<div class="card" style="border-left:5px solid ${ud.worst.c};padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div><div style="font-size:16px;font-weight:800">Eco ${u.eco}</div><div class="muted" style="font-size:11.5px">${u.tipo||'—'}</div></div>
+        ${stPill(ud.worst)}
+      </div>
+      <div style="margin-top:6px">${rows}</div>
+      <div style="margin-top:9px;font-size:11.5px;background:${ud.worst.bg};color:${acc.c};border-radius:8px;padding:7px 9px">⚑ ${acc.t}</div>
+    </div>`;
+  }).join('') : `<div class="empty" style="grid-column:1/-1">Sin unidades registradas. Usa “＋ Registrar servicio / trámite”.</div>`;
+  renderFlotaTable();
+  // datalists para el formulario
+  dl('dl_flTipo',[...new Set(FLOTA.map(r=>(r.tipo||'').trim()).filter(Boolean))].sort());
+  dl('dl_flEco',[...new Set(FLOTA.map(r=>String(r.eco||'').trim()).filter(Boolean))].sort());
+}
+const COLSFL=[{k:'fecha',t:'Fecha'},{k:'tipo',t:'Unidad'},{k:'eco',t:'Eco'},{k:'tramite',t:'Trámite'},{k:'kmActual',t:'Km actual',num:1},{k:'kmProximo',t:'Próx. km',num:1},{k:'vencimiento',t:'Vencimiento'},{k:'estatus',t:'Estatus'},{k:'notas',t:'Notas'}];
+function flotaRowStatus(r){
+  if(r.tramite==='Servicio'){ const s=flotaKmStatus(r.eco); return s.st; }
+  if(r.tramite==='Seguro') return flotaDateStatus(r.eco,'Seguro').st;
+  if(r.tramite==='Verificacion de humo') return flotaDateStatus(r.eco,'Verificacion de humo').st;
+  if(r.tramite==='Verificacion de fisiomecanica') return flotaDateStatus(r.eco,'Verificacion de fisiomecanica').st;
+  if(r.vencimiento){ const d=flotaDays(r.vencimiento); let st=FLOTA_ST.ALDIA; if(d<=0)st=FLOTA_ST.VENCIDO; else if(d<=FLOTA_PARAMS.dUrg)st=FLOTA_ST.URGENTE; else if(d<=FLOTA_PARAMS.dProx)st=FLOTA_ST.PROXIMO; return st; }
+  return FLOTA_ST.SIN;
+}
+function renderFlotaTable(){
+  document.getElementById('theadFl').innerHTML=COLSFL.map(c=>`<th>${c.t}</th>`).join('');
+  const list=[...FLOTA].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'') || String(a.eco).localeCompare(String(b.eco),'es',{numeric:true}));
+  const tb=document.getElementById('tbodyFl');
+  tb.innerHTML = list.length? list.map(r=>`<tr onclick="openFlotaForm('${r.id}')">`+COLSFL.map(c=>{
+    if(c.k==='estatus'){ return `<td>${stPill(flotaRowStatus(r))}</td>`; }
+    let v=r[c.k];
+    if(v===''||v==null) return '<td><span class="muted">—</span></td>';
+    if(c.k==='fecha'||c.k==='vencimiento') v=String(v).split('-').reverse().join('/');
+    else if(c.num) v=Number(v).toLocaleString('es-MX');
+    return `<td class="${c.num?'num':''}">${v}</td>`;
+  }).join('')+`</tr>`).join('') : `<tr><td colspan="${COLSFL.length}" class="empty">Sin registros de flota.</td></tr>`;
+}
+/* ----- formulario de flota ----- */
+function openFlotaForm(id){
+  flotaEditId=id||null;
+  document.getElementById('fl_tramite').innerHTML=FLOTA_TRAMITES.map(t=>`<option value="${t}">${t}</option>`).join('');
+  const del=document.getElementById('flotaDelBtn');
+  if(id){
+    const r=FLOTA.find(x=>x.id===id)||{};
+    document.getElementById('flotaModalTitle').textContent='Editar registro de flota';
+    setV('fl_fecha',r.fecha); setV('fl_tipo',r.tipo); setV('fl_eco',r.eco); setV('fl_tramite',r.tramite||'Servicio');
+    setV('fl_kmActual',r.kmActual); setV('fl_kmProximo',r.kmProximo); setV('fl_venc',r.vencimiento); setV('fl_notas',r.notas);
+    del.style.display='inline-flex';
+  } else {
+    document.getElementById('flotaModalTitle').textContent='Registrar servicio / trámite';
+    setV('fl_fecha',TODAY); setV('fl_tipo',''); setV('fl_eco',''); setV('fl_tramite','Servicio');
+    setV('fl_kmActual',''); setV('fl_kmProximo',''); setV('fl_venc',''); setV('fl_notas','');
+    del.style.display='none';
+  }
+  flotaTramiteChange(); flotaRecalc();
+  document.getElementById('flotaOverlay').classList.add('show');
+}
+function setV(id,v){ const el=document.getElementById(id); if(el) el.value=(v==null?'':v); }
+function closeFlotaForm(){ document.getElementById('flotaOverlay').classList.remove('show'); flotaEditId=null; }
+function flotaTramiteChange(){
+  const t=document.getElementById('fl_tramite').value;
+  const km = (t==='Servicio');
+  document.getElementById('fl_kmActual').closest('.field').style.display = km?'flex':'none';
+  document.getElementById('fl_kmProximo').closest('.field').style.display = km?'flex':'none';
+  const vf=document.getElementById('fl_venc').closest('.field');
+  vf.querySelector('label').textContent = km?'Vencimiento (opcional)':'Vencimiento (seguro / verificación)';
+  flotaRecalc();
+}
+function flotaRecalc(){
+  const t=document.getElementById('fl_tramite').value;
+  const box=document.getElementById('flotaCalc');
+  if(t==='Servicio'){
+    const kmA=flotaNum(document.getElementById('fl_kmActual').value);
+    let kmP=flotaNum(document.getElementById('fl_kmProximo').value);
+    if(kmP==null && kmA!=null) kmP=kmA+FLOTA_PARAMS.kmInterval;
+    const rem = (kmA!=null&&kmP!=null)? kmP-kmA : null;
+    box.innerHTML = `<span>Intervalo servicio: <b>${FLOTA_PARAMS.kmInterval.toLocaleString('es-MX')} km</b></span>`+
+      (kmP!=null?`<span>Próximo servicio a: <b>${kmP.toLocaleString('es-MX')} km</b></span>`:'')+
+      (rem!=null?`<span>Restante estimado: <b>${rem.toLocaleString('es-MX')} km</b></span>`:'')+
+      `<span class="muted">El estatus usa el mayor kilometraje registrado de la unidad.</span>`;
+  } else {
+    const v=document.getElementById('fl_venc').value;
+    const d=flotaDays(v);
+    box.innerHTML = d!=null ? `<span>Faltan <b>${d} días</b> para el vencimiento.</span><span class="muted">≤${FLOTA_PARAMS.dProx}d próximo · ≤${FLOTA_PARAMS.dUrg}d urgente · vencido al llegar a 0.</span>` : `<span class="muted">Captura la fecha de vencimiento del ${t.toLowerCase()}.</span>`;
+  }
+}
+function saveFlotaRow(){
+  if(!requireUnlock()) return;
+  const g=id=>document.getElementById(id).value.trim();
+  const eco=g('fl_eco');
+  if(!eco){ toast('Captura el número económico'); return; }
+  const rec={
+    id: flotaEditId || ('fl'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)),
+    fecha:g('fl_fecha')||TODAY, tipo:g('fl_tipo').toUpperCase(), eco:eco, tramite:g('fl_tramite'),
+    kmActual: g('fl_kmActual')===''?'':Number(g('fl_kmActual')),
+    kmProximo: g('fl_kmProximo')===''?'':Number(g('fl_kmProximo')),
+    vencimiento:g('fl_venc'), notas:g('fl_notas'),
+    ultimaEdicion:new Date().toISOString()
+  };
+  const i=FLOTA.findIndex(x=>x.id===rec.id);
+  if(i>=0) FLOTA[i]=rec; else FLOTA.push(rec);
+  persistFlota(rec.id, rec);
+  closeFlotaForm(); renderFlota(); toast(i>=0?'Registro actualizado':'Registro guardado ✓');
+}
+function deleteFlotaRow(){
+  if(!flotaEditId || !requireUnlock()) return;
+  if(!confirm('¿Borrar este registro de flota? No se puede deshacer.'))return;
+  const id=flotaEditId; FLOTA=FLOTA.filter(x=>x.id!==id);
+  persistFlotaDelete(id); closeFlotaForm(); renderFlota(); toast('Registro borrado');
+}
+function persistFlota(id,rec){ try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} if(fb&&fbFlota&&rec){ fbFlota.child(id).set(sanitize(rec)); } }
+function persistFlotaDelete(id){ try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} if(fb&&fbFlota){ fbFlota.child(id).remove(); } }
+function exportFlotaCSV(){
+  const H=['Fecha','Unidad','Eco','Tramite','KmActual','ProxKm','Vencimiento','Estatus','Notas'];
+  const list=[...FLOTA].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  const L=[H.join(',')];
+  list.forEach(r=>{ const row=[r.fecha,r.tipo,r.eco,r.tramite,r.kmActual,r.kmProximo,r.vencimiento,flotaRowStatus(r).t,r.notas]
+    .map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}); L.push(row.join(',')); });
+  dlBlob(new Blob(['﻿'+L.join('\n')],{type:'text/csv;charset=utf-8'}),'control_flota.csv'); toast('CSV de flota descargado');
+}
+
+/* ================= UTIL ================= */
+let tT; function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),1800); }
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o)o.classList.remove('show'); }));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape')document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show')); });
+
+/* ================= INIT ================= */
+loadLocal();
+applyHardcodedFb();
+setPreset('semana');
+applyLock();
+initFirebase();
+render();
+</script>
+</body>
+</html>
