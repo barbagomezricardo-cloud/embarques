@@ -2506,7 +2506,10 @@ function renderRuta(){
 // ── NUBE / SINCRONIZACIÓN AUTOMÁTICA ─────────────────────────────────────────
 const Q_GROUPS=[[[2,3,4],'Feb–Abr'],[[5,6,7],'May–Jul'],[[8,9,10],'Ago–Oct'],[[11,12,1],'Nov–Ene']];
 function quarterOf(m){for(const g of Q_GROUPS){if(g[0].indexOf(m)>=0)return {months:g[0],label:g[1]};}return {months:[m],label:''};}
-function getCloudCfg(){try{return JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){return {};}}
+const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
+const SK_APP='https://barbagomezricardo-cloud.github.io/embarques/vendedor.html';
+const SK_MASTER='https://barbagomezricardo-cloud.github.io/embarques/maestra.html';
+function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app)c.app=SK_APP; if(!c.master)c.master=SK_MASTER; return c;}
 function saveCloudCfg(){const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));renderCodesPanel();}
 function buildVendorPayloads(){
   if(!DATA)return null;
@@ -2554,24 +2557,24 @@ function buildVendorPayloads(){
   return {period,lastMonth,q,updatedStr,byVendor:out};
 }
 function publishCloud(){
-  const cfg=getCloudCfg(); if(!cfg.db||!cfg.secret){alert('Primero pega la URL de la base y el secreto, y da Guardar config.');return;}
+  const cfg=getCloudCfg(); if(!cfg.db){alert('Falta la URL de la base de datos.');return;}
   const pj=buildVendorPayloads(); if(!pj){alert('Carga primero el reporte de Odoo.');return;}
   const db=cfg.db.replace(/\/$/,''); const keys=Object.keys(pj.byVendor);
   let done=0,fail=0; const btn=document.getElementById('cl-pubbtn'); if(btn)btn.textContent='Publicando...';
   Promise.all(keys.map(v=>{
-    const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json?auth='+encodeURIComponent(cfg.secret);
+    const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';
     return fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).then(r=>{r.ok?done++:fail++;}).catch(()=>fail++);
   })).then(()=>{
     const idx={updatedStr:pj.updatedStr,vendors:keys.map(keyp)};
-    return fetch(db+'/skan/_index.json?auth='+encodeURIComponent(cfg.secret),{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
-  }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa URL/secreto)'):'')+'.\nCada vendedor verá su info actualizada al abrir su link.'); });
+    return fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
+  }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa tu licencia/internet)'):'')+'.\nCada vendedor verá su info actualizada solo.'); });
 }
 function autoPublishCloud(){
-  const cfg=getCloudCfg(); if(!cfg.db||!cfg.secret)return;
+  const cfg=getCloudCfg(); if(!cfg.db)return;
   const pj=buildVendorPayloads(); if(!pj)return; const db=cfg.db.replace(/\/$/,'');
-  Object.keys(pj.byVendor).forEach(v=>{const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json?auth='+encodeURIComponent(cfg.secret);fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).catch(()=>{});});
+  Object.keys(pj.byVendor).forEach(v=>{const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).catch(()=>{});});
   const idx={updatedStr:pj.updatedStr,vendors:Object.keys(pj.byVendor).map(keyp)};
-  fetch(db+'/skan/_index.json?auth='+encodeURIComponent(cfg.secret),{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
+  fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
 }
 function cpv(btn){const el=btn.parentElement.querySelector('input,textarea');if(!el)return;el.select();try{navigator.clipboard&&navigator.clipboard.writeText(el.value);}catch(e){}const o=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=o,1200);}
 
@@ -2633,6 +2636,8 @@ function renderCodesPanel(){
 function resetDash(){DATA=null;selState=null;document.getElementById('dashboard').style.display='none';document.getElementById('loading').style.display='none';document.getElementById('dropzone').style.display='flex';document.getElementById('file-input').value='';}
 
 renderMapeoTable();
+// ── Candado de licencia: si apagas licencia/activa en tu Firebase, el tablero se bloquea ──
+(function(){try{fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(!(l&&l.activa===true)){document.body.innerHTML='<div style="max-width:460px;margin:70px auto;text-align:center;font-family:-apple-system,Segoe UI,sans-serif;color:#e8eef7"><div style="font-size:46px">🔒</div><h2 style="color:#E8A020;margin:12px 0">Servicio no disponible</h2><p style="color:#94a3b8">Este tablero está desactivado temporalmente.</p></div>';}}).catch(function(){});}catch(e){}})();
 </script>
 </body>
 </html>
