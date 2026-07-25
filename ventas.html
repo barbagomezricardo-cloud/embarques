@@ -884,7 +884,9 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       const numMeses=Object.keys(mesesCliente[nombre]||{}).length||1;
       // Promedio mensual = sacos del periodo ÷ meses del periodo (no solo los meses en que compró)
       const _pmx=byClienteProdMes[nombre]||{};
-      // PetFood ahora cuenta para todo el esquema: el volumen calificable = total (incluye PetFood)
+      // PetFood ahora cuenta para todo el esquema: el volumen calificable = total (incluye PetFood).
+      // Se sigue calculando el desglose de PetFood (petMes) solo para mostrarlo; ya NO se resta.
+      const petMes={}; for(const _p in _pmx){ if(PETFOOD_RE.test(_p)){ const _mm=_pmx[_p]; for(const _k in _mm) petMes[_k]=(petMes[_k]||0)+(_mm[_k]||0); } }
       const qualMes={}; for(const _m in mesData){ qualMes[_m]=Math.max(0,(mesData[_m]||0)); }
       const _totalComp=_completos.reduce((a,m)=>a+(qualMes[m]||0),0);
       const promMes=Math.round(_totalComp/_nComplete);
