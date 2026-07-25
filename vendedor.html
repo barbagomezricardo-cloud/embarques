@@ -65,7 +65,7 @@ input[type=file]{display:none}
 const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
 const PREMIUM_RE=/PREMIUM/i, GATO_RE=/SILVER\s*CAT\s*15/i, PETFOOD_RE=/PET\s*FOOD/i;
 const PREM_CODES=['04MAS001','04MAS0011','04MAS0019','04MAS006']; // Silver Kan Premium 25/20 + Silver Cat 15
-const TIERS=[["DIAMANTE_PLUS",15000,2.0,0.75,0.75,2],["DIAMANTE",9000,2.0,0.25,0.25,2],["PLATINO",5000,1.75,0.5,0.25,3],["ORO",3000,1.5,0.5,0.5,6],["PLATA",1000,1.25,0.75,0.5,10],["BRONCE",600,1.0,0.75,0.75,20],["COBRE",0,0,0,0,999]];
+const TIERS=[["DIAMANTE_PLUS",15000,2.0,0.75,0.75,2],["DIAMANTE",9000,2.0,0.25,0.25,2],["PLATINO",5000,1.75,0.5,0.25,3],["ORO",3000,1.5,0.5,0.5,6],["PLATA",1000,1.25,0.75,0.5,10],["BRONCE",600,1.0,0.75,0.75,20],["COBRE",200,0.75,0.75,1.0,30],["INICIAL",0,0,0,0,999]];
 // Bono Premium+ (los % los define el gerente en el dashboard; aquí van los valores por defecto).
 let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
@@ -82,8 +82,8 @@ function quarterOf(m){for(const g of Q_GROUPS){if(g[0].includes(m))return {month
 function tierOf(avg){for(const t of TIERS){if(avg>=t[1])return t;}return TIERS[TIERS.length-1];}
 function nextTier(n){const i=TIERS.findIndex(t=>t[0]===n);return i>0?TIERS[i-1]:null;}
 function nivLab(n){return NIVLAB[n]||n;}
-const NIVCOL={DIAMANTE_PLUS:'#7c3aed',DIAMANTE:'#0e7490',PLATINO:'#475569',ORO:'#a16207',PLATA:'#64748b',BRONCE:'#b45309',COBRE:'#6b7280'};
-const NIVBG={DIAMANTE_PLUS:'linear-gradient(135deg,#6d28d9,#c4b5fd)',DIAMANTE:'linear-gradient(135deg,#0891b2,#22d3ee)',PLATINO:'linear-gradient(135deg,#475569,#94a3b8)',ORO:'linear-gradient(135deg,#a16207,#f5c842)',PLATA:'linear-gradient(135deg,#64748b,#cbd5e1)',BRONCE:'linear-gradient(135deg,#b45309,#f0a868)',COBRE:'linear-gradient(135deg,#4b5563,#9ca3af)'};
+const NIVCOL={DIAMANTE_PLUS:'#7c3aed',DIAMANTE:'#0e7490',PLATINO:'#475569',ORO:'#a16207',PLATA:'#64748b',BRONCE:'#b45309',COBRE:'#b87333',INICIAL:'#6b7280'};
+const NIVBG={DIAMANTE_PLUS:'linear-gradient(135deg,#6d28d9,#c4b5fd)',DIAMANTE:'linear-gradient(135deg,#0891b2,#22d3ee)',PLATINO:'linear-gradient(135deg,#475569,#94a3b8)',ORO:'linear-gradient(135deg,#a16207,#f5c842)',PLATA:'linear-gradient(135deg,#64748b,#cbd5e1)',BRONCE:'linear-gradient(135deg,#b45309,#f0a868)',COBRE:'linear-gradient(135deg,#8a5a2b,#d4915d)',INICIAL:'linear-gradient(135deg,#4b5563,#9ca3af)'};
 let CLIENTS={}, APPVEND='', APPPERIOD='', APPMONTH=0, APPQ=null, APPUPDATED='', CLOUD={db:'',v:''};
 let APPEVAL='TRIM', APPEVALLABEL='';                       // periodo de evaluación (definido por el gerente)
 function PMULT(){return APPEVAL==='MES'?1:3;}               // metas: mensuales (x1) o trimestrales (x3)
@@ -173,7 +173,7 @@ function parse(buf){
     if(c0===''||c0==null)continue;
     if(c0 instanceof Date){
       if(cli&&kind==='fin'&&prod&&val>0){const mm=(c0.getMonth()+1);const d=data[cli];
-        if(prod.petf){}else{d.qual[mm]=(d.qual[mm]||0)+val; if(prod.prem)d.prem[mm]=(d.prem[mm]||0)+val;}}
+        d.qual[mm]=(d.qual[mm]||0)+val; if(prod.prem)d.prem[mm]=(d.prem[mm]||0)+val;}
       continue;
     }
     const t=String(c0).trim(); if(t==='Total')continue;
@@ -351,42 +351,34 @@ function renderVentas(){
 function showCard(name){
   const c=CLIENTS[name];if(!c)return;const t=tierOf(c.avg);const nx=nextTier(t[0]);
   const fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
-  const maintain=t[0]==='COBRE'?600:t[1];
+  const maintain=t[0]==='INICIAL'?200:t[1];
   const M=PMULT();                       // 1 si evaluación mensual, 3 si trimestral
   const PW=perWord();                     // 'mes' o 'trimestre'
   const qLab=perLabel();
   // metas del periodo (mensual x1 o trimestral x3)
   const maintainQ=maintain*M;
   const nextQ=nx?nx[1]*M:null;
-  const growQ=t[0]==='COBRE'?null:Math.round(c.avg*M*(1+uc/100));
-  const bronceRitmo=600*M;
+  const growQ=t[0]==='INICIAL'?null:Math.round(c.avg*M*(1+uc/100));
+  const bronceRitmo=200*M;
   const premNeedQ=Math.round(PREM.base/100*Math.max(c.qtd||0,maintainQ));
   const qpremPct=(c.qtd>0)?(c.qp/c.qtd*100):0;
   const premOk=qpremPct>=PREM.base;
   const curBoost=premBoost(qpremPct);
-  const descMax=t[0]==='COBRE'?0:(fijo+kc+kp+PREM.e2);
+  const descMax=t[0]==='INICIAL'?0:(fijo+kc+kp+PREM.e2);
   const app=document.getElementById('app');
   // avance del periodo en curso
   let qnow='';
   if(APPQ){
     const meta=maintainQ; const pct=meta>0?Math.min(100,Math.round((c.qtd||0)/meta*100)):0;
     const faltaMant=Math.max(0,maintainQ-(c.qtd||0));
-    const s=t[0]==='COBRE'
-      ? ((c.qtd||0)>=bronceRitmo? 'Ya lleva ritmo para entrar a Bronce este '+PW+'.' : 'Le faltan '+fmt(bronceRitmo-(c.qtd||0))+' sacos en el '+PW+' para el ritmo de Bronce.')
+    const s=t[0]==='INICIAL'
+      ? ((c.qtd||0)>=bronceRitmo? 'Ya lleva ritmo para entrar a Cobre este '+PW+'.' : 'Le faltan '+fmt(bronceRitmo-(c.qtd||0))+' sacos en el '+PW+' para el ritmo de Cobre.')
       : (faltaMant<=0? '✓ Ya aseguró el volumen para mantener '+nivLab(t[0])+' este '+PW+'.' : 'Le faltan '+fmt(faltaMant)+' sacos en el '+PW+' para asegurar su nivel.');
     qnow='<div class="qnow"><div class="h">Va este '+PW+' ('+qLab+')</div><div class="b">'+fmt(c.qtd||0)+' sacos</div><div class="bar"><i style="width:'+pct+'%"></i></div><div class="s">'+s+'</div></div>';
   }
   let need='';
-  if(t[0]==='COBRE'){
-    need='';
-    if(COBRE.enabled){
-      var ctxt,cval,cok=false;
-      if(COBRE.opcion==3){ctxt='Descuento Cobre (fijo)';cval='+'+COBRE.pct+'%';cok=true;}
-      else if(COBRE.opcion==1){cok=(c.avg>=COBRE.min);ctxt='Descuento Cobre — promedio ≥ '+fmt(COBRE.min)+' sacos/mes';cval=cok?('+'+COBRE.pct+'% ✓'):('le falta llegar a '+fmt(COBRE.min)+'/mes');}
-      else {ctxt='Descuento Cobre — si crece ≥'+COBRE.umbral+'%';cval='+'+COBRE.pct+'% al crecer';}
-      need+='<div class="row'+(cok?' ok':'')+'"><span class="t">'+ctxt+'</span><span class="v">'+cval+'</span></div>';
-    }
-    need+='<div class="row no"><span class="t">Para entrar a Bronce y tener el esquema completo</span><span class="v">'+fmt(bronceRitmo)+' sacos<br>en el '+PW+'</span></div>';
+  if(t[0]==='INICIAL'){
+    need='<div class="row no"><span class="t">Para entrar a Cobre y empezar a ganar descuento</span><span class="v">'+fmt(bronceRitmo)+' sacos<br>en el '+PW+'</span></div>';
   }else{
     need+='<h3>Para GANAR el tope de su nivel ('+(fijo+kc+kp).toFixed(2)+'%)</h3>';
     need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium ≥'+PREM.base+'% del '+PW+'<br><span style="font-size:11px;color:#8792a3">va '+fmt(c.qp||0)+' sacos ('+qpremPct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
@@ -405,14 +397,14 @@ function showCard(name){
   }
   app.innerHTML='<button class="back" onclick="renderList(\'\')">‹ Volver a la lista</button>'+syncBar()+
    '<div class="card"><div class="top" style="background:'+NIVBG[t[0]]+'"><h2>'+c.nombre+'</h2>'+(c.vend?'<div class="vend">Vendedor: '+c.vend+'</div>':'')+'<div class="badge">Nivel '+nivLab(t[0])+'</div></div>'+
-   '<div class="kpis"><div class="kpi"><div class="n">'+fmt(c.avg)+'</div><div class="l">sacos/mes<br>(sin PetFood)</div></div>'+
+   '<div class="kpis"><div class="kpi"><div class="n">'+fmt(c.avg)+'</div><div class="l">sacos/mes</div></div>'+
    '<div class="kpi"><div class="n">'+c.mix.toFixed(1)+'%</div><div class="l">Premium '+(c.mix>=PREM.base?'✓':'(falta '+PREM.base+'%)')+'</div></div>'+
-   '<div class="kpi"><div class="n">'+(t[0]==='COBRE'?(COBRE.enabled?('+'+COBRE.pct+'%'):'—'):fijo.toFixed(2)+'%')+'</div><div class="l">Descuento fijo<br>de su nivel</div></div></div>'+
+   '<div class="kpi"><div class="n">'+(t[0]==='INICIAL'?'—':fijo.toFixed(2)+'%')+'</div><div class="l">Descuento fijo<br>de su nivel</div></div></div>'+
    qnow+
    '<div class="need">'+need+'</div>'+
-   '<div class="msg">Las metas están en <b>sacos del '+PW+' completo</b>. El descuento ganado se paga como <b>nota de crédito</b> en su primera compra del periodo siguiente. El PetFood no cuenta para estos descuentos.</div>'+
+   '<div class="msg">Las metas están en <b>sacos del '+PW+' completo</b>. El descuento ganado se paga como <b>nota de crédito</b> en su primera compra del periodo siguiente. El PetFood también cuenta y recibe descuento.</div>'+
    '</div>'+
-   '<div class="foot">Silver Kan / Los 19 Hermanos · Programa 04MAS ('+(APPEVAL==='MES'?'mensual':'trimestral')+') · Nivel por promedio mensual sin PetFood.</div>';
+   '<div class="foot">Silver Kan / Los 19 Hermanos · Programa 04MAS ('+(APPEVAL==='MES'?'mensual':'trimestral')+') · Nivel por promedio mensual (PetFood incluido).</div>';
   window.scrollTo(0,0);
 }
 

@@ -360,7 +360,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
       </div>
       <div class="cfg-card">
         <div class="cfg-title">🏆 Niveles y promociones (según script Apps Script)</div>
-        <div style="font-size:.78rem;color:#94a3b8;margin-bottom:10px">El nivel se calcula con el <strong style="color:#fbbf24">promedio de sacos/mes</strong> (sin PetFood). Descuento = fijo por volumen + bono si crece por encima del <strong style="color:#fbbf24">umbral de su nivel</strong> + bono si el <strong style="color:#fbbf24">mix premium ≥3%</strong> (tope base 2.5% · Diamante Plus 3.5%). <strong style="color:#fbbf24">Bono Premium+</strong>: el mix premium ahora cuenta <strong style="color:#fbbf24">Silver Kan Premium 25/20 + Silver Cat 15</strong>; subiéndolo a <strong style="color:#fbbf24">≥5% gana +0.5%</strong> y a <strong style="color:#fbbf24">≥7.5% gana +1%</strong> → <strong style="color:#fbbf24">tope hasta 3.5% (Diamante Plus 4.5%)</strong>. Se autofinancia con la utilidad del premium. Sin sacos regalados.</div>
+        <div style="font-size:.78rem;color:#94a3b8;margin-bottom:10px">El nivel se calcula con el <strong style="color:#fbbf24">promedio de sacos/mes</strong> (PetFood incluido). Descuento = fijo por volumen + bono si crece por encima del <strong style="color:#fbbf24">umbral de su nivel</strong> + bono si el <strong style="color:#fbbf24">mix premium ≥3%</strong> (tope base 2.5% · Diamante Plus 3.5%). <strong style="color:#fbbf24">Bono Premium+</strong>: el mix premium ahora cuenta <strong style="color:#fbbf24">Silver Kan Premium 25/20 + Silver Cat 15</strong>; subiéndolo a <strong style="color:#fbbf24">≥5% gana +0.5%</strong> y a <strong style="color:#fbbf24">≥7.5% gana +1%</strong> → <strong style="color:#fbbf24">tope hasta 3.5% (Diamante Plus 4.5%)</strong>. Se autofinancia con la utilidad del premium. Sin sacos regalados.</div>
         <div id="tier-config-rows"></div>
         <button class="btn-save-cfg" onclick="saveTierConfig()">Guardar niveles y promociones</button>
       </div>
@@ -502,7 +502,7 @@ const PROD_COLORS = {"MI BOOB 20 KGS":"#E8A020","SILVER KAN 18% 25 KGS":"#2563EB
 const VEND_COLORS = {"ARMANDO":"#E8A020","CITLALI":"#22c55e","ADMINISTRACION":"#94a3b8","VICTOR":"#2563EB","VARIOS":"#1A7A3F","JOSE":"#8B5CF6","DAGOVIET":"#EC4899","VICTOR MANUEL":"#14B8A6","JOSE MANUEL AVILA":"#F97316"};
 const MES_NOM = {1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"};
 // Niveles según tu Apps Script
-const TIER_ORDER = ["DIAMANTE_PLUS","DIAMANTE","PLATINO","ORO","PLATA","BRONCE","COBRE"];
+const TIER_ORDER = ["DIAMANTE_PLUS","DIAMANTE","PLATINO","ORO","PLATA","BRONCE","COBRE","INICIAL"];
 const TIER_ICONS = {"DIAMANTE":"💎","PLATINO":"🥇","ORO":"🏅","PLATA":"🥈","BRONCE":"🥉"};
 const TIER_KEY   = {"DIAMANTE":"DIAMANTE","PLATINO":"PLATINO","ORO":"ORO","PLATA":"PLATA","BRONCE":"BRONCE"};
 const PREMIUM_RE = /PREMIUM/i;
@@ -588,7 +588,8 @@ const DEFAULT_TIER_CFG = {
   "ORO":     {min:3000, fijo:1.5,  kc:0.5,  kp:0.5,  uc:6,  promo:"1.5% fijo + 0.5% crece ≥6% + 0.5% premium ≥3% (tope 2.5%). Bono Premium+: mix ≥5% +0.5%, ≥7.5% +1% → hasta 3.5%"},
   "PLATA":   {min:1000, fijo:1.25, kc:0.75, kp:0.5,  uc:10, promo:"1.25% fijo + 0.75% crece ≥10% + 0.5% premium ≥3% (tope 2.5%). Bono Premium+: mix ≥5% +0.5%, ≥7.5% +1% → hasta 3.5%"},
   "BRONCE":  {min:600,  fijo:1.0,  kc:0.75, kp:0.75, uc:20, promo:"1% fijo + 0.75% crece ≥20% + 0.75% premium ≥3% (tope 2.5%). Bono Premium+: mix ≥5% +0.5%, ≥7.5% +1% → hasta 3.5%"},
-  "COBRE":   {min:0,    fijo:0,    kc:0,    kp:0,    uc:999, noDisc:true, promo:"Menos de 600 sacos/mes (sin PetFood): SIN descuento hasta llegar a Bronce"}
+  "COBRE":   {min:200,  fijo:0.75, kc:0.75, kp:1.0,  uc:30, promo:"200–599: 0.75% fijo + 0.75% si crece ≥30% + 1% premium ≥3% (tope 2.5%). Bono Premium+: mix ≥5% +0.5%, ≥7.5% +1% → hasta 3.5%. PetFood incluido."},
+  "INICIAL": {min:0,    fijo:0,    kc:0,    kp:0,    uc:999, noDisc:true, promo:"Menos de 200 sacos/mes: sin descuento todavía. Al llegar a 200 sacos/mes entra a Cobre."}
 };
 const UMBRAL_CREC = 20;
 const UMBRAL_PREM = 3;
@@ -627,8 +628,8 @@ function saveMapping(m){
 // Nivel basado en promedio mensual de sacos (sacosHistorico)
 function calcNivel(promMes){
   const cfg=getTierCfg();
-  for(const t of TIER_ORDER){if(promMes>=cfg[t].min)return t;}
-  return 'COBRE';
+  for(const t of TIER_ORDER){if(cfg[t]&&promMes>=cfg[t].min)return t;}
+  return 'INICIAL';
 }
 
 // Descuento % del nuevo programa: fijo + bono crecimiento + bono premium
@@ -647,15 +648,9 @@ function calcDesc(nivel,mesData,prodMes,completos){
   const pc=getPremCfg();
   const mixPrem=vU>0?premU/vU*100:0;
   const premOk=mixPrem>=(pc.umbralBase!=null?pc.umbralBase:UMBRAL_PREM);
-  // ── COBRE: bloqueado por defecto; se activa desde config con autorización ──
-  if(nivel==='COBRE'){
-    const cob=getCobreCfg();
-    const cmp=_cmp||meses;
-    const avgC=cmp.length?cmp.reduce((a,m)=>a+((mesData&&mesData[m])||0),0)/cmp.length:0;
-    const crecioC=(vP>0&&vU>0)?((vU-vP)/vP*100>=(cob.umbral||20)):false;
-    if(!cob.enabled)return{desc:0,descMax:0,crecio:false,premOk:false,mixPrem:mixPrem,boost:0,cobre:true,cobreOn:false};
-    const d=(cob.opcion==3)?(cob.pct||0):(cob.opcion==1)?(avgC>=(cob.min||300)?(cob.pct||0):0):(crecioC?(cob.pct||0):0);
-    return{desc:d,descMax:(cob.pct||0),crecio:crecioC,premOk:premOk,mixPrem:mixPrem,boost:0,cobre:true,cobreOn:true};
+  // ── INICIAL (menos de 200 sacos/mes): sin descuento hasta llegar a Cobre ──
+  if(nivel==='INICIAL'){
+    return{desc:0,descMax:0,crecio:false,premOk:false,mixPrem:mixPrem,boost:0};
   }
   const cfg=getTierCfg()[nivel]||{fijo:0,kc:0,kp:0,uc:UMBRAL_CREC};
   const umbralC=(cfg.uc!=null?cfg.uc:UMBRAL_CREC);const crecio=(vP>0&&vU>0)?((vU-vP)/vP*100>=umbralC):false;
@@ -888,8 +883,8 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       const numMeses=Object.keys(mesesCliente[nombre]||{}).length||1;
       // Promedio mensual = sacos del periodo ÷ meses del periodo (no solo los meses en que compró)
       const _pmx=byClienteProdMes[nombre]||{};
-      const petMes={}; for(const _p in _pmx){ if(PETFOOD_RE.test(_p)){ const _mm=_pmx[_p]; for(const _k in _mm) petMes[_k]=(petMes[_k]||0)+(_mm[_k]||0); } }
-      const qualMes={}; for(const _m in mesData){ qualMes[_m]=Math.max(0,(mesData[_m]||0)-(petMes[_m]||0)); }
+      // PetFood ahora cuenta para todo el esquema: el volumen calificable = total (incluye PetFood)
+      const qualMes={}; for(const _m in mesData){ qualMes[_m]=Math.max(0,(mesData[_m]||0)); }
       const _totalComp=_completos.reduce((a,m)=>a+(qualMes[m]||0),0);
       const promMes=Math.round(_totalComp/_nComplete);
       const activos=Object.keys(mesData).map(Number).filter(m=>mesData[m]>0);
@@ -1534,7 +1529,7 @@ function renderConfig(){
   const dc=getDirCfg();
   const dn=document.getElementById('dir-nombre'),dp=document.getElementById('dir-phone'),de=document.getElementById('dir-email');
   if(dn){dn.value=dc.nombre||'';dp.value=dc.phone||'';de.value=dc.email||'';}
-  const TIER_LABELS={"DIAMANTE_PLUS":"👑 DIAMANTE PLUS (≥15,000)","DIAMANTE":"💎 DIAMANTE (9,000–14,999)","PLATINO":"🥇 PLATINO (5,000–8,999)","ORO":"🏅 ORO (3,000–4,999)","PLATA":"🥈 PLATA (1,000–2,999)","BRONCE":"🥉 BRONCE (600–999)","COBRE":"🟫 COBRE (menos de 600 — sin descuento)"};
+  const TIER_LABELS={"DIAMANTE_PLUS":"👑 DIAMANTE PLUS (≥15,000)","DIAMANTE":"💎 DIAMANTE (9,000–14,999)","PLATINO":"🥇 PLATINO (5,000–8,999)","ORO":"🏅 ORO (3,000–4,999)","PLATA":"🥈 PLATA (1,000–2,999)","BRONCE":"🥉 BRONCE (600–999)","COBRE":"🟫 COBRE (200–599)","INICIAL":"⚪ INICIAL (menos de 200 — sin descuento)"};
   const evalP=getEvalPeriod();
   let thtml='<div style="margin:8px 0 12px;background:#13233f;border:1px solid #2a4c86;border-radius:8px;padding:12px">'
     +'<div style="font-size:.82rem;font-weight:800;color:#fbbf24;margin-bottom:4px">📅 Periodo de evaluación</div>'
@@ -1557,17 +1552,7 @@ function renderConfig(){
     </div>
     <div style="font-size:.68rem;color:#64748b;margin-top:6px">El "extra %" del escalón 2 es el tope máximo del bono (define hasta cuánto sube el descuento del nivel).</div>
   </div>`;
-  const cob=getCobreCfg();
-  thtml+='<div style="margin:14px 0 4px;background:#2a1e13;border:1px solid #86612a;border-radius:8px;padding:12px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;flex-wrap:wrap">'
-    +'<div style="font-size:.82rem;font-weight:800;color:#fbbf24">\U0001F7EB Nivel Cobre (menos de 600) — '+(cob.enabled?'<span style="color:#22c55e">ACTIVO</span>':'<span style="color:#ef4444">\U0001F512 BLOQUEADO</span>')+'</div>'
-    +'<label style="font-size:.72rem;color:#cbd5e1;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cob-en" '+(cob.enabled?'checked':'')+'> Activar (requiere autorización de dirección)</label></div>'
-    +'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Hoy los Cobre no reciben descuento. Cuando dirección autorice, marca la casilla, elige el esquema y guarda: se activa aquí y en la app del vendedor. (Todo sin PetFood.)</div>'
-    +'<div style="display:flex;flex-direction:column;gap:6px;font-size:.75rem;color:#e8eef7">'
-    +'<label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="radio" name="cob-op" value="1" '+(cob.opcion==1?'checked':'')+'> <b>Opción A</b> — Solo cercanos a Bronce (promedio ≥ <input class="cfg-inp" id="cob-min" type="number" style="width:70px" value="'+cob.min+'"> sacos/mes): descuento fijo.</label>'
-    +'<label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="radio" name="cob-op" value="2" '+(cob.opcion==2?'checked':'')+'> <b>Opción B</b> — Por crecimiento: descuento SOLO si crece ≥ <input class="cfg-inp" id="cob-umb" type="number" style="width:60px" value="'+cob.umbral+'">% (autofinanciado).</label>'
-    +'<label style="display:flex;gap:8px;align-items:center"><input type="radio" name="cob-op" value="3" '+(cob.opcion==3?'checked':'')+'> <b>Opción C</b> — Descuento fijo a TODOS los Cobre.</label>'
-    +'<div class="cfg-row" style="max-width:220px"><label class="cfg-lbl">Descuento Cobre %</label><input class="cfg-inp" id="cob-pct" type="number" step="0.25" value="'+cob.pct+'"></div></div></div>';
+  // (El interruptor de Cobre se retiró: Cobre ahora es un nivel normal con esquema, editable arriba.)
   // Chequeo de rentabilidad (fórmula de dirección) sobre los parámetros actuales
   var MARGCHK=0.203;
   var chk='<div style="margin:14px 0 4px;background:#0f2a17;border:1px solid #1a7a3f;border-radius:8px;padding:12px">'
@@ -1575,7 +1560,7 @@ function renderConfig(){
     +'<div style="font-size:.72rem;color:#9fb0cc;margin-bottom:8px">¿El crecimiento que exiges alcanza a pagar cada bono? Equilibrio = bono ÷ (margen − bono), margen '+(MARGCHK*100).toFixed(1)+'%. Si cambias umbrales o bonos y guardas, esto se actualiza.</div>'
     +'<table style="width:100%;font-size:.72rem;border-collapse:collapse"><tr style="color:#9fb0cc"><td>Nivel</td><td style="text-align:right">Bono crec.</td><td style="text-align:right">Equilibrio</td><td style="text-align:right">Umbral exigido</td><td style="text-align:center">Estado</td></tr>';
   var warn=0;
-  for(const tier of TIER_ORDER){ if(tier==='COBRE')continue; var tcx=tierCfg[tier]||{}; var kcf=(tcx.kc||0)/100; var be=kcf>0?kcf/(MARGCHK-kcf)*100:0; var ucx=tcx.uc!=null?tcx.uc:0; var ok=ucx>=be; if(!ok)warn++;
+  for(const tier of TIER_ORDER){ if(tier==='INICIAL')continue; var tcx=tierCfg[tier]||{}; var kcf=(tcx.kc||0)/100; var be=kcf>0?kcf/(MARGCHK-kcf)*100:0; var ucx=tcx.uc!=null?tcx.uc:0; var ok=ucx>=be; if(!ok)warn++;
     chk+='<tr><td style="color:#fff">'+tier+'</td><td style="text-align:right">'+(tcx.kc||0).toFixed(2)+'%</td><td style="text-align:right">'+be.toFixed(1)+'%</td><td style="text-align:right">'+ucx.toFixed(1)+'%</td><td style="text-align:center">'+(ok?'<span style="color:#22c55e">✔ rentable</span>':'<span style="color:#f59e0b">⚠ ajustado</span>')+'</td></tr>'; }
   chk+='</table><div style="margin-top:8px;font-size:.74rem;font-weight:700;color:'+(warn?'#f59e0b':'#22c55e')+'">'+(warn?('⚠ '+warn+' nivel(es) piden menos crecimiento del que el bono necesita — súbeles el umbral o baja el bono.'):'✔ Todo el esquema es rentable: cada bono se autofinancia con el crecimiento que exiges.')+'</div></div>';
   thtml+=chk;
@@ -1764,7 +1749,7 @@ function renderEquilibrio(){
     for(var p in pm){ var months=pm[p]; var qty=0; for(var m in months){ if(!comp||comp.indexOf(+m)>=0) qty+=months[m]||0; }
       if(qty<=0)continue; var mm=EQ_find(p); if(!mm){unmatched+=qty;continue;}
       var cost=mm[1],price=mm[2]; rev+=qty*price; cogs+=qty*cost;
-      if(!/PET\s*FOOD/i.test(p)) cliRevNP+=qty*price;
+      cliRevNP+=qty*price; // PetFood ahora también recibe descuento
     }
     promo += cliRevNP*(c.desc||0)/100;
   });
@@ -1776,7 +1761,7 @@ function renderEquilibrio(){
   var sobre=revMes-be;
   function card(lbl,val,sub,col){return '<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+(col||'#3b82f6')+';border-radius:10px;padding:12px 14px;min-width:150px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:'+(col||'#fff')+'">'+val+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+lbl+'</div>'+(sub?'<div style="font-size:.7rem;color:#cbd5e1;margin-top:2px">'+sub+'</div>':'')+'</div>';}
   var h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">💰 Punto de equilibrio y margen</div>';
-  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:12px">Calculado con el reporte cargado ('+nM+' mes(es)) y tus costos/precios de abajo. La promoción se descuenta sin PetFood. Cambia cualquier celda azul y da Calcular.</div>';
+  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:12px">Calculado con el reporte cargado ('+nM+' mes(es)) y tus costos/precios de abajo. La promoción se descuenta incluyendo PetFood. Cambia cualquier celda azul y da Calcular.</div>';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
    +'<div><label style="font-size:.72rem;color:#94a3b8;display:block;margin-bottom:3px">Gastos fijos mensuales ($)</label><input id="eq-gf" type="number" value="'+gf+'" style="width:180px;background:#0b1628;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:9px"></div>'
    +'<button onclick="saveEquil()" style="background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:10px 22px;font-weight:800;cursor:pointer">Calcular</button></div>';
@@ -2426,7 +2411,7 @@ function renderSeguimiento(){
   head+='</div>';
   const pc=getPremCfg();
   const evalP=getEvalPeriod(); const mult=evalP==='MES'?1:3; const PW=evalP==='MES'?'mes':'trim';
-  let h='<table class="mt" style="font-size:.75rem"><thead><tr><th>Cliente</th><th>Vend.</th><th>Nivel</th><th>Prom/mes<br>(sin PetFood)</th><th>Premium<br>mix</th><th>Asegurado<br>(fijo)</th><th>Tope<br>(si cumple)</th><th>Mantener<br>sacos/'+PW+'</th><th>Subir a →<br>sacos/'+PW+'</th><th>Crecer→bono<br>sacos/'+PW+'</th><th>Premium base<br>sacos/'+PW+'</th><th>Mix p/ +bono<br>(sacos premium o gato)</th><th>Qué le falta para más descuento</th></tr></thead><tbody>';
+  let h='<table class="mt" style="font-size:.75rem"><thead><tr><th>Cliente</th><th>Vend.</th><th>Nivel</th><th>Prom/mes<br>(PetFood incluido)</th><th>Premium<br>mix</th><th>Asegurado<br>(fijo)</th><th>Tope<br>(si cumple)</th><th>Mantener<br>sacos/'+PW+'</th><th>Subir a →<br>sacos/'+PW+'</th><th>Crecer→bono<br>sacos/'+PW+'</th><th>Premium base<br>sacos/'+PW+'</th><th>Mix p/ +bono<br>(sacos premium o gato)</th><th>Qué le falta para más descuento</th></tr></thead><tbody>';
   rows.forEach(c=>{
     const t=cfg[c.nivel]||{}; const nx=segNext(c.nivel); const nxFloor=nx?(cfg[nx]||{}).min:null;
     const maintain=c.nivel==='COBRE'?600:(t.min||0);
@@ -2465,7 +2450,7 @@ function renderSeguimiento(){
     '</tr>';
   });
   h+='</tbody></table>';
-  box.innerHTML=head+'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Evaluación <b>'+(evalP==='MES'?'MENSUAL':'TRIMESTRAL')+'</b> — las metas de sacos están en el periodo de evaluación. La columna <b>Mix p/ +bono</b> es cuántos sacos de premium o gato (cualquier presentación) necesita para +'+pc.e1+'% y para +'+pc.e2+'% extra. El descuento se paga como nota de crédito el periodo siguiente. PetFood no cuenta.</div>'+h;
+  box.innerHTML=head+'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Evaluación <b>'+(evalP==='MES'?'MENSUAL':'TRIMESTRAL')+'</b> — las metas de sacos están en el periodo de evaluación. La columna <b>Mix p/ +bono</b> es cuántos sacos de premium o gato (cualquier presentación) necesita para +'+pc.e1+'% y para +'+pc.e2+'% extra. El descuento se paga como nota de crédito el periodo siguiente. PetFood también cuenta y recibe descuento.</div>'+h;
 }
 function renderRuta(){
   const box=document.getElementById('ruta-content'); if(!box||typeof prospecAll!=='function')return;
@@ -2539,7 +2524,7 @@ function buildVendorPayloads(){
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
-    byV[v].forEach(function(c){promoSac+=(c.promoSacos||0);var pm=c.prodMes||{};var rnp=0;for(var pp in pm){var mmp=(typeof EQ_find==='function')?EQ_find(pp):null;if(mmp&&!/PET\s*FOOD/i.test(pp)){var qq=0;for(var kk in pm[pp])qq+=pm[pp][kk]||0;rnp+=qq*mmp[2];}}newDisc+=rnp*(c.desc||0)/100;});
+    byV[v].forEach(function(c){promoSac+=(c.promoSacos||0);var pm=c.prodMes||{};var rnp=0;for(var pp in pm){var mmp=(typeof EQ_find==='function')?EQ_find(pp):null;if(mmp){var qq=0;for(var kk in pm[pp])qq+=pm[pp][kk]||0;rnp+=qq*mmp[2];}}newDisc+=rnp*(c.desc||0)/100;});
     var ventas={meses:DATA.meses,gTarget:PVEN.gTarget,cur:vm.cur,prior:vm.prior,dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario};
     // ── Alertas por vendedor ──
     var cliAll=DATA.clients.filter(function(c){return (c.vendedor||'(sin asignar)')===v;});
