@@ -1213,9 +1213,9 @@ function copyFuga(){
 function fallbackCopy(txt,cb){try{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);cb&&cb();}catch(e){alert('No se pudo copiar automáticamente.');}}
 
 // ── SCORECARD POR VENDEDOR (tablero de gestión para los 1:1) ───────────────────
-function setVendMeta(v,val){try{const c=JSON.parse(localStorage.getItem('vendCfg04mas')||'{}');c[v]=Object.assign({},c[v],{meta:Number(val)||0});localStorage.setItem('vendCfg04mas',JSON.stringify(c));}catch(e){}renderScorecard();}
+function setVendMeta(v,val){ if(!SK_SUPER)return;try{const c=JSON.parse(localStorage.getItem('vendCfg04mas')||'{}');c[v]=Object.assign({},c[v],{meta:Number(val)||0});localStorage.setItem('vendCfg04mas',JSON.stringify(c));}catch(e){}renderScorecard();}
 // Meta sugerida = cartera mensual actual × (1 + crecimiento por tamaño). Más exigente a los chicos.
-function suggestMetas(){
+function suggestMetas(){ if(!reqSuper())return;
   if(!DATA)return;
   const byV={};
   for(const c of DATA.clients){const v=c.vendedor||'SIN DATOS';byV[v]=(byV[v]||0)+c.promMes;}
@@ -1229,7 +1229,7 @@ function suggestMetas(){
   try{localStorage.setItem('vendCfg04mas',JSON.stringify(cfg));}catch(e){}
   renderScorecard();
 }
-function clearMetas(){
+function clearMetas(){ if(!reqSuper())return;
   let cfg={};try{cfg=JSON.parse(localStorage.getItem('vendCfg04mas')||'{}');}catch(e){}
   for(const v in cfg){if(cfg[v])delete cfg[v].meta;}
   try{localStorage.setItem('vendCfg04mas',JSON.stringify(cfg));}catch(e){}
@@ -1361,7 +1361,7 @@ function mostrarNotificacionAuto(criticos,totales){
     n.onclick=()=>{showTab('alertas');window.focus();};
   }
 }
-function enviarATodos(){
+function enviarATodos(){ if(!reqSuper())return;
   if(!DATA)return;
   const tierCfg=getTierCfg();const vendCfg=getVendCfg();
   const minDias=dayFilter||15;
@@ -1567,7 +1567,7 @@ function renderConfig(){
   thtml+=chk;
   document.getElementById('tier-config-rows').innerHTML=thtml;
 }
-function saveVendConfig(){
+function saveVendConfig(){ if(!reqSuper())return;
   const vends=window._configVends||[];const cfg={};
   for(const v of vends){const p=document.getElementById('vp-'+v)?.value.trim();const e=document.getElementById('ve-'+v)?.value.trim();if(p||e)cfg[v]={phone:p||'',email:e||''};}
   localStorage.setItem('vendCfg04mas',JSON.stringify(cfg));
@@ -1575,7 +1575,7 @@ function saveVendConfig(){
   localStorage.setItem('dirCfg04mas',JSON.stringify(dcfg));
   renderAlertas();alert('✅ Contactos guardados. Los botones de WhatsApp y Email ya están activos.');
 }
-function saveTierConfig(){
+function saveTierConfig(){ if(!reqSuper())return;
   const cfg={};
   for(const tier of TIER_ORDER){
     const min=parseInt(document.getElementById('tm-'+tier)?.value)||0;
@@ -1612,7 +1612,7 @@ function saveTierConfig(){
 }
 
 // ── EXPORT / IMPORT CONFIG ─────────────────────────────────────────────────────
-function exportConfig(){
+function exportConfig(){ if(!reqSuper())return;
   const data={version:2,fecha:new Date().toISOString(),
     mapping:getMapping(),
     vendedores:getVendCfg(),
@@ -1627,7 +1627,7 @@ function exportConfig(){
   a.download='config_dashboard_04MAS_'+new Date().toISOString().slice(0,10)+'.json';
   a.click();URL.revokeObjectURL(a.href);
 }
-function importConfig(file){
+function importConfig(file){ if(!reqSuper())return;
   if(!file)return;
   const r=new FileReader();
   r.onload=e=>{
@@ -1665,7 +1665,7 @@ function recalcAggregates(){
   }
   DATA.byEstado=byEstado;DATA.byVendedor=byVendedor;
 }
-function addMapping(){
+function addMapping(){ if(!reqSuper())return;
   const c=document.getElementById('m-cliente').value.trim().toUpperCase();
   const e=document.getElementById('m-estado').value.trim().toUpperCase();
   const v=document.getElementById('m-vend').value.trim().toUpperCase();
@@ -1704,7 +1704,7 @@ function editMapping(c){
   document.getElementById('m-cliente').scrollIntoView({behavior:'smooth',block:'center'});
   document.getElementById('m-vend').focus();
 }
-function delMapping(c){
+function delMapping(c){ if(!reqSuper())return;
   const s=JSON.parse(localStorage.getItem('mapping04mas')||'{}');
   if(MAPPING_BASE[c])s[c]={_del:1};else delete s[c];
   localStorage.setItem('mapping04mas',JSON.stringify(s));
@@ -1735,7 +1735,7 @@ function getProdCfg(){try{return JSON.parse(localStorage.getItem('prodCfg04mas')
 function prodOf(n){for(var i=0;i<EQ_PRODS.length;i++){if(EQ_PRODS[i].rx.test(n))return EQ_PRODS[i];}return null;}
 function prodCP(p){var c=getProdCfg()[p.id]||{};return {cost:isFinite(c.cost)?c.cost:p.cost, price:isFinite(c.price)?c.price:p.price};}
 function EQ_find(n){var p=prodOf(n);if(!p)return null;var cp=prodCP(p);return [p,cp.cost,cp.price];}
-function saveEquil(){var g=parseFloat(document.getElementById('eq-gf')?document.getElementById('eq-gf').value:0)||0;localStorage.setItem('gastosFijos04mas',String(g));
+function saveEquil(){ if(!reqSuper())return;var g=parseFloat(document.getElementById('eq-gf')?document.getElementById('eq-gf').value:0)||0;localStorage.setItem('gastosFijos04mas',String(g));
   var cfg={};EQ_PRODS.forEach(function(p){var c=parseFloat((document.getElementById('eqc-'+p.id)||{}).value);var pr=parseFloat((document.getElementById('eqp-'+p.id)||{}).value);cfg[p.id]={cost:isFinite(c)?c:p.cost,price:isFinite(pr)?pr:p.price};});
   localStorage.setItem('prodCfg04mas',JSON.stringify(cfg));renderEquilibrio();}
 function money(n){return '$'+Math.round(n).toLocaleString('es-MX');}
@@ -1898,7 +1898,7 @@ const BASELINE_2024 = {"ARTURO CARDENAS JIMENEZ":20563,"SEMILLAS Y CEREALES EL C
 const BASELINE_2025_DAYM = {"1":[0,8284,4868,5367,0,5628,8797,6616,16652,8637,8572,0,8991,6222,9162,7159,10893,1903,0,3385,7437,7466,8397,11289,8182,0,11301,15338,8854,10987,11605],"2":[8871,0,4219,5934,4258,9244,6940,5334,0,6938,4850,12860,7092,7982,10794,0,6926,7108,8359,7916,12384,4137,0,6412,8266,8634,11741,15798,0,0,0],"3":[5096,0,2601,10761,5184,8412,10417,7197,0,4452,10735,6781,7174,9036,6662,0,11873,4787,7874,6620,11256,8408,0,7709,8765,8784,15024,9364,7121,0,9952],"4":[3789,3041,9456,4667,2761,0,4254,10033,7415,10656,8197,2813,0,8947,6388,8164,7798,0,0,0,10143,7509,12450,5474,10138,9452,0,14151,7500,9385,0],"5":[11300,14505,0,0,6455,11650,8714,5630,9116,4592,0,7165,8264,11902,7787,7860,5421,0,11266,8229,11588,10799,7929,8559,0,6310,8935,10673,11876,0,12426],"6":[0,3785,11047,6160,5546,7702,6875,0,4731,10619,9342,3125,8883,5026,0,8024,9897,5345,9461,8468,2107,0,7112,13049,6483,12112,13816,17053,0,8847,0],"7":[6094,4401,8054,7265,5024,0,11387,10864,8097,6172,6329,2549,0,7416,8162,14351,5588,5752,5861,0,8526,13107,8788,12102,8624,6208,0,10474,11753,13078,12810],"8":[6667,5212,0,8467,6211,9041,10443,4393,6064,0,6534,13487,13517,3545,7815,7168,0,9313,7319,12992,9211,5496,4687,0,11397,5746,12049,7793,12842,8649,0],"9":[7457,9662,6871,6120,4489,4961,0,7697,8258,10054,6452,8394,7788,0,4628,5924,11734,10892,7249,10345,0,4560,8392,10944,13207,11092,8725,0,7255,15523,0],"10":[5364,5322,8932,4237,0,9556,5284,9421,6183,7375,7375,0,10842,7211,6305,9696,8528,8148,0,10816,12720,6438,7516,12017,12840,0,8971,13402,14871,10404,16808],"11":[9371,0,9916,9820,12631,6389,4426,7952,0,12871,8063,13528,4087,5816,5200,0,10673,7450,10294,10632,3482,7955,0,5716,6569,15195,9245,8370,8906,0,0],"12":[5002,18103,8826,9601,7416,0,0,11958,8167,10878,3561,3980,2645,0,13074,8926,14114,14908,5681,11919,0,9305,10950,8051,0,10069,8118,0,13728,18852,9694]};
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
-function saveVParams(){
+function saveVParams(){ if(!reqSuper())return;
   const p={capTonMes:parseFloat(document.getElementById('p-cap').value)||5700,
            gTarget:(parseFloat(document.getElementById('p-gt').value)||7)/100,
            metaNuevos:parseInt(document.getElementById('p-mn').value)||6};
@@ -2283,7 +2283,7 @@ function prospecAll(){
 }
 function getVisitasImport(){var live=window._visitasLive||{};var pasted={};try{pasted=JSON.parse(localStorage.getItem('visitasImport04mas')||'{}');}catch(e){}return Object.assign({},pasted,live);}
 function fetchVisitasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/visits.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var vis=o[v]||{};for(var n in vis){store[n]=Object.assign({},vis[n],{v:v});}}window._visitasLive=store;renderProspec();}).catch(function(){}); }
-function addVisitasCode(){
+function addVisitasCode(){ if(!reqSuper())return;
   var el=document.getElementById('visimport'); if(!el)return;
   var raw=(el.value||'').trim(); if(!raw){alert('Pega el código de visitas que te envió el vendedor.');return;}
   try{ var s=decodeURIComponent(escape(atob(raw))); var p=JSON.parse(s); var store=getVisitasImport();
@@ -2293,7 +2293,7 @@ function addVisitasCode(){
     alert('✅ Visitas cargadas: '+Object.keys(vis).length+' de '+v);
   }catch(e){ alert('Código inválido. Pídeselo de nuevo al vendedor.'); }
 }
-function limpiarVisitasImport(){ if(confirm('¿Borrar el registro de visitas cargadas?')){localStorage.removeItem('visitasImport04mas');renderProspec();} }
+function limpiarVisitasImport(){ if(!reqSuper())return; if(confirm('¿Borrar el registro de visitas cargadas?')){localStorage.removeItem('visitasImport04mas');renderProspec();} }
 function visitasPanel(){
   var st=getVisitasImport(); var names=Object.keys(st);
   var h='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-radius:8px;padding:12px;margin-bottom:12px">'
@@ -2496,8 +2496,9 @@ const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebas
 const SK_APP='https://barbagomezricardo-cloud.github.io/embarques/vendedor.html';
 const SK_MASTER='https://barbagomezricardo-cloud.github.io/embarques/maestra.html';
 /* ===== ROL: super-usuario (edita/publica) vs visor (solo ver/filtrar) ===== */
-const SUPER_PWD='silverkan-super';   // ← CONTRASEÑA DE SUPER-USUARIO. Cámbiala por la que quieras.
+const SUPER_PWD='Poseidon201085';   // ← CONTRASEÑA DE SUPER-USUARIO. Cámbiala por la que quieras.
 let SK_SUPER=false;
+function reqSuper(){ if(!SK_SUPER){ alert('🔒 Modo visor: solo el super-usuario puede editar, borrar o publicar.\nToca el botón de la cabecera e ingresa la contraseña.'); return false; } return true; }
 function applyRole(){
   var g=document.getElementById('grp-config'); if(g) g.style.display=SK_SUPER?'':'none';
   var b=document.getElementById('btn-super'); if(b){ b.textContent=SK_SUPER?'🔓 Super-usuario':'🔒 Modo visor'; b.style.background=SK_SUPER?'#16a34a':'#334155'; b.style.color='#fff'; }
@@ -2509,7 +2510,7 @@ function toggleSuper(){
   if(p===SUPER_PWD){ SK_SUPER=true; applyRole(); } else { alert('Contraseña incorrecta.'); }
 }
 function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app)c.app=SK_APP; if(!c.master)c.master=SK_MASTER; return c;}
-function saveCloudCfg(){const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));renderCodesPanel();}
+function saveCloudCfg(){ if(!reqSuper())return;const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));renderCodesPanel();}
 function buildVendorPayloads(){
   if(!DATA)return null;
   const period=(DATA.dataYear||'')+'';
@@ -2579,7 +2580,7 @@ function autoPublishCloud(){
 }
 function cpv(btn){const el=btn.parentElement.querySelector('input,textarea');if(!el)return;el.select();try{navigator.clipboard&&navigator.clipboard.writeText(el.value);}catch(e){}const o=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=o,1200);}
 
-function genCodes(){
+function genCodes(){ if(!reqSuper())return;
   const box=document.getElementById('seg-codes'); if(!box)return;
   if(!DATA){box.innerHTML='';return;}
   if(box.dataset.open==='1'){box.innerHTML='';box.dataset.open='';return;}
