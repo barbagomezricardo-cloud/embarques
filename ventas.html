@@ -465,7 +465,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
       <label style="font-size:.78rem;color:#94a3b8">Vendedor:</label><select id="seg-vend" onchange="renderSeguimiento()"><option value="">Todos</option></select>
       <label style="font-size:.78rem;color:#94a3b8">Nivel:</label><select id="seg-niv" onchange="renderSeguimiento()"><option value="">Todos</option><option value="DIAMANTE_PLUS">DIAMANTE PLUS</option><option>DIAMANTE</option><option>PLATINO</option><option>ORO</option><option>PLATA</option><option>BRONCE</option><option>COBRE</option></select>
       <input id="seg-q" oninput="renderSeguimiento()" placeholder="Buscar cliente..." style="background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:4px 9px;font-size:.78rem">
-      <button onclick="genCodes()" style="background:var(--gold);color:var(--navy);border:none;border-radius:6px;padding:4px 11px;font-weight:700;font-size:.75rem;cursor:pointer">📲 Códigos para la app del vendedor</button>
+      <button id="btn-gencodes" onclick="genCodes()" style="background:var(--gold);color:var(--navy);border:none;border-radius:6px;padding:4px 11px;font-weight:700;font-size:.75rem;cursor:pointer">📲 Códigos para la app del vendedor</button>
     </div>
     <div id="seg-codes"></div>
     <div id="seg-content"></div>
@@ -2501,10 +2501,25 @@ const SK_MASTER='https://barbagomezricardo-cloud.github.io/embarques/maestra.htm
 const SUPER_PWD='Poseidon201085';   // ← CONTRASEÑA DE SUPER-USUARIO. Cámbiala por la que quieras.
 let SK_SUPER=false;
 function reqSuper(){ if(!SK_SUPER){ alert('🔒 Modo visor: solo el super-usuario puede editar, borrar o publicar.\nToca el botón de la cabecera e ingresa la contraseña.'); return false; } return true; }
+var VISOR_TABS=['grafica','vendedores','seguimiento']; // lo único que ve un usuario normal
 function applyRole(){
-  var g=document.getElementById('grp-config'); if(g) g.style.display=SK_SUPER?'':'none';
+  // pestañas: super ve todo; visor solo las permitidas
+  document.querySelectorAll('.tab').forEach(function(t){
+    var dt=t.getAttribute('data-tab');
+    t.style.display = SK_SUPER ? '' : (VISOR_TABS.indexOf(dt)>=0 ? '' : 'none');
+  });
+  // ocultar grupos de pestañas que queden sin pestañas visibles
+  document.querySelectorAll('.tabgrp').forEach(function(gr){
+    if(SK_SUPER){ gr.style.display=''; return; }
+    var anyVis=Array.prototype.slice.call(gr.querySelectorAll('.tab')).some(function(t){return t.style.display!=='none';});
+    gr.style.display = anyVis ? '' : 'none';
+  });
+  // botón "Códigos para la app del vendedor" (menú de links) solo super
+  var gc=document.getElementById('btn-gencodes'); if(gc) gc.style.display=SK_SUPER?'':'none';
+  // botón de rol
   var b=document.getElementById('btn-super'); if(b){ b.textContent=SK_SUPER?'🔓 Super-usuario':'🔒 Modo visor'; b.style.background=SK_SUPER?'#16a34a':'#334155'; b.style.color='#fff'; }
-  if(!SK_SUPER){ var ap=document.querySelector('.pane.active'); if(ap&&(ap.id==='pane-config'||ap.id==='pane-mapeo')&&typeof showTab==='function') showTab('mapa'); }
+  // si el visor está en una pestaña no permitida, mándalo a la primera permitida
+  if(!SK_SUPER){ var ap=document.querySelector('.pane.active'); if(ap){ var id=ap.id.replace('pane-',''); if(VISOR_TABS.indexOf(id)<0 && typeof showTab==='function') showTab('grafica'); } }
 }
 function toggleSuper(){
   if(SK_SUPER){ SK_SUPER=false; applyRole(); return; }
@@ -2557,6 +2572,13 @@ function buildVendorPayloads(){
     out[v]={v:v,period:period,lastMonth:lastMonth,q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows};
   });
   return {period,lastMonth,q,updatedStr,byVendor:out};
+}
+function liberarDispositivo(vkey,vname){ if(!reqSuper())return;
+  if(!confirm('¿Liberar el dispositivo de '+(vname||vkey)+'?\nEl próximo teléfono que abra su link quedará como el autorizado.'))return;
+  var DB=(getCloudCfg().db||SK_DB).replace(/\/$/,'');
+  fetch(DB+'/locks/'+encodeURIComponent(vkey)+'.json',{method:'DELETE'})
+    .then(function(){alert('✔ Dispositivo liberado. Pídele al vendedor que abra su link en el teléfono correcto.');})
+    .catch(function(){alert('No se pudo liberar (revisa internet/licencia).');});
 }
 function publishCloud(){
   if(!SK_SUPER){alert('Solo el super-usuario puede publicar a la nube.');return;}
@@ -2627,7 +2649,7 @@ function renderCodesPanel(){
     if(/^https?:\/\/[^\/]+$/i.test(appBase))appBase+='/';
     const link=appBase?(appBase+'#v='+encodeURIComponent(keyp(v))+'&db='+encodeURIComponent(cfg.db||'')):'';
     h+='<div style="background:#12203c;border-radius:8px;padding:8px 10px;margin-bottom:7px;border:1px solid #24304f">';
-    h+='<b style="color:#cbd5e1;font-size:.85rem">'+v+' — '+payload.rows.length+' clientes</b>';
+    h+='<b style="color:#cbd5e1;font-size:.85rem">'+v+' — '+payload.rows.length+' clientes</b> <button onclick="liberarDispositivo(\''+keyp(v).replace(/'/g,"")+'\',\''+String(v).replace(/'/g,"")+'\')" style="background:#7c2d12;color:#fed7aa;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-left:6px">🔓 Liberar dispositivo</button>';
     if(link){h+='<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input readonly value="'+esc(link)+'" style="flex:1;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#7dd3fc;font-size:.68rem;padding:6px"><button onclick="cpv(this)" style="background:#2563EB;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer;white-space:nowrap">Copiar link</button></div>';}
     else{h+='<div style="font-size:.68rem;color:#64748b;margin-top:4px">Configura la URL de la app arriba para generar el link automático.</div>';}
     h+='<details style="margin-top:6px"><summary style="font-size:.7rem;color:#64748b;cursor:pointer">Código de respaldo (sin internet)</summary><div style="display:flex;gap:6px;align-items:flex-start;margin-top:5px"><textarea readonly style="flex:1;height:40px;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#64748b;font-size:.64rem;padding:6px;resize:none">'+code+'</textarea><button onclick="cpv(this)" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer;white-space:nowrap">Copiar</button></div></details>';

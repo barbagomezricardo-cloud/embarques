@@ -413,7 +413,20 @@ function skBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<di
 function skGate(cb){fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
 // refresco silencioso: solo cuando el vendedor está en la lista de clientes (no interrumpe una tarjeta)
 function skPoll(){ if(!CLOUD.v||VIEW!=='clientes')return; var url=CLOUD.db.replace(/\/$/,'')+'/skan/'+encodeURIComponent(CLOUD.v)+'.json'; fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ var qi=document.getElementById('q'); var qv=qi?qi.value:''; applyPayload(p); renderList(qv); } }).catch(function(){}); }
-window.addEventListener('hashchange',function(){skGate(fetchCloud);});
-skGate(function(){ fetchCloud(); setInterval(skPoll,60000); });
+// ── Candado por DISPOSITIVO: el primer teléfono que abre el link queda autorizado; otro teléfono se bloquea ──
+function skDeviceBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">📵</div><h2 style="color:#E8A020;margin:10px 0">App bloqueada en este teléfono</h2><p class="hint">Esta app ya está activada en otro dispositivo. Si cambiaste de teléfono, pide a tu gerente que <b>libere tu acceso</b>.</p></div>';}
+function skDeviceLock(cb){
+  var q=parseHash(); var v=q.v||''; if(!v){ cb(); return; }
+  var DB=(q.db||SK_DB).replace(/\/$/,''); var lk='sk_dev_'+v; var mine='';
+  try{ mine=localStorage.getItem(lk)||''; }catch(e){}
+  if(!mine){ mine='d'+Date.now().toString(36)+Math.random().toString(36).slice(2,9); }
+  fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
+    if(!c || !c.dev){ try{localStorage.setItem(lk,mine);}catch(e){} fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine})}).then(function(){cb();}).catch(function(){cb();}); }
+    else if(c.dev===mine){ try{localStorage.setItem(lk,mine);}catch(e){} cb(); }
+    else { skDeviceBlocked(); }
+  }).catch(function(){ cb(); }); // sin internet: no bloquea (los datos tampoco cargan)
+}
+window.addEventListener('hashchange',function(){skGate(function(){skDeviceLock(fetchCloud);});});
+skGate(function(){ skDeviceLock(function(){ fetchCloud(); setInterval(skPoll,60000); }); });
 </script>
 </body></html>
