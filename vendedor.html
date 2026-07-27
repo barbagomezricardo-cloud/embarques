@@ -43,8 +43,10 @@ input[type=file]{display:none}
 .synced .l{font-size:11px;color:#9fb0cc}.synced .l b{color:#E8A020}
 .synced .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:5px}
 .rfr{background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+#wm{position:fixed;inset:0;z-index:9999;pointer-events:none;background-repeat:repeat;display:none}
 </style></head>
 <body>
+<div id="wm"></div>
 <header><div style="font-size:22px">🐶</div><div><h1>Silver Kan — App Vendedor</h1><div class="sub">Consulta el nivel y descuentos de tu cliente</div></div></header>
 <div class="wrap" id="wrap">
   <div class="drop" id="drop">
@@ -90,6 +92,19 @@ function PMULT(){return APPEVAL==='MES'?1:3;}               // metas: mensuales 
 function perWord(){return APPEVAL==='MES'?'mes':'trimestre';}
 function perLabel(){return APPEVALLABEL||(APPEVAL==='MES'?(MES_NOM[APPMONTH]||'mes'):(APPQ?APPQ.label:'trimestre'));}
 function fmt(n){return Math.round(n).toLocaleString('es-MX');}
+// ── Marca de agua trazable: nombre del vendedor + fecha repetido sobre toda la pantalla ──
+function applyWatermark(){
+  var el=document.getElementById('wm'); if(!el)return;
+  var label=(APPVEND||'Silver Kan').toString().toUpperCase();
+  var dev=''; try{dev=(localStorage.getItem('sk_dev_'+(CLOUD.v||''))||'').slice(1,7);}catch(e){}
+  var d=new Date(); var p=function(n){return ('0'+n).slice(-2);};
+  var stamp=p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear();
+  var txt=(label+' · '+stamp+(dev?(' · '+dev):'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="330" height="190">'
+    +'<text x="6" y="150" transform="rotate(-28 6 150)" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" fill="#9fb6dd" fill-opacity="0.15">'+txt+'</text></svg>';
+  el.style.backgroundImage='url("data:image/svg+xml;utf8,'+encodeURIComponent(svg)+'")';
+  el.style.display='block';
+}
 
 // ── SYNC EN LA NUBE (link con #v=...&db=...) ─────────────────────────────────
 function parseHash(){
@@ -110,6 +125,7 @@ function applyPayload(p){
   ALERTAS=p.alertas||null;
   CLIENTS={};
   (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:APPVEND,avg:r.avg||0,mix:r.mix||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0};});
+  applyWatermark();
 }
 function fetchCloud(){
   const q=parseHash(); CLOUD.db=q.db||SK_DB; CLOUD.v=q.v||'';
@@ -145,6 +161,7 @@ function loadCode(){
     }
     if(!Object.keys(CLIENTS).length)throw 0;
     document.getElementById('drop').style.display='none';
+    applyWatermark();
     renderList('');
   }catch(e){alert('El código no es válido o está incompleto. Pídeselo de nuevo a tu gerente.');}
 }
@@ -206,6 +223,7 @@ function parse(buf){
     CLIENTS[c]={nombre:c,vend:'',avg,mix:tq>0?tp/tq*100:0,cur:Math.round(d.qual[lastM]||0),qtd:Math.round(qtd),qp:Math.round(qp)};
   }
   document.getElementById('drop').style.display='none';
+  applyWatermark();
   renderList('');
 }
 
@@ -411,8 +429,21 @@ function showCard(name){
 // ── Candado de licencia (tu panel manda) + carga en vivo + auto-refresco ──
 function skBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🔒</div><h2 style="color:#E8A020;margin:10px 0">Servicio no disponible</h2><p class="hint">Esta app está desactivada temporalmente. Contacta a tu gerente.</p></div>';}
 function skGate(cb){fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
+// ── Apagado POR VENDEDOR: el gerente puede desactivar a un solo vendedor sin afectar a los demás ──
+function skVendBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🚫</div><h2 style="color:#E8A020;margin:10px 0">Acceso desactivado</h2><p class="hint">Tu acceso a esta app fue desactivado por tu gerente. Contáctalo si crees que es un error.</p></div>';}
+function vBlocked(b){return b===true||(b&&b.blocked===true);}
+function skVendorGate(cb){
+  var q=parseHash(); var v=q.v||''; if(!v){cb();return;}
+  var DB=(q.db||SK_DB).replace(/\/$/,'');
+  fetch(DB+'/skan/_vblock/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){ if(vBlocked(b))skVendBlocked(); else cb(); }).catch(function(){cb();});
+}
 // refresco silencioso: solo cuando el vendedor está en la lista de clientes (no interrumpe una tarjeta)
-function skPoll(){ if(!CLOUD.v||VIEW!=='clientes')return; var url=CLOUD.db.replace(/\/$/,'')+'/skan/'+encodeURIComponent(CLOUD.v)+'.json'; fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ var qi=document.getElementById('q'); var qv=qi?qi.value:''; applyPayload(p); renderList(qv); } }).catch(function(){}); }
+function skPoll(){ if(!CLOUD.v)return;
+  var base=CLOUD.db.replace(/\/$/,'');
+  // corta la sesión abierta si el gerente desactiva a este vendedor
+  fetch(base+'/skan/_vblock/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){if(vBlocked(b))skVendBlocked();}).catch(function(){});
+  if(VIEW!=='clientes')return;
+  fetch(base+'/skan/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ var qi=document.getElementById('q'); var qv=qi?qi.value:''; applyPayload(p); renderList(qv); } }).catch(function(){}); }
 // ── Candado por DISPOSITIVO: el primer teléfono que abre el link queda autorizado; otro teléfono se bloquea ──
 function skDeviceBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">📵</div><h2 style="color:#E8A020;margin:10px 0">App bloqueada en este teléfono</h2><p class="hint">Esta app ya está activada en otro dispositivo. Si cambiaste de teléfono, pide a tu gerente que <b>libere tu acceso</b>.</p></div>';}
 function skDeviceLock(cb){
@@ -426,7 +457,7 @@ function skDeviceLock(cb){
     else { skDeviceBlocked(); }
   }).catch(function(){ cb(); }); // sin internet: no bloquea (los datos tampoco cargan)
 }
-window.addEventListener('hashchange',function(){skGate(function(){skDeviceLock(fetchCloud);});});
-skGate(function(){ skDeviceLock(function(){ fetchCloud(); setInterval(skPoll,60000); }); });
+window.addEventListener('hashchange',function(){skGate(function(){skVendorGate(function(){skDeviceLock(fetchCloud);});});});
+skGate(function(){ skVendorGate(function(){ skDeviceLock(function(){ fetchCloud(); setInterval(skPoll,60000); }); }); });
 </script>
 </body></html>

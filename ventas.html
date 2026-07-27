@@ -2580,6 +2580,21 @@ function liberarDispositivo(vkey,vname){ if(!reqSuper())return;
     .then(function(){alert('✔ Dispositivo liberado. Pídele al vendedor que abra su link en el teléfono correcto.');})
     .catch(function(){alert('No se pudo liberar (revisa internet/licencia).');});
 }
+// ── Apagado por vendedor: desactiva/reactiva la app de UN solo vendedor ──
+function setVendBtn(btn,blocked){ if(!btn)return;
+  btn.setAttribute('data-blocked',blocked?'1':'0');
+  if(blocked){btn.textContent='🔴 App desactivada — reactivar';btn.style.background='#166534';btn.style.color='#dcfce7';}
+  else{btn.textContent='⛔ Desactivar app';btn.style.background='#7f1d1d';btn.style.color='#fecaca';}
+}
+function toggleVendedor(vkey,vname,btn){ if(!reqSuper())return;
+  var DB=(getCloudCfg().db||SK_DB).replace(/\/$/,'');
+  var willBlock=btn.getAttribute('data-blocked')!=='1';
+  if(willBlock&&!confirm('¿Desactivar la app de '+(vname||vkey)+'?\nSu app dejará de funcionar (aunque tenga el link) hasta que la reactives. Los demás vendedores no se ven afectados.'))return;
+  var url=DB+'/skan/_vblock/'+encodeURIComponent(vkey)+'.json';
+  var req=willBlock?fetch(url,{method:'PUT',body:'true'}):fetch(url,{method:'DELETE'});
+  req.then(function(){ setVendBtn(btn,willBlock); alert(willBlock?('⛔ App de '+(vname||vkey)+' desactivada. Se bloquea en su teléfono en menos de 1 minuto.'):('✅ App de '+(vname||vkey)+' reactivada.')); })
+     .catch(function(){alert('No se pudo cambiar (revisa internet/licencia).');});
+}
 function publishCloud(){
   if(!SK_SUPER){alert('Solo el super-usuario puede publicar a la nube.');return;}
   const cfg=getCloudCfg(); if(!cfg.db){alert('Falta la URL de la base de datos.');return;}
@@ -2649,7 +2664,8 @@ function renderCodesPanel(){
     if(/^https?:\/\/[^\/]+$/i.test(appBase))appBase+='/';
     const link=appBase?(appBase+'#v='+encodeURIComponent(keyp(v))+'&db='+encodeURIComponent(cfg.db||'')):'';
     h+='<div style="background:#12203c;border-radius:8px;padding:8px 10px;margin-bottom:7px;border:1px solid #24304f">';
-    h+='<b style="color:#cbd5e1;font-size:.85rem">'+v+' — '+payload.rows.length+' clientes</b> <button onclick="liberarDispositivo(\''+keyp(v).replace(/'/g,"")+'\',\''+String(v).replace(/'/g,"")+'\')" style="background:#7c2d12;color:#fed7aa;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-left:6px">🔓 Liberar dispositivo</button>';
+    h+='<b style="color:#cbd5e1;font-size:.85rem">'+v+' — '+payload.rows.length+' clientes</b> <button onclick="liberarDispositivo(\''+keyp(v).replace(/'/g,"")+'\',\''+String(v).replace(/'/g,"")+'\')" style="background:#7c2d12;color:#fed7aa;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-left:6px">🔓 Liberar dispositivo</button>'
+      +' <button id="vb_'+keyp(v)+'" data-blocked="0" onclick="toggleVendedor(\''+keyp(v).replace(/'/g,"")+'\',\''+String(v).replace(/'/g,"")+'\',this)" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-left:4px">⛔ Desactivar app</button>';
     if(link){h+='<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input readonly value="'+esc(link)+'" style="flex:1;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#7dd3fc;font-size:.68rem;padding:6px"><button onclick="cpv(this)" style="background:#2563EB;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer;white-space:nowrap">Copiar link</button></div>';}
     else{h+='<div style="font-size:.68rem;color:#64748b;margin-top:4px">Configura la URL de la app arriba para generar el link automático.</div>';}
     h+='<details style="margin-top:6px"><summary style="font-size:.7rem;color:#64748b;cursor:pointer">Código de respaldo (sin internet)</summary><div style="display:flex;gap:6px;align-items:flex-start;margin-top:5px"><textarea readonly style="flex:1;height:40px;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#64748b;font-size:.64rem;padding:6px;resize:none">'+code+'</textarea><button onclick="cpv(this)" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer;white-space:nowrap">Copiar</button></div></details>';
@@ -2657,6 +2673,8 @@ function renderCodesPanel(){
   });
   h+='</div>';
   box.innerHTML=h;
+  // marca los botones de vendedores actualmente desactivados
+  (function(){var DB=(cfg.db||SK_DB).replace(/\/$/,'');fetch(DB+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(m){m=m||{};Object.keys(pj.byVendor).forEach(function(v){var b=document.getElementById('vb_'+keyp(v));if(b)setVendBtn(b,m[keyp(v)]===true);});}).catch(function(){});})();
 }
 
 function resetDash(){DATA=null;selState=null;document.getElementById('dashboard').style.display='none';document.getElementById('loading').style.display='none';document.getElementById('dropzone').style.display='flex';document.getElementById('file-input').value='';}
