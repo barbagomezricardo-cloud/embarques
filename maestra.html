@@ -69,9 +69,9 @@ const TIERS=[["DIAMANTE_PLUS",15000,2.0,0.75,0.75,2],["DIAMANTE",9000,2.0,0.25,0
 // Bono Premium+ (los % los define el gerente en el dashboard; aquí van los valores por defecto).
 let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
-let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes';
+let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else renderList('');}
+function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else renderList('');}
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
 function viewTabs(){return masterBar()+'<div style="display:flex;gap:6px;margin-bottom:10px">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+'</div>';}
 function premBoost(mix){return mix>=PREM.u2?PREM.e2:(mix>=PREM.u1?PREM.e1:0);}
@@ -109,7 +109,7 @@ function applyPayload(p){
   VENTAS=p.ventas||null;
   ALERTAS=p.alertas||null;
   CLIENTS={};
-  (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:APPVEND,avg:r.avg||0,mix:r.mix||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0};});
+  (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0};});
 }
 function fetchCloud(){
   const q=parseHash(); CLOUD.db=q.db||''; CLOUD.v=q.v||'';
@@ -216,7 +216,7 @@ function syncBar(){
 
 function renderList(q){
   const app=document.getElementById('app');app.style.display='block';
-  VIEW='clientes';
+  CARDOPEN=false; VIEW='clientes';
   const arr=Object.values(CLIENTS).filter(c=>!q||c.nombre.includes(q.toUpperCase())).sort((a,b)=>b.avg-a.avg);
   let h=syncBar()+viewTabs();
   h+='<input class="search" id="q" placeholder="Buscar cliente..." value="'+q.replace(/"/g,'')+'" oninput="renderList(this.value)">';
@@ -410,7 +410,7 @@ function renderVentas(){
   app.innerHTML=h;
 }
 function showCard(name){
-  const c=CLIENTS[name];if(!c)return;const t=tierOf(c.avg);const nx=nextTier(t[0]);
+  const c=CLIENTS[name];if(!c)return;CARDOPEN=true;const t=tierOf(c.avg);const nx=nextTier(t[0]);
   const fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
   const maintain=t[0]==='INICIAL'?200:t[1];
   const M=PMULT();                       // 1 si evaluación mensual, 3 si trimestral
@@ -422,9 +422,10 @@ function showCard(name){
   const growQ=t[0]==='INICIAL'?null:Math.round(c.avg*M*(1+uc/100));
   const bronceRitmo=200*M;
   const premNeedQ=Math.round(PREM.base/100*Math.max(c.qtd||0,maintainQ));
-  const qpremPct=(c.qtd>0)?(c.qp/c.qtd*100):0;
-  const premOk=qpremPct>=PREM.base;
-  const curBoost=premBoost(qpremPct);
+  const qpBasePct=(c.qtd>0)?((c.qpb||0)/c.qtd*100):0;   // % premium BASE (solo Silver Kan Premium) → 3%
+  const qpMixPct=(c.qtd>0)?((c.qp||0)/c.qtd*100):0;      // % familia MIX (Premium + Silver Cat) → +0.5/+1%
+  const premOk=qpBasePct>=PREM.base;
+  const curBoost=premBoost(qpMixPct);
   const descMax=t[0]==='INICIAL'?0:(fijo+kc+kp+PREM.e2);
   const app=document.getElementById('app');
   // avance del periodo en curso
@@ -442,16 +443,16 @@ function showCard(name){
     need='<div class="row no"><span class="t">Para entrar a Cobre y empezar a ganar descuento</span><span class="v">'+fmt(bronceRitmo)+' sacos<br>en el '+PW+'</span></div>';
   }else{
     need+='<h3>Para GANAR el tope de su nivel ('+(fijo+kc+kp).toFixed(2)+'%)</h3>';
-    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium ≥'+PREM.base+'% del '+PW+'<br><span style="font-size:11px;color:#8792a3">va '+fmt(c.qp||0)+' sacos ('+qpremPct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
+    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium base ≥'+PREM.base+'% del '+PW+'<br><span style="font-size:11px;color:#8792a3">solo Silver Kan Premium 25/20 · va '+fmt(c.qpb||0)+' sacos ('+qpBasePct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
     need+='<div class="row"><span class="t">Crecer +'+uc+'% vs. su ritmo</span><span class="v">llegar a '+fmt(growQ)+' sacos<br>en el '+PW+'</span></div>';
     // Bono Premium+ — descuento EXTRA por subir el mix premium
     const need1=Math.round(PREM.u1/100*Math.max(c.qtd||0,maintainQ));
     const need2=Math.round(PREM.u2/100*Math.max(c.qtd||0,maintainQ));
     need+='<h3>Bono Premium+ · hasta '+descMax.toFixed(2)+'% (extra por más premium)</h3>';
     need+='<div style="font-size:11.5px;color:#3d4552;padding:0 2px 8px">Cuenta cualquier presentación de <b>Premium (25 kg o 20 kg)</b> o <b>Silver Cat 15 kg</b>. Compra estos sacos en el '+PW+' para ganar el descuento extra:</div>';
-    need+='<div class="row'+(qpremPct>=PREM.u1?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need1)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u1+'%)</span></span><span class="v">+'+PREM.e1+'% extra'+(qpremPct>=PREM.u1?' ✓':'')+'</span></div>';
-    need+='<div class="row'+(qpremPct>=PREM.u2?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need2)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u2+'%)</span></span><span class="v">+'+PREM.e2+'% extra'+(qpremPct>=PREM.u2?' ✓':'')+'</span></div>';
-    need+='<div style="font-size:11px;color:#8792a3;padding:2px 4px 8px">Va '+fmt(c.qp||0)+' sacos premium/gato ('+qpremPct.toFixed(1)+'%). Bono actual del cliente: <b>+'+curBoost.toFixed(2)+'%</b>.</div>';
+    need+='<div class="row'+(qpMixPct>=PREM.u1?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need1)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u1+'%)</span></span><span class="v">+'+PREM.e1+'% extra'+(qpMixPct>=PREM.u1?' ✓':'')+'</span></div>';
+    need+='<div class="row'+(qpMixPct>=PREM.u2?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need2)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u2+'%)</span></span><span class="v">+'+PREM.e2+'% extra'+(qpMixPct>=PREM.u2?' ✓':'')+'</span></div>';
+    need+='<div style="font-size:11px;color:#8792a3;padding:2px 4px 8px">Va '+fmt(c.qp||0)+' sacos premium/gato ('+qpMixPct.toFixed(1)+'%). Bono actual del cliente: <b>+'+curBoost.toFixed(2)+'%</b>.</div>';
     need+='<h3>Para MANTENER o SUBIR de nivel</h3>';
     need+='<div class="row"><span class="t">Mantener '+nivLab(t[0])+'</span><span class="v">'+fmt(maintainQ)+' sacos<br>en el '+PW+'</span></div>';
     if(nx)need+='<div class="row"><span class="t">Subir a '+nivLab(nx[0])+'</span><span class="v">'+fmt(nextQ)+' sacos<br>en el '+PW+'</span></div>';
@@ -473,7 +474,7 @@ function showCard(name){
 function skBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🔒</div><h2 style="color:#E8A020;margin:10px 0">Servicio no disponible</h2><p class="hint">El panel está desactivado temporalmente.</p></div>';}
 function skGate(cb){fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
 // refresco silencioso: solo cuando está en la lista (no interrumpe una tarjeta abierta)
-function skPoll(){ if(VIEW!=='clientes')return; masterLoad(); }
+function skPoll(){ if(VIEW!=='clientes'||CARDOPEN)return; masterLoad(); }
 window.addEventListener('hashchange',function(){skGate(masterLoad);});
 skGate(function(){ masterLoad(); setInterval(skPoll,60000); });
 </script>

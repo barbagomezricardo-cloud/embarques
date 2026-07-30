@@ -2311,6 +2311,18 @@ function visitasPanel(){
   else h+='<div style="font-size:.75rem;color:#94a3b8">Las visitas aparecen aquí <b>en vivo</b> cuando los vendedores las registran en su app (vía Firebase). Si un vendedor está sin conexión, puede enviarte un código y lo pegas aquí.</div>';
   h+='</div>'; return h;
 }
+function fetchObsLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_obs.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._obsLive=store;renderProspec();}).catch(function(){}); }
+function obsPanel(){
+  var st=window._obsLive||{}; var names=Object.keys(st);
+  var h='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:12px;margin-bottom:12px">'
+   +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:800;color:#f4d58a">📝 Observaciones de vendedores — EN VIVO ('+names.length+')</span><button onclick="fetchObsLive()" style="background:#4a3a12;color:#f4d58a;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">🔄 Actualizar</button></div>'
+   +'<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Lo que los vendedores escriben sobre cada prospecto (no lo encontró, negocio cerrado, dirección/estado mal, etc.). Se actualiza solo.</div>';
+  if(names.length){ h+='<table style="width:100%;font-size:.76rem;color:#cbd5e1;border-collapse:collapse"><tr style="color:#94a3b8;text-align:left"><td>Prospecto</td><td>Vendedor</td><td>Observación</td><td>Fecha</td></tr>';
+    names.forEach(function(n){h+='<tr style="border-top:1px solid #3a3320"><td style="color:#fff">'+n+'</td><td>'+(st[n].v||'')+'</td><td style="color:#f0d9a0">'+((st[n].txt||'').replace(/</g,'&lt;'))+'</td><td style="white-space:nowrap">'+(st[n].ts||'')+'</td></tr>';});
+    h+='</table>'; }
+  else h+='<div style="font-size:.75rem;color:#94a3b8">Aún no hay observaciones. Aparecerán aquí en cuanto un vendedor escriba una nota en su app.</div>';
+  h+='</div>'; return h;
+}
 
 function renderProspec(){
   const box=document.getElementById('prospec-content'); if(!box||typeof PROSPECT_DATA==='undefined')return;
@@ -2344,7 +2356,7 @@ function renderProspec(){
   const prosp=view.filter(p=>p.kind==='prosp');
   const byV={}; prosp.forEach(p=>{const v=p.v||'(sin asignar)';const e=p.e||'(sin estado)';if(!byV[v])byV[v]={};byV[v][e]=(byV[v][e]||0)+1;});
   const vt=Object.keys(byV).map(v=>[v,Object.values(byV[v]).reduce((a,b)=>a+b,0)]).sort((a,b)=>b[1]-a[1]);
-  let lh=visitasPanel();
+  let lh=visitasPanel()+obsPanel();
   if(vt.length){lh+='<div style="font-size:.95rem;font-weight:800;color:var(--gold);margin:4px 0 8px">Plan de ruta — prospectos de competencia por vendedor y estado</div><div style="display:flex;gap:10px;flex-wrap:wrap">';
     for(const [v,tot] of vt){const col=PROSPEC_VCOL[v]||'#94a3b8';const est=Object.entries(byV[v]).sort((a,b)=>b[1]-a[1]);
       lh+='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+col+';border-radius:8px;padding:10px 12px;min-width:200px"><div style="font-weight:800;color:'+col+'">'+v+' — '+tot+' prospectos</div><table style="width:100%;font-size:.76rem;color:#cbd5e1;margin-top:5px;border-collapse:collapse">';
@@ -2362,7 +2374,7 @@ function renderProspec(){
     lh+='</div>';}
   const lEl=document.getElementById('prospec-list'); if(lEl)lEl.innerHTML=lh;
 }
-try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db)fetchVisitasLive();}catch(e){}},25000);}catch(e){}
+try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db){fetchVisitasLive();fetchObsLive();}}catch(e){}},25000);}catch(e){}
 function prospecShow(i){const p=_prospecView[i];if(!p)return;const col=prospecColor(p);
   const info=document.getElementById('prospec-info'); if(!info)return;
   if(p.kind==='mine'||p.kind==='churn'){

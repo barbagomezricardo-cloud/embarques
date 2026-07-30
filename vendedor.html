@@ -73,7 +73,7 @@ let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
 let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else renderList('');}
+function setView(v){CARDOPEN=false;OBSEDIT=-1;VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else renderList('');}
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
 function viewTabs(){return '<div style="display:flex;gap:6px;margin-bottom:10px">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+'</div>';}
 function premBoost(mix){return mix>=PREM.u2?PREM.e2:(mix>=PREM.u1?PREM.e1:0);}
@@ -251,6 +251,20 @@ function visKey(){return 'visitas04mas_'+(APPVEND||'v');}
 function getVisitas(){try{return JSON.parse(localStorage.getItem(visKey())||'{}');}catch(e){return {};}}
 function saveVisitas(o){try{localStorage.setItem(visKey(),JSON.stringify(o));}catch(e){}}
 function pushVisitasCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/visits/'+encodeURIComponent(CLOUD.v)+'.json';fetch(url,{method:'PUT',body:JSON.stringify(getVisitas())}).catch(function(){});}catch(e){} }
+// ── Observaciones manuales del vendedor (se sincronizan con el gerente) ──
+function obsKey(){return 'obs04mas_'+(APPVEND||'v');}
+function getObs(){try{return JSON.parse(localStorage.getItem(obsKey())||'{}');}catch(e){return {};}}
+function saveObs(o){try{localStorage.setItem(obsKey(),JSON.stringify(o));}catch(e){}}
+function pushObsCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/skan/_obs/'+encodeURIComponent(CLOUD.v)+'.json';fetch(url,{method:'PUT',body:JSON.stringify(getObs())}).catch(function(){});}catch(e){} }
+var OBSEDIT=-1;
+function openObs(i){OBSEDIT=i;renderProspectos(PROSPQ);setTimeout(function(){var ta=document.getElementById('obsta');if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}
+function cancelObs(){OBSEDIT=-1;renderProspectos(PROSPQ);}
+function addTag(t){var ta=document.getElementById('obsta');if(!ta)return;ta.value=(ta.value.trim()?ta.value.replace(/\s*$/,'')+' · ':'')+t;ta.focus();}
+function saveObsFor(i){var p=PROSPECTS[i];if(!p)return;var ta=document.getElementById('obsta');var txt=ta?ta.value.trim():'';var o=getObs();
+  if(!txt){delete o[p.n];}else{var d=new Date();var pd=function(n){return ('0'+n).slice(-2);};o[p.n]={ts:pd(d.getDate())+'/'+pd(d.getMonth()+1)+' '+pd(d.getHours())+':'+pd(d.getMinutes()),txt:txt};}
+  saveObs(o);pushObsCloud();OBSEDIT=-1;renderProspectos(PROSPQ);}
+var PROSPEST='';
+function setPEst(v){PROSPEST=v;OBSEDIT=-1;renderProspectos(PROSPQ);}
 function setVisita(name,how){var v=getVisitas();var d=new Date();var p=function(n){return ('0'+n).slice(-2);};v[name]={ts:p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes()),how:how};saveVisitas(v);pushVisitasCloud();}
 function quitarVisita(i){var p=PROSPECTS[i];if(!p)return;var v=getVisitas();delete v[p.n];saveVisitas(v);pushVisitasCloud();renderProspectos(PROSPQ);}
 function distM(la1,lo1,la2,lo2){var R=6371000,t=Math.PI/180;var dLa=(la2-la1)*t,dLo=(lo2-lo1)*t;var x=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*t)*Math.cos(la2*t)*Math.sin(dLo/2)*Math.sin(dLo/2);return 2*R*Math.asin(Math.sqrt(x));}
@@ -273,27 +287,50 @@ function enviarVisitas(){var v=getVisitas();var ks=Object.keys(v);if(!ks.length)
   else {alert(full);}
 }
 function pfilt(f){return '<button onclick="renderProspectos(PROSPQ,\''+f+'\')" style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;background:'+(PROSPFILT===f?'var(--gold)':'var(--mid)')+';color:'+(PROSPFILT===f?'var(--navy)':'#9fb0cc')+'">';}
+function prospItem(p,i,vis,obs){
+  var loc=[p.c,p.e].filter(Boolean).join(', ');var url=mapsUrl(p.la,p.lo,(p.n||'')+' '+loc);var v=vis[p.n];var ob=obs[p.n];
+  var h='<div class="li" style="flex-direction:column;align-items:stretch;gap:8px'+(v?';background:#0f2417;border-color:#1a7a3f':'')+'">'
+   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b><div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
+  if(ob&&ob.txt&&OBSEDIT!==i){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:7px 10px;font-size:12px;color:#f0d9a0">📝 '+(ob.txt||'').replace(/</g,'&lt;')+' <span style="color:#8a7a52">· '+(ob.ts||'')+'</span></div>';}
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap"><a href="'+url+'" target="_blank" rel="noopener" style="flex:1;min-width:104px;text-align:center;background:var(--gold);color:var(--navy);text-decoration:none;font-weight:800;border-radius:8px;padding:9px">📍 Cómo llegar</a>'
+   +(v?('<button onclick="quitarVisita('+i+')" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer">Deshacer</button>')
+       :('<button onclick="registrarVisita('+i+')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer">✓ Visita</button>'))
+   +'<button onclick="openObs('+i+')" style="background:#4a3a12;color:#f4d58a;border:none;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer">📝 '+(ob&&ob.txt?'Editar nota':'Nota')+'</button>'
+   +(p.tel?('<a href="tel:'+p.tel+'" style="background:#22304d;color:#dbeafe;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px">📞</a>'):'')
+   +'</div>';
+  if(OBSEDIT===i){
+    var cur=ob&&ob.txt?ob.txt.replace(/</g,'&lt;'):'';
+    var tags=['No lo encontré','Ya no existe','Dirección mal','Estado/ubicación mal','Ya es cliente','No le interesa'];
+    h+='<div style="background:#10233f;border:1px solid #21406e;border-radius:10px;padding:10px;margin-top:2px">'
+      +'<div style="font-size:11px;color:#9fb0cc;margin-bottom:6px">Escribe lo que quieras (toca una etiqueta para agregarla):</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px">'+tags.map(function(t){return '<button onclick="addTag(\''+t.replace(/'/g,'')+'\')" style="background:#22304d;color:#cfe0ff;border:none;border-radius:14px;padding:5px 10px;font-size:11px;cursor:pointer">'+t+'</button>';}).join('')+'</div>'
+      +'<textarea id="obsta" placeholder="Ej.: no encontré el negocio, la dirección está mal, está en otro estado..." style="width:100%;height:66px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#e8eef7;padding:9px;font-size:14px;resize:none">'+cur+'</textarea>'
+      +'<div style="display:flex;gap:8px;margin-top:7px"><button onclick="saveObsFor('+i+')" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar</button><button onclick="cancelObs()" style="background:#334155;color:#cbd5e1;border:none;border-radius:8px;padding:9px 14px;cursor:pointer">Cancelar</button></div></div>';
+  }
+  h+='</div>';return h;
+}
 function renderProspectos(q,filt){
   var app=document.getElementById('app');app.style.display='block';q=q||'';PROSPQ=q;if(filt)PROSPFILT=filt;
-  var vis=getVisitas();
+  var vis=getVisitas(), obs=getObs();
   var base=PROSPECTS.filter(function(p){return !q||((p.n||'')+' '+(p.c||'')+' '+(p.e||'')).toUpperCase().indexOf(q.toUpperCase())>=0;});
   var nVis=PROSPECTS.filter(function(p){return vis[p.n];}).length, nPend=PROSPECTS.length-nVis;
   var arr=base.filter(function(p){return PROSPFILT==='all'?true:(PROSPFILT==='vis'?!!vis[p.n]:!vis[p.n]);});
+  if(PROSPEST)arr=arr.filter(function(p){return (p.e||'(sin estado)')===PROSPEST;});
+  var estCount={}; PROSPECTS.forEach(function(p){var e=p.e||'(sin estado)';if(!estCount[e])estCount[e]={t:0,pend:0};estCount[e].t++;if(!vis[p.n])estCount[e].pend++;});
+  var estados=Object.keys(estCount).sort();
   var h=syncBar()+viewTabs();
   h+='<div style="display:flex;gap:6px;margin-bottom:8px">'+pfilt('pend')+'Pendientes ('+nPend+')</button>'+pfilt('vis')+'Visitados ('+nVis+')</button>'+pfilt('all')+'Todos</button></div>';
+  h+='<select onchange="setPEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:8px"><option value="">📍 Todos los estados ('+PROSPECTS.length+')</option>'+estados.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(PROSPEST===e?' selected':'')+'>'+e+' — '+estCount[e].t+' ('+estCount[e].pend+' pend.)</option>';}).join('')+'</select>';
   h+='<input class="search" id="pq" placeholder="Buscar prospecto o ciudad..." value="'+q.replace(/"/g,'')+'" oninput="renderProspectos(this.value)">';
-  if(nVis){ h+= (CLOUD.db&&CLOUD.v) ? ('<div style="background:#0f2417;border:1px solid #1a7a3f;border-radius:10px;padding:9px 12px;font-size:12px;color:#7ee2a8;margin-bottom:10px">✓ Tus '+nVis+' visitas se sincronizan solas con el gerente (en vivo).</div>') : ('<button onclick="enviarVisitas()" style="width:100%;background:#1a7a3f;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:800;margin-bottom:10px;cursor:pointer">📤 Enviar mis '+nVis+' visitas al gerente</button>'); }
+  if(nVis){ h+= (CLOUD.db&&CLOUD.v) ? ('<div style="background:#0f2417;border:1px solid #1a7a3f;border-radius:10px;padding:9px 12px;font-size:12px;color:#7ee2a8;margin-bottom:10px">✓ Tus visitas y notas se sincronizan solas con el gerente (en vivo).</div>') : ('<button onclick="enviarVisitas()" style="width:100%;background:#1a7a3f;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:800;margin-bottom:10px;cursor:pointer">📤 Enviar mis '+nVis+' visitas al gerente</button>'); }
   if(!arr.length){h+='<div class="hint">'+(PROSPECTS.length?'Nada en esta vista.':'Aún no hay prospectos cargados. Pídele a tu gerente que los publique.')+'</div>';app.innerHTML=h;var q0=document.getElementById('pq');if(q0&&q){q0.focus();q0.setSelectionRange(q0.value.length,q0.value.length);}return;}
-  h+='<div class="list">';
-  arr.slice(0,300).forEach(function(p){var i=PROSPECTS.indexOf(p);var loc=[p.c,p.e].filter(Boolean).join(', ');var url=mapsUrl(p.la,p.lo,(p.n||'')+' '+loc);var v=vis[p.n];
-    h+='<div class="li" style="flex-direction:column;align-items:stretch;gap:8px'+(v?';background:#0f2417;border-color:#1a7a3f':'')+'">'
-     +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b><div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>'
-     +'<div style="display:flex;gap:8px"><a href="'+url+'" target="_blank" rel="noopener" style="flex:1;text-align:center;background:var(--gold);color:var(--navy);text-decoration:none;font-weight:800;border-radius:8px;padding:9px">📍 Cómo llegar</a>'
-     +(v?('<button onclick="quitarVisita('+i+')" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer">Deshacer</button>')
-         :('<button onclick="registrarVisita('+i+')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer">✓ Registrar visita</button>'))
-     +(p.tel?('<a href="tel:'+p.tel+'" style="background:#22304d;color:#dbeafe;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px">📞</a>'):'')
-     +'</div></div>';});
-  h+='</div>';app.innerHTML=h;var qi=document.getElementById('pq');if(qi&&q){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
+  var groups={}; arr.forEach(function(p){var e=p.e||'(sin estado)';(groups[e]=groups[e]||[]).push(p);});
+  Object.keys(groups).sort().forEach(function(e){
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 2px 6px"><span style="font-size:13px;font-weight:800;color:#E8A020">📍 '+e+'</span><span style="font-size:11px;color:#9fb0cc">'+groups[e].length+' aquí</span></div><div class="list">';
+    groups[e].slice(0,300).forEach(function(p){var i=PROSPECTS.indexOf(p);h+=prospItem(p,i,vis,obs);});
+    h+='</div>';
+  });
+  app.innerHTML=h;var qi=document.getElementById('pq');if(qi&&q){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 
 function renderAlertas(){
