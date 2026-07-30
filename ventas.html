@@ -2285,7 +2285,53 @@ function prospecAll(){
   const prospKeys=new Set(PROSPECT_DATA.map(p=>keyp(p.n)));
   let all=PROSPECT_DATA.map(p=>{const k=keyp(p.n);const conv=cliByKey[k];return Object.assign({},p,{brand:(p.src&&p.src.indexOf('Nogal')>=0)?'Nogal':'Nubac',kind:(conv||p.m)?'yacli':'prosp',m:conv?'1':p.m,conv:conv?1:0,v:conv?conv.v:p.v,sacos:conv?conv.sacos:p.sacos});});
   const mine=prospecMine().filter(c=>!prospKeys.has(keyp(c.n)));
-  return all.concat(mine).concat(prospecChurn());
+  var _res=all.concat(mine).concat(prospecChurn());
+  // Correcciones manuales de estado/ciudad del gerente (se guardan en la nube)
+  var fx=window._prospFix||{};
+  if(fx&&Object.keys(fx).length){_res.forEach(function(p){var f=fx[keyp(p.n)];if(f){if(f.e)p.e=f.e;if(f.c)p.c=f.c;}});}
+  return _res;
+}
+const MX_ESTADOS=['AGUASCALIENTES','BAJA CALIFORNIA','BAJA CALIFORNIA SUR','CAMPECHE','CHIAPAS','CHIHUAHUA','CIUDAD DE MEXICO','COAHUILA','COLIMA','DURANGO','GUANAJUATO','GUERRERO','HIDALGO','JALISCO','MEXICO','MICHOACAN','MORELOS','NAYARIT','NUEVO LEON','OAXACA','PUEBLA','QUERETARO','QUINTANA ROO','SAN LUIS POTOSI','SINALOA','SONORA','TABASCO','TAMAULIPAS','TLAXCALA','VERACRUZ','YUCATAN','ZACATECAS'];
+function fetchProspFix(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_prospfix.json'; fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._prospFix=o||{};}).catch(function(){}); }
+function saveProspFix(){ if(!reqSuper())return;
+  var name=((document.getElementById('corr-name')||{}).value||'').trim();
+  var e=((document.getElementById('corr-est')||{}).value||'');
+  var c=((document.getElementById('corr-city')||{}).value||'').trim();
+  if(!name){alert('Escribe o elige el nombre del prospecto.');return;}
+  if(!e){alert('Elige el estado correcto.');return;}
+  var k=keyp(name); var rec={n:name,e:e}; if(c)rec.c=c;
+  window._prospFix=window._prospFix||{}; window._prospFix[k]=rec;
+  var DB=(getCloudCfg().db||SK_DB).replace(/\/$/,'');
+  fetch(DB+'/skan/_prospfix/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(rec)}).catch(function(){});
+  try{if(typeof renderMap==='function')renderMap();}catch(e2){}
+  renderProspec();
+  alert('✔ Corrección guardada: '+name+' → '+e+'.\nPublica a la nube para que les llegue a los vendedores.');
+}
+function delProspFix(k){ if(!reqSuper())return;
+  if(window._prospFix)delete window._prospFix[k];
+  var DB=(getCloudCfg().db||SK_DB).replace(/\/$/,'');
+  fetch(DB+'/skan/_prospfix/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).catch(function(){});
+  try{if(typeof renderMap==='function')renderMap();}catch(e2){}
+  renderProspec();
+}
+function corrPrefill(name){ var el=document.getElementById('corr-name'); if(el){el.value=name;el.scrollIntoView({behavior:'smooth',block:'center'});el.focus();} }
+function corrPanel(){
+  var fx=window._prospFix||{}; var keys=Object.keys(fx);
+  var names=(typeof prospecAll==='function')?[...new Set(prospecAll().map(function(p){return p.n;}))].sort():[];
+  var dl='<datalist id="corr-names">'+names.slice(0,2000).map(function(n){return '<option value="'+(n||'').replace(/"/g,'&quot;')+'">';}).join('')+'</datalist>';
+  var opts='<option value="">-- estado correcto --</option>'+MX_ESTADOS.map(function(e){return '<option value="'+e+'">'+e+'</option>';}).join('');
+  var h='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-radius:8px;padding:12px;margin-bottom:12px">'
+   +'<div style="font-weight:800;color:var(--gold);margin-bottom:6px">✎ Corregir estado de un prospecto</div>'
+   +'<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Si un vendedor reporta (en sus observaciones) que un prospecto está en otro estado, corrígelo aquí. La corrección se guarda en la nube y viaja a la app en la próxima publicación.</div>'+dl
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+   +'<input id="corr-name" list="corr-names" placeholder="Nombre del prospecto" style="flex:2;min-width:200px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#cbd5e1;padding:8px">'
+   +'<select id="corr-est" style="flex:1;min-width:150px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#cbd5e1;padding:8px">'+opts+'</select>'
+   +'<input id="corr-city" placeholder="Ciudad (opcional)" style="flex:1;min-width:120px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#cbd5e1;padding:8px">'
+   +'<button onclick="saveProspFix()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:800;cursor:pointer">Guardar corrección</button></div>';
+  if(keys.length){ h+='<div style="font-size:.74rem;color:#cbd5e1"><b style="color:#f4d58a">'+keys.length+' correcciones activas:</b><table style="width:100%;font-size:.74rem;border-collapse:collapse;margin-top:4px">';
+    keys.forEach(function(k){var f=fx[k];h+='<tr style="border-top:1px solid #1e3a6b"><td style="color:#fff">'+((f.n||k)).replace(/</g,'&lt;')+'</td><td style="color:#7dd3fc">'+(f.e||'')+(f.c?(' · '+f.c):'')+'</td><td style="text-align:right"><button onclick="delProspFix(\''+k.replace(/'/g,'')+'\')" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:6px;padding:3px 8px;font-size:.68rem;cursor:pointer">Quitar</button></td></tr>';});
+    h+='</table></div>'; }
+  h+='</div>'; return h;
 }
 function getVisitasImport(){var live=window._visitasLive||{};var pasted={};try{pasted=JSON.parse(localStorage.getItem('visitasImport04mas')||'{}');}catch(e){}return Object.assign({},pasted,live);}
 function fetchVisitasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/visits.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var vis=o[v]||{};for(var n in vis){store[n]=Object.assign({},vis[n],{v:v});}}window._visitasLive=store;renderProspec();}).catch(function(){}); }
@@ -2317,8 +2363,8 @@ function obsPanel(){
   var h='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:12px;margin-bottom:12px">'
    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:800;color:#f4d58a">📝 Observaciones de vendedores — EN VIVO ('+names.length+')</span><button onclick="fetchObsLive()" style="background:#4a3a12;color:#f4d58a;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">🔄 Actualizar</button></div>'
    +'<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Lo que los vendedores escriben sobre cada prospecto (no lo encontró, negocio cerrado, dirección/estado mal, etc.). Se actualiza solo.</div>';
-  if(names.length){ h+='<table style="width:100%;font-size:.76rem;color:#cbd5e1;border-collapse:collapse"><tr style="color:#94a3b8;text-align:left"><td>Prospecto</td><td>Vendedor</td><td>Observación</td><td>Fecha</td></tr>';
-    names.forEach(function(n){h+='<tr style="border-top:1px solid #3a3320"><td style="color:#fff">'+n+'</td><td>'+(st[n].v||'')+'</td><td style="color:#f0d9a0">'+((st[n].txt||'').replace(/</g,'&lt;'))+'</td><td style="white-space:nowrap">'+(st[n].ts||'')+'</td></tr>';});
+  if(names.length){ h+='<table style="width:100%;font-size:.76rem;color:#cbd5e1;border-collapse:collapse"><tr style="color:#94a3b8;text-align:left"><td>Prospecto</td><td>Vendedor</td><td>Observación</td><td>Fecha</td><td></td></tr>';
+    names.forEach(function(n){h+='<tr style="border-top:1px solid #3a3320"><td style="color:#fff">'+n.replace(/</g,'&lt;')+'</td><td>'+(st[n].v||'')+'</td><td style="color:#f0d9a0">'+((st[n].txt||'').replace(/</g,'&lt;'))+'</td><td style="white-space:nowrap">'+(st[n].ts||'')+'</td><td><button onclick="corrPrefill(\''+n.replace(/['\\]/g,'')+'\')" title="Corregir el estado de este prospecto" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:6px;padding:3px 8px;font-size:.68rem;cursor:pointer;white-space:nowrap">✎ Estado</button></td></tr>';});
     h+='</table>'; }
   else h+='<div style="font-size:.75rem;color:#94a3b8">Aún no hay observaciones. Aparecerán aquí en cuanto un vendedor escriba una nota en su app.</div>';
   h+='</div>'; return h;
@@ -2356,7 +2402,7 @@ function renderProspec(){
   const prosp=view.filter(p=>p.kind==='prosp');
   const byV={}; prosp.forEach(p=>{const v=p.v||'(sin asignar)';const e=p.e||'(sin estado)';if(!byV[v])byV[v]={};byV[v][e]=(byV[v][e]||0)+1;});
   const vt=Object.keys(byV).map(v=>[v,Object.values(byV[v]).reduce((a,b)=>a+b,0)]).sort((a,b)=>b[1]-a[1]);
-  let lh=visitasPanel()+obsPanel();
+  let lh=visitasPanel()+obsPanel()+corrPanel();
   if(vt.length){lh+='<div style="font-size:.95rem;font-weight:800;color:var(--gold);margin:4px 0 8px">Plan de ruta — prospectos de competencia por vendedor y estado</div><div style="display:flex;gap:10px;flex-wrap:wrap">';
     for(const [v,tot] of vt){const col=PROSPEC_VCOL[v]||'#94a3b8';const est=Object.entries(byV[v]).sort((a,b)=>b[1]-a[1]);
       lh+='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+col+';border-radius:8px;padding:10px 12px;min-width:200px"><div style="font-weight:800;color:'+col+'">'+v+' — '+tot+' prospectos</div><table style="width:100%;font-size:.76rem;color:#cbd5e1;margin-top:5px;border-collapse:collapse">';
@@ -2374,7 +2420,8 @@ function renderProspec(){
     lh+='</div>';}
   const lEl=document.getElementById('prospec-list'); if(lEl)lEl.innerHTML=lh;
 }
-try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db){fetchVisitasLive();fetchObsLive();}}catch(e){}},25000);}catch(e){}
+try{fetchProspFix();}catch(e){}
+try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db){fetchVisitasLive();fetchObsLive();fetchProspFix();}}catch(e){}},25000);}catch(e){}
 function prospecShow(i){const p=_prospecView[i];if(!p)return;const col=prospecColor(p);
   const info=document.getElementById('prospec-info'); if(!info)return;
   if(p.kind==='mine'||p.kind==='churn'){
