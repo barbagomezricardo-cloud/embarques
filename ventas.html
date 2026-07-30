@@ -226,6 +226,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
   <div class="dash-header">
     <span class="file-badge" id="file-badge">—</span>
     <button id="btn-nuevo" onclick="resetDash()">Cargar nuevo archivo</button>
+    <button id="btn-publicar" onclick="publishCloud()" title="Sube los datos a la nube para que vendedores y gerencia los reciban actualizados" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:800;cursor:pointer;margin-left:10px">☁️ Publicar a la nube</button>
     <button id="btn-super" onclick="toggleSuper()" style="background:#334155;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;margin-left:10px">🔒 Modo visor</button>
     <span style="font-size:.72rem;color:#4B5563;margin-left:auto">Procesado localmente · sin envío de datos</span>
   </div>
@@ -642,23 +643,26 @@ function calcDesc(nivel,mesData,prodMes,completos){
   const win=evalWindows(um,evalP);                                    // meses del periodo actual y anterior
   const sumM=(arr)=>arr.reduce((a,m)=>a+((mesData&&mesData[m])||0),0);
   const vU=sumM(win.cur), vP=sumM(win.prev);
-  let premU=0;
+  let premBaseU=0, premMixU=0;
   for(const[p,pms] of Object.entries(prodMes||{})){
-    if(isPremiumPlus(p))premU+=win.cur.reduce((a,m)=>a+((pms&&pms[m])||0),0);
+    const cu=win.cur.reduce((a,m)=>a+((pms&&pms[m])||0),0);
+    if(PREMIUM_RE.test(p))premBaseU+=cu;   // Premium Base (3%): SOLO Silver Kan Premium 25/20
+    if(isPremiumPlus(p))premMixU+=cu;      // Familia Mix (+bono): Premium 25/20 + Silver Cat 15
   }
   const pc=getPremCfg();
-  const mixPrem=vU>0?premU/vU*100:0;
+  const mixPrem=vU>0?premBaseU/vU*100:0;   // % premium BASE (para el 3%)
+  const mixPlus=vU>0?premMixU/vU*100:0;    // % familia MIX (para +0.5/+1%)
   const premOk=mixPrem>=(pc.umbralBase!=null?pc.umbralBase:UMBRAL_PREM);
   // ── INICIAL (menos de 200 sacos/mes): sin descuento hasta llegar a Cobre ──
   if(nivel==='INICIAL'){
-    return{desc:0,descMax:0,crecio:false,premOk:false,mixPrem:mixPrem,boost:0};
+    return{desc:0,descMax:0,crecio:false,premOk:false,mixPrem:mixPrem,mixPlus:mixPlus,boost:0};
   }
   const cfg=getTierCfg()[nivel]||{fijo:0,kc:0,kp:0,uc:UMBRAL_CREC};
   const umbralC=(cfg.uc!=null?cfg.uc:UMBRAL_CREC);const crecio=(vP>0&&vU>0)?((vU-vP)/vP*100>=umbralC):false;
-  const boost=premBoost(mixPrem,pc);                                // +e1 o +e2 por subir el mix premium
+  const boost=premBoost(mixPlus,pc);                                // +e1 o +e2 por subir el mix (incluye Silver Cat)
   const desc=(cfg.fijo||0)+(crecio?(cfg.kc||0):0)+(premOk?(cfg.kp||0):0)+boost;
   const descMax=(cfg.fijo||0)+(cfg.kc||0)+(cfg.kp||0)+(pc.e2||0);
-  return{desc,descMax,crecio,premOk,mixPrem,boost};
+  return{desc,descMax,crecio,premOk,mixPrem,mixPlus,boost};
 }
 
 function daysAgo(date){if(!date)return 999;return Math.floor((TODAY-date)/86400000);}
@@ -906,7 +910,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       const ld=lastDate[nombre]||null;
       const dias=daysAgo(ld);
       const prodMes=byClienteProdMes[nombre]||{};
-      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,promoSacos:(promoCliente&&promoCliente[nombre])||0,lastDate:ld,dias};
+      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,lastDate:ld,dias};
     }).sort((a,b)=>b.promMes-a.promMes);
 
     // El vendedor se toma del MAPEO curado (vendedores reales + administración), NO del export de Odoo.
@@ -1608,7 +1612,7 @@ function saveTierConfig(){ if(!reqSuper())return;
     min:parseInt(document.getElementById('cob-min')?.value)||300,
     umbral:parseFloat(document.getElementById('cob-umb')?.value)||20};
   localStorage.setItem('cobreCfg04mas',JSON.stringify(ccfg));
-  if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;}}
+  if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;c.mixPlus=d.mixPlus;}}
   renderClienteTable();renderRiesgo();renderAlertas();renderConfig();if(typeof renderEquilibrio==='function')renderEquilibrio();
   alert('✅ Niveles y descuentos guardados.'+(ccfg.enabled?' Nivel Cobre ACTIVO.':' Nivel Cobre bloqueado.'));
 }
@@ -1646,7 +1650,7 @@ function importConfig(file){ if(!reqSuper())return;
         const m=getMapping();DATA.mapping=m;
         for(const c of DATA.clients){const info=m[c.nombre]||{e:c.estado,v:c.vendedor};c.estado=info.e;c.vendedor=info.v;
           c.nivel=calcNivel(c.promMes);const ds=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos);
-          c.desc=ds.desc;c.descMax=ds.descMax;c.crecio=ds.crecio;c.premOk=ds.premOk;c.mixPrem=ds.mixPrem;}
+          c.desc=ds.desc;c.descMax=ds.descMax;c.crecio=ds.crecio;c.premOk=ds.premOk;c.mixPrem=ds.mixPrem;c.mixPlus=ds.mixPlus;}
         recalcAggregates();renderMap();renderClienteTable();renderVendedores();renderRiesgo();renderAlertas();renderConfig();renderMapeoTable();
       }
       alert('✅ Configuración importada: '+Object.keys(d.mapping||{}).length+' clientes, '+Object.keys(d.vendedores||{}).length+' vendedores.');
@@ -2426,7 +2430,7 @@ function renderSeguimiento(){
     const premNeedP=Math.round((pc.umbralBase/100)*baseVol);
     const mixNeed1=Math.round(pc.u1/100*baseVol);
     const mixNeed2=Math.round(pc.u2/100*baseVol);
-    const premOk=(c.mixPrem||0)>=pc.umbralBase; const mix=(c.mixPrem||0);
+    const premOk=(c.mixPrem||0)>=pc.umbralBase; const mix=(c.mixPlus||0);
     const topeMax=(t.fijo||0)+(t.kc||0)+(t.kp||0)+(pc.e2||0);
     let falta=[];
     if(c.nivel==='COBRE')falta.push('llegar a 600/mes para entrar a Bronce');
@@ -2551,8 +2555,8 @@ function buildVendorPayloads(){
     const rows=byV[v].map(c=>{
       const cur=Math.round((c.qualMes&&c.qualMes[lastMonth])||0);
       let qtd=0; evalMonths.forEach(m=>{qtd+=(c.qualMes&&c.qualMes[m])||0;});
-      let qp=0; const pm=c.prodMes||{}; for(const p in pm){ if(isPremiumPlus(p)){ evalMonths.forEach(m=>{qp+=(pm[p]&&pm[p][m])||0;}); } }
-      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp)};
+      let qp=0,qpb=0; const pm=c.prodMes||{}; for(const p in pm){ const isMix=isPremiumPlus(p), isBase=PREMIUM_RE.test(p); if(isMix||isBase){ evalMonths.forEach(m=>{const s=(pm[p]&&pm[p][m])||0; if(isMix)qp+=s; if(isBase)qpb+=s;}); } }
+      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb)};
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
@@ -2596,7 +2600,7 @@ function toggleVendedor(vkey,vname,btn){ if(!reqSuper())return;
      .catch(function(){alert('No se pudo cambiar (revisa internet/licencia).');});
 }
 function publishCloud(){
-  if(!SK_SUPER){alert('Solo el super-usuario puede publicar a la nube.');return;}
+  // Publicar SÍ lo pueden hacer los usuarios comunes (secretarias): cargan Odoo y suben los datos.
   const cfg=getCloudCfg(); if(!cfg.db){alert('Falta la URL de la base de datos.');return;}
   const pj=buildVendorPayloads(); if(!pj){alert('Carga primero el reporte de Odoo.');return;}
   const db=cfg.db.replace(/\/$/,''); const keys=Object.keys(pj.byVendor);
