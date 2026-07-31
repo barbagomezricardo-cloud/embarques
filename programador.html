@@ -1,6 +1,33 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- ===== SERVICIO ESPECIAL POR CLIENTE (chalanes / sacos de bonificación) — bloque compartido, generado del Excel de ventas ===== -->
+<style>
+.serv-badge{display:inline-block;font-weight:900;font-size:11px;line-height:1;letter-spacing:.4px;padding:4px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;white-space:nowrap;text-transform:uppercase;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.serv-badge.chalan{background:#dc2626;color:#fff;animation:servPulse 1.4s ease-in-out infinite}
+.serv-badge.sacos{background:#7c3aed;color:#fff}
+.serv-banner{display:flex;align-items:center;gap:8px;font-weight:900;font-size:13px;padding:10px 12px;border-radius:12px;margin:8px 0;text-transform:uppercase;letter-spacing:.3px}
+.serv-banner.chalan{background:#dc2626;color:#fff;box-shadow:0 0 0 2px #7f1d1d,0 4px 14px rgba(220,38,38,.45);animation:servPulse 1.4s ease-in-out infinite}
+.serv-banner.sacos{background:#7c3aed;color:#fff;box-shadow:0 0 0 2px #4c1d95,0 4px 14px rgba(124,58,237,.4)}
+@keyframes servPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.32)}}
+.serv-card-chalan{box-shadow:0 0 0 2px #dc2626 inset!important;border-color:#dc2626!important}
+.serv-card-sacos{box-shadow:0 0 0 2px #7c3aed inset!important;border-color:#7c3aed!important}
+</style>
+<script>
+/* Clientes con servicio especial. CHALAN = enviar ayudantes a descargar. SACOS = sacos de bonificación. */
+const CLIENTES_CHALAN=["ABARROTERA SANTANA","ADRIAN GONZALEZ CASILLAS","ALFREDO ROJO OROZCO","BEATRIZ ADRIANA VILLALOBOS DURAN","CARLOS PADILLA ALVAREZ","GILBERTO CAMPOS MUÑOZ","JULIO CESAR GARCIA ZAVALA","MARIA CELINA ARELLANO MARTINEZ","MARIA CONSUELO ARGOTE DEANDA","NOE CARRANZA BECERRA","NUTRIENTES BASICOS DE MONTERREY","RIGOBERTO CASILLAS GARCIA","RUBEN EFRAIN RAMIREZ CAMACHO","VICTOR ENRIQUE PADILLA HERNANDEZ"];
+const CLIENTES_SACOS=["ABARROTES LA VIOLETA","ABARROTES SILVIA HERRERA DIAZ","AGROVETERINARIA MARROQUIN","ALFREDO VELAZQUEZ GONZALEZ","ARTURO CARDENAS JIMENEZ","ARTURO CLARETT CARO VELAZQUEZ","BRENDA GOMEZ FRANCO","CEDIS GRUPO AZTECAS","CENTRAL DE SEMILLAS Y CEREALES BARBOSA","CEREALES Y FRUTAS BRAMBILA","CID 002","CLAUDIA EDITH GALVEZ GALLARDO","COMERCIAL TACAMBA","DISTRIBUIDORA FEEDCO Y CIA","EL CAMPESINO  CRISTIAN","EL CAMPESINO \" JOEL\"","EL CAMPESINO HORACIO","ELSA GUADALUPE REA MERIN","ERIK BARRAGAN","FORRAJES HERMANOS VERDIN","FORRAJES JAIME","GERARDO GARCIA VIDAURRI","GERARDO NUÑO RUIZ","GRANOS Y SEMILLAS JUAN PABLO","GRUPO ABARROTERO LOPEZ VILLANUEVA","GRUPO VIGALAMO","ISRAEL MONTES LOPEZ","J. REFUGIO INFANTE GAMIÑO","JOSE MANUEL ALVAREZ AGUIRRE","JOSE SANTIAGO RIVERA FLORES","LUIS CORREA MANDUJANO","MA INES MERCADO RAMIREZ","MARIA DEL REFUGIO MERCADO NAVARRO","MOISES LOPEZ","NUEVA ABORROTERA SANTA PAULA-CALLE DELICIAS","ORGANIZACION CIR","OSCAR ARMANDO CABRERA ZAMORA","OSCAR FLORES OLVERA","OSCAR GIBRAN ESPINOZA VILLASEÑOR","OSCAR RAFAEL HERNANDEZ PEÑA","RIGOBERTO CORTES TOVAR","RODRIGO ROMO GUTIERREZ","SERGIO HERNANDEZ BAUTISTA","SERGIO RICARDO VALENTIN TRUJILLO CONTRERAS","SUPER CEREALES EL BETO","VALENTINA RANGEL BANDA","ZYSA ABARROTERA DE OCCIDENTGE"];
+const CLIENTES_TODOS=["ABARROTERA SANTANA","ABARROTES LA VIOLETA","ABARROTES SILVIA HERRERA DIAZ","ABEL FERNANDO GONZALEZ LOPEZ","ADAN GARCIA MARTINEZ","ADOLFO ANTONIO ARELLANO ROJO","ADOLFO ANTONIO ARELLANO ROJO  (2)","ADRIAN GONZALEZ CASILLAS","AGA WEBER","AGROVETERINARIA MARROQUIN","ALEJANDRA NAYELI ARELLANO GOMEZ","ALEJANDRO VAZQUEZ GALARZA","ALEXIS MARTINEZ LEON","ALFREDO ROJO OROZCO","ALFREDO VELAZQUEZ GONZALEZ","ALIMENTOS JUDA","ALMA ROSA SILVIA ALVAREZ","ANACLETO SALAZAR RODRIGUEZ","ARMANDO BRISEÑO SERRANO","ARMANDO DIAS GARCIA","ARTURO CARDENAS JIMENEZ","ARTURO CLARETT CARO VELAZQUEZ","ARTURO GARCIA HERNANDEZ","ASUNCION ARELLANO PLAZA","BEATRIZ ADRIANA VILLALOBOS DURAN","BERNABE FERNANDEZ OROZCO","BIANEY CATALINA NAVARRO VAZQUEZ","BODEGAS MIRANDA HERMANOS","BRENDA GOMEZ FRANCO","BRYAN SOLIS OLIVAR","CARLOS ALVERTO LUJANO AGUILAR (CONSIGNACION)","CARLOS EDUARDO SALAZAR NAPOLES","CARLOS HINOJOSA DE PAZ","CARLOS PADILLA ALVAREZ","CARLOS RASCON AISPURO","CEDIS GRUPO AZTECAS","CELIA DE LA PAZ MORALES CRUZ","CENTRAL DE SEMILLAS Y CEREALES BARBOSA","CEREALES Y FRUTAS BRAMBILA","CESAR HERNANDEZ SANABRIA","CID 002","CLAUDIA EDITH GALVEZ GALLARDO","COMERCIAL PRODUMEX","COMERCIAL TACAMBA","COMERCIALIZADORA GRANOS Y SEMILLAS EL MANA","COMERCIO BASICO","CRISTIAN ALONSO MAURO ROBLES","CRISTOBAL CRUZ VALDIVIA","DANIEL ELICEO CERDA RAMIREZ","DANIEL MIGUEL LEAL MENDOZA","DAVID LEDON CONTRERAS","DENIS SALINAS FRUCTUOSO","DESPACHO LA CENTRAL","DISTRIBUIDORA FEEDCO Y CIA","EBERT GARCIA CAMPOS","EDGAR GUADALUPE LOPEZ DURAN","EDUARDO AYON GUTIERREZ","EL CAMPESINO  CRISTIAN","EL CAMPESINO \" JOEL\"","EL CAMPESINO HORACIO","EL NOGAL PANUCO","ELIUD COVARRUBIAS ROBLEDO","ELSA GUADALUPE REA MERIN","ERIC RAFEL CISNEROS GONZALES","ERIK BARRAGAN","ERNETH SANTOS ALVARADO","EXPRESS 19 HERMANOS","FAUSTINO TAPIA TELLEZ","FELICIA COMERCIALIZADORA","FERNANDO ADOLFO MILLAN CHAVEZ","FERNANDO IVAN GARCIA LOMELI","FORRAJERA 19 HERMANOS","FORRAJERA ELIZONDO","FORRAJES EL DOLLAR","FORRAJES HERMANOS VERDIN","FORRAJES JAIME","FRANCISCO JAVIER GUTIERREZ GARCIA","FRANCISCO JAVIER VALDIVIA AGUILAR","GABRIELA LORENA RODRIGUEZ VILLASEÑOR","GENOVEVO ACOSTA RIVERA","GERARDO GARCIA VIDAURRI","GERARDO NUÑO RUIZ","GILBERTO CAMPOS MUÑOZ","GILBERTO MARQUEZ SANCHEZ","GRACE ANAHI GUILLEN RUIZ","GRANOS Y SEMILLAS JUAN PABLO","GRUPO ABARROTERO LOPEZ VILLANUEVA","GRUPO AGROINSUMOS CAMPO FUERTE DE MEXICO","GRUPO ESPINO","GRUPO VIGALAMO","GUILLERMO CORONADO NAVARRO","GUILLERMO MESTAS ZARAGOZA","GUILLERMO SANCHEZ SANDOVAL","GUSTAVO GARCIA MENDEZ","HERIBERTO CARRANZA LAMAS","IRIS MADAY LUIS VELASQUEZ","ISIDRO JAVIER VALDEZ CORONA","ISRAEL MONTES LOPEZ","IVAN ISRAEL GALLARDO ORTEGA","J. REFUGIO INFANTE GAMIÑO","JAIME DANIEL PEREZ CAVAZOS","JAVIER CHOLULA SOLANO","JAVIER CUATEPOTZO MELENDEZ","JESUS ALEJANDRO PARRA SALCEDO","JESUS CARLOS PINTO MIRAMONTES","JESUS FLORES VAZQUEZ","JESUS GONZALES ROBLES","JESUS MORALES ACEVEZ","JONATHAN GONZALES AMEZOLA","JORGE ALVAREZ CANO","JORGE ANTONIO PARRA GONZALEZ","JORGE GIOVANNI BARRON QUEZADA","JORGE LUIS MALDONADO CORDOVA","JORGE OMAR PEDRAZA HERNANDEZ","JORGE REYES CORONA","JOSE ALFREDO GUTIERREZ GARCIA","JOSE FELIPE JIMENEZ MARTINEZ","JOSE LUIS ACEVEDO GARCIA","JOSE LUIS DE LIRA PALACIOS","JOSE LUIS DEL TORO RABAGO","JOSE LUIS ESTRADA CHAVEZ","JOSE MANUEL ALVAREZ AGUIRRE","JOSE MANUEL CARDENAS HUERTADO","JOSE OMAR ZAVALA LOPEZ","JOSE SANTIAGO RIVERA FLORES","JUAN ANTONIO CORTINA GARDUÑO","JUAN ANTONIO RODRIGUEZ SANCHEZ","JUAN DIEGO MANZANO TORRES","JUAN GERARDO GONZALEZ MENDEZ","JUAN MANUEL BIURQUEZ HERNANDEZ","JUAN MANUEL RUIZ FLORES","JULIAN MIRELES CERDA","JULIO CESAR GARCIA ZAVALA","JULIO GARCIA VERGARA","KARINA SANCHEZ CARDONA","KARLA DEVORA","LAISHA ELIZABETH SUSTAITA REGINO","LEOBARDO MARTINEZ COELLO","LUCILA LOPEZ GAETA","LUCIO VELAZCO GONZALEZ","LUIS ALBERTO VILLANUEVA OCHOA","LUIS ANTONIO GUERRA TORRES","LUIS CORREA MANDUJANO","LUIS ENRIQUE CANALES TORRES","LUIS ENRIQUE RUBIO MONROY","LUIS FERNANDO MARIN ESTRADA","LUIS FERNANDO MORA TORRES","MA INES MERCADO RAMIREZ","MA JOAQUINA CARRIZALES VEGA","MA. DEL CARMEN FLORES BARBOSA","MA. ELVIA RUIZ RUIZ","MANUEL GARCIA MORENO","MANUEL LEDESMA MORA","MARIA CELINA ARELLANO MARTINEZ","MARIA CONSUELO ARGOTE DEANDA","MARIA DE LOURDES PRECIADO ARCE","MARIA DEL REFUGIO MERCADO NAVARRO","MARIA ELENA CAMPERO MARTINEZ","MARTIN GARCIA LEOCADIO","MIGUEL ANGEL GUADALUPE URBINA","MIGUEL ANGEL REYNA MARTINEZ","MIGUEL ANGEL ROJAS QUIJADA","MOISES LOPEZ","NOE CARRANZA BECERRA","NOE FRANCISCO OROZCO FRANCO","NOE MEDINA CARRILLO","NORMA IRENE SANCHEZ MARTINEZ","NUEVA ABORROTERA SANTA PAULA-CALLE DELICIAS","NUTRIENTES BASICOS DE MONTERREY","NUTRIGAFER","OLGA OLIVIA SALCIDO SOTO","OMAR MENDOZA MORAN","ORGANIZACION CIR","OSCAR ARMANDO CABRERA ZAMORA","OSCAR CANALES FLORES","OSCAR FLORES OLVERA","OSCAR GIBRAN ESPINOZA VILLASEÑOR","OSCAR HERNANDEZ PEREZ","OSCAR RAFAEL HERNANDEZ PEÑA","PEDRO ANTONIO TORRES PEREZ","PILAR MARAI LOPEZ HUERTA","PROBA HD PROCESADORA DE BARREDURAS HD","PROVEEDORA DE ABARROTES TRG","PROVEEDORA DE ABARROTES Y GRANOS PUTZ","RENE MONREAL LOPEZ","RICARDO MORENO PADILLA","RIGOBERTO CASILLAS GARCIA","RIGOBERTO CORTES TOVAR","ROBERTO CARLOS SANCHEZ MONROY","ROBERTO FLORES LOPEZ","ROBERTO FLORES LOPEZ  (2)","ROBERTO TEJEDA HERNANDEZ","RODRIGO DANIEL QUIROZ MORENO","RODRIGO ROMO GUTIERREZ","RUBEN EFRAIN RAMIREZ CAMACHO","SALOMON DE JESUS GARCIA MOLINA","SALVADOR ANGUIANO BERNAL","SEMILLAS Y CEREALES DE LA REGION","SERGIO GOMEZ GONZALEZ","SERGIO GUSTAVO LUGO ZARAZUA","SERGIO HERNANDEZ BAUTISTA","SERGIO RICARDO VALENTIN TRUJILLO CONTRERAS","SERGIO SALAZAR LOPEZ","SILVERIO SANCHEZ GALLEGOS","SUPER 19HNOS CUITZEO","SUPER ABARROTES LUPITAS","SUPER ATOTONILCO EL ALTO 19 HNOS","SUPER CEREALES EL BETO","SUPER JAMAY 1 19 HNOS","SUPER JAMAY 2 19 HNOS","SUPER OCOTLAN 1 19 HNOS","SUPER OCOTLAN 2 19 HNOS","SUPER OFERTAS BRAVO","SUPER PONCITLAN 19 HNOS","SUPER TOTOTLAN 19 HNOS","SUPER TOTOTLAN 19HNOS 2","TARSICIO LARA ARIAS","TERESITA DE JESUS ARIAS MORAN","URIEL CENTENO SANCHEZ","VALENTINA RANGEL BANDA","VANESA YAQUELIN RODRIGUEZ LUNA","VENTA PLANTA DE CROQUETAS","VICTOR ENRIQUE PADILLA HERNANDEZ","VICTOR HUGO VALDES ALDAPE","VICTOR JAVIER TENTLE TOXQUI","VICTOR MANUEL LOPEZ SALAS","VICTOR MANUEL NAVARRO","VICTOR MANUEL NAVARRO  (2)","WILFRIDO CAZARES GONZALES","XENIA GABRIELA ESCALERA VELASCO","YESENIA LIZETH DIAZ VILLEGAS","YESENIA MARLENE MERCADO REGINO","ZYSA ABARROTERA DE OCCIDENTGE"];
+function _normCli(s){return (s||'').toString().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').trim();}
+const _SET_CHALAN=new Set(CLIENTES_CHALAN.map(_normCli));
+const _SET_SACOS=new Set(CLIENTES_SACOS.map(_normCli));
+function servicioCliente(n){const k=_normCli(n);if(_SET_CHALAN.has(k))return 'CHALAN';if(_SET_SACOS.has(k))return 'SACOS';return '';}
+function servInfo(t){if(t==='CHALAN')return{cls:'chalan',txt:'CHALANES',emoji:'\uD83E\uDDD1\u200D\uD83D\uDD27',full:'REQUIERE CHALANES \u2014 enviar ayudantes para descargar'};if(t==='SACOS')return{cls:'sacos',txt:'SACOS BONIF.',emoji:'\uD83C\uDF81',full:'SACOS DE BONIFICACI\u00D3N \u2014 enviar sacos extra al cliente'};return null;}
+function servBadge(n){const s=servInfo(servicioCliente(n));return s?'<span class="serv-badge '+s.cls+'">'+s.emoji+' '+s.txt+'</span>':'';}
+function servBanner(n){const s=servInfo(servicioCliente(n));return s?'<div class="serv-banner '+s.cls+'">'+s.emoji+' '+s.full+'</div>':'';}
+function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-chalan':t==='SACOS'?'serv-card-sacos':'';}
+</script>
+<!-- ===== fin bloque compartido ===== -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Programador de Embarques · Planta de Alimentos para Mascotas</title>
@@ -231,7 +258,8 @@
     <div class="grid">
       <div class="sech full">📋 Datos de programación</div>
       <div class="field"><label>N° de pedido</label><input id="f_pedido"></div>
-      <div class="field half"><label>Cliente</label><input id="f_cliente" list="dl_cli"></div>
+      <div class="field half"><label>Cliente</label><input id="f_cliente" list="dl_cli" oninput="servAlertUpd()" onchange="servAlertUpd()"></div>
+      <div class="field full" id="servAlertWrap" style="display:none;padding:0"><div id="servAlert"></div></div>
       <div class="field"><label>Familia</label><select id="f_familia"><option value="">—</option><option>M</option><option>MIX</option><option>P</option></select></div>
       <div class="field"><label>Destino</label><input id="f_destino" list="dl_dest"></div>
       <div class="field"><label>Estado destino</label><input id="f_estado"></div>
@@ -592,6 +620,7 @@ function cellHTML(r,c,cv){
     if(c.k==='estatusSalida') return pill(cv.estatusSalida)+(cv.retrasoSalida?` <span class="muted">+${cv.retrasoSalida}m</span>`:'');
   }
   let v=r[c.k];
+  if(c.k==='cliente'){ if(v===''||v==null) return '<span class="muted">—</span>'; return String(v)+servBadge(v); }
   if(v===''||v==null) return '<span class="muted">—</span>';
   if(c.k==='motivo') return `<span title="${motivoFull(v)}">${motivoDesc(v)}</span>`;
   if(c.num) return Number(v).toLocaleString('es-MX');
@@ -874,9 +903,11 @@ function openForm(id){
   document.getElementById('f_despachado').value = (r.despachado===true||r.despachado==='1'||r.despachado===1)?'1':'';
   const hasExec = !!(r.colocacion||r.inicioCarga||r.finCarga||r.kilos||r.sacos||r.horaSalida||r.libSAP||(r.despachado===true||r.despachado==='1'||r.despachado===1));
   toggleExec(hasExec);
+  servAlertUpd();
   recalc();
   document.getElementById('overlay').classList.add('show');
 }
+function servAlertUpd(){ const el=document.getElementById('f_cliente'); if(!el)return; const w=document.getElementById('servAlertWrap'); const b=servBanner(el.value); if(b){ document.getElementById('servAlert').innerHTML=b; w.style.display=''; } else { w.style.display='none'; } }
 let execOpen=false;
 function toggleExec(force){
   execOpen = (force===undefined)? !execOpen : force;
@@ -1144,7 +1175,12 @@ function uniq(k){ return [...new Set(DATA.map(r=>(r[k]||'').toString().trim()).f
 function refreshOptions(){
   fill('fturno',[...new Set(DATA.map(r=>String(r.turno||'')).filter(Boolean))].sort());
   fill('f_tipo_dummy',[]); // noop
-  dl('dl_cli',uniq('cliente')); dl('dl_dest',uniq('destino')); dl('dl_carg',uniq('cargador'));
+  dlCli(); dl('dl_dest',uniq('destino')); dl('dl_carg',uniq('cargador'));
+}
+function dlCli(){ const el=document.getElementById('dl_cli'); if(!el)return;
+  const set=new Set([...CLIENTES_TODOS, ...uniq('cliente')]);
+  const arr=[...set].filter(Boolean).sort((a,b)=>a.localeCompare(b,'es'));
+  el.innerHTML=arr.map(v=>{ const t=servicioCliente(v); const lab=t==='CHALAN'?' label="⚠️ CHALANES"':t==='SACOS'?' label="🎁 SACOS bonif."':''; return `<option value="${String(v).replace(/"/g,'&quot;')}"${lab}>`; }).join('');
 }
 function fill(id,arr){ const el=document.getElementById(id); if(!el)return; const cur=el.value; el.innerHTML='<option value="">Todos</option>'+arr.map(v=>`<option>${v}</option>`).join(''); if(arr.includes(cur))el.value=cur; }
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
