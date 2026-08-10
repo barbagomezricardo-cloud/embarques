@@ -1583,6 +1583,7 @@ function saveVendConfig(){ if(!reqSuper())return;
   localStorage.setItem('vendCfg04mas',JSON.stringify(cfg));
   const dcfg={nombre:document.getElementById('dir-nombre')?.value.trim()||'',phone:document.getElementById('dir-phone')?.value.trim()||'',email:document.getElementById('dir-email')?.value.trim()||''};
   localStorage.setItem('dirCfg04mas',JSON.stringify(dcfg));
+  pushConfigCloud(true);
   renderAlertas();alert('✅ Contactos guardados. Los botones de WhatsApp y Email ya están activos.');
 }
 function saveTierConfig(){ if(!reqSuper())return;
@@ -1617,6 +1618,7 @@ function saveTierConfig(){ if(!reqSuper())return;
     umbral:parseFloat(document.getElementById('cob-umb')?.value)||20};
   localStorage.setItem('cobreCfg04mas',JSON.stringify(ccfg));
   if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos,c.promMes);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;c.mixPlus=d.mixPlus;}}
+  pushConfigCloud(true);
   renderClienteTable();renderRiesgo();renderAlertas();renderConfig();if(typeof renderEquilibrio==='function')renderEquilibrio();
   alert('✅ Niveles y descuentos guardados.'+(ccfg.enabled?' Nivel Cobre ACTIVO.':' Nivel Cobre bloqueado.'));
 }
@@ -1681,7 +1683,7 @@ function addMapping(){ if(!reqSuper())return;
   const v=document.getElementById('m-vend').value.trim().toUpperCase();
   if(!c||!e||!v){alert('Completa los tres campos');return;}
   const s=JSON.parse(localStorage.getItem('mapping04mas')||'{}');delete s[c];localStorage.setItem('mapping04mas',JSON.stringify(s));
-  const m=getMapping();m[c]={e,v};saveMapping(m);
+  const m=getMapping();m[c]={e,v};saveMapping(m);pushConfigCloud(true);
   if(DATA){DATA.mapping=getMapping();for(const cl of DATA.clients){if(cl.nombre===c){cl.estado=e;cl.vendedor=v;}}recalcAggregates();renderMap();renderClienteTable();renderVendedores();renderRiesgo();renderAlertas();renderConfig();}
   document.getElementById('m-cliente').value='';document.getElementById('m-estado').value='';document.getElementById('m-vend').value='';
   renderMapeoTable();
@@ -1717,7 +1719,7 @@ function editMapping(c){
 function delMapping(c){ if(!reqSuper())return;
   const s=JSON.parse(localStorage.getItem('mapping04mas')||'{}');
   if(MAPPING_BASE[c])s[c]={_del:1};else delete s[c];
-  localStorage.setItem('mapping04mas',JSON.stringify(s));
+  localStorage.setItem('mapping04mas',JSON.stringify(s));pushConfigCloud(true);
   if(DATA){DATA.mapping=getMapping();for(const cl of DATA.clients){if(cl.nombre===c){cl.estado='';cl.vendedor='';}}recalcAggregates();renderMap();renderClienteTable();renderVendedores();renderRiesgo();renderAlertas();}
   renderMapeoTable();
 }
@@ -1908,11 +1910,19 @@ const BASELINE_2024 = {"ARTURO CARDENAS JIMENEZ":20563,"SEMILLAS Y CEREALES EL C
 const BASELINE_2025_DAYM = {"1":[0,8284,4868,5367,0,5628,8797,6616,16652,8637,8572,0,8991,6222,9162,7159,10893,1903,0,3385,7437,7466,8397,11289,8182,0,11301,15338,8854,10987,11605],"2":[8871,0,4219,5934,4258,9244,6940,5334,0,6938,4850,12860,7092,7982,10794,0,6926,7108,8359,7916,12384,4137,0,6412,8266,8634,11741,15798,0,0,0],"3":[5096,0,2601,10761,5184,8412,10417,7197,0,4452,10735,6781,7174,9036,6662,0,11873,4787,7874,6620,11256,8408,0,7709,8765,8784,15024,9364,7121,0,9952],"4":[3789,3041,9456,4667,2761,0,4254,10033,7415,10656,8197,2813,0,8947,6388,8164,7798,0,0,0,10143,7509,12450,5474,10138,9452,0,14151,7500,9385,0],"5":[11300,14505,0,0,6455,11650,8714,5630,9116,4592,0,7165,8264,11902,7787,7860,5421,0,11266,8229,11588,10799,7929,8559,0,6310,8935,10673,11876,0,12426],"6":[0,3785,11047,6160,5546,7702,6875,0,4731,10619,9342,3125,8883,5026,0,8024,9897,5345,9461,8468,2107,0,7112,13049,6483,12112,13816,17053,0,8847,0],"7":[6094,4401,8054,7265,5024,0,11387,10864,8097,6172,6329,2549,0,7416,8162,14351,5588,5752,5861,0,8526,13107,8788,12102,8624,6208,0,10474,11753,13078,12810],"8":[6667,5212,0,8467,6211,9041,10443,4393,6064,0,6534,13487,13517,3545,7815,7168,0,9313,7319,12992,9211,5496,4687,0,11397,5746,12049,7793,12842,8649,0],"9":[7457,9662,6871,6120,4489,4961,0,7697,8258,10054,6452,8394,7788,0,4628,5924,11734,10892,7249,10345,0,4560,8392,10944,13207,11092,8725,0,7255,15523,0],"10":[5364,5322,8932,4237,0,9556,5284,9421,6183,7375,7375,0,10842,7211,6305,9696,8528,8148,0,10816,12720,6438,7516,12017,12840,0,8971,13402,14871,10404,16808],"11":[9371,0,9916,9820,12631,6389,4426,7952,0,12871,8063,13528,4087,5816,5200,0,10673,7450,10294,10632,3482,7955,0,5716,6569,15195,9245,8370,8906,0,0],"12":[5002,18103,8826,9601,7416,0,0,11958,8167,10878,3561,3980,2645,0,13074,8926,14114,14908,5681,11919,0,9305,10950,8051,0,10069,8118,0,13728,18852,9694]};
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
+// ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
+var CFG_KEYS=['ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
+  if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
+  return o;}
+function pushConfigCloud(silent){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');fetch(DB+'/skan/_config.json',{method:'PUT',body:JSON.stringify(_cfgBundle())}).then(function(){if(!silent)alert('✔ Configuración guardada en la nube. Cualquier navegador la tomará sola al abrir el link.');}).catch(function(){if(!silent)alert('No se pudo guardar (revisa internet/licencia).');});}catch(e){} }
+function syncConfigCloud(cb){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');fetch(DB+'/skan/_config.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){ if(o&&typeof o==='object'){ CFG_KEYS.forEach(function(k){ if(o[k]==null)return; if(k==='cloudCfg04mas'){ try{var cloud=JSON.parse(o[k]);var loc=JSON.parse(localStorage.getItem(k)||'{}'); if(loc.secret)cloud.secret=loc.secret; localStorage.setItem(k,JSON.stringify(cloud)); }catch(e){} } else { localStorage.setItem(k,o[k]); } }); } if(cb)cb(); }).catch(function(){ if(cb)cb(); }); }catch(e){ if(cb)cb(); } }
 function saveVParams(){ if(!reqSuper())return;
   const p={capTonMes:parseFloat(document.getElementById('p-cap').value)||5700,
            gTarget:(parseFloat(document.getElementById('p-gt').value)||7)/100,
            metaNuevos:parseInt(document.getElementById('p-mn').value)||6};
   localStorage.setItem('ventasParams04mas',JSON.stringify(p));
+  pushConfigCloud(true);
   computeYoY();renderObjetivos();renderNuevos();renderMetas();
 }
 function nkey(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s*\(\d+\)\s*$/,'').replace(/\s+/g,' ').trim();}
@@ -2594,7 +2604,7 @@ function toggleSuper(){
   if(p===SUPER_PWD){ SK_SUPER=true; applyRole(); } else { alert('Contraseña incorrecta.'); }
 }
 function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app)c.app=SK_APP; if(!c.master)c.master=SK_MASTER; return c;}
-function saveCloudCfg(){ if(!reqSuper())return;const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));renderCodesPanel();}
+function saveCloudCfg(){ if(!reqSuper())return;const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));pushConfigCloud(true);renderCodesPanel();}
 function buildVendorPayloads(){
   if(!DATA)return null;
   const period=(DATA.dataYear||'')+'';
@@ -2706,6 +2716,7 @@ function renderCodesPanel(){
   h+='<input id="cl-master" placeholder="URL donde subiste la App MAESTRA (https://tuproyecto.netlify.app/App_Maestra_04MAS.html) — solo para ti y dirección" value="'+esc(cfg.master||'')+'" style="background:#0b1628;border:1px solid #7c5cff;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem">';
   h+='</div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button onclick="saveCloudCfg()" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">Guardar config</button>';
+  h+='<button onclick="pushConfigCloud(false)" title="Sube TODA tu configuración (objetivos, niveles, mapeo, contactos) a la nube para que cualquier navegador la tome sola al abrir el link" style="background:#7c5cff;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">☁️ Guardar mi configuración en la nube</button>';
   h+='<button id="cl-pubbtn" onclick="publishCloud()" style="background:#2563EB;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">☁️ Publicar a la nube ahora</button>';
   h+='<span style="font-size:.72rem;color:#64748b">Info: '+pj.updatedStr+' · trimestre '+(pj.q.label||'—')+(cfg.db?'':' · (sin configurar: usa los códigos de abajo)')+'</span></div>';
   h+='</div>';
@@ -2748,6 +2759,8 @@ function resetDash(){DATA=null;selState=null;document.getElementById('dashboard'
 
 renderMapeoTable();
 applyRole();   // arranca en modo visor (config/mapeo/publicar ocultos hasta super-usuario)
+// Jala la configuración desde la nube (si existe) para que cualquier navegador abra "listo"
+syncConfigCloud(function(){ try{renderMapeoTable();applyRole();}catch(e){} });
 // ── Candado de licencia: si apagas licencia/activa en tu Firebase, el tablero se bloquea ──
 (function(){try{fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(!(l&&l.activa===true)){document.body.innerHTML='<div style="max-width:460px;margin:70px auto;text-align:center;font-family:-apple-system,Segoe UI,sans-serif;color:#e8eef7"><div style="font-size:46px">🔒</div><h2 style="color:#E8A020;margin:12px 0">Servicio no disponible</h2><p style="color:#94a3b8">Este tablero está desactivado temporalmente.</p></div>';}}).catch(function(){});}catch(e){}})();
 </script>
