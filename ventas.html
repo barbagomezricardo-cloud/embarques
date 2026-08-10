@@ -2142,11 +2142,19 @@ function getPriorDaily(py){let b=null;try{b=JSON.parse(localStorage.getItem('bas
 function _vendMonthly(vf){
   const cur=Array(12).fill(0),prior=Array(12).fill(0);
   const B=getPriorBaseline().data; const bN=new Map(); for(const k in B)bN.set(nkey(k),k);
+  const seen=new Set();
+  for(const c of DATA.clients){ const rk0=resolveKey(c.nombre,bN); if(rk0)seen.add(rk0); }   // TODOS los clientes actuales (de cualquier vendedor)
   for(const c of DATA.clients){ if(vf&&(c.vendedor||'(sin asignar)')!==vf)continue;   // misma etiqueta que al publicar -> no se pierden los clientes sin vendedor
     for(const mm in c.mesData)cur[mm-1]+=c.mesData[mm];
     const rk=resolveKey(c.nombre,bN),arr=(rk&&B[rk]&&B[rk].m)||[];
     for(let i=0;i<12;i++)prior[i]+=arr[i]||0;
-  } return {cur,prior};
+  }
+  // Año-anterior de clientes que YA NO están en el reporte de este año (se fueron): también cuenta para el objetivo total.
+  // Va a la bolsa global (vf='') y a "(sin asignar)" para no penalizar a ningún vendedor con clientes que perdió.
+  if(!vf||vf==='(sin asignar)'){
+    for(const k in B){ if(seen.has(k))continue; const arr=B[k].m||[]; for(let i=0;i<12;i++)prior[i]+=arr[i]||0; }
+  }
+  return {cur,prior};
 }
 function renderGrafica(){
   const box=document.getElementById('graf-content'); if(!box||!DATA)return;
@@ -2617,8 +2625,8 @@ function buildVendorPayloads(){
   const evalLabel=(evalP==='MES')?(MES_NOM_L[lastMonth]||''):q.label;
   const byV={};
   DATA.clients.forEach(c=>{ if(!((c.promMes||0)>0))return; const v=c.vendedor||'(sin asignar)'; (byV[v]=byV[v]||[]).push(c); });
-  // Publica siempre la bolsa "(sin asignar)" si hay clientes sin vendedor (aunque ya no vendan), para no perder su año-anterior en la gerencia
-  if(!byV['(sin asignar)'] && DATA.clients.some(c=>!c.vendedor)) byV['(sin asignar)']=[];
+  // Publica SIEMPRE la bolsa "(sin asignar)": ahí viaja el año-anterior de los clientes que ya se fueron, para que el objetivo total cuadre en la gerencia
+  if(!byV['(sin asignar)']) byV['(sin asignar)']=[];
   const now=new Date(); const pad=n=>('0'+n).slice(-2);
   const updatedStr=pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad(now.getHours())+':'+pad(now.getMinutes());
   const out={};
