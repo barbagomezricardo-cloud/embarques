@@ -21,7 +21,9 @@ const CLIENTES_TODOS=["ABARROTERA SANTANA","ABARROTES LA VIOLETA","ABARROTES SIL
 function _normCli(s){return (s||'').toString().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').trim();}
 const _SET_CHALAN=new Set(CLIENTES_CHALAN.map(_normCli));
 const _SET_SACOS=new Set(CLIENTES_SACOS.map(_normCli));
-function servicioCliente(n){const k=_normCli(n);if(_SET_CHALAN.has(k))return 'CHALAN';if(_SET_SACOS.has(k))return 'SACOS';return '';}
+let SERV_OVERRIDES=null;/* {normKey:'CHALAN'|'SACOS'|'NINGUNO'} o {normKey:{t,n}} — desde Firebase config.servClientes */
+function _servT(k){const o=SERV_OVERRIDES&&SERV_OVERRIDES[k];return o?(typeof o==='string'?o:o.t):null;}
+function servicioCliente(n){const k=_normCli(n);const ov=_servT(k);if(ov!=null)return (ov==='CHALAN'||ov==='SACOS')?ov:'';if(_SET_CHALAN.has(k))return 'CHALAN';if(_SET_SACOS.has(k))return 'SACOS';return '';}
 function servInfo(t){if(t==='CHALAN')return{cls:'chalan',txt:'CHALANES',emoji:'\uD83E\uDDD1\u200D\uD83D\uDD27',full:'REQUIERE CHALANES \u2014 enviar ayudantes para descargar'};if(t==='SACOS')return{cls:'sacos',txt:'SACOS BONIF.',emoji:'\uD83C\uDF81',full:'SACOS DE BONIFICACI\u00D3N \u2014 enviar sacos extra al cliente'};return null;}
 function servBadge(n){const s=servInfo(servicioCliente(n));return s?'<span class="serv-badge '+s.cls+'">'+s.emoji+' '+s.txt+'</span>':'';}
 function servBanner(n){const s=servInfo(servicioCliente(n));return s?'<div class="serv-banner '+s.cls+'">'+s.emoji+' '+s.full+'</div>':'';}
@@ -334,6 +336,10 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
         <span class="hint">Más de eso = fuera de ventana (rojo).</span>
       </div>
       <hr style="border-color:var(--line);margin:16px 0">
+      <h3 style="margin:0 0 8px;font-size:13px">🧑‍🔧🎁 Servicio especial por cliente</h3>
+      <p class="hint" style="margin-top:0">Marca qué clientes requieren <b>chalanes</b> (ayudantes para descargar) o <b>sacos de bonificación</b>. Los cambios se guardan en la nube y se reflejan al instante en el programador y en la app de cargadores.</p>
+      <button class="ghost" onclick="openServEditor()" style="border-color:var(--accent);color:var(--accent)">✏️ Abrir editor de clientes (chalanes / sacos)</button>
+      <hr style="border-color:var(--line);margin:16px 0">
       <h3 style="margin:0 0 8px;font-size:13px">Seguridad y datos</h3>
       <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
         <div class="field"><label>Cambiar contraseña</label><input type="text" id="cfgPwd" placeholder="Nueva contraseña"></div>
@@ -363,6 +369,47 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     </div>
     <div class="actions"><span class="hint">Los cambios se guardan y se sincronizan.</span>
       <button class="primary" onclick="saveConfig()">Guardar configuración</button></div>
+  </div>
+</div>
+
+<!-- EDITOR DE SERVICIO POR CLIENTE -->
+<style>
+#servOverlay .modal{max-width:640px}
+.serv-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.serv-tools input{flex:1;min-width:160px}
+#servList{max-height:56vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.servrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)}
+.servrow:last-child{border-bottom:none}
+.servn{flex:1;font-size:13.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.servbtns{display:flex;gap:5px;flex-shrink:0}
+.servbtn{font-size:11px;font-weight:800;padding:5px 9px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);cursor:pointer;white-space:nowrap}
+.servbtn:hover{border-color:var(--accent)}
+.servbtn.act{color:#fff;border-color:transparent}
+.servbtn.act.chalan{background:#dc2626}
+.servbtn.act.sacos{background:#7c3aed}
+.servbtn.act:not(.chalan):not(.sacos){background:#334155;color:#fff}
+.serv-addbox{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.serv-addbox input{flex:1;min-width:160px}
+.serv-addbox select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px}
+</style>
+<div class="overlay" id="servOverlay">
+  <div class="modal">
+    <h2>🧑‍🔧🎁 Servicio especial por cliente</h2>
+    <div style="padding:14px 18px">
+      <p class="hint" style="margin-top:0">Toca <b>Ninguno</b>, <b>Chalanes</b> o <b>Sacos</b> en cada cliente. Se guarda solo y se sincroniza a las dos apps al instante.</p>
+      <div class="serv-tools">
+        <input id="servFilter" placeholder="🔍 Buscar cliente…" oninput="renderServList(this.value)">
+        <span class="hint" id="servCount"></span>
+      </div>
+      <div id="servList"></div>
+      <div class="serv-addbox">
+        <input id="servNew" placeholder="Agregar cliente nuevo por nombre…" onkeydown="if(event.key==='Enter')addServClient()">
+        <select id="servNewTipo"><option value="CHALAN">🧑‍🔧 Chalanes</option><option value="SACOS">🎁 Sacos</option></select>
+        <button class="ghost" onclick="addServClient()">＋ Agregar</button>
+      </div>
+    </div>
+    <div class="actions"><span class="hint">Los cambios se guardan automáticamente.</span>
+      <button class="primary" onclick="closeServEditor()">Listo</button></div>
   </div>
 </div>
 
@@ -1154,7 +1201,7 @@ function initFirebase(){
         if(!fs.exists() && !cv.flotaSeeded){ const o={}; FLOTA.forEach(r=>o[r.id]=sanitize(r)); fbFlota.set(o); fbCfg.update({flotaSeeded:true}); }
       });
       fbData.on('value', snap=>{ const val=snap.val(); if(val){ DATA=normalize(Object.values(val)); render(); } setConn('online','Nube conectada'); document.getElementById('footer').textContent='Programador de embarques · sincronizado en tiempo real con la app de cargadores (Firebase).'; });
-      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; } });
+      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; SERV_OVERRIDES=CFG.servClientes||null; try{render();}catch(e){} } });
       fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster) renderAudit(); } });
       fbFlota.on('value', snap=>{ const v=snap.val(); if(v){ FLOTA=normalize(Object.values(v)); try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} } renderFlota(); },
         err=>{ console.error('flota:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "flota" en las reglas de Firebase'); });
@@ -1423,10 +1470,60 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape')document.querySelec
 /* ================= INIT ================= */
 loadLocal();
 applyHardcodedFb();
+SERV_OVERRIDES=(typeof CFG!=='undefined'&&CFG.servClientes)?CFG.servClientes:null;
 setPreset('semana');
 applyLock();
 initFirebase();
 render();
+
+/* ============ EDITOR DE SERVICIO POR CLIENTE (chalanes / sacos) ============
+   Guarda en CFG.servClientes (se sincroniza por Firebase a las dos apps).
+   Acceso: superusuario o master (requireUnlock). */
+let _servRows=[];
+function _servAllClients(){
+  const s=new Set(CLIENTES_TODOS);
+  try{ uniq('cliente').forEach(c=>s.add(c)); }catch(e){}
+  if(CFG.servClientes){ for(const k in CFG.servClientes){ const o=CFG.servClientes[k]; const n=o&&typeof o==='object'?o.n:null; if(n)s.add(n); } }
+  return [...s].filter(Boolean).sort((a,b)=>a.localeCompare(b,'es'));
+}
+function _servEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function openServEditor(){ if(!requireUnlock())return; const f=document.getElementById('servFilter'); if(f)f.value=''; renderServList(''); document.getElementById('servOverlay').classList.add('show'); }
+function closeServEditor(){ document.getElementById('servOverlay').classList.remove('show'); }
+function renderServList(q){
+  q=(q||'').toLowerCase().trim();
+  const all=_servAllClients();
+  let nCh=0,nSa=0; all.forEach(n=>{const t=servicioCliente(n); if(t==='CHALAN')nCh++; else if(t==='SACOS')nSa++;});
+  _servRows=all.filter(n=>!q||n.toLowerCase().includes(q));
+  const rows=_servRows.slice(0,600).map((n,i)=>{
+    const t=servicioCliente(n);
+    const b=(val,lab,cls)=>`<button class="servbtn ${t===val?('act '+cls):''}" onclick="setServ(${i},'${val}')">${lab}</button>`;
+    return `<div class="servrow"><div class="servn">${_servEsc(n)} ${servBadge(n)}</div><div class="servbtns">${b('','Ninguno','')}${b('CHALAN','🧑‍🔧 Chalanes','chalan')}${b('SACOS','🎁 Sacos','sacos')}</div></div>`;
+  }).join('');
+  document.getElementById('servList').innerHTML=rows||'<div class="hint" style="padding:14px">Sin resultados para “'+_servEsc(q)+'”.</div>';
+  document.getElementById('servCount').innerHTML=`🧑‍🔧 <b>${nCh}</b> chalanes · 🎁 <b>${nSa}</b> sacos · ${all.length} clientes`;
+}
+function setServ(i,tipo){
+  if(!requireUnlock())return;
+  const name=_servRows[i]; if(name==null)return;
+  const key=_normCli(name); if(!key)return;
+  if(!CFG.servClientes)CFG.servClientes={};
+  CFG.servClientes[key]={t:(tipo||'NINGUNO'),n:name};
+  SERV_OVERRIDES=CFG.servClientes; persistCfg();
+  renderServList(document.getElementById('servFilter').value);
+  try{render();}catch(e){}
+}
+function addServClient(){
+  if(!requireUnlock())return;
+  const el=document.getElementById('servNew'); const name=(el.value||'').trim();
+  if(!name){toast('Escribe un nombre');return;}
+  const key=_normCli(name); if(!key){toast('Nombre inválido');return;}
+  if(!CFG.servClientes)CFG.servClientes={};
+  CFG.servClientes[key]={t:(document.getElementById('servNewTipo').value||'CHALAN'),n:name};
+  SERV_OVERRIDES=CFG.servClientes; persistCfg();
+  el.value=''; const f=document.getElementById('servFilter'); if(f)f.value=name; renderServList(name);
+  try{render();}catch(e){}
+  toast('Cliente agregado');
+}
 </script>
 </body>
 </html>

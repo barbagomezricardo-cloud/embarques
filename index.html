@@ -21,7 +21,9 @@ const CLIENTES_TODOS=["ABARROTERA SANTANA","ABARROTES LA VIOLETA","ABARROTES SIL
 function _normCli(s){return (s||'').toString().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').trim();}
 const _SET_CHALAN=new Set(CLIENTES_CHALAN.map(_normCli));
 const _SET_SACOS=new Set(CLIENTES_SACOS.map(_normCli));
-function servicioCliente(n){const k=_normCli(n);if(_SET_CHALAN.has(k))return 'CHALAN';if(_SET_SACOS.has(k))return 'SACOS';return '';}
+let SERV_OVERRIDES=null;/* {normKey:'CHALAN'|'SACOS'|'NINGUNO'} o {normKey:{t,n}} — desde Firebase config.servClientes */
+function _servT(k){const o=SERV_OVERRIDES&&SERV_OVERRIDES[k];return o?(typeof o==='string'?o:o.t):null;}
+function servicioCliente(n){const k=_normCli(n);const ov=_servT(k);if(ov!=null)return (ov==='CHALAN'||ov==='SACOS')?ov:'';if(_SET_CHALAN.has(k))return 'CHALAN';if(_SET_SACOS.has(k))return 'SACOS';return '';}
 function servInfo(t){if(t==='CHALAN')return{cls:'chalan',txt:'CHALANES',emoji:'\uD83E\uDDD1\u200D\uD83D\uDD27',full:'REQUIERE CHALANES \u2014 enviar ayudantes para descargar'};if(t==='SACOS')return{cls:'sacos',txt:'SACOS BONIF.',emoji:'\uD83C\uDF81',full:'SACOS DE BONIFICACI\u00D3N \u2014 enviar sacos extra al cliente'};return null;}
 function servBadge(n){const s=servInfo(servicioCliente(n));return s?'<span class="serv-badge '+s.cls+'">'+s.emoji+' '+s.txt+'</span>':'';}
 function servBanner(n){const s=servInfo(servicioCliente(n));return s?'<div class="serv-banner '+s.cls+'">'+s.emoji+' '+s.full+'</div>':'';}
@@ -457,7 +459,7 @@ function initFirebase(){
     const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
-    fbCfg.on('value',snap=>{ const v=snap.val(); if(v){ if(v.limites)LIMITES=v.limites; if(v.users)USERS=v.users; if(currentUser && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } } });
+    fbCfg.on('value',snap=>{ const v=snap.val(); if(v){ if(v.limites)LIMITES=v.limites; if(v.users)USERS=v.users; if('servClientes' in v){ SERV_OVERRIDES=v.servClientes||null; render(); } if(currentUser && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } } });
   }catch(e){ console.error(e); setConn('local','Local (error)'); } });
 }
 let fbLoaded=false;
