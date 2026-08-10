@@ -2132,7 +2132,7 @@ function getPriorDaily(py){let b=null;try{b=JSON.parse(localStorage.getItem('bas
 function _vendMonthly(vf){
   const cur=Array(12).fill(0),prior=Array(12).fill(0);
   const B=getPriorBaseline().data; const bN=new Map(); for(const k in B)bN.set(nkey(k),k);
-  for(const c of DATA.clients){ if(vf&&(c.vendedor||'')!==vf)continue;
+  for(const c of DATA.clients){ if(vf&&(c.vendedor||'(sin asignar)')!==vf)continue;   // misma etiqueta que al publicar -> no se pierden los clientes sin vendedor
     for(const mm in c.mesData)cur[mm-1]+=c.mesData[mm];
     const rk=resolveKey(c.nombre,bN),arr=(rk&&B[rk]&&B[rk].m)||[];
     for(let i=0;i<12;i++)prior[i]+=arr[i]||0;
