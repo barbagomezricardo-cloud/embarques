@@ -439,9 +439,10 @@ function showCard(name){
   const nextQ=nx?nx[1]*M:null;
   const growQ=t[0]==='INICIAL'?null:Math.round(c.avg*M*(1+uc/100));
   const bronceRitmo=200*M;
-  const premNeedQ=Math.round(PREM.base/100*Math.max(c.qtd||0,maintainQ));
-  const qpBasePct=(c.qtd>0)?((c.qpb||0)/c.qtd*100):0;   // % premium BASE (solo Silver Kan Premium) → 3%
-  const qpMixPct=(c.qtd>0)?((c.qp||0)/c.qtd*100):0;      // % familia MIX (Premium + Silver Cat) → +0.5/+1%
+  const refVol=Math.round((c.avg||0)*M);                 // referencia = PROMEDIO MENSUAL del cliente × periodo (evita mañosos)
+  const premNeedQ=Math.round(PREM.base/100*refVol);
+  const qpBasePct=(refVol>0)?((c.qpb||0)/refVol*100):0;  // % premium BASE vs promedio → 3%
+  const qpMixPct=(refVol>0)?((c.qp||0)/refVol*100):0;    // % familia MIX vs promedio → +0.5/+1%
   const premOk=qpBasePct>=PREM.base;
   const curBoost=premBoost(qpMixPct);
   const descMax=t[0]==='INICIAL'?0:(fijo+kc+kp+PREM.e2);
@@ -461,11 +462,11 @@ function showCard(name){
     need='<div class="row no"><span class="t">Para entrar a Cobre y empezar a ganar descuento</span><span class="v">'+fmt(bronceRitmo)+' sacos<br>en el '+PW+'</span></div>';
   }else{
     need+='<h3>Para GANAR el tope de su nivel ('+(fijo+kc+kp).toFixed(2)+'%)</h3>';
-    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium base ≥'+PREM.base+'% del '+PW+'<br><span style="font-size:11px;color:#8792a3">solo Silver Kan Premium 25/20 · va '+fmt(c.qpb||0)+' sacos ('+qpBasePct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
+    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium base ≥'+PREM.base+'% de su promedio<br><span style="font-size:11px;color:#8792a3">solo Silver Kan Premium 25/20 · va '+fmt(c.qpb||0)+' sacos ('+qpBasePct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
     need+='<div class="row"><span class="t">Crecer +'+uc+'% vs. su ritmo</span><span class="v">llegar a '+fmt(growQ)+' sacos<br>en el '+PW+'</span></div>';
     // Bono Premium+ — descuento EXTRA por subir el mix premium
-    const need1=Math.round(PREM.u1/100*Math.max(c.qtd||0,maintainQ));
-    const need2=Math.round(PREM.u2/100*Math.max(c.qtd||0,maintainQ));
+    const need1=Math.round(PREM.u1/100*refVol);
+    const need2=Math.round(PREM.u2/100*refVol);
     need+='<h3>Bono Premium+ · hasta '+descMax.toFixed(2)+'% (extra por más premium)</h3>';
     need+='<div style="font-size:11.5px;color:#3d4552;padding:0 2px 8px">Cuenta cualquier presentación de <b>Premium (25 kg o 20 kg)</b> o <b>Silver Cat 15 kg</b>. Compra estos sacos en el '+PW+' para ganar el descuento extra:</div>';
     need+='<div class="row'+(qpMixPct>=PREM.u1?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need1)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u1+'%)</span></span><span class="v">+'+PREM.e1+'% extra'+(qpMixPct>=PREM.u1?' ✓':'')+'</span></div>';

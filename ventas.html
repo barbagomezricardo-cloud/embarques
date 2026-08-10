@@ -635,7 +635,7 @@ function calcNivel(promMes){
 }
 
 // Descuento % del nuevo programa: fijo + bono crecimiento + bono premium
-function calcDesc(nivel,mesData,prodMes,completos){
+function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
   const _cmp=(completos&&completos.length)?completos:null;
   const meses=Object.keys(mesData||{}).map(Number).filter(m=>m>0&&mesData[m]>0&&(!_cmp||_cmp.indexOf(m)>=0)).sort((a,b)=>a-b);
   const um=meses[meses.length-1]||0;
@@ -650,8 +650,12 @@ function calcDesc(nivel,mesData,prodMes,completos){
     if(isPremiumPlus(p))premMixU+=cu;      // Familia Mix (+bono): Premium 25/20 + Silver Cat 15
   }
   const pc=getPremCfg();
-  const mixPrem=vU>0?premBaseU/vU*100:0;   // % premium BASE (para el 3%)
-  const mixPlus=vU>0?premMixU/vU*100:0;    // % familia MIX (para +0.5/+1%)
+  // Premium se mide contra el PROMEDIO MENSUAL del cliente (no la compra puntual del mes) -> evita clientes mañosos
+  var _cmpA=(completos&&completos.length)?completos:meses;
+  var _refM=(refMonthly!=null)?refMonthly:(_cmpA.length?_cmpA.reduce(function(a,m){return a+((mesData&&mesData[m])||0);},0)/_cmpA.length:0);
+  var _denP=(_refM||0)*(win.cur.length||1);
+  const mixPrem=_denP>0?premBaseU/_denP*100:0;   // % premium BASE vs PROMEDIO (para el 3%)
+  const mixPlus=_denP>0?premMixU/_denP*100:0;    // % familia MIX vs PROMEDIO (para +0.5/+1%)
   const premOk=mixPrem>=(pc.umbralBase!=null?pc.umbralBase:UMBRAL_PREM);
   // ── INICIAL (menos de 200 sacos/mes): sin descuento hasta llegar a Cobre ──
   if(nivel==='INICIAL'){
@@ -906,7 +910,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       else if(activos.length>=2)seg='Esporadico';
       else seg='EnRiesgo';
       const nivel=calcNivel(promMes);
-      const dsc=calcDesc(nivel,qualMes,byClienteProdMes[nombre]||{},_completos);
+      const dsc=calcDesc(nivel,qualMes,byClienteProdMes[nombre]||{},_completos,promMes);
       const ld=lastDate[nombre]||null;
       const dias=daysAgo(ld);
       const prodMes=byClienteProdMes[nombre]||{};
@@ -1612,7 +1616,7 @@ function saveTierConfig(){ if(!reqSuper())return;
     min:parseInt(document.getElementById('cob-min')?.value)||300,
     umbral:parseFloat(document.getElementById('cob-umb')?.value)||20};
   localStorage.setItem('cobreCfg04mas',JSON.stringify(ccfg));
-  if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;c.mixPlus=d.mixPlus;}}
+  if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos,c.promMes);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;c.mixPlus=d.mixPlus;}}
   renderClienteTable();renderRiesgo();renderAlertas();renderConfig();if(typeof renderEquilibrio==='function')renderEquilibrio();
   alert('✅ Niveles y descuentos guardados.'+(ccfg.enabled?' Nivel Cobre ACTIVO.':' Nivel Cobre bloqueado.'));
 }
@@ -1649,7 +1653,7 @@ function importConfig(file){ if(!reqSuper())return;
       if(DATA){
         const m=getMapping();DATA.mapping=m;
         for(const c of DATA.clients){const info=m[c.nombre]||{e:c.estado,v:c.vendedor};c.estado=info.e;c.vendedor=info.v;
-          c.nivel=calcNivel(c.promMes);const ds=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos);
+          c.nivel=calcNivel(c.promMes);const ds=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos,c.promMes);
           c.desc=ds.desc;c.descMax=ds.descMax;c.crecio=ds.crecio;c.premOk=ds.premOk;c.mixPrem=ds.mixPrem;c.mixPlus=ds.mixPlus;}
         recalcAggregates();renderMap();renderClienteTable();renderVendedores();renderRiesgo();renderAlertas();renderConfig();renderMapeoTable();
       }
@@ -2485,7 +2489,7 @@ function renderSeguimiento(){
     const maintainP=maintain*mult;
     const gTargetP=c.nivel==='COBRE'?null:Math.round((c.promMes||0)*mult*(1+uc/100));
     const nextP=nxFloor!=null?nxFloor*mult:null;
-    const baseVol=Math.max(c.promMes||0,maintain)*mult;
+    const baseVol=(c.promMes||0)*mult;   // premium = % del PROMEDIO MENSUAL del cliente
     const premNeedP=Math.round((pc.umbralBase/100)*baseVol);
     const mixNeed1=Math.round(pc.u1/100*baseVol);
     const mixNeed2=Math.round(pc.u2/100*baseVol);
