@@ -2617,6 +2617,8 @@ function buildVendorPayloads(){
   const evalLabel=(evalP==='MES')?(MES_NOM_L[lastMonth]||''):q.label;
   const byV={};
   DATA.clients.forEach(c=>{ if(!((c.promMes||0)>0))return; const v=c.vendedor||'(sin asignar)'; (byV[v]=byV[v]||[]).push(c); });
+  // Publica siempre la bolsa "(sin asignar)" si hay clientes sin vendedor (aunque ya no vendan), para no perder su año-anterior en la gerencia
+  if(!byV['(sin asignar)'] && DATA.clients.some(c=>!c.vendedor)) byV['(sin asignar)']=[];
   const now=new Date(); const pad=n=>('0'+n).slice(-2);
   const updatedStr=pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad(now.getHours())+':'+pad(now.getMinutes());
   const out={};
