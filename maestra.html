@@ -391,7 +391,7 @@ function masterLoad(){
     var vendors=(idx&&idx.vendors)||[]; MUP=(idx&&idx.updatedStr)||'';
     if(!vendors.length){document.getElementById('loading').style.display='none';document.getElementById('drop').style.display='block';return;}
     VDATA={};
-    Promise.all(vendors.map(function(k){return fetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){if(p&&p.rows){VDATA[k]=p;VNAMES[k]=p.v||k;}}).catch(function(){});})).then(function(){
+    Promise.all(vendors.map(function(k){return fetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){if(p&&(p.rows||p.ventas)){VDATA[k]=p;VNAMES[k]=p.v||k;}}).catch(function(){});})).then(function(){
       VKEYS=Object.keys(VDATA); document.getElementById('loading').style.display='none';
       if(!VKEYS.length){document.getElementById('drop').style.display='block';return;}
       selectVendor(CURVEND); fetchMObs(); fetchMFix();
