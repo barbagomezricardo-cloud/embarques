@@ -646,7 +646,7 @@ function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
   let premBaseU=0, premMixU=0;
   for(const[p,pms] of Object.entries(prodMes||{})){
     const cu=win.cur.reduce((a,m)=>a+((pms&&pms[m])||0),0);
-    if(PREMIUM_RE.test(p))premBaseU+=cu;   // Premium Base (3%): SOLO Silver Kan Premium 25/20
+    if(isPremiumPlus(p))premBaseU+=cu;     // Premium Base (3%): Silver Kan Premium 25/20 + Silver Cat 15
     if(isPremiumPlus(p))premMixU+=cu;      // Familia Mix (+bono): Premium 25/20 + Silver Cat 15
   }
   const pc=getPremCfg();
@@ -886,6 +886,9 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     const _maxMes=Math.max(...Object.values(mesTotal),1);
     const _completos=_mesArr.filter(m=>mesTotal[m]>=0.4*_maxMes);
     const _nComplete=_completos.length||1;
+    // Nivel: promedio de los ÚLTIMOS 6 MESES CERRADOS (ventana que se recorre sola conforme avanza el tiempo)
+    const _completos6=_completos.slice().sort((a,b)=>a-b).slice(-6);
+    const _nComp6=_completos6.length||1;
     const _normMap=new Map();for(const _k in mapping)if(mapping[_k]&&(mapping[_k].e||mapping[_k].v))_normMap.set(nkey(_k),_k);
     const clients=Object.entries(byClienteMes).map(([nombre,mesData])=>{
       const total=sacosCliente[nombre]||0;
@@ -896,8 +899,8 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       // Se sigue calculando el desglose de PetFood (petMes) solo para mostrarlo; ya NO se resta.
       const petMes={}; for(const _p in _pmx){ if(PETFOOD_RE.test(_p)){ const _mm=_pmx[_p]; for(const _k in _mm) petMes[_k]=(petMes[_k]||0)+(_mm[_k]||0); } }
       const qualMes={}; for(const _m in mesData){ qualMes[_m]=Math.max(0,(mesData[_m]||0)); }
-      const _totalComp=_completos.reduce((a,m)=>a+(qualMes[m]||0),0);
-      const promMes=Math.round(_totalComp/_nComplete);
+      const _totalComp=_completos6.reduce((a,m)=>a+(qualMes[m]||0),0);
+      const promMes=Math.round(_totalComp/_nComp6);   // promedio de los últimos 6 meses cerrados
       const activos=Object.keys(mesData).map(Number).filter(m=>mesData[m]>0);
       const prods=byClienteProd[nombre]||{};
       const topProd=Object.entries(prods).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
@@ -2638,7 +2641,7 @@ function buildVendorPayloads(){
     const rows=byV[v].map(c=>{
       const cur=Math.round((c.qualMes&&c.qualMes[lastMonth])||0);
       let qtd=0; evalMonths.forEach(m=>{qtd+=(c.qualMes&&c.qualMes[m])||0;});
-      let qp=0,qpb=0; const pm=c.prodMes||{}; for(const p in pm){ const isMix=isPremiumPlus(p), isBase=PREMIUM_RE.test(p); if(isMix||isBase){ evalMonths.forEach(m=>{const s=(pm[p]&&pm[p][m])||0; if(isMix)qp+=s; if(isBase)qpb+=s;}); } }
+      let qp=0,qpb=0; const pm=c.prodMes||{}; for(const p in pm){ if(isPremiumPlus(p)){ evalMonths.forEach(m=>{const s=(pm[p]&&pm[p][m])||0; qp+=s; qpb+=s;}); } }   // base y mix ahora cuentan Premium 25/20 + Silver Cat 15
       return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb)};
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
