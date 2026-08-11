@@ -446,7 +446,7 @@ function showCard(name){
     need='<div class="row no"><span class="t">Para entrar a Cobre y empezar a ganar descuento</span><span class="v">'+fmt(bronceRitmo)+' sacos<br>en el '+PW+'</span></div>';
   }else{
     need+='<h3>Para GANAR el tope de su nivel ('+(fijo+kc+kp).toFixed(2)+'%)</h3>';
-    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium base ≥'+PREM.base+'% de su promedio<br><span style="font-size:11px;color:#8792a3">solo Silver Kan Premium 25/20 · va '+fmt(c.qpb||0)+' sacos ('+qpBasePct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
+    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium base ≥'+PREM.base+'% de su promedio<br><span style="font-size:11px;color:#8792a3">Silver Kan Premium 25/20 + Silver Cat 15 · va '+fmt(c.qpb||0)+' sacos ('+qpBasePct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
     need+='<div class="row"><span class="t">Crecer +'+uc+'% vs. su ritmo</span><span class="v">llegar a '+fmt(growQ)+' sacos<br>en el '+PW+'</span></div>';
     // Bono Premium+ — descuento EXTRA por subir el mix premium
     const need1=Math.round(PREM.u1/100*refVol);
