@@ -2616,6 +2616,10 @@ function toggleSuper(){
 }
 function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app)c.app=SK_APP; if(!c.master)c.master=SK_MASTER; return c;}
 function saveCloudCfg(){ if(!reqSuper())return;const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));pushConfigCloud(true);renderCodesPanel();}
+// ── COBRADORES: usuarios que VEN la cartera de un vendedor, con su propia marca de agua y su propia licencia/link.
+//    name = etiqueta que se muestra y se estampa en la marca de agua · cartera = vendedor cuya cartera verá (por nombre, sin importar mayúsculas/acentos).
+//    NO se suman en la app de gerencia (se excluyen del índice) para no duplicar la cartera del vendedor.
+const COBRADORES=[{name:'LUIS (COBRADOR)', cartera:'ARMANDO'}];
 function buildVendorPayloads(){
   if(!DATA)return null;
   const period=(DATA.dataYear||'')+'';
@@ -2661,6 +2665,18 @@ function buildVendorPayloads(){
     var alertas={sinCompra:sinCompra,fuga:fuga,focos:focos,nuevos:{count:nuevosV.length,meta:metaN,lista:nuevosV.slice(0,20).map(function(r){return {n:r.nombre,cur:Math.round(r.cur)};})},regiones:regiones,gTarget:PVEN.gTarget};
     out[v]={v:v,period:period,lastMonth:lastMonth,q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows};
   });
+  // ── Cobradores: clonan la cartera de "su" vendedor con su propia marca de agua y licencia (excluidos del índice de gerencia) ──
+  (COBRADORES||[]).forEach(function(cb){
+    if(!cb||!cb.name||!cb.cartera)return;
+    var want=keyp(cb.cartera);
+    var src=Object.keys(out).find(function(v){return !out[v].cobrador && keyp(v).indexOf(want)>=0;});
+    if(!src)return;                              // el vendedor no está en estos datos: nada que clonar
+    var clone=JSON.parse(JSON.stringify(out[src]));
+    clone.v=cb.name;                             // encabezado + marca de agua = el cobrador (trazable)
+    clone.cartera=out[src].v;                    // referencia interna: de quién es la cartera
+    clone.cobrador=true;                         // bandera: NO se suma en gerencia
+    out[cb.name]=clone;
+  });
   return {period,lastMonth,q,updatedStr,byVendor:out};
 }
 function liberarDispositivo(vkey,vname){ if(!reqSuper())return;
@@ -2695,7 +2711,7 @@ function publishCloud(){
     const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';
     return fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).then(r=>{r.ok?done++:fail++;}).catch(()=>fail++);
   })).then(()=>{
-    const idx={updatedStr:pj.updatedStr,vendors:keys.map(keyp)};
+    const idx={updatedStr:pj.updatedStr,vendors:keys.filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
     return fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
   }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa tu licencia/internet)'):'')+'.\nCada vendedor verá su info actualizada solo.'); });
 }
@@ -2704,7 +2720,7 @@ function autoPublishCloud(){
   const cfg=getCloudCfg(); if(!cfg.db)return;
   const pj=buildVendorPayloads(); if(!pj)return; const db=cfg.db.replace(/\/$/,'');
   Object.keys(pj.byVendor).forEach(v=>{const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).catch(()=>{});});
-  const idx={updatedStr:pj.updatedStr,vendors:Object.keys(pj.byVendor).map(keyp)};
+  const idx={updatedStr:pj.updatedStr,vendors:Object.keys(pj.byVendor).filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
   fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
 }
 function cpv(btn){const el=btn.parentElement.querySelector('input,textarea');if(!el)return;el.select();try{navigator.clipboard&&navigator.clipboard.writeText(el.value);}catch(e){}const o=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=o,1200);}
@@ -2755,7 +2771,7 @@ function renderCodesPanel(){
     if(/^https?:\/\/[^\/]+$/i.test(appBase))appBase+='/';
     const link=appBase?(appBase+'#v='+encodeURIComponent(keyp(v))+'&db='+encodeURIComponent(cfg.db||'')):'';
     h+='<div style="background:#12203c;border-radius:8px;padding:8px 10px;margin-bottom:7px;border:1px solid #24304f">';
-    h+='<b style="color:#cbd5e1;font-size:.85rem">'+v+' — '+payload.rows.length+' clientes</b> <button onclick="liberarDispositivo(\''+keyp(v).replace(/'/g,"")+'\',\''+String(v).replace(/'/g,"")+'\')" style="background:#7c2d12;color:#fed7aa;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-left:6px">🔓 Liberar dispositivo</button>'
+    h+='<b style="color:#cbd5e1;font-size:.85rem">'+v+' — '+payload.rows.length+' clientes</b>'+(payload.cobrador?(' <span style="background:#3b2f0b;color:#facc15;border:1px solid #a16207;border-radius:6px;padding:1px 7px;font-size:.62rem;font-weight:800">COBRADOR · cartera de '+esc(payload.cartera||'')+'</span>'):'')+' <button onclick="liberarDispositivo(\''+keyp(v).replace(/'/g,"")+'\',\''+String(v).replace(/'/g,"")+'\')" style="background:#7c2d12;color:#fed7aa;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-left:6px">🔓 Liberar dispositivo</button>'
       +' <button id="vb_'+keyp(v)+'" data-blocked="0" onclick="toggleVendedor(\''+keyp(v).replace(/'/g,"")+'\',\''+String(v).replace(/'/g,"")+'\',this)" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-left:4px">⛔ Desactivar app</button>';
     if(link){h+='<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input readonly value="'+esc(link)+'" style="flex:1;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#7dd3fc;font-size:.68rem;padding:6px"><button onclick="cpv(this)" style="background:#2563EB;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer;white-space:nowrap">Copiar link</button></div>';}
     else{h+='<div style="font-size:.68rem;color:#64748b;margin-top:4px">Configura la URL de la app arriba para generar el link automático.</div>';}
