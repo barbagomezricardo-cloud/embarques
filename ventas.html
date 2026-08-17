@@ -465,6 +465,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
     <div class="tbl-ctrl" style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <label style="font-size:.78rem;color:#94a3b8">Vendedor:</label><select id="seg-vend" onchange="renderSeguimiento()"><option value="">Todos</option></select>
       <label style="font-size:.78rem;color:#94a3b8">Nivel:</label><select id="seg-niv" onchange="renderSeguimiento()"><option value="">Todos</option><option value="DIAMANTE_PLUS">DIAMANTE PLUS</option><option>DIAMANTE</option><option>PLATINO</option><option>ORO</option><option>PLATA</option><option>BRONCE</option><option>COBRE</option></select>
+      <label style="font-size:.78rem;color:#94a3b8">Estado:</label><select id="seg-est" onchange="renderSeguimiento()"><option value="">Todos</option></select>
       <input id="seg-q" oninput="renderSeguimiento()" placeholder="Buscar cliente..." style="background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:4px 9px;font-size:.78rem">
       <button id="btn-gencodes" onclick="genCodes()" style="background:var(--gold);color:var(--navy);border:none;border-radius:6px;padding:4px 11px;font-weight:700;font-size:.75rem;cursor:pointer">📲 Códigos para la app del vendedor</button>
     </div>
@@ -2492,9 +2493,11 @@ function renderSeguimiento(){
   const cfg=getTierCfg();
   const vSel=document.getElementById('seg-vend');
   if(vSel&&vSel.options.length<=1){const vs=[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort();vs.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;vSel.appendChild(o);});}
-  const vf=vSel?vSel.value:''; const nf=(document.getElementById('seg-niv')||{}).value||''; const q=((document.getElementById('seg-q')||{}).value||'').toUpperCase().trim();
+  const eSel=document.getElementById('seg-est');
+  if(eSel&&eSel.options.length<=1){const es=[...new Set(DATA.clients.map(c=>c.estado).filter(Boolean))].sort();es.forEach(e=>{const o=document.createElement('option');o.value=o.textContent=e;eSel.appendChild(o);});}
+  const vf=vSel?vSel.value:''; const nf=(document.getElementById('seg-niv')||{}).value||''; const ef=eSel?eSel.value:''; const q=((document.getElementById('seg-q')||{}).value||'').toUpperCase().trim();
   let rows=DATA.clients.filter(c=>(c.promMes||0)>0);
-  rows=rows.filter(c=>{if(vf&&c.vendedor!==vf)return false;if(nf&&c.nivel!==nf)return false;if(q&&!c.nombre.toUpperCase().includes(q))return false;return true;});
+  rows=rows.filter(c=>{if(vf&&c.vendedor!==vf)return false;if(nf&&c.nivel!==nf)return false;if(ef&&(c.estado||'')!==ef)return false;if(q&&!c.nombre.toUpperCase().includes(q))return false;return true;});
   rows.sort((a,b)=>(b.promMes||0)-(a.promMes||0));
   const cnt={}; DATA.clients.forEach(c=>cnt[c.nivel]=(cnt[c.nivel]||0)+1);
   let head='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
@@ -2526,7 +2529,7 @@ function renderSeguimiento(){
       if(c.crecio&&premOk&&mix>=pc.u2)falta.push('✓ ya está al tope máximo '+topeMax.toFixed(1)+'%');
     }
     h+='<tr>'+
-      '<td style="color:#fff;max-width:190px;overflow:hidden;text-overflow:ellipsis">'+c.nombre+'</td>'+
+      '<td style="color:#fff;max-width:190px;overflow:hidden;text-overflow:ellipsis"><span onclick="showCliProd(\''+c.nombre.replace(/'/g,"\\'")+'\')" title="Ver compras por producto y mes" style="cursor:pointer;border-bottom:1px dotted #7c93b8">'+c.nombre+'</span></td>'+
       '<td>'+(c.vendedor||'—')+'</td>'+
       '<td style="font-weight:800;color:'+_nivColor(c.nivel)+'">'+c.nivel+'</td>'+
       '<td style="text-align:right">'+fmt(c.promMes||0)+'</td>'+
@@ -2542,6 +2545,30 @@ function renderSeguimiento(){
   });
   h+='</tbody></table>';
   box.innerHTML=head+'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Evaluación <b>'+(evalP==='MES'?'MENSUAL':'TRIMESTRAL')+'</b> — las metas de sacos están en el periodo de evaluación. La columna <b>Mix p/ +bono</b> es cuántos sacos de premium o gato (cualquier presentación) necesita para +'+pc.e1+'% y para +'+pc.e2+'% extra. El descuento se paga como nota de crédito el periodo siguiente. PetFood también cuenta y recibe descuento.</div>'+h;
+}
+// ── Modal: compras por producto y mes de un cliente (dashboard) ──
+function showCliProd(nombre){
+  if(!DATA)return; const c=DATA.clients.find(x=>x.nombre===nombre); if(!c)return;
+  const pm=c.prodMes||{}; const prods=Object.keys(pm);
+  const MESA={1:'Ene',2:'Feb',3:'Mar',4:'Abr',5:'May',6:'Jun',7:'Jul',8:'Ago',9:'Sep',10:'Oct',11:'Nov',12:'Dic'};
+  let inner='';
+  if(!prods.length){ inner='<div style="color:#94a3b8;padding:14px">Este cliente no tiene desglose de productos en el reporte cargado.</div>'; }
+  else{
+    const mset={}; prods.forEach(p=>{for(const m in pm[p])mset[m]=1;}); const months=Object.keys(mset).map(Number).sort((a,b)=>a-b);
+    const ptot=p=>{let s=0;for(const m in pm[p])s+=pm[p][m]||0;return s;}; prods.sort((a,b)=>ptot(b)-ptot(a));
+    const TH='padding:6px 8px;text-align:right;color:#9fb0cc;border-bottom:1px solid #24304f;white-space:nowrap;font-size:.72rem';
+    const TD='padding:5px 8px;text-align:right;color:#e8eef7;border-bottom:1px solid #172542;white-space:nowrap;font-size:.72rem';
+    let t='<div style="overflow:auto;max-height:60vh"><table style="border-collapse:collapse;width:100%"><thead><tr><th style="'+TH+';text-align:left">Producto</th>';
+    months.forEach(m=>{t+='<th style="'+TH+'">'+(MESA[m]||m)+'</th>';}); t+='<th style="'+TH+';color:#E8A020">Total</th></tr></thead><tbody>';
+    const colTot={};
+    prods.forEach(p=>{let rt=0;t+='<tr><td style="'+TD+';text-align:left;color:#cbd5e1;max-width:240px;overflow:hidden;text-overflow:ellipsis">'+p+'</td>';months.forEach(m=>{const q=(pm[p]&&pm[p][m])||0;rt+=q;colTot[m]=(colTot[m]||0)+q;t+='<td style="'+TD+'">'+(q?fmt(q):'·')+'</td>';});t+='<td style="'+TD+';font-weight:800;color:#E8A020">'+fmt(rt)+'</td></tr>';});
+    let gt=0;t+='<tr><td style="'+TD+';text-align:left;font-weight:800">Total</td>';months.forEach(m=>{gt+=colTot[m]||0;t+='<td style="'+TD+';font-weight:800">'+fmt(colTot[m]||0)+'</td>';});t+='<td style="'+TD+';font-weight:900;color:#E8A020">'+fmt(gt)+'</td></tr>';
+    t+='</tbody></table></div>'; inner=t;
+  }
+  let ov=document.getElementById('cliprod-ov');
+  if(!ov){ov=document.createElement('div');ov.id='cliprod-ov';ov.style.cssText='position:fixed;inset:0;background:rgba(3,8,20,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px';ov.addEventListener('click',e=>{if(e.target===ov)ov.style.display='none';});document.body.appendChild(ov);}
+  ov.innerHTML='<div style="background:#0d1830;border:1px solid #274063;border-radius:14px;max-width:840px;width:100%;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.5)"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px"><div style="font-weight:800;color:#E8A020;font-size:.95rem">📦 '+c.nombre+' — compras por producto y mes '+(c.estado?('· '+c.estado):'')+'</div><button onclick="document.getElementById(\'cliprod-ov\').style.display=\'none\'" style="background:#1e2f4d;color:#cbd5e1;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:700">Cerrar ✕</button></div>'+inner+'<div style="font-size:.68rem;color:#64748b;margin-top:8px">Sacos por mes de cada producto que ha comprado el cliente (todos los productos del reporte).</div></div>';
+  ov.style.display='flex';
 }
 function renderRuta(){
   const box=document.getElementById('ruta-content'); if(!box||typeof prospecAll!=='function')return;
@@ -2646,7 +2673,8 @@ function buildVendorPayloads(){
       const cur=Math.round((c.qualMes&&c.qualMes[lastMonth])||0);
       let qtd=0; evalMonths.forEach(m=>{qtd+=(c.qualMes&&c.qualMes[m])||0;});
       let qp=0,qpb=0; const pm=c.prodMes||{}; for(const p in pm){ if(isPremiumPlus(p)){ evalMonths.forEach(m=>{const s=(pm[p]&&pm[p][m])||0; qp+=s; qpb+=s;}); } }   // base y mix ahora cuentan Premium 25/20 + Silver Cat 15
-      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb)};
+      const pmOut={}; for(const p in pm){ const mm={}; for(const k in pm[p]){ const qy=Math.round(pm[p][k]||0); if(qy>0)mm[k]=qy; } if(Object.keys(mm).length)pmOut[p]=mm; }   // compras por producto y mes (para la credencial y filtros)
+      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb),e:(c.estado||''),vd:(c.vendedor||''),pm:pmOut};
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;

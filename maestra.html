@@ -117,7 +117,7 @@ function applyPayload(p){
   VENTAS=p.ventas||null;
   ALERTAS=p.alertas||null;
   CLIENTS={};
-  (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0};});
+  (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:r.vd||APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null};});
 }
 function fetchCloud(){
   const q=parseHash(); CLOUD.db=q.db||''; CLOUD.v=q.v||'';
@@ -222,14 +222,23 @@ function syncBar(){
   return '<div class="synced"><div class="l"><span class="dot"></span>Datos en vivo'+(APPUPDATED?(' · <b>Actualizado:</b> '+APPUPDATED):'')+'</div>'+(CLOUD.db?'<button class="rfr" onclick="refreshCloud()">↻ Refrescar</button>':'')+'</div>';
 }
 
+let CLISTEST='';
+function setClistEst(v){CLISTEST=v;const qi=document.getElementById('q');renderList(qi?qi.value:'');}
 function renderList(q){
   const app=document.getElementById('app');app.style.display='block';
   CARDOPEN=false; VIEW='clientes';
-  const arr=Object.values(CLIENTS).filter(c=>!q||c.nombre.includes(q.toUpperCase())).sort((a,b)=>b.avg-a.avg);
+  let arr=Object.values(CLIENTS).filter(c=>!q||c.nombre.includes(q.toUpperCase()));
+  if(CLISTEST)arr=arr.filter(c=>(c.estado||'(sin estado)')===CLISTEST);
+  arr.sort((a,b)=>b.avg-a.avg);
+  const estCnt={}; Object.values(CLIENTS).forEach(c=>{const e=c.estado||'(sin estado)';estCnt[e]=(estCnt[e]||0)+1;});
+  const estKeys=Object.keys(estCnt).filter(e=>e!=='(sin estado)').sort();
   let h=syncBar()+viewTabs();
   h+='<input class="search" id="q" placeholder="Buscar cliente..." value="'+q.replace(/"/g,'')+'" oninput="renderList(this.value)">';
-  h+='<div class="hint">'+(APPVEND?('<b style="color:#E8A020">'+APPVEND+'</b> · '):'')+Object.keys(CLIENTS).length+' clientes'+(APPQ?(' · '+perWord()+' '+perLabel()):'')+' · toca uno para ver su tarjeta</div><div class="list">';
-  arr.slice(0,80).forEach(c=>{const t=tierOf(c.avg);h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b><div style="font-size:11px;color:#9fb0cc">'+fmt(c.avg)+' sacos/mes'+(c.vend?' · '+c.vend:'')+'</div></div><span class="lv" style="background:'+NIVCOL[t[0]]+';color:#fff">'+nivLab(t[0])+'</span></div>';});
+  if(estKeys.length){
+    h+='<select onchange="setClistEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:8px"><option value="">📍 Todos los estados ('+Object.keys(CLIENTS).length+')</option>'+estKeys.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(CLISTEST===e?' selected':'')+'>'+e+' — '+estCnt[e]+'</option>';}).join('')+(estCnt['(sin estado)']?('<option value="(sin estado)"'+(CLISTEST==='(sin estado)'?' selected':'')+'>Sin estado — '+estCnt['(sin estado)']+'</option>'):'')+'</select>';
+  }
+  h+='<div class="hint">'+(APPVEND?('<b style="color:#E8A020">'+APPVEND+'</b> · '):'')+arr.length+(CLISTEST?(' en '+CLISTEST):' clientes')+(APPQ?(' · '+perWord()+' '+perLabel()):'')+' · toca uno para ver su tarjeta</div><div class="list">';
+  arr.slice(0,120).forEach(c=>{const t=tierOf(c.avg);h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b><div style="font-size:11px;color:#9fb0cc">'+fmt(c.avg)+' sacos/mes'+(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')+'</div></div><span class="lv" style="background:'+NIVCOL[t[0]]+';color:#fff">'+nivLab(t[0])+'</span></div>';});
   h+='</div>';
   if(!arr.length)h+='<div class="hint">Sin resultados.</div>';
   app.innerHTML=h;
@@ -435,6 +444,26 @@ function renderVentas(){
   h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · solo tuyas · datos del último reporte publicado.</div>';
   app.innerHTML=h;
 }
+// ── Desplegable: compras por producto y mes del cliente ──
+function prodMesHtml(c){
+  if(!c||!c.pm)return '';
+  var prods=Object.keys(c.pm||{}); if(!prods.length)return '';
+  var mset={}; prods.forEach(function(p){for(var m in c.pm[p])mset[m]=1;});
+  var months=Object.keys(mset).map(Number).sort(function(a,b){return a-b;}); if(!months.length)return '';
+  var MESA={1:'Ene',2:'Feb',3:'Mar',4:'Abr',5:'May',6:'Jun',7:'Jul',8:'Ago',9:'Sep',10:'Oct',11:'Nov',12:'Dic'};
+  function ptot(p){var s=0;for(var m in c.pm[p])s+=c.pm[p][m]||0;return s;}
+  prods.sort(function(a,b){return ptot(b)-ptot(a);});
+  var TH='padding:6px 7px;text-align:right;color:#8792a3;border-bottom:1px solid #d8e0ee;white-space:nowrap;font-size:11px';
+  var TD='padding:5px 7px;text-align:right;color:#26324a;border-bottom:1px solid #eef2fb;white-space:nowrap;font-size:11.5px';
+  var h='<details style="margin:2px 16px 16px;border:1px solid #e3e9f5;border-radius:12px;background:#fbfcff;overflow:hidden"><summary style="cursor:pointer;padding:11px 13px;font-weight:800;color:#1A2E5A;font-size:13px">📦 Compras por producto y mes</summary><div style="overflow-x:auto;padding:0 8px 10px"><table style="border-collapse:collapse;width:100%"><thead><tr><th style="'+TH+';text-align:left">Producto</th>';
+  months.forEach(function(m){h+='<th style="'+TH+'">'+(MESA[m]||m)+'</th>';});
+  h+='<th style="'+TH+';color:#B57611">Total</th></tr></thead><tbody>';
+  var colTot={};
+  prods.forEach(function(p){var rt=0;h+='<tr><td style="'+TD+';text-align:left;max-width:160px;overflow:hidden;text-overflow:ellipsis">'+p+'</td>';months.forEach(function(m){var q=(c.pm[p]&&c.pm[p][m])||0;rt+=q;colTot[m]=(colTot[m]||0)+q;h+='<td style="'+TD+'">'+(q?fmt(q):'·')+'</td>';});h+='<td style="'+TD+';font-weight:800;color:#B57611">'+fmt(rt)+'</td></tr>';});
+  var gt=0;h+='<tr><td style="'+TD+';text-align:left;font-weight:800">Total</td>';months.forEach(function(m){gt+=colTot[m]||0;h+='<td style="'+TD+';font-weight:800">'+fmt(colTot[m]||0)+'</td>';});h+='<td style="'+TD+';font-weight:900;color:#B57611">'+fmt(gt)+'</td></tr>';
+  h+='</tbody></table></div></details>';
+  return h;
+}
 function showCard(name){
   const c=CLIENTS[name];if(!c)return;CARDOPEN=true;const t=tierOf(c.avg);const nx=nextTier(t[0]);
   const fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
@@ -492,6 +521,7 @@ function showCard(name){
    qnow+
    '<div class="need">'+need+'</div>'+
    '<div class="msg">Las metas están en <b>sacos del '+PW+' completo</b>. El descuento ganado se paga como <b>nota de crédito</b> en su primera compra del periodo siguiente. El PetFood también cuenta y recibe descuento.</div>'+
+   prodMesHtml(c)+
    '</div>'+
    '<div class="foot">Silver Kan / Los 19 Hermanos · Programa 04MAS ('+(APPEVAL==='MES'?'mensual':'trimestral')+') · Nivel por promedio mensual (PetFood incluido).</div>';
   window.scrollTo(0,0);
