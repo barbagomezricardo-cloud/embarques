@@ -238,7 +238,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
     <div class="kpi"><div class="kpi-val" id="k-peak">—</div><div class="kpi-lbl">Mes pico</div><div class="kpi-sub" id="k-peak-sub"></div></div>
   </div>
   <div class="tabs">
-<div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
+<div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
   </div>
 
   <!-- MAPA -->
@@ -473,6 +473,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
     <div id="seg-content"></div>
   </div></div>
   <div class="pane" id="pane-equilibrio"><div id="equil-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
+  <div class="pane" id="pane-rentabilidad"><div id="rent-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-ruta"><div style="width:100%;overflow-y:auto;padding:14px">
     <div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">🗺 Planificador de ruta — visitar a todos</div>
     <div class="tbl-ctrl" style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -1623,7 +1624,7 @@ function saveTierConfig(){ if(!reqSuper())return;
   localStorage.setItem('cobreCfg04mas',JSON.stringify(ccfg));
   if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos,c.promMes);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;c.mixPlus=d.mixPlus;}}
   pushConfigCloud(true);
-  renderClienteTable();renderRiesgo();renderAlertas();renderConfig();if(typeof renderEquilibrio==='function')renderEquilibrio();
+  renderClienteTable();renderRiesgo();renderAlertas();renderConfig();if(typeof renderEquilibrio==='function')renderEquilibrio();if(typeof renderRentabilidad==='function')renderRentabilidad();
   alert('✅ Niveles y descuentos guardados.'+(ccfg.enabled?' Nivel Cobre ACTIVO.':' Nivel Cobre bloqueado.'));
 }
 
@@ -1809,6 +1810,89 @@ function renderEquilibrio(){
   box.innerHTML=h;
 }
 
+// ====== RENTABILIDAD (solo en el tablero; costos NUNCA se publican) ======
+const COSTOS_DEF=[
+ {code:'04MAS001',name:'SILVER KAN PREMIUM +22% 25 KG',costo:377.46,precio:540},
+ {code:'04MAS0019',name:'SILVER KAN PREMIUM 20 KGS',costo:301.96,precio:439.66},
+ {code:'04MAS006',name:'SILVER CAT 15 KGS',costo:221.8,precio:341},
+ {code:'04MAS007',name:'SILVER CAT 5 KGS',costo:73.93,precio:124},
+ {code:'04MAS009',name:'KAN KAN 20 KGS',costo:197.2,precio:261},
+ {code:'04MAS0020',name:'KAN KAN 25 KG',costo:246.5,precio:325},
+ {code:'04MAS008',name:'MI BOOB 20 KGS',costo:198.96,precio:250},
+ {code:'04MAS010',name:'PET FOOD 20 KG (R)',costo:175.99,precio:224},
+ {code:'04MAS003',name:'SILVER KAN 18% 25 KGS',costo:285.61,precio:350},
+ {code:'04MAS002',name:'SILVER KAN 18% 5 KGS',costo:57.12,precio:77},
+ {code:'04MAS004',name:'SILVER KAN CACHORRO 20 KGS',costo:296.43,precio:357},
+ {code:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',costo:74.11,precio:102}
+];
+function _pk(s){return (s||'').toUpperCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'');}
+function getCostos(){let arr=null;try{arr=JSON.parse(localStorage.getItem('costos04mas')||'null');}catch(e){}if(!Array.isArray(arr)||!arr.length)arr=COSTOS_DEF.map(x=>Object.assign({},x));return arr;}
+function saveCostos(arr){try{localStorage.setItem('costos04mas',JSON.stringify(arr));}catch(e){}}
+function costMap(){const arr=getCostos();const m={};arr.forEach(x=>{m[_pk(x.name)]={costo:+x.costo||0,precio:+x.precio||0,name:x.name,code:x.code||''};});return m;}
+function setCosto(i,field,val){const arr=getCostos();if(!arr[i])return;arr[i][field]=(field==='name'?val:(parseFloat(val)||0));saveCostos(arr);renderRentabilidad();}
+function addCostoProd(name){const arr=getCostos();arr.push({code:'',name:(name||'NUEVO PRODUCTO'),costo:0,precio:0});saveCostos(arr);renderRentabilidad();}
+function resetCostos(){if(!confirm('¿Restaurar los costos y precios a los valores originales (jul-2026)?'))return;localStorage.removeItem('costos04mas');renderRentabilidad();}
+function _money(n){return '$'+fmt(n);}
+function _pctCol(p,thr){return p>=thr?'#4ade80':(p>=thr*0.6?'#f59e0b':'#ef4444');}
+function renderRentabilidad(){
+  const box=document.getElementById('rent-content'); if(!box)return;
+  if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la rentabilidad del programa.</div>';return;}
+  const CM=costMap();
+  const vSel=document.getElementById('rent-vend');
+  if(vSel&&vSel.options.length<=1){[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort().forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;vSel.appendChild(o);});}
+  const vf=vSel?vSel.value:'';
+  const thr=parseFloat((document.getElementById('rent-thr')||{}).value)||12;
+  let TR=0,TC=0,TD=0; const byV={}; const cli=[]; const sinCosto={}; const byProd={};
+  for(const c of DATA.clients){
+    if(vf&&(c.vendedor||'(sin asignar)')!==vf)continue;
+    const pm=c.prodMes||{}; let rev=0,cost=0;
+    for(const p in pm){ let sac=0; for(const m in pm[p])sac+=pm[p][m]||0; if(sac<=0)continue; const cc=CM[_pk(p)];
+      if(cc){ rev+=sac*cc.precio; cost+=sac*cc.costo; if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0}; byProd[p].sac+=sac; byProd[p].rev+=sac*cc.precio; byProd[p].cost+=sac*cc.costo; }
+      else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
+    if(rev<=0)continue;
+    const gm=rev-cost, disc=rev*(c.desc||0)/100, net=gm-disc, netpct=rev>0?net/rev*100:0;
+    TR+=rev;TC+=cost;TD+=disc;
+    const v=c.vendedor||'(sin asignar)'; if(!byV[v])byV[v]={rev:0,gm:0,disc:0,net:0,cl:0}; const b=byV[v]; b.rev+=rev;b.gm+=gm;b.disc+=disc;b.net+=net;b.cl++;
+    cli.push({n:c.nombre,v:v,e:c.estado||'',rev:rev,disc:disc,net:net,netpct:netpct,desc:c.desc||0});
+  }
+  const TGM=TR-TC, TNET=TGM-TD, TnetPct=TR>0?TNET/TR*100:0, TdiscPct=TR>0?TD/TR*100:0, TgmPct=TR>0?TGM/TR*100:0;
+  const kpi=(n,l,col)=>'<div style="flex:1;min-width:120px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:11px 13px"><div style="font-size:1.15rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
+  let h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:3px">💵 Rentabilidad del programa 04MAS</div>';
+  h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:10px">Con tus costos reales. Estimación sobre la compra del periodo cargado, aplicando la tasa de descuento actual de cada cliente. Estos costos viven <b>solo en este tablero</b> — nunca se publican a las apps.</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><label style="font-size:.78rem;color:#94a3b8">Vendedor:</label><select id="rent-vend" onchange="renderRentabilidad()"><option value="">Todos</option></select>';
+  h+='<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Alerta si margen neto &lt;</label><input id="rent-thr" type="number" value="'+thr+'" onchange="renderRentabilidad()" style="width:60px;background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:3px 7px;font-size:.78rem">%</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+kpi(_money(TR),'Ingreso (precio lista)')+kpi(_money(TGM)+' · '+TgmPct.toFixed(1)+'%','Margen bruto','#e8eef7')+kpi('-'+_money(TD)+' · '+TdiscPct.toFixed(1)+'%','Descuento pagado (nota de crédito)','#fca5a5')+kpi(_money(TNET)+' · '+TnetPct.toFixed(1)+'%','Margen NETO (después del descuento)',_pctCol(TnetPct,thr))+'</div>';
+  // barra
+  h+='<div style="background:#0b1628;border-radius:7px;overflow:hidden;height:14px;display:flex;margin:8px 0 16px">'+
+     '<div style="width:'+(TR>0?TNET/TR*100:0)+'%;background:#22c55e"></div>'+
+     '<div style="width:'+(TR>0?TD/TR*100:0)+'%;background:#ef4444"></div>'+
+     '<div style="width:'+(TR>0?TC/TR*100:0)+'%;background:#334155"></div></div>';
+  h+='<div style="font-size:.68rem;color:#64748b;margin-top:-10px;margin-bottom:14px"><span style="color:#22c55e">■</span> margen neto &nbsp; <span style="color:#ef4444">■</span> descuento &nbsp; <span style="color:#334155">■</span> costo</div>';
+  // por vendedor
+  h+='<div style="font-weight:800;color:#cbd5e1;margin:6px 0 6px">Por vendedor</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:.75rem"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:right">Clientes</th><th style="text-align:right">Ingreso</th><th style="text-align:right">Margen bruto</th><th style="text-align:right">Descuento</th><th style="text-align:right">Margen neto</th><th style="text-align:right">Neto %</th></tr></thead><tbody>';
+  Object.entries(byV).sort((a,b)=>b[1].net-a[1].net).forEach(([v,b])=>{const np=b.rev>0?b.net/b.rev*100:0;h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;font-weight:700">'+v+'</td><td style="text-align:right">'+b.cl+'</td><td style="text-align:right">'+_money(b.rev)+'</td><td style="text-align:right">'+_money(b.gm)+'</td><td style="text-align:right;color:#fca5a5">-'+_money(b.disc)+'</td><td style="text-align:right;font-weight:700">'+_money(b.net)+'</td><td style="text-align:right;font-weight:800;color:'+_pctCol(np,thr)+'">'+np.toFixed(1)+'%</td></tr>';});
+  h+='</tbody></table>';
+  // clientes de margen delgado
+  const flacos=cli.filter(x=>x.netpct<thr).sort((a,b)=>a.netpct-b.netpct).slice(0,30);
+  h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">⚠ Clientes de margen delgado (neto &lt; '+thr+'%) <span style="font-weight:400;color:#64748b">— '+cli.filter(x=>x.netpct<thr).length+' en total</span></div>';
+  if(!flacos.length)h+='<div style="font-size:.75rem;color:#4ade80">Ninguno por debajo del umbral. 👍</div>';
+  else{ h+='<table style="width:100%;border-collapse:collapse;font-size:.73rem"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Cliente</th><th style="text-align:left">Vendedor</th><th style="text-align:left">Estado</th><th style="text-align:right">Ingreso</th><th style="text-align:right">Desc.</th><th style="text-align:right">Neto %</th></tr></thead><tbody>';
+    flacos.forEach(x=>{h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;max-width:190px;overflow:hidden;text-overflow:ellipsis">'+x.n+'</td><td style="color:#94a3b8">'+x.v+'</td><td style="color:#94a3b8">'+(x.e||'—')+'</td><td style="text-align:right">'+_money(x.rev)+'</td><td style="text-align:right">'+x.desc.toFixed(2)+'%</td><td style="text-align:right;font-weight:800;color:'+_pctCol(x.netpct,thr)+'">'+x.netpct.toFixed(1)+'%</td></tr>';});
+    h+='</tbody></table>'; }
+  // productos sin costo (aviso)
+  const sc=Object.keys(sinCosto);
+  if(sc.length){ h+='<div style="background:#3a1414;border:1px solid #7f1d1d;border-radius:10px;padding:10px 13px;margin-top:16px;font-size:.74rem;color:#fecaca"><b>⚠ Productos sin costo capturado</b> (no se contaron en el margen). Agrégalos abajo:<br>'+sc.map(p=>'<button onclick="addCostoProd(\''+p.replace(/'/g,"")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:2px 8px;margin:4px 4px 0 0;font-size:.7rem;cursor:pointer">+ '+p+' ('+fmt(sinCosto[p])+' sacos)</button>').join('')+'</div>'; }
+  // editor de costos
+  const arr=getCostos();
+  h+='<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:800;color:var(--gold);font-size:.85rem">⚙ Costos y precios (editable · solo en tu tablero)</summary>';
+  h+='<div style="font-size:.7rem;color:#94a3b8;margin:6px 0 8px">Actualiza aquí cuando cambien tus costos o precios. Se guarda solo en este navegador; nunca se sube a la nube ni a las apps. <button onclick="resetCostos()" style="background:#334155;color:#cbd5e1;border:none;border-radius:6px;padding:2px 8px;font-size:.68rem;cursor:pointer;margin-left:6px">Restaurar originales</button></div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:.72rem"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:5px 7px">Producto</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio</th><th style="text-align:right">Margen</th></tr></thead><tbody>';
+  arr.forEach((x,i)=>{const u=(+x.precio||0)-(+x.costo||0);const mp=(+x.precio>0)?u/(+x.precio)*100:0;h+='<tr style="border-top:1px solid #16233f"><td style="padding:4px 7px"><input value="'+(x.name||'').replace(/"/g,'&quot;')+'" onchange="setCosto('+i+',\'name\',this.value)" style="width:98%;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem"></td><td style="text-align:right"><input type="number" value="'+(x.costo||0)+'" onchange="setCosto('+i+',\'costo\',this.value)" style="width:78px;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem;text-align:right"></td><td style="text-align:right"><input type="number" value="'+(x.precio||0)+'" onchange="setCosto('+i+',\'precio\',this.value)" style="width:78px;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem;text-align:right"></td><td style="text-align:right;font-weight:700;color:'+(mp>=20?'#4ade80':(mp>=15?'#f59e0b':'#ef4444'))+'">'+mp.toFixed(1)+'%</td></tr>';});
+  h+='</tbody></table></details>';
+  box.innerHTML=h;
+}
+
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.getAttribute('data-tab')===name));
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
@@ -1818,6 +1902,7 @@ function showTab(name){
   if(name==='seguimiento'&&typeof renderSeguimiento==='function')renderSeguimiento();
   if(name==='ruta'&&typeof renderRuta==='function')renderRuta();
   if(name==='equilibrio'&&typeof renderEquilibrio==='function')renderEquilibrio();
+  if(name==='rentabilidad'&&typeof renderRentabilidad==='function')renderRentabilidad();
 }
 
 // ── TENDENCIA (mes a mes) ──────────────────────────────────────────────────────
