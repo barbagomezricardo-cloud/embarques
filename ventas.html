@@ -582,6 +582,7 @@ const ST_LBL = {
 
 // ── ESTADO GLOBAL ─────────────────────────────────────────────────────────────
 let DATA=null, LAST_DATA_YEAR=0, LAST_DIAMES=null, LAST_ESDIARIO=false, selState=null, sortCol='promMes', sortAsc=false, dayFilter=0, tendSortCol='promMes', tendSortAsc=false;
+var LAST_PROMO_PROD={};   // {cliente:{producto:sacos}} — sacos regalados como promo/bonificación por producto (para costearlos en Rentabilidad)
 const TODAY=new Date();
 
 // ── TIERS (según tu Apps Script) ─────────────────────────────────────────────
@@ -787,6 +788,7 @@ function processExcel(buf,fname){
 
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiarioX;
     window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND={};
+    LAST_PROMO_PROD={};
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,{},promoMesTon,fname);
   }catch(err){
     console.error(err);
@@ -799,7 +801,7 @@ function processExcel(buf,fname){
 function processPivot(rows,fname){
   try{
     document.getElementById('load-msg').textContent='Procesando ventas facturadas...';
-    const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={};
+    const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={},promoCliProd={};
     const lastReal={},yearCount={},diaMes={},diaMesCli={},clienteVend={};let esDiario=false;let curVendor=null;
     // Detectar jerarquía: cliente->producto->mes  vs  cliente->mes->producto
     let productFirst=false,seenClient=false;
@@ -832,6 +834,9 @@ function processPivot(rows,fname){
     const recPromo=(prodTxt,mes,val)=>{
       if(!cli||val<=0)return;
       promoCliente[cli]=(promoCliente[cli]||0)+val;
+      var _pn=(prodTxt.split(']').slice(1).join(']').trim())||prodTxt;   // nombre del producto regalado
+      if(!promoCliProd[cli])promoCliProd[cli]={};
+      promoCliProd[cli][_pn]=(promoCliProd[cli][_pn]||0)+val;
       if(mes>0){const kgm=(prodTxt.toUpperCase().match(/(\d+(?:\.\d+)?)\s*KG/g)||[]).slice(-1)[0];promoMesTon[mes]=(promoMesTon[mes]||0)+val*(kgm?parseFloat(kgm):25)/1000;}
     };
     const prodInfo=(t)=>{const mp=t.match(/\[(\S+)\]/);if(!mp)return null;const code=mp[1].toUpperCase();return {es04:t.toUpperCase().includes('04MAS'),promo:/[PB]\d*$/.test(code),name:t.split(']').slice(1).join(']').trim()};};
@@ -870,6 +875,7 @@ function processPivot(rows,fname){
     for(const c in lastReal){const f=lastReal[c];lastDate[c]=esDiario?f:new Date(f.getFullYear(),f.getMonth()+1,0);}
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiario;
     window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND=clienteVend;
+    LAST_PROMO_PROD=promoCliProd;
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname);
   }catch(err){console.error(err);alert('Error procesando el archivo:\n'+err.message);resetDash();}
 }
@@ -919,7 +925,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       const ld=lastDate[nombre]||null;
       const dias=daysAgo(ld);
       const prodMes=byClienteProdMes[nombre]||{};
-      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,lastDate:ld,dias};
+      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},lastDate:ld,dias};
     }).sort((a,b)=>b.promMes-a.promMes);
 
     // El vendedor se toma del MAPEO curado (vendedores reales + administración), NO del export de Odoo.
@@ -1834,59 +1840,83 @@ function addCostoProd(name){const arr=getCostos();arr.push({code:'',name:(name||
 function resetCostos(){if(!confirm('¿Restaurar los costos y precios a los valores originales (jul-2026)?'))return;localStorage.removeItem('costos04mas');renderRentabilidad();}
 function _money(n){return '$'+fmt(n);}
 function _pctCol(p,thr){return p>=thr?'#4ade80':(p>=thr*0.6?'#f59e0b':'#ef4444');}
+let RENT_VF='',RENT_EST='',RENT_THR=12,RENT_EDIT_OPEN=false;
+function rentSet(k,v){if(k==='vf')RENT_VF=v;else if(k==='est')RENT_EST=v;else if(k==='thr')RENT_THR=parseFloat(v)||12;renderRentabilidad();}
 function renderRentabilidad(){
   const box=document.getElementById('rent-content'); if(!box)return;
   if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la rentabilidad del programa.</div>';return;}
   const CM=costMap();
-  const vSel=document.getElementById('rent-vend');
-  if(vSel&&vSel.options.length<=1){[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort().forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;vSel.appendChild(o);});}
-  const vf=vSel?vSel.value:'';
-  const thr=parseFloat((document.getElementById('rent-thr')||{}).value)||12;
-  let TR=0,TC=0,TD=0; const byV={}; const cli=[]; const sinCosto={}; const byProd={};
+  const vends=[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort();
+  const ests=[...new Set(DATA.clients.map(c=>c.estado).filter(Boolean))].sort();
+  let TR=0,TC=0,TPROMO=0,TDISC=0,TCL=0; const byV={}; const cli=[]; const sinCosto={}; const byProd={}; const byProdPromo={};
   for(const c of DATA.clients){
-    if(vf&&(c.vendedor||'(sin asignar)')!==vf)continue;
+    if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
+    if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
     const pm=c.prodMes||{}; let rev=0,cost=0;
     for(const p in pm){ let sac=0; for(const m in pm[p])sac+=pm[p][m]||0; if(sac<=0)continue; const cc=CM[_pk(p)];
       if(cc){ rev+=sac*cc.precio; cost+=sac*cc.costo; if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0}; byProd[p].sac+=sac; byProd[p].rev+=sac*cc.precio; byProd[p].cost+=sac*cc.costo; }
       else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
-    if(rev<=0)continue;
-    const gm=rev-cost, disc=rev*(c.desc||0)/100, net=gm-disc, netpct=rev>0?net/rev*100:0;
-    TR+=rev;TC+=cost;TD+=disc;
-    const v=c.vendedor||'(sin asignar)'; if(!byV[v])byV[v]={rev:0,gm:0,disc:0,net:0,cl:0}; const b=byV[v]; b.rev+=rev;b.gm+=gm;b.disc+=disc;b.net+=net;b.cl++;
-    cli.push({n:c.nombre,v:v,e:c.estado||'',rev:rev,disc:disc,net:net,netpct:netpct,desc:c.desc||0});
+    // costo de sacos regalados (promo/bonificación) por su producto real
+    let promoCost=0; const pp=c.promoProd||{};
+    for(const p in pp){ const sac=pp[p]||0; if(sac<=0)continue; const cc=CM[_pk(p)];
+      if(cc){ promoCost+=sac*cc.costo; if(!byProdPromo[p])byProdPromo[p]={sac:0,cost:0}; byProdPromo[p].sac+=sac; byProdPromo[p].cost+=sac*cc.costo; }
+      else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
+    if(rev<=0&&promoCost<=0)continue;
+    const gm=rev-cost, disc=rev*(c.desc||0)/100;
+    const netPromo=gm-promoCost, netDisc=gm-disc;
+    const netPromoPct=rev>0?netPromo/rev*100:0, netDiscPct=rev>0?netDisc/rev*100:0;
+    TR+=rev;TC+=cost;TPROMO+=promoCost;TDISC+=disc;TCL++;
+    const v=c.vendedor||'(sin asignar)'; if(!byV[v])byV[v]={rev:0,gm:0,promo:0,disc:0,cl:0}; const b=byV[v]; b.rev+=rev;b.gm+=gm;b.promo+=promoCost;b.disc+=disc;b.cl++;
+    cli.push({n:c.nombre,v:v,e:c.estado||'',rev:rev,gm:gm,promo:promoCost,disc:disc,netPromoPct:netPromoPct,netDiscPct:netDiscPct,desc:c.desc||0,psac:Object.values(pp).reduce((a,b)=>a+b,0)});
   }
-  const TGM=TR-TC, TNET=TGM-TD, TnetPct=TR>0?TNET/TR*100:0, TdiscPct=TR>0?TD/TR*100:0, TgmPct=TR>0?TGM/TR*100:0;
-  const kpi=(n,l,col)=>'<div style="flex:1;min-width:120px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:11px 13px"><div style="font-size:1.15rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
+  const TGM=TR-TC, TNETP=TGM-TPROMO, TNETD=TGM-TDISC;
+  const pP=x=>TR>0?x/TR*100:0;
+  const kpi=(n,l,col)=>'<div style="flex:1;min-width:118px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.7rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
   let h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:3px">💵 Rentabilidad del programa 04MAS</div>';
-  h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:10px">Con tus costos reales. Estimación sobre la compra del periodo cargado, aplicando la tasa de descuento actual de cada cliente. Estos costos viven <b>solo en este tablero</b> — nunca se publican a las apps.</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><label style="font-size:.78rem;color:#94a3b8">Vendedor:</label><select id="rent-vend" onchange="renderRentabilidad()"><option value="">Todos</option></select>';
-  h+='<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Alerta si margen neto &lt;</label><input id="rent-thr" type="number" value="'+thr+'" onchange="renderRentabilidad()" style="width:60px;background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:3px 7px;font-size:.78rem">%</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+kpi(_money(TR),'Ingreso (precio lista)')+kpi(_money(TGM)+' · '+TgmPct.toFixed(1)+'%','Margen bruto','#e8eef7')+kpi('-'+_money(TD)+' · '+TdiscPct.toFixed(1)+'%','Descuento pagado (nota de crédito)','#fca5a5')+kpi(_money(TNET)+' · '+TnetPct.toFixed(1)+'%','Margen NETO (después del descuento)',_pctCol(TnetPct,thr))+'</div>';
-  // barra
-  h+='<div style="background:#0b1628;border-radius:7px;overflow:hidden;height:14px;display:flex;margin:8px 0 16px">'+
-     '<div style="width:'+(TR>0?TNET/TR*100:0)+'%;background:#22c55e"></div>'+
-     '<div style="width:'+(TR>0?TD/TR*100:0)+'%;background:#ef4444"></div>'+
-     '<div style="width:'+(TR>0?TC/TR*100:0)+'%;background:#334155"></div></div>';
-  h+='<div style="font-size:.68rem;color:#64748b;margin-top:-10px;margin-bottom:14px"><span style="color:#22c55e">■</span> margen neto &nbsp; <span style="color:#ef4444">■</span> descuento &nbsp; <span style="color:#334155">■</span> costo</div>';
+  h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">Hasta agosto</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">Desde septiembre</b> será el <b>descuento %</b> (nota de crédito). Aquí ves los dos para comparar. Los costos viven <b>solo en este tablero</b>.</div>';
+  // filtros
+  const opt=(arr,sel)=>'<option value="">Todos</option>'+arr.map(x=>'<option'+(x===sel?' selected':'')+'>'+x+'</option>').join('');
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px">'+
+     '<label style="font-size:.78rem;color:#94a3b8">Vendedor:</label><select onchange="rentSet(\'vf\',this.value)">'+opt(vends,RENT_VF)+'</select>'+
+     '<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Estado:</label><select onchange="rentSet(\'est\',this.value)">'+opt(ests,RENT_EST)+'</select>'+
+     '<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Alerta si neto &lt;</label><input type="number" value="'+RENT_THR+'" onchange="rentSet(\'thr\',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:3px 7px;font-size:.78rem">%</div>';
+  // KPIs
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+kpi(_money(TR),'Ingreso (precio lista)')+kpi(_money(TGM)+' · '+pP(TGM).toFixed(1)+'%','Margen bruto')+'</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+
+     kpi('-'+_money(TPROMO)+' · '+pP(TPROMO).toFixed(1)+'%','📦 Costo sacos promo/bonif (hasta agosto)','#fca5a5')+
+     kpi(_money(TNETP)+' · '+(TR>0?TNETP/TR*100:0).toFixed(1)+'%','Margen NETO con promo (real)',_pctCol(TR>0?TNETP/TR*100:0,RENT_THR))+
+     kpi('-'+_money(TDISC)+' · '+pP(TDISC).toFixed(1)+'%','💳 Descuento % (desde septiembre)','#fbbf24')+
+     kpi(_money(TNETD)+' · '+(TR>0?TNETD/TR*100:0).toFixed(1)+'%','Margen NETO con descuento %',_pctCol(TR>0?TNETD/TR*100:0,RENT_THR))+'</div>';
+  // comparación / ahorro
+  const ahorro=TPROMO-TDISC;
+  h+='<div style="background:'+(ahorro>=0?'#0f2e1c':'#3a1414')+';border:1px solid '+(ahorro>=0?'#1a7a3f':'#7f1d1d')+';border-radius:10px;padding:10px 14px;margin:6px 0 16px;font-size:.8rem;color:'+(ahorro>=0?'#a9f0c4':'#fecaca')+'">'+
+     (ahorro>=0?'✅ El cambio te conviene: ':'⚠ Ojo: ')+'el esquema nuevo de <b>descuento %</b> costaría <b>'+_money(TDISC)+'</b> vs <b>'+_money(TPROMO)+'</b> de los sacos regalados → '+(ahorro>=0?'ahorro de <b>'+_money(ahorro)+'</b> ('+(TPROMO>0?(ahorro/TPROMO*100).toFixed(0):'0')+'% menos)':'costaría <b>'+_money(-ahorro)+'</b> MÁS')+' sobre este volumen.</div>';
   // por vendedor
   h+='<div style="font-weight:800;color:#cbd5e1;margin:6px 0 6px">Por vendedor</div>';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:.75rem"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:right">Clientes</th><th style="text-align:right">Ingreso</th><th style="text-align:right">Margen bruto</th><th style="text-align:right">Descuento</th><th style="text-align:right">Margen neto</th><th style="text-align:right">Neto %</th></tr></thead><tbody>';
-  Object.entries(byV).sort((a,b)=>b[1].net-a[1].net).forEach(([v,b])=>{const np=b.rev>0?b.net/b.rev*100:0;h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;font-weight:700">'+v+'</td><td style="text-align:right">'+b.cl+'</td><td style="text-align:right">'+_money(b.rev)+'</td><td style="text-align:right">'+_money(b.gm)+'</td><td style="text-align:right;color:#fca5a5">-'+_money(b.disc)+'</td><td style="text-align:right;font-weight:700">'+_money(b.net)+'</td><td style="text-align:right;font-weight:800;color:'+_pctCol(np,thr)+'">'+np.toFixed(1)+'%</td></tr>';});
-  h+='</tbody></table>';
-  // clientes de margen delgado
-  const flacos=cli.filter(x=>x.netpct<thr).sort((a,b)=>a.netpct-b.netpct).slice(0,30);
-  h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">⚠ Clientes de margen delgado (neto &lt; '+thr+'%) <span style="font-weight:400;color:#64748b">— '+cli.filter(x=>x.netpct<thr).length+' en total</span></div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:right">Cli.</th><th style="text-align:right">Ingreso</th><th style="text-align:right">M. bruto</th><th style="text-align:right">Promo/bonif</th><th style="text-align:right">Neto c/promo</th><th style="text-align:right">Desc. %</th><th style="text-align:right">Neto c/desc</th></tr></thead><tbody>';
+  Object.entries(byV).sort((a,b)=>b[1].gm-a[1].gm).forEach(([v,b])=>{const nps=b.rev>0?(b.gm-b.promo)/b.rev*100:0;const nds=b.rev>0?(b.gm-b.disc)/b.rev*100:0;h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;font-weight:700">'+v+'</td><td style="text-align:right">'+b.cl+'</td><td style="text-align:right">'+_money(b.rev)+'</td><td style="text-align:right">'+_money(b.gm)+'</td><td style="text-align:right;color:#fca5a5">-'+_money(b.promo)+'</td><td style="text-align:right;font-weight:700;color:'+_pctCol(nps,RENT_THR)+'">'+nps.toFixed(1)+'%</td><td style="text-align:right;color:#fbbf24">-'+_money(b.disc)+'</td><td style="text-align:right;font-weight:700;color:'+_pctCol(nds,RENT_THR)+'">'+nds.toFixed(1)+'%</td></tr>';});
+  h+='</tbody></table></div>';
+  // por producto
+  h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">Por producto</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:620px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Producto</th><th style="text-align:right">Sacos vend.</th><th style="text-align:right">Ingreso</th><th style="text-align:right">M. bruto</th><th style="text-align:right">Margen %</th><th style="text-align:right">Sacos regalados</th><th style="text-align:right">Costo regalados</th></tr></thead><tbody>';
+  Object.entries(byProd).sort((a,b)=>(b[1].rev-b[1].cost)-(a[1].rev-a[1].cost)).forEach(([p,b])=>{const gm=b.rev-b.cost;const mp=b.rev>0?gm/b.rev*100:0;const pr=byProdPromo[p]||{sac:0,cost:0};h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;max-width:210px;overflow:hidden;text-overflow:ellipsis">'+p+'</td><td style="text-align:right">'+fmt(b.sac)+'</td><td style="text-align:right">'+_money(b.rev)+'</td><td style="text-align:right">'+_money(gm)+'</td><td style="text-align:right;font-weight:700;color:'+(mp>=20?'#4ade80':(mp>=15?'#f59e0b':'#ef4444'))+'">'+mp.toFixed(1)+'%</td><td style="text-align:right;color:'+(pr.sac?'#fca5a5':'#475569')+'">'+(pr.sac?fmt(pr.sac):'—')+'</td><td style="text-align:right;color:'+(pr.cost?'#fca5a5':'#475569')+'">'+(pr.cost?'-'+_money(pr.cost):'—')+'</td></tr>';});
+  // productos regalados que no tienen venta (por si solo hay promo)
+  Object.keys(byProdPromo).filter(p=>!byProd[p]).forEach(p=>{const pr=byProdPromo[p];h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#94a3b8;max-width:210px;overflow:hidden;text-overflow:ellipsis">'+p+' <span style="font-size:.62rem;color:#64748b">(solo regalo)</span></td><td style="text-align:right">—</td><td style="text-align:right">—</td><td style="text-align:right">—</td><td style="text-align:right">—</td><td style="text-align:right;color:#fca5a5">'+fmt(pr.sac)+'</td><td style="text-align:right;color:#fca5a5">-'+_money(pr.cost)+'</td></tr>';});
+  h+='</tbody></table></div>';
+  // clientes de margen delgado (por el esquema real actual = con promo)
+  const flacos=cli.filter(x=>x.netPromoPct<RENT_THR).sort((a,b)=>a.netPromoPct-b.netPromoPct).slice(0,30);
+  h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">⚠ Clientes de margen delgado (neto con promo &lt; '+RENT_THR+'%) <span style="font-weight:400;color:#64748b">— '+cli.filter(x=>x.netPromoPct<RENT_THR).length+' en total</span></div>';
   if(!flacos.length)h+='<div style="font-size:.75rem;color:#4ade80">Ninguno por debajo del umbral. 👍</div>';
-  else{ h+='<table style="width:100%;border-collapse:collapse;font-size:.73rem"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Cliente</th><th style="text-align:left">Vendedor</th><th style="text-align:left">Estado</th><th style="text-align:right">Ingreso</th><th style="text-align:right">Desc.</th><th style="text-align:right">Neto %</th></tr></thead><tbody>';
-    flacos.forEach(x=>{h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;max-width:190px;overflow:hidden;text-overflow:ellipsis">'+x.n+'</td><td style="color:#94a3b8">'+x.v+'</td><td style="color:#94a3b8">'+(x.e||'—')+'</td><td style="text-align:right">'+_money(x.rev)+'</td><td style="text-align:right">'+x.desc.toFixed(2)+'%</td><td style="text-align:right;font-weight:800;color:'+_pctCol(x.netpct,thr)+'">'+x.netpct.toFixed(1)+'%</td></tr>';});
-    h+='</tbody></table>'; }
-  // productos sin costo (aviso)
+  else{ h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:560px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Cliente</th><th style="text-align:left">Vendedor</th><th style="text-align:left">Estado</th><th style="text-align:right">Ingreso</th><th style="text-align:right">Sacos regal.</th><th style="text-align:right">Neto c/promo</th><th style="text-align:right">Neto c/desc</th></tr></thead><tbody>';
+    flacos.forEach(x=>{h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;max-width:180px;overflow:hidden;text-overflow:ellipsis">'+x.n+'</td><td style="color:#94a3b8">'+x.v+'</td><td style="color:#94a3b8">'+(x.e||'—')+'</td><td style="text-align:right">'+_money(x.rev)+'</td><td style="text-align:right;color:#fca5a5">'+(x.psac?fmt(x.psac):'—')+'</td><td style="text-align:right;font-weight:800;color:'+_pctCol(x.netPromoPct,RENT_THR)+'">'+x.netPromoPct.toFixed(1)+'%</td><td style="text-align:right;color:'+_pctCol(x.netDiscPct,RENT_THR)+'">'+x.netDiscPct.toFixed(1)+'%</td></tr>';});
+    h+='</tbody></table></div>'; }
+  // sin costo
   const sc=Object.keys(sinCosto);
-  if(sc.length){ h+='<div style="background:#3a1414;border:1px solid #7f1d1d;border-radius:10px;padding:10px 13px;margin-top:16px;font-size:.74rem;color:#fecaca"><b>⚠ Productos sin costo capturado</b> (no se contaron en el margen). Agrégalos abajo:<br>'+sc.map(p=>'<button onclick="addCostoProd(\''+p.replace(/'/g,"")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:2px 8px;margin:4px 4px 0 0;font-size:.7rem;cursor:pointer">+ '+p+' ('+fmt(sinCosto[p])+' sacos)</button>').join('')+'</div>'; }
-  // editor de costos
+  if(sc.length){ h+='<div style="background:#3a1414;border:1px solid #7f1d1d;border-radius:10px;padding:10px 13px;margin-top:16px;font-size:.74rem;color:#fecaca"><b>⚠ Productos sin costo capturado</b> (no se contaron). Agrégalos abajo:<br>'+sc.map(p=>'<button onclick="addCostoProd(\''+p.replace(/'/g,"")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:2px 8px;margin:4px 4px 0 0;font-size:.7rem;cursor:pointer">+ '+p+'</button>').join('')+'</div>'; }
+  // editor de costos (no se cierra al capturar)
   const arr=getCostos();
-  h+='<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:800;color:var(--gold);font-size:.85rem">⚙ Costos y precios (editable · solo en tu tablero)</summary>';
-  h+='<div style="font-size:.7rem;color:#94a3b8;margin:6px 0 8px">Actualiza aquí cuando cambien tus costos o precios. Se guarda solo en este navegador; nunca se sube a la nube ni a las apps. <button onclick="resetCostos()" style="background:#334155;color:#cbd5e1;border:none;border-radius:6px;padding:2px 8px;font-size:.68rem;cursor:pointer;margin-left:6px">Restaurar originales</button></div>';
+  h+='<details '+(RENT_EDIT_OPEN?'open':'')+' ontoggle="RENT_EDIT_OPEN=this.open" style="margin-top:18px"><summary style="cursor:pointer;font-weight:800;color:var(--gold);font-size:.85rem">⚙ Costos y precios (editable · solo en tu tablero)</summary>';
+  h+='<div style="font-size:.7rem;color:#94a3b8;margin:6px 0 8px">Actualiza cuando cambien tus costos o precios. Se guarda solo en este navegador. <button onclick="resetCostos()" style="background:#334155;color:#cbd5e1;border:none;border-radius:6px;padding:2px 8px;font-size:.68rem;cursor:pointer;margin-left:6px">Restaurar originales</button></div>';
   h+='<table style="width:100%;border-collapse:collapse;font-size:.72rem"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:5px 7px">Producto</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio</th><th style="text-align:right">Margen</th></tr></thead><tbody>';
   arr.forEach((x,i)=>{const u=(+x.precio||0)-(+x.costo||0);const mp=(+x.precio>0)?u/(+x.precio)*100:0;h+='<tr style="border-top:1px solid #16233f"><td style="padding:4px 7px"><input value="'+(x.name||'').replace(/"/g,'&quot;')+'" onchange="setCosto('+i+',\'name\',this.value)" style="width:98%;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem"></td><td style="text-align:right"><input type="number" value="'+(x.costo||0)+'" onchange="setCosto('+i+',\'costo\',this.value)" style="width:78px;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem;text-align:right"></td><td style="text-align:right"><input type="number" value="'+(x.precio||0)+'" onchange="setCosto('+i+',\'precio\',this.value)" style="width:78px;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem;text-align:right"></td><td style="text-align:right;font-weight:700;color:'+(mp>=20?'#4ade80':(mp>=15?'#f59e0b':'#ef4444'))+'">'+mp.toFixed(1)+'%</td></tr>';});
   h+='</tbody></table></details>';
