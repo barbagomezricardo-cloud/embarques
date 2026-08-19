@@ -1316,6 +1316,34 @@ function flotaAccion(ud){
   const t=bad.map(c=>`${c.lbl}: ${c.d.st.t.toLowerCase()}`).join(' · ');
   return {c:bad[0].d.st.c, t};
 }
+/* ===== Revisión de niveles de las unidades: ciclo de 21 días, siempre en domingo ===== */
+const REVISION_NIVELES_ANCLA = {y:2026, m:7, d:16};   // última revisión: domingo 16 de agosto de 2026 (m=7 => agosto)
+const REVISION_NIVELES_CICLO = 21;                    // días entre revisiones
+function nextRevisionNiveles(){
+  const DAY=86400000, CY=REVISION_NIVELES_CICLO;
+  const anchor=new Date(REVISION_NIVELES_ANCLA.y,REVISION_NIVELES_ANCLA.m,REVISION_NIVELES_ANCLA.d); anchor.setHours(0,0,0,0);
+  const today=new Date(); today.setHours(0,0,0,0);
+  let k=Math.ceil((today.getTime()-anchor.getTime())/(CY*DAY)); if(k<0)k=0;
+  let next=new Date(anchor.getTime()+k*CY*DAY); next.setHours(0,0,0,0);
+  // por si acaso, ajusta al domingo más cercano (con ancla domingo y ciclo de 21 ya cae en domingo)
+  const dow=next.getDay(); if(dow!==0){ const back=dow, fwd=7-dow; next=new Date(next.getTime()+(fwd<=back?fwd:-back)*DAY); next.setHours(0,0,0,0); }
+  const dias=Math.round((next.getTime()-today.getTime())/DAY);
+  return {next:next, dias:dias};
+}
+function revisionNivelesCard(){
+  const r=nextRevisionNiveles();
+  const MESN=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const f=r.next, ftxt='dom '+f.getDate()+'/'+MESN[f.getMonth()]+'/'+f.getFullYear();
+  const cls = r.dias<=0?'late':(r.dias<=3?'warn':'blue');
+  const col = r.dias<=0?'var(--late)':(r.dias<=3?'var(--warn)':'var(--accent)');
+  const val = r.dias<=0?'¡HOY!':(r.dias+(r.dias===1?' día':' días'));
+  const prog = Math.max(0,Math.min(100,(REVISION_NIVELES_CICLO-Math.max(0,r.dias))/REVISION_NIVELES_CICLO*100));
+  return '<div class="kpi '+cls+'" title="Revisión de niveles de las unidades cada '+REVISION_NIVELES_CICLO+' días · siempre en domingo. Última: dom 16/ago/2026.">'+
+    '<div class="lbl">🛢️ Revisión de niveles</div>'+
+    '<div class="val">'+val+'</div>'+
+    '<div class="bar"><i style="width:'+prog.toFixed(0)+'%;background:'+col+'"></i></div>'+
+    '<div class="foot">'+(r.dias<=0?'toca <b>hoy</b>':'próxima <b>'+ftxt+'</b>')+' · ciclo '+REVISION_NIVELES_CICLO+' días</div></div>';
+}
 function renderFlota(){
   const units=flotaUnits();
   // ---- tablero de alertas: KPIs ----
@@ -1332,7 +1360,7 @@ function renderFlota(){
     {lbl:'Próximos', val:nProx, foot:'≤ 30 días / ≤ 25 mil km', cls:'warn'},
     {lbl:'Al día', val:nAldia, foot:'sin pendientes', cls:'ok'}
   ];
-  document.getElementById('flotaKpis').innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot}</div></div>`).join('');
+  document.getElementById('flotaKpis').innerHTML=revisionNivelesCard()+K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot}</div></div>`).join('');
   // ---- tarjetas por unidad ----
   const order={[FLOTA_ST.VENCIDO.t]:0,[FLOTA_ST.URGENTE.t]:1,[FLOTA_ST.PROXIMO.t]:2,[FLOTA_ST.SIN.t]:3,[FLOTA_ST.ALDIA.t]:4};
   uds.sort((a,b)=> (b.ud.worst.sev-a.ud.worst.sev) || String(a.u.eco).localeCompare(String(b.u.eco),'es',{numeric:true}));
