@@ -802,6 +802,7 @@ function renderMapa(rows){
 }
 
 function renderCharts(rows){
+  rows = rows.filter(x=>!x.cv.cancelado);   // los cancelados no deben sumar en gráficas/mapa (igual que en los KPIs)
   renderMapa(rows);
   // ton por día prog vs cargado
   const mode=document.getElementById('dateMode').value;
