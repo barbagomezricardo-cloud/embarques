@@ -1,5 +1,11 @@
 <!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Silver Kan — App Vendedor</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Silver Kan">
+<meta name="theme-color" content="#1A2E5A">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--navy:#1A2E5A;--gold:#E8A020;--bg:#0F1E3C;--mid:#162340;--green:#22c55e;--red:#ef4444;--amber:#f59e0b}
@@ -557,5 +563,10 @@ function skDeviceLock(cb){
 applyZoom();
 window.addEventListener('hashchange',function(){skGate(function(){skVendorGate(function(){skDeviceLock(fetchCloud);});});});
 skGate(function(){ skVendorGate(function(){ skDeviceLock(function(){ fetchCloud(); setInterval(skPoll,60000); }); }); });
+/* Guarda una copia de la app (el "cascarón": este HTML y el script que necesita) para que si al abrirla
+   desde la pantalla de inicio el celular no tiene señal buena (típico con datos móviles), en vez de
+   "Safari no puede abrir la página" cargue lo último guardado y solo falle la actualización de precios,
+   que ya se avisa aparte. No afecta las llamadas a la base de datos, que siempre van en vivo. */
+if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); }); }
 </script>
 </body></html>
