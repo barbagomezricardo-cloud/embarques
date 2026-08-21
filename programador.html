@@ -288,7 +288,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <div class="field execfld"><label>Fin de carga</label><input type="time" id="f_finCarga" onchange="recalc()"></div>
       <div class="field execfld"><label>Liberación SAP</label><input type="time" id="f_libSAP"></div>
       <div class="field execfld"><label>Hora de salida</label><input type="time" id="f_horaSalida"></div>
-      <div class="field execfld"><label>Kilos cargados</label><input type="number" id="f_kilos" oninput="recalc()"></div>
+      <div class="field execfld"><label>Kilos cargados (en KG, no toneladas)</label><input type="number" id="f_kilos" oninput="recalc()"></div>
       <div class="field execfld"><label>Sacos</label><input type="number" id="f_sacos"></div>
       <div class="field execfld"><label>Fecha de carga real</label><input type="date" id="f_fechaCarga"></div>
       <div class="field execfld"><label>¿Despachado?</label><select id="f_despachado"><option value="">No</option><option value="1">Sí</option></select></div>
@@ -998,9 +998,25 @@ function recalc(){
   if(r.despachado && !document.getElementById('f_fechaCarga').value){ document.getElementById('f_fechaCarga').value=r.fechaProg||TODAY; }
 }
 ['f_despachado'].forEach(id=>document.getElementById(id).addEventListener('change',recalc));
+/* Detecta cuando "kilos cargados" se capturó en TONELADAS por error (ej. "15.655" en vez de "15655")
+   comparándolo contra el peso programado, y lo corrige automáticamente a kilogramos antes de guardar. */
+function fixUnidadKilos(kilosStr, pesoStr){
+  if(kilosStr==null || kilosStr==='') return kilosStr;
+  const k=Number(kilosStr), p=Number(pesoStr);
+  if(isNaN(k) || isNaN(p) || p<=0 || k<=0) return kilosStr;
+  if(k < p/50){                       // capturado >=50x más chico que lo programado: huele a toneladas
+    const corregido=k*1000;
+    if(corregido>=p*0.3 && corregido<=p*3){   // y al llevarlo a kg cae en un rango creíble vs lo programado
+      toast('⚠️ '+k+' se veía como toneladas (muy bajo vs '+p+' kg prog.) · guardado como '+corregido.toLocaleString('es-MX')+' kg');
+      return String(corregido);
+    }
+  }
+  return kilosStr;
+}
 function saveRow(){
   if(!requireUnlock()) return;
   const r=readForm();
+  r.kilos=fixUnidadKilos(r.kilos, r.peso);
   if(!r.cliente && !r.pedido){ toast('Captura al menos cliente o pedido'); return; }
   if(!r.fechaProg) r.fechaProg=TODAY;
   if(editId){

@@ -376,7 +376,7 @@ function fillSheet(r){
   // kg cargados y sacos: solo una vez que ya inició la carga (paso 3)
   if(s==='proc' || s==='done'){
     body+=`<div class="stamps" style="margin-top:12px">
-      <div class="field" style="flex:1"><label>Kg cargados${s==='proc'?' <span style="color:var(--late)">*</span>':''}</label><input id="kgInput" type="number" inputmode="numeric" value="${r.kilos!=null&&r.kilos!==''?r.kilos:''}" placeholder="0" onchange="setField('${r.id}','kilos',this.value)"></div>
+      <div class="field" style="flex:1"><label>Kg cargados (en KG, no toneladas)${s==='proc'?' <span style="color:var(--late)">*</span>':''}</label><input id="kgInput" type="number" inputmode="numeric" value="${r.kilos!=null&&r.kilos!==''?r.kilos:''}" placeholder="0" onchange="setField('${r.id}','kilos',this.value)"></div>
       <div class="field" style="flex:1"><label>Sacos</label><input type="number" inputmode="numeric" value="${r.sacos!=null&&r.sacos!==''?r.sacos:''}" placeholder="0" onchange="setField('${r.id}','sacos',this.value)"></div>
     </div>`;
   }
@@ -405,7 +405,23 @@ function stopTick(){ if(tick){clearInterval(tick);tick=null;} }
 /* ---- acciones ---- */
 function upd(r){ r.ultimoUsuario=currentUser; r.ultimaAccionAt=new Date().toISOString(); const i=DATA.findIndex(x=>x.id===r.id); if(i>=0)DATA[i]=r; persist(r); render(); }
 function stampColocacion(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); const prev=r.colocacion||''; r.colocacion=nowHM(); appAudit(r,'colocacion','Colocación (app)',prev,r.colocacion); upd(r); toast('Colocación registrada 📍'); }
-function setField(id,field,val){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); if(!r)return; const prev=r[field]; r[field]=(val===''?'':val); if(String(prev||'')!==String(val||'')) appAudit(r,field,(field==='kilos'?'Kg cargados (app)':field+' (app)'),prev,val); r.ultimoUsuario=currentUser; persist(r); const i=DATA.findIndex(x=>x.id===id); if(i>=0)DATA[i]=r; }
+/* Detecta cuando "Kg cargados" se capturó en TONELADAS por error (ej. "16.4" en vez de "16400")
+   comparándolo contra el peso programado, y lo corrige automáticamente a kilogramos antes de guardar. */
+function fixUnidadKilosApp(val, pesoStr){
+  const k=Number(val), p=Number(pesoStr);
+  if(val===''||val==null||isNaN(k)||isNaN(p)||p<=0||k<=0) return val;
+  if(k < p/50){
+    const corregido=k*1000;
+    if(corregido>=p*0.3 && corregido<=p*3){
+      toast('⚠️ Se veía en toneladas · guardado como '+corregido.toLocaleString('es-MX')+' kg');
+      return String(corregido);
+    }
+  }
+  return val;
+}
+function setField(id,field,val){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); if(!r)return; const prev=r[field];
+  if(field==='kilos'){ const fixed=fixUnidadKilosApp(val,r.peso); if(fixed!==val){ val=fixed; const el=document.getElementById('kgInput'); if(el)el.value=val; } }
+  r[field]=(val===''?'':val); if(String(prev||'')!==String(val||'')) appAudit(r,field,(field==='kilos'?'Kg cargados (app)':field+' (app)'),prev,val); r.ultimoUsuario=currentUser; persist(r); const i=DATA.findIndex(x=>x.id===id); if(i>=0)DATA[i]=r; }
 function startLoad(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); if(!r.colocacion){ toast('Primero registra la colocación 📍'); return; } r.inicioCarga=nowHM(); if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'inicioCarga','Inicio de carga (app)','',r.inicioCarga); upd(r); toast('Carga iniciada ⏱'); }
 function undoStart(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); const prev=r.inicioCarga; r.inicioCarga=''; appAudit(r,'inicioCarga','Deshacer inicio (app)',prev,''); upd(r); toast('Inicio deshecho'); }
 function stopLoad(id){
