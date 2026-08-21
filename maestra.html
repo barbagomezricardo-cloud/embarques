@@ -76,9 +76,9 @@ let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
 let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else renderList('');}
+function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else if(v==='accesos')renderAccesos();else renderList('');}
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
-function viewTabs(){return masterBar()+'<div style="display:flex;gap:6px;margin-bottom:10px">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+'</div>';}
+function viewTabs(){return masterBar()+'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+vtBtn('accesos','\uD83D\uDD13 Accesos')+'</div>';}
 function premBoost(mix){return mix>=PREM.u2?PREM.e2:(mix>=PREM.u1?PREM.e1:0);}
 const NIVLAB={DIAMANTE_PLUS:'DIAMANTE PLUS'};
 const MES_NOM={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
@@ -406,6 +406,49 @@ function masterLoad(){
       selectVendor(CURVEND); fetchMObs(); fetchMFix();
     });
   }).catch(function(){document.getElementById('loading').style.display='none';document.getElementById('drop').style.display='block';alert('No se pudo conectar a la nube. Revisa el link maestro.');});
+}
+
+/* ── Accesos: ver y liberar el candado de dispositivo de cada vendedor, y activar/desactivar su acceso ──
+   El candado (uno por vendedor) autoriza al primer teléfono que abre su link y bloquea a los demás para
+   que el link no se comparta. Si Safari le borra el localStorage al vendedor (ITP tras días sin usar la
+   app, "Borrar historial y datos", o abrir el link desde WhatsApp/Instagram en vez de Safari), su propio
+   teléfono se ve como "otro dispositivo" y queda bloqueado. Desde aquí se libera con un botón. */
+function fmtTs(ts){try{var d=new Date(ts);var p=function(n){return ('0'+n).slice(-2);};return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes());}catch(e){return '';}}
+function renderAccesos(){
+  var app=document.getElementById('app');app.style.display='block';
+  var h=syncBar()+viewTabs();
+  h+='<div class="hint" style="margin-bottom:10px">🔒 = su teléfono actual quedó registrado (normal). Si un vendedor dice que ya no puede entrar a su app, dale <b>Liberar dispositivo</b>: la próxima vez que abra su link, quedará autorizado ahí, sin perder nada.</div>';
+  h+='<div id="accList">Cargando…</div>';
+  app.innerHTML=h;
+  var base=MDB.replace(/\/$/,'');
+  Promise.all([
+    fetch(base+'/locks.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
+    fetch(base+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
+  ]).then(function(res){
+    var locks=res[0]||{}, blocks=res[1]||{};
+    var keys=VKEYS.slice().sort(function(a,b){return (VNAMES[a]||a).localeCompare(VNAMES[b]||b);});
+    var rows=keys.map(function(k){
+      var l=locks[k]; var blocked=blocks[k]===true||(blocks[k]&&blocks[k].blocked===true);
+      var lockInfo = (l&&l.dev) ? ('🔒 dispositivo activo desde '+(l.ts?fmtTs(l.ts):'—')) : '🔓 sin candado (nadie lo ha abierto, o ya fue liberado)';
+      return '<div style="background:#162340;border:1px solid #22304d;border-radius:12px;padding:12px;margin-bottom:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
+        '<div><b>'+(VNAMES[k]||k)+'</b><div style="font-size:11.5px;color:#9fb0cc;margin-top:2px">'+lockInfo+(blocked?' · 🚫 acceso desactivado':'')+'</div></div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        ((l&&l.dev)?('<button onclick="liberarDispositivo(\''+k+'\')" style="background:#E8A020;color:#10233f;border:none;border-radius:8px;padding:8px 10px;font-weight:800;cursor:pointer;font-size:12px">Liberar dispositivo</button>'):'')+
+        '<button onclick="toggleVendBlock(\''+k+'\','+(!blocked)+')" style="background:'+(blocked?'#1e3a6b':'#3a1e1e')+';color:'+(blocked?'#dbeafe':'#fca5a5')+';border:none;border-radius:8px;padding:8px 10px;font-weight:800;cursor:pointer;font-size:12px">'+(blocked?'Reactivar acceso':'Desactivar acceso')+'</button>'+
+        '</div></div></div>';
+    }).join('');
+    document.getElementById('accList').innerHTML=rows||'<div class="hint">No hay vendedores cargados.</div>';
+  });
+}
+function liberarDispositivo(k){
+  if(!confirm('¿Liberar el candado de dispositivo de '+(VNAMES[k]||k)+'? La próxima vez que abra su link en cualquier teléfono quedará autorizado ahí.'))return;
+  var base=MDB.replace(/\/$/,'');
+  fetch(base+'/locks/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo liberar. Intenta de nuevo.');});
+}
+function toggleVendBlock(k,val){
+  var base=MDB.replace(/\/$/,'');
+  fetch(base+'/skan/_vblock/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(val)}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo actualizar. Intenta de nuevo.');});
 }
 
 function renderVentas(){

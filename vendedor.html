@@ -518,20 +518,39 @@ function skVendorGate(cb){
 // refresco silencioso: solo cuando el vendedor está en la lista de clientes (no interrumpe una tarjeta)
 function skPoll(){ if(!CLOUD.v)return;
   var base=CLOUD.db.replace(/\/$/,'');
+  lockHeartbeat();   // mantiene "vivo" el candado de este dispositivo mientras siga usando la app
   // corta la sesión abierta si el gerente desactiva a este vendedor
   fetch(base+'/skan/_vblock/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){if(vBlocked(b))skVendBlocked();}).catch(function(){});
   if(VIEW!=='clientes'||CARDOPEN)return;   // no refrescar mientras una tarjeta está abierta (se cerraría sola)
   fetch(base+'/skan/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ if(CARDOPEN)return; var qi=document.getElementById('q'); var qv=qi?qi.value:''; applyPayload(p); renderList(qv); } }).catch(function(){}); }
 // ── Candado por DISPOSITIVO: el primer teléfono que abre el link queda autorizado; otro teléfono se bloquea ──
 function skDeviceBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">📵</div><h2 style="color:#E8A020;margin:10px 0">App bloqueada en este teléfono</h2><p class="hint">Esta app ya está activada en otro dispositivo. Si cambiaste de teléfono, pide a tu gerente que <b>libere tu acceso</b>.</p></div>';}
+/* Safari (sobre todo iPhone) borra localStorage solo (Intelligent Tracking Prevention tras ~7 días sin
+   usar el sitio, "Borrar historial y datos de sitios web", o abrir el link dentro de WhatsApp/Instagram
+   en vez de Safari — cada uno guarda su propio storage). Cuando eso pasa, el teléfono del vendedor
+   pierde su "mine" y se ve a sí mismo como dispositivo nuevo, chocando con el candado que dejó su
+   sesión anterior. Para no bloquear al dueño legítimo, si el candado lleva más de LOCK_STALE_MS sin
+   dar señales de vida (ver lockHeartbeat), se considera abandonado y el nuevo dispositivo lo toma solo. */
+var LOCK_STALE_MS = 1000*60*60*72; // 72h
+var _lastLockPing = 0;
+function lockHeartbeat(){
+  var q=parseHash(); var v=q.v||''; if(!v)return;
+  var DB=(q.db||SK_DB).replace(/\/$/,''); var lk='sk_dev_'+v; var mine='';
+  try{ mine=localStorage.getItem(lk)||''; }catch(e){}
+  if(!mine)return;
+  var now=Date.now(); if(now-_lastLockPing<1000*60*10)return; // máx 1 vez cada 10 min
+  _lastLockPing=now;
+  try{ fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:now})}).catch(function(){}); }catch(e){}
+}
 function skDeviceLock(cb){
   var q=parseHash(); var v=q.v||''; if(!v){ cb(); return; }
   var DB=(q.db||SK_DB).replace(/\/$/,''); var lk='sk_dev_'+v; var mine='';
   try{ mine=localStorage.getItem(lk)||''; }catch(e){}
   if(!mine){ mine='d'+Date.now().toString(36)+Math.random().toString(36).slice(2,9); }
   fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
-    if(!c || !c.dev){ try{localStorage.setItem(lk,mine);}catch(e){} fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine})}).then(function(){cb();}).catch(function(){cb();}); }
-    else if(c.dev===mine){ try{localStorage.setItem(lk,mine);}catch(e){} cb(); }
+    var stale = c && c.dev && c.ts && (Date.now()-c.ts>LOCK_STALE_MS);
+    if(!c || !c.dev || stale){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).then(function(){cb();}).catch(function(){cb();}); }
+    else if(c.dev===mine){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).catch(function(){}); cb(); }
     else { skDeviceBlocked(); }
   }).catch(function(){ cb(); }); // sin internet: no bloquea (los datos tampoco cargan)
 }
