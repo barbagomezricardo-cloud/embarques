@@ -181,7 +181,6 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="dash" onclick="setView('dash')">📊 Tablero</button>
     <button data-v="arrastre" onclick="setView('arrastre')">⚠️ Arrastres y pendientes <span id="arrCount" class="pill p-warn" style="margin-left:4px"></span></button>
     <button data-v="flota" onclick="setView('flota')">🚚 Flota y mantenimiento <span id="flotaCount" class="pill p-late" style="margin-left:4px"></span></button>
-    <button data-v="mkt" onclick="setView('mkt')">📊 Mercadotecnia y Ventas</button>
     <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
   </div>
 
@@ -253,14 +252,6 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     </div>
   </div>
 
-  <!-- MERCADOTECNIA Y VENTAS VIEW (datos del programa de ventas 04MAS, misma nube) -->
-  <div class="view" id="v-mkt">
-    <div class="legend"><span class="muted">Indicadores de venta y cartera (04MAS), ya filtrados, para decidir rápido sin abrir la app de ventas. Mismos datos y cálculos que ve cada vendedor y el gerente en su panel.</span>
-      <div class="spacer"></div>
-      <select id="mktVendSel" onchange="mktSelectVendor(this.value)" style="min-width:220px"></select>
-    </div>
-    <div id="mktBody"><div class="empty">Cargando…</div></div>
-  </div>
 </main>
 
 <!-- FORM MODAL -->
@@ -1260,7 +1251,7 @@ function fill(id,arr){ const el=document.getElementById(id); if(!el)return; cons
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
 
 /* ================= VISTAS ================= */
-function setView(v){ if(v==='audit'&&!isMaster)return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='mkt')loadMkt(); }
+function setView(v){ if(v==='audit'&&!isMaster)return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); }
 
 /* ================================================================
    ================= FLOTA / MANTENIMIENTO ========================
@@ -1515,117 +1506,6 @@ function exportFlotaCSV(){
   list.forEach(r=>{ const row=[r.fecha,r.tipo,r.eco,r.tramite,r.kmActual,r.kmProximo,r.vencimiento,flotaRowStatus(r).t,r.notas]
     .map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}); L.push(row.join(',')); });
   dlBlob(new Blob(['﻿'+L.join('\n')],{type:'text/csv;charset=utf-8'}),'control_flota.csv'); toast('CSV de flota descargado');
-}
-
-/* ================= MERCADOTECNIA Y VENTAS (lee el programa de ventas 04MAS, misma nube Firebase) =================
-   Solo lectura: no modifica nada de /skan. Se carga bajo demanda (al abrir la pestaña) y se cachea en
-   memoria para no repetir las descargas cada vez que se cambia de pestaña. Usa fetch() a la REST API de
-   Firebase (igual que vendedor.html/maestra.html) porque estos nodos no están enganchados al SDK que ya
-   usa este programa para /embarques, /config, /audit y /flota. */
-let MKT_CACHE=null, MKT_LOADING=false, MKT_VKEYS=[], MKT_VNAMES={}, MKT_VDATA={}, MKT_CURVEND='__all__';
-function mktDbUrl(){ return ((CFG&&CFG.firebase&&CFG.firebase.databaseURL)||(typeof FIREBASE_CONFIG!=='undefined'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.databaseURL)||'').replace(/\/$/,''); }
-function mktBuildAgg(){
-  var cur=[],prior=[],dia={},priorDaily={};
-  for(var z=0;z<12;z++){cur.push(0);prior.push(0);}
-  var sinCompra=[],fuga=[],nuevosCount=0,nuevosMeta=0,regMap={};
-  var meses=[],gTarget=0,lastMonth=0,esDiario=false;
-  MKT_VKEYS.forEach(function(k){ var p=MKT_VDATA[k]; if(!p) return;
-    var V=p.ventas; if(V){ meses=(V.meses&&V.meses.length)?V.meses:meses; gTarget=V.gTarget||gTarget; lastMonth=V.lastMonth||lastMonth; esDiario=esDiario||V.esDiario; priorDaily=(V.priorDaily&&Object.keys(V.priorDaily).length)?V.priorDaily:priorDaily;
-      for(var i=0;i<12;i++){ cur[i]+=(V.cur&&V.cur[i])||0; prior[i]+=(V.prior&&V.prior[i])||0; }
-      if(V.dia) for(var mm in V.dia){ var arr=V.dia[mm]||[]; if(!dia[mm])dia[mm]=[]; for(var d=0;d<arr.length;d++) dia[mm][d]=(dia[mm][d]||0)+(arr[d]||0); }
-    }
-    var A=p.alertas; if(A){ gTarget=A.gTarget||gTarget;
-      if(A.sinCompra) sinCompra=sinCompra.concat(A.sinCompra);
-      if(A.fuga) fuga=fuga.concat(A.fuga);
-      if(A.nuevos){ nuevosCount+=A.nuevos.count||0; nuevosMeta+=A.nuevos.meta||0; }
-      if(A.regiones) A.regiones.forEach(function(r){ if(!regMap[r.est])regMap[r.est]={cur:0,prior:0}; regMap[r.est].cur+=r.cur||0; regMap[r.est].prior+=r.prior||0; });
-    }
-  });
-  var regiones=Object.keys(regMap).map(function(e){ var o=regMap[e]; var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0); return {est:e,cur:o.cur,prior:o.prior,crec:crec}; });
-  return { ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,esDiario:esDiario},
-    alertas:{sinCompra:sinCompra,fuga:fuga,nuevos:{count:nuevosCount,meta:nuevosMeta},regiones:regiones,gTarget:gTarget} };
-}
-function mktCurrentPayload(){
-  if(MKT_CURVEND==='__all__') return mktBuildAgg();
-  var p=MKT_VDATA[MKT_CURVEND]; if(!p) return {ventas:null,alertas:null};
-  return { ventas:p.ventas||null, alertas:p.alertas||null };
-}
-function loadMkt(force){
-  var box=document.getElementById('mktBody');
-  var base=mktDbUrl();
-  if(!base){ box.innerHTML='<div class="empty">No hay Firebase configurado, así que no se puede leer el programa de ventas (04MAS). Conecta Firebase en ⚙ Configuración.</div>'; return; }
-  if(MKT_CACHE && !force){ renderMktView(); return; }
-  if(MKT_LOADING) return;
-  MKT_LOADING=true; box.innerHTML='<div class="empty">Cargando datos de ventas…</div>';
-  fetch(base+'/skan/_index.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(idx){
-    var vendors=(idx&&idx.vendors)||[];
-    if(!vendors.length){ MKT_LOADING=false; box.innerHTML='<div class="empty">Aún no hay vendedores con datos publicados en el programa de ventas.</div>'; return; }
-    MKT_VDATA={};
-    return Promise.all(vendors.map(function(k){ return fetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&(p.ventas||p.alertas)){ MKT_VDATA[k]=p; MKT_VNAMES[k]=p.v||k; } }).catch(function(){}); }));
-  }).then(function(){
-    MKT_LOADING=false; MKT_VKEYS=Object.keys(MKT_VDATA);
-    if(!MKT_VKEYS.length){ box.innerHTML='<div class="empty">Aún no hay vendedores con datos publicados en el programa de ventas.</div>'; return; }
-    MKT_CACHE=true; mktFillSelect(); renderMktView();
-  }).catch(function(){ MKT_LOADING=false; box.innerHTML='<div class="empty">No se pudo conectar con el programa de ventas. Intenta de nuevo.</div>'; });
-}
-function mktFillSelect(){
-  var sel=document.getElementById('mktVendSel'); if(!sel) return;
-  var opts='<option value="__all__">🌎 Todos los vendedores ('+MKT_VKEYS.length+')</option>';
-  MKT_VKEYS.slice().sort(function(a,b){ return (MKT_VNAMES[a]||a).localeCompare(MKT_VNAMES[b]||b); }).forEach(function(k){ opts+='<option value="'+k+'">'+(MKT_VNAMES[k]||k)+'</option>'; });
-  sel.innerHTML=opts; sel.value=MKT_CURVEND;
-}
-function mktSelectVendor(v){ MKT_CURVEND=v; renderMktView(); }
-function mktFmt(n){ return Math.round(n||0).toLocaleString('es-MX'); }
-function mktKcard(n,l,col){ return `<div class="kpi" style="text-align:center"><div class="val" style="${col?`color:${col}`:''}">${n}</div><div class="lbl" style="text-transform:none;letter-spacing:0;font-size:11px;margin-top:2px">${l}</div></div>`; }
-function renderMktView(){
-  var box=document.getElementById('mktBody'); if(!box) return;
-  var MESN={1:'ene',2:'feb',3:'mar',4:'abr',5:'may',6:'jun',7:'jul',8:'ago',9:'sep',10:'oct',11:'nov',12:'dic'};
-  var payload=mktCurrentPayload();
-  var V=payload.ventas, A=payload.alertas;
-  var tieneVentas=V&&V.meses&&V.meses.length, tieneAlertas=!!A;
-  if(!tieneVentas && !tieneAlertas){ box.innerHTML='<div class="empty">Este vendedor todavía no tiene datos de ventas ni alertas publicados.</div>'; return; }
-  var h='';
-  if(tieneVentas){
-    var g=V.gTarget||0, meses=V.meses, lm=V.lastMonth||meses[meses.length-1];
-    var curLm=(V.cur&&V.cur[lm-1])||0, priorLm=(V.prior&&V.prior[lm-1])||0, objLm=priorLm*(1+g);
-    var realVal=curLm, objVal=objLm, cutLabel=MESN[lm];
-    if(V.esDiario && V.dia && V.dia[lm] && V.dia[lm].length){
-      var d=V.dia[lm], cut=0; for(var i=0;i<d.length;i++) if(d[i]>0) cut=i+1;
-      var realCut=0; for(var a2=0;a2<cut;a2++) realCut+=d[a2]||0;
-      var pd=(V.priorDaily&&V.priorDaily[lm])||[], pdSum=0; for(var j=0;j<pd.length;j++) pdSum+=pd[j]||0;
-      var sc=pdSum?priorLm/pdSum:0, objCut=0; for(var j2=0;j2<cut;j2++) objCut+=(pd[j2]||0)*sc*(1+g);
-      realVal=realCut; objVal=objCut; cutLabel=MESN[lm]+' al día '+cut;
-    }
-    var avVal=objVal>0?realVal/objVal:0, avcol=avVal>=1?'var(--ok)':(avVal>=0.8?'var(--warn)':'var(--late)');
-    var faltaVal=Math.max(0,Math.round(objVal-realVal));
-    h+=`<h3 style="margin:2px 0 8px">Venta — ${cutLabel}</h3><div class="kpis">`
-     +mktKcard(mktFmt(realVal),'Venta real (sacos)')+mktKcard(mktFmt(objVal),'Objetivo')
-     +mktKcard((objVal>0?(avVal*100).toFixed(0):'—')+'%','Avance de meta',avcol)
-     +mktKcard(faltaVal>0?mktFmt(faltaVal):'✓ logrado','Faltan para el objetivo',faltaVal>0?'var(--warn)':'var(--ok)')+'</div>';
-  }
-  if(tieneAlertas){
-    var g2=A.gTarget||0, nv=A.nuevos||{count:0,meta:0}, nok=nv.count>=nv.meta;
-    var sinCompra=(A.sinCompra||[]).slice().sort(function(a,b){return (b.dias||0)-(a.dias||0);});
-    var fuga=(A.fuga||[]).slice().sort(function(a,b){return (b.perd||0)-(a.perd||0);});
-    var regBajo=(A.regiones||[]).filter(function(r){return r.crec<g2;}).sort(function(a,b){return a.crec-b.crec;});
-    h+=`<h3 style="margin:16px 0 8px">Clientes y regiones</h3><div class="kpis">`
-     +mktKcard(nv.count+'/'+nv.meta,'Clientes nuevos vs meta',nok?'var(--ok)':'var(--warn)')
-     +mktKcard(sinCompra.length,'Clientes sin comprar',sinCompra.length?'var(--warn)':'var(--ok)')
-     +mktKcard(fuga.length,'Clientes en fuga',fuga.length?'var(--late)':'var(--ok)')
-     +mktKcard(regBajo.length,'Regiones bajo objetivo',regBajo.length?'var(--late)':'var(--ok)')+'</div>';
-    function mktMini(title,items,rowFn){
-      var hh=`<div class="card" style="margin-bottom:12px"><h3>${title} (${items.length})</h3>`;
-      if(!items.length) hh+='<div class="muted" style="font-size:12px">✓ Sin pendientes aquí.</div>';
-      else hh+=items.slice(0,8).map(rowFn).join('');
-      return hh+'</div>';
-    }
-    h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:6px">'
-     +mktMini('📉 Top fuga lenta',fuga,function(f){ var col=f.sev==='critica'?'var(--late)':(f.sev==='alta'?'#f97316':'var(--warn)'); return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:4px 0;border-top:1px solid var(--line)"><span><b>${f.n}</b><br><span class="muted" style="font-size:11px">${f.est||''} · pierde ~${mktFmt(f.perd)} sac/mes</span></span><span style="font-weight:700;color:${col}">${f.drop}%</span></div>`; })
-     +mktMini('🚨 Top sin comprar',sinCompra,function(c){ var dd=(c.dias==null?'—':c.dias+'d'); var col=(c.dias!=null&&c.dias>=45)?'var(--late)':'var(--warn)'; return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:4px 0;border-top:1px solid var(--line)"><span><b>${c.n}</b><br><span class="muted" style="font-size:11px">${c.est||''} · últ. ${c.ult||'—'}</span></span><span style="font-weight:700;color:${col}">${dd}</span></div>`; })
-     +mktMini('🗺️ Regiones cayendo',regBajo,function(r){ var pc=r.crec*100, col=r.crec<0?'var(--late)':'var(--warn)'; return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:4px 0;border-top:1px solid var(--line)"><span><b>${r.est}</b><br><span class="muted" style="font-size:11px">${mktFmt(r.cur)} vs ${mktFmt(r.prior)} (año ant.)</span></span><span style="font-weight:700;color:${col}">${pc>=0?'+':''}${pc.toFixed(0)}%</span></div>`; })
-     +'</div>';
-  }
-  box.innerHTML=h;
 }
 
 /* ================= UTIL ================= */

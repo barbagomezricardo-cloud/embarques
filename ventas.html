@@ -238,10 +238,22 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
     <div class="kpi"><div class="kpi-val" id="k-peak">—</div><div class="kpi-lbl">Mes pico</div><div class="kpi-sub" id="k-peak-sub"></div></div>
   </div>
   <div class="tabs">
-<div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
+<div class="tabgrp"><div class="glbl">Dirección</div><div class="gtabs"><div class="tab" data-tab="tablero" onclick="showTab('tablero')">📊 Tablero</div></div></div><div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
   </div>
 
   <!-- MAPA -->
+  <div class="pane" id="pane-tablero"><div style="width:100%;overflow-y:auto">
+    <div class="tbl-ctrl" style="flex-wrap:wrap;gap:8px;margin:12px 16px 0">
+      <label style="font-size:.74rem;color:#94a3b8">Vendedor:</label><select id="tb-vend" onchange="renderTablero()"><option value="">Todos</option></select>
+      <label style="font-size:.74rem;color:#94a3b8">Estado:</label><select id="tb-est" onchange="renderTablero()"><option value="">Todos</option></select>
+      <label style="font-size:.74rem;color:#94a3b8">Cliente:</label><input id="tb-cli" list="client-list" placeholder="Todos los clientes" oninput="tbCliInput()" style="min-width:190px">
+      <label style="font-size:.74rem;color:#94a3b8">Mes:</label><select id="tb-mes" onchange="tbMesChange()"><option value="">Periodo completo</option></select>
+      <span id="tb-dia-wrap" style="display:none"><label style="font-size:.74rem;color:#94a3b8">Corte al día:</label><select id="tb-dia" onchange="renderTablero()"></select></span>
+      <button onclick="tbClear()" style="background:transparent;color:#94a3b8;border:1px solid #2a3a5c;border-radius:7px;padding:5px 11px;font-size:.76rem;cursor:pointer">Limpiar filtros</button>
+    </div>
+    <div id="tablero-content" style="width:100%;padding:10px 16px 20px"></div>
+  </div></div>
+
   <div class="pane active" id="pane-mapa">
     <div class="map-wrap" id="map-wrap">
       <div class="map-ctrl">
@@ -979,6 +991,7 @@ function renderDashboard(fname){
   for(const c of D.clients){const o=document.createElement('option');o.value=c.nombre;dl.appendChild(o);}
 
   renderMap();renderClienteTable();renderVendedores();renderScorecard();renderFuga();renderRiesgo();renderAlertas();renderTendencia();renderConfig();renderMapeoTable();computeYoY();renderObjetivos();renderNuevos();renderMetas();renderGrafica();
+  try{tbFillSelects();renderTablero();}catch(e){console.error('tablero:',e);}
   // Auto-notificación al cargar datos
   pedirPermisoNotificacion();
   setTimeout(()=>{
@@ -1923,10 +1936,299 @@ function renderRentabilidad(){
   box.innerHTML=h;
 }
 
+/* ── TABLERO DE DIRECCIÓN ───────────────────────────────────────────────────────
+   Consolida en una sola pantalla lo que hoy está repartido en Objetivos, Scorecard,
+   Riesgo, Fuga y Nuevos, y agrega indicadores que antes no se calculaban:
+   retención de clientes (cuántos de los que compraban el año pasado siguen comprando),
+   sacos en juego (riesgo + fuga como % de la cartera), concentración del top 10,
+   mix premium ponderado del equipo y el ranking de vendedores por avance real vs objetivo.
+   No inventa números: usa DATA.yoy, fugaInfo() y los mismos parámetros (getVParams)
+   que ya usan las demás pestañas, para que todo cuadre entre tabs y con la app. ── */
+// ── Filtros del tablero: vendedor, estado, cliente, mes y día ──
+function tbFilters(){
+  const g=id=>document.getElementById(id);
+  return {v:(g('tb-vend')&&g('tb-vend').value)||'',
+          e:(g('tb-est')&&g('tb-est').value)||'',
+          c:((g('tb-cli')&&g('tb-cli').value)||'').trim().toLowerCase(),
+          m:Number((g('tb-mes')&&g('tb-mes').value)||0)||0,
+          d:Number((g('tb-dia')&&g('tb-dia').value)||0)||0};
+}
+function tbMatch(o,F,vk,ek,nk2){
+  if(F.v&&(o[vk]||'SIN DATOS')!==F.v)return false;
+  if(F.e&&(o[ek]||'SIN DATOS')!==F.e)return false;
+  if(F.c&&String(o[nk2]||'').toLowerCase().indexOf(F.c)<0)return false;
+  return true;
+}
+function tbFillSelects(){
+  if(!DATA)return;
+  const vs=new Set(),es=new Set();
+  for(const c of DATA.clients){vs.add(c.vendedor||'SIN DATOS');es.add(c.estado||'SIN DATOS');}
+  const fill=(id,vals,all)=>{const s=document.getElementById(id);if(!s)return;const keep=s.value;
+    s.innerHTML='<option value="">'+all+'</option>'+[...vals].sort().map(v=>'<option value="'+v+'">'+v+'</option>').join('');
+    if(keep&&vals.has(keep))s.value=keep;};
+  fill('tb-vend',vs,'Todos');fill('tb-est',es,'Todos');
+  const ms=document.getElementById('tb-mes');
+  if(ms){const keep=ms.value;ms.innerHTML='<option value="">Periodo completo</option>'+(DATA.meses||[]).map(m=>'<option value="'+m+'">'+MES_NOM[m]+'</option>').join('');if(keep)ms.value=keep;}
+  tbMesChange(true);
+}
+function tbMesChange(silent){
+  const ms=document.getElementById('tb-mes'), wrap=document.getElementById('tb-dia-wrap'), ds=document.getElementById('tb-dia');
+  const m=Number((ms&&ms.value)||0);
+  const diaCli=window.LAST_DIACLI||{};
+  let maxDia=0;
+  if(m&&DATA&&DATA.esDiario){ const dm=(DATA.diaMes&&DATA.diaMes[m])||null;
+    if(dm){for(let i=0;i<dm.length;i++)if((dm[i]||0)>0)maxDia=i+1;}
+    if(!maxDia){for(const n in diaCli){const a=(diaCli[n]||{})[m];if(a)for(let i=0;i<a.length;i++)if((a[i]||0)>0&&i+1>maxDia)maxDia=i+1;}}
+  }
+  if(wrap)wrap.style.display=maxDia>0?'':'none';
+  if(ds){ if(maxDia>0){ const keep=Number(ds.value||0);
+      ds.innerHTML='<option value="0">Mes completo</option>'+Array.from({length:maxDia},(_,i)=>'<option value="'+(i+1)+'">día '+(i+1)+'</option>').join('');
+      ds.value=(keep&&keep<=maxDia)?String(keep):'0';
+    } else ds.innerHTML='<option value="0">Mes completo</option>'; }
+  if(!silent)renderTablero();
+}
+var _tbCliT=null;
+function tbCliInput(){clearTimeout(_tbCliT);_tbCliT=setTimeout(renderTablero,300);}
+function tbClear(){['tb-vend','tb-est','tb-cli','tb-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});tbMesChange(true);renderTablero();}
+
+function tableroCalc(){
+  if(!DATA)return null;
+  if(!DATA.yoy&&typeof computeYoY==='function')computeYoY();
+  const Y=DATA.yoy||{rows:[],complete:[],curTot:0,priorTot:0,tonMes:0};
+  const P=getVParams();
+  const comp=_compMonths();
+  const F=tbFilters();
+  const filtrando=!!(F.v||F.e||F.c);
+
+  // Ventana de meses a comparar: periodo completo, o solo el mes elegido
+  const win=F.m?[F.m]:((Y.complete&&Y.complete.length)?Y.complete:comp);
+  // Corte por día: solo aplica con un mes elegido y datos diarios
+  const diaCli=window.LAST_DIACLI||{};
+  const pdAll=(typeof getPriorDaily==='function')?getPriorDaily(Y.py||2025):{};
+  const pdArr=(F.m&&F.d)?((pdAll&&pdAll[F.m])||[]):[];
+  let pdSum=0,pdCut=0;
+  for(let i=0;i<pdArr.length;i++){const x=pdArr[i]||0;pdSum+=x;if(i<F.d)pdCut+=x;}
+  const cortaDia=!!(F.m&&F.d);
+  const escalaDia=(cortaDia&&pdSum>0)?(pdCut/pdSum):(cortaDia?0:1);
+
+  // Sumas actuales y del año anterior de una fila, ya recortadas por mes/día
+  const rowCur=r=>{
+    if(cortaDia){const a=(diaCli[r.nombre]||{})[F.m];if(!a)return 0;let s=0;for(let i=0;i<F.d&&i<a.length;i++)s+=a[i]||0;return s;}
+    return win.reduce((a,m)=>a+((r.curM&&r.curM[m-1])||0),0);
+  };
+  const rowPrior=r=>{
+    const base=win.reduce((a,m)=>a+((r.priorM&&r.priorM[m-1])||0),0);
+    return cortaDia?base*escalaDia:base;
+  };
+
+  const rows=(Y.rows||[]).filter(r=>tbMatch(r,F,'vend','estado','nombre'));
+  const clientes=DATA.clients.filter(c=>tbMatch({v:c.vendedor,e:c.estado,n:c.nombre},F,'v','e','n'));
+
+  // 1) Venta vs objetivo
+  let curTot=0,priorTot=0;
+  rows.forEach(r=>{curTot+=rowCur(r);priorTot+=rowPrior(r);});
+  const obj=priorTot*(1+P.gTarget);
+  const av=obj>0?curTot/obj:0;
+  const crec=priorTot>0?(curTot/priorTot-1):(curTot>0?1:0);
+
+  // 2) Cartera y dinero en juego
+  let carteraMes=0,riesgoN=0,riesgoSac=0,fugaN=0,fugaSac=0,activos=0;
+  const perVend={};
+  const vd=v=>perVend[v]||(perVend[v]={cur:0,prior:0,nuevos:0,cartera:0,rSac:0,fSac:0,clientes:0});
+  for(const c of clientes){
+    const d=vd(c.vendedor||'SIN DATOS');
+    carteraMes+=c.promMes||0; d.cartera+=c.promMes||0; d.clientes++;
+    if(c.dias<30)activos++;
+    if(c.dias>=30&&c.dias<=365){riesgoN++;riesgoSac+=c.promMes||0;d.rSac+=c.promMes||0;}
+    const f=(typeof fugaInfo==='function')?fugaInfo(c):null;
+    if(f){fugaN++;fugaSac+=f.sacosPerd;d.fSac+=f.sacosPerd;}
+  }
+  const enJuego=riesgoSac+fugaSac;
+  const pctJuego=carteraMes>0?enJuego/carteraMes:0;
+
+  // 3) Retención de clientes vs año anterior
+  const base=rows.filter(r=>r.priorFull>0);
+  const keep=base.filter(r=>r.curFull>0);
+  const lost=base.filter(r=>!(r.curFull>0));
+  const retencion=base.length?keep.length/base.length:0;
+  const lostSac=lost.reduce((a,r)=>a+(r.prior||0),0);
+  const lostTop=lost.slice().sort((a,b)=>(b.prior||0)-(a.prior||0)).slice(0,8);
+
+  // 4) Clientes nuevos vs meta (la meta se prorratea si se filtra un solo mes)
+  const nuevos=rows.filter(r=>r.nuevo);
+  const nMeses=F.m?1:((DATA.meses&&DATA.meses.length)||1);
+  const metaN=Math.round((P.metaNuevos||6)*nMeses);
+  const nuevosSac=nuevos.reduce((a,r)=>a+rowCur(r),0);
+
+  // 5) Concentración del top 10
+  const ordC=clientes.slice().sort((a,b)=>(b.promMes||0)-(a.promMes||0));
+  const top10=ordC.slice(0,10).reduce((a,c)=>a+(c.promMes||0),0);
+  const conc=carteraMes>0?top10/carteraMes:0;
+
+  // 6) Mix premium ponderado (sigue la ventana de meses elegida)
+  let premS=0,totS=0;
+  for(const c of clientes){
+    const pm=c.prodMes||{};
+    for(const p in pm){ const mm=pm[p]; const esP=isPremiumPlus(p);
+      for(const k in mm){ if(win.indexOf(Number(k))<0)continue; const s=mm[k]||0; totS+=s; if(esP)premS+=s; } }
+  }
+  const mixPrem=totS>0?premS/totS:0;
+
+  // 7) Toneladas y uso de planta (la planta es global: solo se recorta por mes, no por vendedor)
+  let tonsWin=0;
+  for(const c of clientes){const pm=c.prodMes||{};for(const p in pm){const kg=prodKg(p);for(const k in pm[p]){if(win.indexOf(Number(k))<0)continue;tonsWin+=(pm[p][k]||0)*kg/1000;}}}
+  const promoWin=DATA.promoMesTon?win.reduce((a,m)=>a+(DATA.promoMesTon[m]||0),0):0;
+  const tonMes=(tonsWin+(filtrando?0:promoWin))/(win.length||1);
+  const uso=P.capTonMes>0?(tonMes/P.capTonMes):0;
+
+  // 8) Ranking de vendedores
+  rows.forEach(r=>{const d=vd(r.vend||'SIN DATOS');d.cur+=rowCur(r);d.prior+=rowPrior(r);if(r.nuevo)d.nuevos++;});
+  const vendRank=Object.keys(perVend).map(v=>{const d=perVend[v];const o=d.prior*(1+P.gTarget);
+    return {v:v,cur:d.cur,prior:d.prior,obj:o,av:o>0?d.cur/o:(d.cur>0?1.5:0),tieneObj:o>0,
+      nuevos:d.nuevos,cartera:d.cartera,clientes:d.clientes,juego:d.rSac+d.fSac};})
+    .filter(x=>x.cur>0||x.prior>0||x.cartera>0)
+    .sort((a,b)=>a.av-b.av);
+
+  // 9) Regiones
+  const reg={};
+  rows.forEach(r=>{const e=r.estado||'SIN DATOS';if(e==='SIN DATOS')return;const o=reg[e]||(reg[e]={cur:0,prior:0});o.cur+=rowCur(r);o.prior+=rowPrior(r);});
+  const regiones=Object.keys(reg).map(e=>{const o=reg[e];return {est:e,cur:o.cur,prior:o.prior,dif:o.cur-o.prior,crec:o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0)};}).sort((a,b)=>a.dif-b.dif);
+
+  // 10) Acciones prioritarias
+  const acciones=clientes.map(c=>{
+    const f=(typeof fugaInfo==='function')?fugaInfo(c):null;
+    const rs=(c.dias>=30&&c.dias<=365)?(c.promMes||0):0;
+    const fs=f?f.sacosPerd:0;
+    return {c:c,val:rs+fs,tipo:rs>0?('no compra hace '+(c.dias>=999?'—':c.dias+' d')):(fs>0?('baja '+Math.round(f.drop)+'%'):'')};
+  }).filter(x=>x.val>0).sort((a,b)=>b.val-a.val).slice(0,12);
+
+  const periodoTxt=F.m?(MES_NOM[F.m]+(cortaDia?(' — al día '+F.d):'')):mesesTxt(win);
+  return {Y,P,F,win,filtrando,cortaDia,periodoTxt,nClientes:clientes.length,
+    curTot,priorTot,obj,av,crec,carteraMes,riesgoN,riesgoSac,fugaN,fugaSac,activos,enJuego,pctJuego,
+    baseN:base.length,keepN:keep.length,lostN:lost.length,retencion,lostSac,lostTop,
+    nuevosN:nuevos.length,metaN,nuevosSac,conc,top10,mixPrem,tonMes,promoWin,uso,vendRank,regiones,acciones};
+}
+
+function renderTablero(){
+  const box=document.getElementById('tablero-content'); if(!box)return;
+  const T=tableroCalc();
+  if(!T){box.innerHTML='<div style="color:#94a3b8;font-size:.85rem">Carga primero el archivo de ventas.</div>';return;}
+  const Y=T.Y, P=T.P;
+  const big=(val,lbl,sub,col)=>`<div style="flex:1;min-width:158px;background:var(--mid);border:1px solid #1e3258;border-left:4px solid ${col};border-radius:9px;padding:9px 13px">
+    <div style="font-size:1.35rem;font-weight:800;color:${col};line-height:1.15">${val}</div>
+    <div style="font-size:.66rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${lbl}</div>
+    ${sub?`<div style="font-size:.68rem;color:#64748b;margin-top:2px">${sub}</div>`:''}</div>`;
+  const sect=(t,s)=>`<div style="font-size:.95rem;font-weight:800;color:var(--gold);margin:16px 0 3px">${t}</div>${s?`<div style="font-size:.7rem;color:#94a3b8;margin-bottom:7px">${s}</div>`:'<div style="height:6px"></div>'}`;
+
+  const F=T.F;
+  const chips=[];
+  if(F.v)chips.push('👤 '+F.v);
+  if(F.e)chips.push('📍 '+F.e);
+  if(F.c)chips.push('🏢 "'+F.c+'"');
+  if(F.m)chips.push('📅 '+MES_NOM[F.m]+(T.cortaDia?(' al día '+F.d):''));
+  let h=`<div style="font-size:1.1rem;font-weight:800;color:var(--gold)">📊 Tablero de dirección — Mercadotecnia y Ventas</div>
+    <div style="font-size:.72rem;color:#94a3b8;margin:2px 0 8px">Todo el sistema de ventas en una pantalla: cómo vamos contra el objetivo, cuánto volumen está en juego, y qué atender primero. Comparando <b>${T.periodoTxt}</b> de ${Y.cy} vs ${Y.py} · <b>${T.nClientes}</b> clientes en la vista.</div>`;
+  if(chips.length)h+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chips.map(c=>`<span style="background:#1e3258;color:var(--gold);border-radius:20px;padding:3px 11px;font-size:.72rem;font-weight:600">${c}</span>`).join('')}<span style="font-size:.7rem;color:#64748b;align-self:center">— todo el tablero está filtrado</span></div>`;
+  if(T.cortaDia)h+=`<div style="font-size:.7rem;color:#64748b;margin-bottom:8px">El corte al día ${F.d} compara contra la misma porción del mes en ${Y.py} (curva diaria del año anterior escalada), igual que la pestaña Gráfica.</div>`;
+
+  // ── Cómo vamos ──
+  h+=sect('1 · ¿Cómo vamos contra el objetivo?','Objetivo = '+Y.py+' del mismo periodo +'+(P.gTarget*100).toFixed(0)+'%. Misma base que la pestaña Objetivos.');
+  const avCol=semColor(T.av), crCol=T.crec>=0?'var(--green)':'var(--red)';
+  const falta=Math.max(0,Math.round(T.obj-T.curTot));
+  h+=`<div style="display:flex;gap:9px;flex-wrap:wrap">
+    ${big(fmt(T.curTot),'Venta '+Y.cy,'sacos · '+T.periodoTxt,'var(--gold)')}
+    ${big(fmt(T.priorTot),Y.py+' mismo periodo','base de comparación','#94a3b8')}
+    ${big(fmt(T.obj),'Objetivo','+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}
+    ${big((T.av*100).toFixed(0)+'%','Avance vs objetivo',T.av>=1?'✓ vas arriba':'faltan '+fmt(falta)+' sacos',avCol)}
+    ${big(pct(T.crec),'Crecimiento real','vs '+Y.py,crCol)}
+  </div>`;
+
+  // ── Salud de cartera ──
+  h+=sect('2 · Salud de la cartera — ¿cuánto volumen está en juego?','Riesgo = lleva 30–365 días sin comprar. Fuga = sigue comprando pero cayó más de 15% contra su propio promedio. Estos indicadores miden el estado actual del cliente, así que responden al filtro de vendedor, estado y cliente, pero no al corte por mes o día.');
+  const jCol=T.pctJuego>=0.2?'var(--red)':T.pctJuego>=0.1?'#f59e0b':'var(--green)';
+  const retCol=T.retencion>=0.85?'var(--green)':T.retencion>=0.7?'#f59e0b':'var(--red)';
+  const concCol=T.conc>=0.5?'var(--red)':T.conc>=0.35?'#f59e0b':'var(--green)';
+  h+=`<div style="display:flex;gap:9px;flex-wrap:wrap">
+    ${big(fmt(T.carteraMes),T.filtrando?'Cartera filtrada':'Cartera del equipo','sacos/mes · '+T.nClientes+' clientes · '+T.activos+' activos','var(--gold)')}
+    ${big(fmt(T.enJuego),'Sacos/mes en juego',(T.pctJuego*100).toFixed(0)+'% de la cartera · '+(T.riesgoN+T.fugaN)+' clientes',jCol)}
+    ${big(fmt(T.riesgoSac),'En riesgo',T.riesgoN+' clientes sin comprar','#f97316')}
+    ${big(fmt(T.fugaSac),'En fuga lenta',T.fugaN+' clientes comprando menos','var(--red)')}
+  </div>
+  <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:9px">
+    ${big((T.retencion*100).toFixed(0)+'%','Retención de clientes',T.keepN+' de '+T.baseN+' que compraban en '+Y.py,retCol)}
+    ${big(fmt(T.lostSac),'Volumen perdido',T.lostN+' clientes de '+Y.py+' que ya no compran','var(--red)')}
+    ${big(T.nuevosN+' / '+T.metaN,'Clientes nuevos vs meta',fmt(T.nuevosSac)+' sacos aportados',T.nuevosN>=T.metaN?'var(--green)':'#f59e0b')}
+    ${big((T.conc*100).toFixed(0)+'%','Concentración top 10',fmt(T.top10)+' sac/mes en 10 clientes',concCol)}
+  </div>`;
+
+  // ── Mezcla y planta ──
+  h+=sect('3 · Mezcla y capacidad','Dónde puede crecer el margen sin pedirle más toneladas a la planta.');
+  const usoCol=T.uso>=0.95?'var(--red)':T.uso>=0.85?'#f59e0b':'var(--green)';
+  const head=T.uso>0?(1/T.uso-1):0;
+  h+=`<div style="display:flex;gap:9px;flex-wrap:wrap">
+    ${big((T.mixPrem*100).toFixed(1)+'%',T.filtrando?'Mix premium (filtrado)':'Mix premium del equipo','Premium 25/20 + Silver Cat 15 · '+T.periodoTxt,'#a78bfa')}
+    ${big(fmt(T.tonMes),'Toneladas / mes',T.filtrando?'solo lo filtrado':'terminado + promoción','#38bdf8')}
+    ${big(T.filtrando?'—':((T.uso*100).toFixed(0)+'%'),'Uso de planta',T.filtrando?'aplica al total, quita filtros':'queda '+pct(head)+' de volumen',T.filtrando?'#64748b':usoCol)}
+    ${big(fmt(T.promoWin),'Toneladas de promoción',T.periodoTxt+' · consumen planta','#f59e0b')}
+  </div>`;
+
+  // ── Vendedores ──
+  h+=sect('4 · Vendedores — avance real vs objetivo','Ordenados del más atrasado al más adelantado: por ahí empieza la junta.');
+  h+=`<div style="overflow:auto"><table class="dt"><thead><tr><th>Vendedor</th><th style="text-align:right">${Y.cy}</th><th style="text-align:right">${Y.py}</th><th style="text-align:right">Objetivo</th><th style="text-align:right">Avance</th><th style="text-align:center">Sem.</th><th style="text-align:right">Cartera</th><th style="text-align:right">En juego</th><th style="text-align:right">Nuevos</th></tr></thead><tbody>`;
+  for(const r of T.vendRank){
+    const sem=!r.tieneObj?'⚪':r.av>=1?'🟢':r.av>=0.85?'🟡':'🔴';
+    const col=!r.tieneObj?'#64748b':semColor(r.av);
+    const jp=r.cartera>0?r.juego/r.cartera:0;
+    h+=`<tr><td style="font-weight:600">${r.v}</td>
+      <td style="text-align:right;color:#cbd5e1">${fmt(r.cur)}</td>
+      <td style="text-align:right;color:#94a3b8">${fmt(r.prior)}</td>
+      <td style="text-align:right;color:#94a3b8">${r.tieneObj?fmt(r.obj):'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${col}">${r.tieneObj?(r.av*100).toFixed(0)+'%':'nuevo'}</td>
+      <td style="text-align:center;font-size:1.02rem">${sem}</td>
+      <td style="text-align:right;color:#cbd5e1">${fmt(r.cartera)}</td>
+      <td style="text-align:right;color:${jp>=0.2?'var(--red)':jp>=0.1?'#f59e0b':'#94a3b8'}">${fmt(r.juego)}${r.cartera>0?' · '+(jp*100).toFixed(0)+'%':''}</td>
+      <td style="text-align:right;color:${r.nuevos>0?'var(--green)':'#64748b'}">${r.nuevos}</td></tr>`;
+  }
+  h+=`</tbody></table></div>`;
+
+  // ── Regiones ──
+  const pierden=T.regiones.filter(r=>r.dif<0).slice(0,6);
+  const ganan=T.regiones.filter(r=>r.dif>0).sort((a,b)=>b.dif-a.dif).slice(0,6);
+  h+=sect('5 · Mapa de crecimiento por región','Dónde se está ganando y perdiendo volumen real contra el año pasado (en sacos, no en porcentaje, para ver el tamaño de la fuga).');
+  const regRow=(r)=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:.76rem;padding:4px 0;border-top:1px solid #16233f">
+    <span style="color:#cbd5e1">${r.est}</span>
+    <span style="color:#64748b;white-space:nowrap">${fmt(r.cur)} vs ${fmt(r.prior)}</span>
+    <span style="font-weight:700;color:${r.dif>=0?'var(--green)':'var(--red)'};white-space:nowrap;min-width:82px;text-align:right">${r.dif>=0?'+':''}${fmt(r.dif)} · ${pct(r.crec)}</span></div>`;
+  h+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:12px">
+    <div style="background:var(--mid);border:1px solid #1e3258;border-radius:9px;padding:10px 13px"><div style="font-size:.78rem;font-weight:700;color:var(--red);margin-bottom:2px">📉 Pierden volumen</div>${pierden.length?pierden.map(regRow).join(''):'<div style="font-size:.74rem;color:var(--green);padding-top:5px">✓ Ninguna región cae contra el año pasado.</div>'}</div>
+    <div style="background:var(--mid);border:1px solid #1e3258;border-radius:9px;padding:10px 13px"><div style="font-size:.78rem;font-weight:700;color:var(--green);margin-bottom:2px">📈 Ganan volumen</div>${ganan.length?ganan.map(regRow).join(''):'<div style="font-size:.74rem;color:#94a3b8;padding-top:5px">Sin regiones creciendo todavía.</div>'}</div>
+  </div>`;
+
+  // ── Acciones ──
+  h+=sect('6 · Qué atender primero','Los clientes con más sacos/mes en juego. Atender los primeros cinco recupera la mayor parte del volumen en riesgo.');
+  h+=`<div style="overflow:auto"><table class="dt"><thead><tr><th>Cliente</th><th>Vendedor</th><th>Estado</th><th>Situación</th><th style="text-align:right">Sacos/mes en juego</th></tr></thead><tbody>`;
+  if(!T.acciones.length)h+=`<tr><td colspan="5" style="color:var(--green);padding:8px">✓ Sin clientes en riesgo ni en fuga.</td></tr>`;
+  else for(const a of T.acciones){
+    h+=`<tr><td style="font-weight:600">${a.c.nombre}</td><td style="color:#94a3b8">${a.c.vendedor||'—'}</td><td style="color:#94a3b8">${a.c.estado||'—'}</td><td style="color:#f59e0b">${a.tipo}</td><td style="text-align:right;font-weight:700;color:var(--red)">${fmt(a.val)}</td></tr>`;
+  }
+  h+=`</tbody></table></div>`;
+
+  // ── Clientes perdidos del año anterior ──
+  if(T.lostTop.length){
+    h+=sect('7 · Clientes de '+Y.py+' que ya no compran','Recuperables: ya te conocían y ya compraban. Ordenados por el volumen que traían.');
+    h+=`<div style="overflow:auto"><table class="dt"><thead><tr><th>Cliente</th><th>Vendedor</th><th>Estado</th><th style="text-align:right">Traía en ${Y.py}</th></tr></thead><tbody>`;
+    for(const r of T.lostTop)h+=`<tr><td style="font-weight:600">${r.nombre}</td><td style="color:#94a3b8">${r.vend||'—'}</td><td style="color:#94a3b8">${r.estado||'—'}</td><td style="text-align:right;font-weight:700;color:var(--red)">${fmt(r.prior)}</td></tr>`;
+    h+=`</tbody></table></div>`;
+  }
+
+  box.innerHTML=h;
+}
+
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.getAttribute('data-tab')===name));
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
   const pn=document.getElementById('pane-'+name); if(pn)pn.classList.add('active');
+  if(name==='tablero'&&typeof renderTablero==='function')renderTablero();
   if(name==='prospec'&&typeof renderProspec==='function')renderProspec();
   if(name==='mapeo'&&typeof renderMapeoTable==='function')renderMapeoTable();
   if(name==='seguimiento'&&typeof renderSeguimiento==='function')renderSeguimiento();
@@ -2100,10 +2402,13 @@ function computeYoY(){
     const priorFull=b&&b.m?b.m.reduce((x,y)=>x+y,0):0;
     const tg=metaTier(priorFull);
     const act=Object.keys(c.mesData).map(Number).filter(m=>c.mesData[m]>0);
+    // arreglos mes a mes (1–12): permiten recortar el periodo por mes/día en el Tablero sin recalcular todo
+    const curM=Array(12).fill(0); for(const m in c.mesData) curM[m-1]=c.mesData[m]||0;
+    const priorM=Array(12).fill(0); if(b&&b.m) for(let i=0;i<12;i++) priorM[i]=b.m[i]||0;
     return{nombre:c.nombre,estado:c.estado||'SIN DATOS',vend:c.vendedor||'SIN DATOS',
       cur,curFull,prior,priorFull,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
       nuevo:(!b||priorFull===0)&&cur>0,firstMes:act.length?Math.min(...act):0,
-      tonsCur:clientTons(c)};
+      tonsCur:clientTons(c),curM,priorM};
   });
   // 2) clientes que estaban en el año anterior y ya no compran (para totales/vendedor/estado justos)
   const map=getMapping(); const mNorm=new Map(); for(const k in map) if(map[k]&&(map[k].e||map[k].v)) mNorm.set(nkey(k),k);
@@ -2112,9 +2417,10 @@ function computeYoY(){
     const prior=b&&b.m?complete.reduce((a,m)=>a+(b.m[m-1]||0),0):0;
     const rk=resolveKey(k,mNorm); const info=rk?map[rk]:null;
     const tg=metaTier(priorFull);
+    const priorM0=Array(12).fill(0); if(b&&b.m) for(let i=0;i<12;i++) priorM0[i]=b.m[i]||0;
     rows.push({nombre:k,estado:(info&&info.e)||'SIN DATOS',vend:(info&&info.v)||'SIN DATOS',
       cur:0,curFull:0,prior,priorFull,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
-      nuevo:false,firstMes:0,tonsCur:0});
+      nuevo:false,firstMes:0,tonsCur:0,curM:Array(12).fill(0),priorM:priorM0});
   }
   const tbm={};
   for(const c of DATA.clients){for(const[p,md] of Object.entries(c.prodMes||{})){const kg=prodKg(p);for(const[m,s] of Object.entries(md)){if(complete.includes(Number(m)))tbm[m]=(tbm[m]||0)+s*kg/1000;}}}
@@ -2806,7 +3112,31 @@ function buildVendorPayloads(){
     var reg={}; yrows.forEach(function(r){ if(r.vend!==v)return; var e=r.estado||'SIN DATOS'; if(!reg[e])reg[e]={cur:0,prior:0}; reg[e].cur+=r.cur||0; reg[e].prior+=r.prior||0; });
     var regiones=Object.keys(reg).map(function(e){var o=reg[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:Math.round(o.cur),prior:Math.round(o.prior),crec:crec};}).filter(function(x){return x.est!=='SIN DATOS'&&x.cur>0;}).sort(function(a,b){return a.crec-b.crec;});
     var alertas={sinCompra:sinCompra,fuga:fuga,focos:focos,nuevos:{count:nuevosV.length,meta:metaN,lista:nuevosV.slice(0,20).map(function(r){return {n:r.nombre,cur:Math.round(r.cur)};})},regiones:regiones,gTarget:PVEN.gTarget};
-    out[v]={v:v,period:period,lastMonth:lastMonth,q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows};
+    // ── Resumen ejecutivo: contadores crudos y sumables, para que la app de gerencia
+    //    arme los mismos indicadores del Tablero (retención, sacos en juego, mix premium) ──
+    var compW=(Yv.complete&&Yv.complete.length)?Yv.complete:(DATA.meses||[]);
+    var vbase=yrows.filter(function(r){return r.vend===v&&r.priorFull>0;});
+    var vkeep=vbase.filter(function(r){return r.curFull>0;});
+    var vlost=vbase.filter(function(r){return !(r.curFull>0);});
+    var carteraV=0,riesgoSacV=0,riesgoNV=0,fugaSacV=0,fugaNV=0,activosV=0,premSV=0,totSV=0;
+    cliAll.forEach(function(c){
+      carteraV+=c.promMes||0; if(c.dias<30)activosV++;
+      if(c.dias>=30&&c.dias<=365){riesgoNV++;riesgoSacV+=c.promMes||0;}
+      var f=(typeof fugaInfo==='function')?fugaInfo(c):null; if(f){fugaNV++;fugaSacV+=f.sacosPerd;}
+      var pm=c.prodMes||{};
+      for(var p in pm){ var esP=isPremiumPlus(p);
+        for(var k in pm[p]){ if(compW.indexOf(Number(k))<0)continue; var s=pm[p][k]||0; totSV+=s; if(esP)premSV+=s; } }
+    });
+    var res={cartera:Math.round(carteraV),clientes:cliAll.length,activos:activosV,
+      riesgoN:riesgoNV,riesgoSac:Math.round(riesgoSacV),fugaN:fugaNV,fugaSac:Math.round(fugaSacV),
+      retBase:vbase.length,retKeep:vkeep.length,lostN:vlost.length,
+      lostSac:Math.round(vlost.reduce(function(a,r){return a+(r.prior||0);},0)),
+      lostTop:vlost.slice().sort(function(a,b){return (b.prior||0)-(a.prior||0);}).slice(0,8).map(function(r){return {n:r.nombre,est:r.estado||'',prior:Math.round(r.prior||0)};}),
+      premSac:Math.round(premSV),totSac:Math.round(totSV),
+      curTot:Math.round(yrows.filter(function(r){return r.vend===v;}).reduce(function(a,r){return a+(r.cur||0);},0)),
+      priorTot:Math.round(yrows.filter(function(r){return r.vend===v;}).reduce(function(a,r){return a+(r.prior||0);},0)),
+      cy:Yv.cy||0,py:Yv.py||0};
+    out[v]={v:v,period:period,lastMonth:lastMonth,q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows,res:res};
   });
   // ── Cobradores: clonan la cartera de "su" vendedor con su propia marca de agua y licencia (excluidos del índice de gerencia) ──
   (COBRADORES||[]).forEach(function(cb){

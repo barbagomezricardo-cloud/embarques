@@ -74,7 +74,7 @@ const TIERS=[["DIAMANTE_PLUS",15000,2.0,0.75,0.75,2],["DIAMANTE",9000,2.0,0.25,0
 // Bono Premium+ (los % los define el gerente en el dashboard; aquí van los valores por defecto).
 let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
-let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes'; let CARDOPEN=false;
+let PROSPECTS=[], VENTAS=null, ALERTAS=null, RES=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
 function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else if(v==='accesos')renderAccesos();else if(v==='resumen')renderResumen();else renderList('');}
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
@@ -116,6 +116,7 @@ function applyPayload(p){
   PROSPECTS=Array.isArray(p.prospects)?p.prospects:[];
   VENTAS=p.ventas||null;
   ALERTAS=p.alertas||null;
+  RES=p.res||null;
   CLIENTS={};
   (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:r.vd||APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null};});
 }
@@ -367,6 +368,8 @@ function buildAgg(){
   for(var z=0;z<12;z++){cur.push(0);prior.push(0);}
   var sinCompra=[],fuga=[],focos=[],nuevosCount=0,nuevosMeta=0,nuevosLista=[],regMap={};
   var meses=[],gTarget=0,lastMonth=0,esDiario=false,priorDaily={},prem=null,cobre=null,evalPeriod='TRIM',evalLabel='',updatedStr=MUP;
+  // acumuladores del resumen ejecutivo (contadores crudos: se suman entre vendedores sin distorsionarse)
+  var R={cartera:0,clientes:0,activos:0,riesgoN:0,riesgoSac:0,fugaN:0,fugaSac:0,retBase:0,retKeep:0,lostN:0,lostSac:0,premSac:0,totSac:0,curTot:0,priorTot:0,cy:0,py:0},hayRes=false,lostTop=[];
   VKEYS.forEach(function(k){var p=VDATA[k];if(!p)return;
     if(p.rows)rows=rows.concat(p.rows);
     if(p.prospects)prospects=prospects.concat(p.prospects);
@@ -383,11 +386,18 @@ function buildAgg(){
       if(A.nuevos){nuevosCount+=A.nuevos.count||0;nuevosMeta+=A.nuevos.meta||0;if(A.nuevos.lista)nuevosLista=nuevosLista.concat(A.nuevos.lista);}
       if(A.regiones)A.regiones.forEach(function(r){if(!regMap[r.est])regMap[r.est]={cur:0,prior:0};regMap[r.est].cur+=r.cur||0;regMap[r.est].prior+=r.prior||0;});
     }
+    var S=p.res;if(S){hayRes=true;
+      ['cartera','clientes','activos','riesgoN','riesgoSac','fugaN','fugaSac','retBase','retKeep','lostN','lostSac','premSac','totSac','curTot','priorTot'].forEach(function(k){R[k]+=S[k]||0;});
+      R.cy=S.cy||R.cy;R.py=S.py||R.py;
+      if(S.lostTop)lostTop=lostTop.concat(S.lostTop);
+    }
   });
+  lostTop.sort(function(a,b){return (b.prior||0)-(a.prior||0);});
+  R.lostTop=lostTop.slice(0,10);
   sinCompra.sort(function(a,b){return (b.dias||0)-(a.dias||0);});
   fuga.sort(function(a,b){return (b.perd||0)-(a.perd||0);});
   var regiones=Object.keys(regMap).map(function(e){var o=regMap[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:o.cur,prior:o.prior,crec:crec};}).sort(function(a,b){return a.crec-b.crec;});
-  return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,prem:prem,cobre:cobre,prospects:prospects,rows:rows,
+  return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,prem:prem,cobre:cobre,prospects:prospects,rows:rows,res:(hayRes?R:null),
     ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario},
     alertas:{sinCompra:sinCompra,fuga:fuga,focos:focos.slice(0,12),nuevos:{count:nuevosCount,meta:nuevosMeta,lista:nuevosLista},regiones:regiones,gTarget:gTarget}};
 }
@@ -481,6 +491,28 @@ function renderResumen(){
     h+='<div style="font-size:11.5px;color:#9fb0cc;font-weight:800;text-transform:uppercase;margin:4px 0 6px">Venta — '+cutLabel+'</div>';
     h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+kcard(fmt(Math.round(realVal)),'Venta real (sacos)','#E8A020')+kcard(fmt(Math.round(objVal)),'Objetivo')+kcard((objVal>0?(avVal*100).toFixed(0):'—')+'%','Avance',avcol)+kcard(faltaVal>0?fmt(faltaVal):'✓ logrado','Faltan',faltaVal>0?'#f59e0b':'#22c55e')+'</div>';
   }
+  // ── Salud de la cartera: cuánto volumen está realmente en juego ──
+  if(RES&&RES.cartera>0){
+    var Rr=RES;
+    var enJuego=(Rr.riesgoSac||0)+(Rr.fugaSac||0);
+    var pj=Rr.cartera>0?enJuego/Rr.cartera:0;
+    var jcol=pj>=0.2?'#ef4444':(pj>=0.1?'#f59e0b':'#22c55e');
+    var ret=Rr.retBase>0?Rr.retKeep/Rr.retBase:0;
+    var rcol=ret>=0.85?'#22c55e':(ret>=0.7?'#f59e0b':'#ef4444');
+    var mix=Rr.totSac>0?Rr.premSac/Rr.totSac:0;
+    h+='<div style="font-size:11.5px;color:#9fb0cc;font-weight:800;text-transform:uppercase;margin:14px 0 6px">Salud de la cartera</div>';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +kcard(fmt(Rr.cartera),'Cartera sac/mes ('+(Rr.clientes||0)+' clientes)','#E8A020')
+      +kcard(fmt(enJuego),'Sacos/mes en juego · '+(pj*100).toFixed(0)+'%',jcol)
+      +'</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+      +kcard(fmt(Rr.riesgoSac),'En riesgo ('+(Rr.riesgoN||0)+' sin comprar)','#f97316')
+      +kcard(fmt(Rr.fugaSac),'En fuga ('+(Rr.fugaN||0)+' bajando)','#ef4444')
+      +'</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+      +kcard((ret*100).toFixed(0)+'%','Retención: '+Rr.retKeep+' de '+Rr.retBase+' de '+(Rr.py||'año ant.'),rcol)
+      +kcard(fmt(Rr.lostSac),'Volumen perdido ('+(Rr.lostN||0)+' clientes)','#ef4444')
+      +kcard((mix*100).toFixed(1)+'%','Mix premium','#a78bfa')
+      +'</div>';
+  }
   if(tieneAlertas){
     var A=ALERTAS; var g2=A.gTarget||0;
     var nv=A.nuevos||{count:0,meta:0}; var nok=nv.count>=nv.meta;
@@ -506,7 +538,13 @@ function renderResumen(){
       return '<div class="li"><div><b>'+r.est+'</b><div style="font-size:11px;color:#9fb0cc">'+fmt(r.cur)+' vs '+fmt(r.prior)+' (año ant.)</div></div><span style="font-weight:900;color:'+col+'">'+(pc>=0?'+':'')+pc.toFixed(0)+'%</span></div>';
     },'alertas');
   }
-  h+='<div class="foot">Resumen de '+(APPVEND||'tu cartera')+' · mismos datos y cálculos que Ventas y Alertas.</div>';
+  if(RES&&RES.lostTop&&RES.lostTop.length){
+    h+='<div style="font-size:12.5px;color:#e8eef7;font-weight:800;margin:14px 0 6px">🔄 Clientes de '+(RES.py||'año anterior')+' que ya no compran</div>';
+    h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:5px">Recuperables: ya te conocían y ya compraban.</div><div class="list">';
+    RES.lostTop.forEach(function(r){h+='<div class="li"><div><b>'+r.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(r.est||'')+'</div></div><span style="font-weight:900;color:#ef4444">'+fmt(r.prior)+'</span></div>';});
+    h+='</div>';
+  }
+  h+='<div class="foot">Resumen de '+(APPVEND||'tu cartera')+' · mismos datos y cálculos que el Tablero de dirección del programa de ventas.</div>';
   app.innerHTML=h;
 }
 function renderVentas(){
