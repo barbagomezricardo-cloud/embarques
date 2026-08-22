@@ -76,9 +76,9 @@ let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
 let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else if(v==='accesos')renderAccesos();else renderList('');}
+function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else if(v==='accesos')renderAccesos();else if(v==='resumen')renderResumen();else renderList('');}
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
-function viewTabs(){return masterBar()+'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+vtBtn('accesos','\uD83D\uDD13 Accesos')+'</div>';}
+function viewTabs(){return masterBar()+'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+vtBtn('resumen','\uD83D\uDCCA Resumen')+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+vtBtn('accesos','\uD83D\uDD13 Accesos')+'</div>';}
 function premBoost(mix){return mix>=PREM.u2?PREM.e2:(mix>=PREM.u1?PREM.e1:0);}
 const NIVLAB={DIAMANTE_PLUS:'DIAMANTE PLUS'};
 const MES_NOM={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
@@ -359,7 +359,7 @@ function selectVendor(v){
   CURVEND=v;
   if(v==='__all__')applyPayload(buildAgg());
   else if(VDATA[v])applyPayload(VDATA[v]);
-  if(VIEW==='prosp')renderProspectos('');else if(VIEW==='ventas')renderVentas();else if(VIEW==='alertas')renderAlertas();else renderList('');
+  if(VIEW==='prosp')renderProspectos('');else if(VIEW==='ventas')renderVentas();else if(VIEW==='alertas')renderAlertas();else if(VIEW==='accesos')renderAccesos();else if(VIEW==='resumen')renderResumen();else renderList('');
 }
 function buildAgg(){
   var rows=[],prospects=[];
@@ -451,6 +451,64 @@ function toggleVendBlock(k,val){
   fetch(base+'/skan/_vblock/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(val)}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo actualizar. Intenta de nuevo.');});
 }
 
+/* ── Resumen: Mercadotecnia y Ventas — KPIs clave ya filtrados/calculados,
+   para decidir rápido sin tener que abrir Ventas y Alertas por separado.
+   Lee VENTAS/ALERTAS (los globales que ya llena applyPayload/buildAgg según
+   el vendedor seleccionado) — misma fuente y mismos cálculos que esas pestañas,
+   así los números siempre cuadran entre tabs. ── */
+function renderResumen(){
+  var app=document.getElementById('app');app.style.display='block';
+  var h=syncBar()+viewTabs();
+  var MESN={1:'ene',2:'feb',3:'mar',4:'abr',5:'may',6:'jun',7:'jul',8:'ago',9:'sep',10:'oct',11:'nov',12:'dic'};
+  h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:2px 0 8px">📊 Mercadotecnia y Ventas — '+(APPVEND||'')+'</div>';
+  var tieneVentas=VENTAS&&VENTAS.meses&&VENTAS.meses.length;
+  var tieneAlertas=!!ALERTAS;
+  if(!tieneVentas&&!tieneAlertas){h+='<div class="hint">Aún no hay datos de ventas ni alertas publicados. Pídele a tu gerente que cargue el reporte más reciente.</div>';app.innerHTML=h;return;}
+  function kcard(n,l,col){return '<div style="flex:1;min-width:90px;background:#162340;border:1px solid #22304d;border-radius:12px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:10.5px;color:#9fb0cc;margin-top:2px">'+l+'</div></div>';}
+  if(tieneVentas){
+    var V=VENTAS; var g=V.gTarget||0; var meses=V.meses; var lm=V.lastMonth||meses[meses.length-1];
+    var curLm=(V.cur&&V.cur[lm-1])||0, priorLm=(V.prior&&V.prior[lm-1])||0, objLm=priorLm*(1+g);
+    var realVal=curLm, objVal=objLm, cutLabel=MESN[lm];
+    if(V.esDiario&&V.dia&&V.dia[lm]&&V.dia[lm].length){
+      var d=V.dia[lm]; var cut=0; for(var i=0;i<d.length;i++)if(d[i]>0)cut=i+1;
+      var realCut=0; for(var a2=0;a2<cut;a2++)realCut+=d[a2]||0;
+      var pd=(V.priorDaily&&V.priorDaily[lm])||[]; var pdSum=0; for(var j=0;j<pd.length;j++)pdSum+=pd[j]||0;
+      var sc=pdSum?priorLm/pdSum:0; var objCut=0; for(var j2=0;j2<cut;j2++)objCut+=(pd[j2]||0)*sc*(1+g);
+      realVal=realCut; objVal=objCut; cutLabel=MESN[lm]+' al día '+cut;
+    }
+    var avVal=objVal>0?realVal/objVal:0, avcol=avVal>=1?'#22c55e':(avVal>=0.8?'#f59e0b':'#ef4444');
+    var faltaVal=Math.max(0,Math.round(objVal-realVal));
+    h+='<div style="font-size:11.5px;color:#9fb0cc;font-weight:800;text-transform:uppercase;margin:4px 0 6px">Venta — '+cutLabel+'</div>';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+kcard(fmt(Math.round(realVal)),'Venta real (sacos)','#E8A020')+kcard(fmt(Math.round(objVal)),'Objetivo')+kcard((objVal>0?(avVal*100).toFixed(0):'—')+'%','Avance',avcol)+kcard(faltaVal>0?fmt(faltaVal):'✓ logrado','Faltan',faltaVal>0?'#f59e0b':'#22c55e')+'</div>';
+  }
+  if(tieneAlertas){
+    var A=ALERTAS; var g2=A.gTarget||0;
+    var nv=A.nuevos||{count:0,meta:0}; var nok=nv.count>=nv.meta;
+    var sinCompra=A.sinCompra||[], fuga=A.fuga||[];
+    var regBajo=(A.regiones||[]).filter(function(r){return r.crec<g2;});
+    h+='<div style="font-size:11.5px;color:#9fb0cc;font-weight:800;text-transform:uppercase;margin:14px 0 6px">Clientes y regiones</div>';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+kcard(nv.count+'/'+nv.meta,'Clientes nuevos vs meta',nok?'#22c55e':'#f59e0b')+kcard(sinCompra.length,'Sin comprar',sinCompra.length?'#f59e0b':'#22c55e')+kcard(fuga.length,'En fuga (bajando)',fuga.length?'#ef4444':'#22c55e')+kcard(regBajo.length,'Regiones bajo objetivo',regBajo.length?'#ef4444':'#22c55e')+'</div>';
+    function miniList(title,items,render,verKey){
+      var hh='<div style="font-size:12.5px;color:#e8eef7;font-weight:800;margin:14px 0 6px;display:flex;justify-content:space-between;align-items:center"><span>'+title+'</span>'+(items.length?('<button onclick="setView(\''+verKey+'\')" style="background:none;border:none;color:#E8A020;font-weight:800;font-size:11px;cursor:pointer">Ver todo →</button>'):'')+'</div>';
+      if(!items.length)return hh+'<div style="font-size:12px;color:#7ee2a8;padding:2px 2px 6px">✓ Sin pendientes aquí.</div>';
+      hh+='<div class="list">'; items.slice(0,5).forEach(function(it){hh+=render(it);}); hh+='</div>'; return hh;
+    }
+    h+=miniList('📉 Top fuga lenta',fuga.slice().sort(function(a,b){return (b.perd||0)-(a.perd||0);}),function(f){
+      var col=f.sev==='critica'?'#ef4444':(f.sev==='alta'?'#f97316':'#f59e0b');
+      return '<div class="li"><div><b>'+f.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(f.est||'')+' · pierde ~'+fmt(f.perd)+' sac/mes</div></div><span style="font-weight:900;color:'+col+'">'+f.drop+'%</span></div>';
+    },'alertas');
+    h+=miniList('🚨 Top sin comprar',sinCompra.slice().sort(function(a,b){return (b.dias||0)-(a.dias||0);}),function(c){
+      var dd=(c.dias==null?'—':c.dias+'d'); var col=(c.dias!=null&&c.dias>=45)?'#ef4444':'#f59e0b';
+      return '<div class="li"><div><b>'+c.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(c.est||'')+' · últ. '+(c.ult||'—')+'</div></div><span style="font-weight:900;color:'+col+'">'+dd+'</span></div>';
+    },'alertas');
+    h+=miniList('🗺 Regiones cayendo',regBajo.slice().sort(function(a,b){return a.crec-b.crec;}),function(r){
+      var pc=r.crec*100;var col=r.crec<0?'#ef4444':'#f59e0b';
+      return '<div class="li"><div><b>'+r.est+'</b><div style="font-size:11px;color:#9fb0cc">'+fmt(r.cur)+' vs '+fmt(r.prior)+' (año ant.)</div></div><span style="font-weight:900;color:'+col+'">'+(pc>=0?'+':'')+pc.toFixed(0)+'%</span></div>';
+    },'alertas');
+  }
+  h+='<div class="foot">Resumen de '+(APPVEND||'tu cartera')+' · mismos datos y cálculos que Ventas y Alertas.</div>';
+  app.innerHTML=h;
+}
 function renderVentas(){
   var app=document.getElementById('app');app.style.display='block';
   var h=syncBar()+viewTabs();
