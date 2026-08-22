@@ -250,6 +250,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
       <label style="font-size:.74rem;color:#94a3b8">Mes:</label><select id="tb-mes" onchange="tbMesChange()"><option value="">Periodo completo</option></select>
       <span id="tb-dia-wrap" style="display:none"><label style="font-size:.74rem;color:#94a3b8">Corte al día:</label><select id="tb-dia" onchange="renderTablero()"></select></span>
       <button onclick="tbClear()" style="background:transparent;color:#94a3b8;border:1px solid #2a3a5c;border-radius:7px;padding:5px 11px;font-size:.76rem;cursor:pointer">Limpiar filtros</button>
+      <button onclick="tableroPDF()" title="Genera un reporte con exactamente lo que estás viendo, ya filtrado, y abre el diálogo para guardarlo como PDF" style="background:var(--gold);color:var(--navy);border:none;border-radius:7px;padding:5px 13px;font-size:.76rem;font-weight:800;cursor:pointer">⬇ Descargar PDF</button>
     </div>
     <div id="tablero-content" style="width:100%;padding:10px 16px 20px"></div>
   </div></div>
@@ -2127,7 +2128,7 @@ function renderTablero(){
   if(F.c)chips.push('🏢 "'+F.c+'"');
   if(F.m)chips.push('📅 '+MES_NOM[F.m]+(T.cortaDia?(' al día '+F.d):''));
   let h=`<div style="font-size:1.1rem;font-weight:800;color:var(--gold)">📊 Tablero de dirección — Mercadotecnia y Ventas</div>
-    <div style="font-size:.72rem;color:#94a3b8;margin:2px 0 8px">Todo el sistema de ventas en una pantalla: cómo vamos contra el objetivo, cuánto volumen está en juego, y qué atender primero. Comparando <b>${T.periodoTxt}</b> de ${Y.cy} vs ${Y.py} · <b>${T.nClientes}</b> clientes en la vista.</div>`;
+    <div style="font-size:.72rem;color:#94a3b8;margin:2px 0 8px">Todo el sistema de ventas en una pantalla: cómo vamos contra el objetivo, cuánto volumen está en juego, y qué atender primero. Comparando <b>${T.periodoTxt}</b> de ${Y.cy} vs ${Y.py} · <b>${T.nClientes}</b> ${T.nClientes===1?'cliente':'clientes'} en la vista.</div>`;
   if(chips.length)h+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chips.map(c=>`<span style="background:#1e3258;color:var(--gold);border-radius:20px;padding:3px 11px;font-size:.72rem;font-weight:600">${c}</span>`).join('')}<span style="font-size:.7rem;color:#64748b;align-self:center">— todo el tablero está filtrado</span></div>`;
   if(T.cortaDia)h+=`<div style="font-size:.7rem;color:#64748b;margin-bottom:8px">El corte al día ${F.d} compara contra la misma porción del mes en ${Y.py} (curva diaria del año anterior escalada), igual que la pestaña Gráfica.</div>`;
 
@@ -2149,14 +2150,14 @@ function renderTablero(){
   const retCol=T.retencion>=0.85?'var(--green)':T.retencion>=0.7?'#f59e0b':'var(--red)';
   const concCol=T.conc>=0.5?'var(--red)':T.conc>=0.35?'#f59e0b':'var(--green)';
   h+=`<div style="display:flex;gap:9px;flex-wrap:wrap">
-    ${big(fmt(T.carteraMes),T.filtrando?'Cartera filtrada':'Cartera del equipo','sacos/mes · '+T.nClientes+' clientes · '+T.activos+' activos','var(--gold)')}
-    ${big(fmt(T.enJuego),'Sacos/mes en juego',(T.pctJuego*100).toFixed(0)+'% de la cartera · '+(T.riesgoN+T.fugaN)+' clientes',jCol)}
-    ${big(fmt(T.riesgoSac),'En riesgo',T.riesgoN+' clientes sin comprar','#f97316')}
-    ${big(fmt(T.fugaSac),'En fuga lenta',T.fugaN+' clientes comprando menos','var(--red)')}
+    ${big(fmt(T.carteraMes),T.filtrando?'Cartera filtrada':'Cartera del equipo','sacos/mes · '+_pl(T.nClientes,'cliente')+' · '+_pl(T.activos,'activo'),'var(--gold)')}
+    ${big(fmt(T.enJuego),'Sacos/mes en juego',(T.pctJuego*100).toFixed(0)+'% de la cartera · '+_pl(T.riesgoN+T.fugaN,'cliente'),jCol)}
+    ${big(fmt(T.riesgoSac),'En riesgo',_pl(T.riesgoN,'cliente')+' sin comprar','#f97316')}
+    ${big(fmt(T.fugaSac),'En fuga lenta',_pl(T.fugaN,'cliente')+' comprando menos','var(--red)')}
   </div>
   <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:9px">
     ${big((T.retencion*100).toFixed(0)+'%','Retención de clientes',T.keepN+' de '+T.baseN+' que compraban en '+Y.py,retCol)}
-    ${big(fmt(T.lostSac),'Volumen perdido',T.lostN+' clientes de '+Y.py+' que ya no compran','var(--red)')}
+    ${big(fmt(T.lostSac),'Volumen perdido',_pl(T.lostN,'cliente')+' de '+Y.py+' que ya no '+(T.lostN===1?'compra':'compran'),'var(--red)')}
     ${big(T.nuevosN+' / '+T.metaN,'Clientes nuevos vs meta',fmt(T.nuevosSac)+' sacos aportados',T.nuevosN>=T.metaN?'var(--green)':'#f59e0b')}
     ${big((T.conc*100).toFixed(0)+'%','Concentración top 10',fmt(T.top10)+' sac/mes en 10 clientes',concCol)}
   </div>`;
@@ -2168,7 +2169,7 @@ function renderTablero(){
   h+=`<div style="display:flex;gap:9px;flex-wrap:wrap">
     ${big((T.mixPrem*100).toFixed(1)+'%',T.filtrando?'Mix premium (filtrado)':'Mix premium del equipo','Premium 25/20 + Silver Cat 15 · '+T.periodoTxt,'#a78bfa')}
     ${big(fmt(T.tonMes),'Toneladas / mes',T.filtrando?'solo lo filtrado':'terminado + promoción','#38bdf8')}
-    ${big(T.filtrando?'—':((T.uso*100).toFixed(0)+'%'),'Uso de planta',T.filtrando?'aplica al total, quita filtros':'queda '+pct(head)+' de volumen',T.filtrando?'#64748b':usoCol)}
+    ${big(T.filtrando?'—':((T.uso*100).toFixed(0)+'%'),'Uso de planta',T.filtrando?'aplica al total, quita filtros':(head>2?'capacidad de sobra':'queda '+pct(head)+' de volumen'),T.filtrando?'#64748b':usoCol)}
     ${big(fmt(T.promoWin),'Toneladas de promoción',T.periodoTxt+' · consumen planta','#f59e0b')}
   </div>`;
 
@@ -2222,6 +2223,158 @@ function renderTablero(){
   }
 
   box.innerHTML=h;
+}
+
+
+/* ── PDF del Tablero de dirección ───────────────────────────────────────────
+   Exporta exactamente lo que está en pantalla, con los filtros aplicados.
+   Arma un reporte limpio en blanco (texto seleccionable, no captura de imagen)
+   y abre el diálogo de impresión, donde se elige "Guardar como PDF".
+   Sin librerías externas: funciona igual en la oficina y en el celular. ── */
+function _pl(n,s1,sp){n=Math.round(n||0);return n+' '+(n===1?s1:(sp||s1+'s'));}
+function _pe(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _pdfCss(){return '*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111;margin:0;padding:16px 18px;font-size:11px}'
+  +'h1{font-size:17px;margin:0 0 2px}.sub{color:#555;font-size:10.5px}'
+  +'.chips{margin:7px 0 4px}.chip{display:inline-block;border:1px solid #999;border-radius:20px;padding:2px 9px;font-size:9.5px;margin:0 5px 4px 0}'
+  +'h2{font-size:12.5px;margin:15px 0 4px;padding-bottom:3px;border-bottom:1.5px solid #333}'
+  +'.note{color:#666;font-size:9.5px;margin:0 0 7px}'
+  +'.cards{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:7px}'
+  +'.card{flex:1;min-width:112px;border:1px solid #ccc;border-left:3px solid #777;border-radius:5px;padding:6px 9px}'
+  +'.card .v{font-size:15px;font-weight:800}.card .l{font-size:8.8px;color:#555;text-transform:uppercase;letter-spacing:.03em;margin-top:1px}.card .s{font-size:8.8px;color:#777;margin-top:1px}'
+  +'table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:7px}'
+  +'th{text-align:left;background:#eee;border-bottom:1.5px solid #999;padding:4px 5px;font-size:8.8px;text-transform:uppercase}'
+  +'td{border-bottom:1px solid #ddd;padding:3.5px 5px}.r{text-align:right}.c{text-align:center}'
+  +'.ok{color:#15803d;font-weight:700}.wr{color:#b45309;font-weight:700}.bad{color:#b91c1c;font-weight:700}'
+  +'.two{display:flex;gap:12px}.two>div{flex:1}'
+  +'.foot{margin-top:15px;border-top:1px solid #ccc;padding-top:6px;color:#777;font-size:9px}'
+  +'@page{size:A4 portrait;margin:11mm}'
+  +'@media print{body{padding:0}h2{break-after:avoid;page-break-after:avoid}tr{break-inside:avoid;page-break-inside:avoid}.cards{break-inside:avoid;page-break-inside:avoid}}';}
+function openPrintDoc(title,body){
+  var doc='<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+_pe(title)+'</title><style>'+_pdfCss()+'</style></head><body>'+body+'</body></html>';
+  var w=null; try{ w=window.open('','_blank'); }catch(e){}
+  if(w&&w.document){
+    w.document.open(); w.document.write(doc); w.document.close();
+    var go=function(){ try{w.focus();w.print();}catch(e){} };
+    if(w.document.readyState==='complete'){setTimeout(go,350);} else {w.onload=function(){setTimeout(go,250);};setTimeout(go,1200);}
+    return;
+  }
+  var f=document.getElementById('__pdfFrame'); if(f&&f.parentNode)f.parentNode.removeChild(f);
+  f=document.createElement('iframe'); f.id='__pdfFrame';
+  f.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
+  document.body.appendChild(f);
+  var d=f.contentWindow.document; d.open(); d.write(doc); d.close();
+  setTimeout(function(){ try{f.contentWindow.focus();f.contentWindow.print();}catch(e){alert('Tu navegador bloqueó la ventana de impresión. Permite las ventanas emergentes de este sitio e intenta de nuevo.');} },600);
+}
+function _pdCard(v,l,s,col){return '<div class="card" style="border-left-color:'+(col||'#777')+'"><div class="v" style="color:'+(col||'#111')+'">'+v+'</div><div class="l">'+l+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';}
+function _pdFecha(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());}
+function _pdStamp(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+
+function tableroPDF(){
+  var T=tableroCalc();
+  if(!T){alert('Carga primero el archivo de ventas para poder generar el PDF.');return;}
+  var Y=T.Y, P=T.P, F=T.F;
+  var b='<h1>Tablero de dirección — Mercadotecnia y Ventas</h1>'
+   +'<div class="sub">Comparando '+_pe(T.periodoTxt)+' de '+Y.cy+' vs '+Y.py+' · '+_pl(T.nClientes,'cliente')+' en la vista · generado '+_pdFecha()+'</div>';
+  var chips=[];
+  chips.push('👤 '+(F.v||'Todos los vendedores'));
+  chips.push('📍 '+(F.e||'Todos los estados'));
+  if(F.c)chips.push('🏢 "'+F.c+'"');
+  chips.push('📅 '+_pe(T.periodoTxt));
+  b+='<div class="chips">'+chips.map(function(c){return '<span class="chip">'+_pe(c)+'</span>';}).join('')+'</div>';
+  if(T.cortaDia)b+='<div class="note">El corte al día '+F.d+' compara contra la misma porción del mes en '+Y.py+' (curva diaria del año anterior escalada).</div>';
+
+  // 1 · objetivo
+  var avc=T.av>=1?'#15803d':(T.av>=0.85?'#b45309':'#b91c1c');
+  var falta=Math.max(0,Math.round(T.obj-T.curTot));
+  b+='<h2>1 · ¿Cómo vamos contra el objetivo?</h2>'
+   +'<div class="note">Objetivo = '+Y.py+' del mismo periodo +'+(P.gTarget*100).toFixed(0)+'%.</div><div class="cards">'
+   +_pdCard(fmt(T.curTot),'Venta '+Y.cy,_pe(T.periodoTxt),'#a16207')
+   +_pdCard(fmt(T.priorTot),Y.py+' mismo periodo','base de comparación','#555')
+   +_pdCard(fmt(T.obj),'Objetivo','+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#1e40af')
+   +_pdCard((T.av*100).toFixed(0)+'%','Avance',T.av>=1?'vas arriba':'faltan '+fmt(falta),avc)
+   +_pdCard(pct(T.crec),'Crecimiento real','vs '+Y.py,T.crec>=0?'#15803d':'#b91c1c')
+   +'</div>';
+
+  // 2 · cartera
+  var jc=T.pctJuego>=0.2?'#b91c1c':(T.pctJuego>=0.1?'#b45309':'#15803d');
+  var rc=T.retencion>=0.85?'#15803d':(T.retencion>=0.7?'#b45309':'#b91c1c');
+  var cc=T.conc>=0.5?'#b91c1c':(T.conc>=0.35?'#b45309':'#15803d');
+  b+='<h2>2 · Salud de la cartera</h2>'
+   +'<div class="note">Riesgo = 30 a 365 días sin comprar. Fuga = sigue comprando pero cayó más de 15% contra su propio promedio. Miden el estado actual del cliente, así que no dependen del corte por mes o día.</div><div class="cards">'
+   +_pdCard(fmt(T.carteraMes),T.filtrando?'Cartera filtrada':'Cartera del equipo','sac/mes · '+_pl(T.nClientes,'cliente')+' · '+_pl(T.activos,'activo'),'#a16207')
+   +_pdCard(fmt(T.enJuego),'Sacos/mes en juego',(T.pctJuego*100).toFixed(0)+'% de la cartera · '+_pl(T.riesgoN+T.fugaN,'cliente'),jc)
+   +_pdCard(fmt(T.riesgoSac),'En riesgo',_pl(T.riesgoN,'cliente')+' sin comprar','#c2410c')
+   +_pdCard(fmt(T.fugaSac),'En fuga lenta',_pl(T.fugaN,'cliente')+' comprando menos','#b91c1c')
+   +'</div><div class="cards">'
+   +_pdCard((T.retencion*100).toFixed(0)+'%','Retención de clientes',T.keepN+' de '+T.baseN+' que compraban en '+Y.py,rc)
+   +_pdCard(fmt(T.lostSac),'Volumen perdido',_pl(T.lostN,'cliente')+' de '+Y.py+' que ya no '+(T.lostN===1?'compra':'compran'),'#b91c1c')
+   +_pdCard(T.nuevosN+' / '+T.metaN,'Clientes nuevos vs meta',fmt(T.nuevosSac)+' sacos aportados',T.nuevosN>=T.metaN?'#15803d':'#b45309')
+   +_pdCard((T.conc*100).toFixed(0)+'%','Concentración top 10',fmt(T.top10)+' sac/mes en 10 clientes',cc)
+   +'</div>';
+
+  // 3 · mezcla
+  var uc=T.uso>=0.95?'#b91c1c':(T.uso>=0.85?'#b45309':'#15803d');
+  var head=T.uso>0?(1/T.uso-1):0;
+  b+='<h2>3 · Mezcla y capacidad</h2><div class="cards">'
+   +_pdCard((T.mixPrem*100).toFixed(1)+'%',T.filtrando?'Mix premium (filtrado)':'Mix premium del equipo','Premium 25/20 + Silver Cat 15','#6d28d9')
+   +_pdCard(fmt(T.tonMes),'Toneladas / mes',T.filtrando?'solo lo filtrado':'terminado + promoción','#1e40af')
+   +_pdCard(T.filtrando?'—':((T.uso*100).toFixed(0)+'%'),'Uso de planta',T.filtrando?'aplica al total':(head>2?'capacidad de sobra':'queda '+pct(head)+' de volumen'),T.filtrando?'#777':uc)
+   +_pdCard(fmt(T.promoWin),'Toneladas de promoción',_pe(T.periodoTxt),'#b45309')
+   +'</div>';
+
+  // 4 · vendedores
+  if(T.vendRank.length){
+    b+='<h2>4 · Vendedores — avance real vs objetivo</h2><div class="note">Del más atrasado al más adelantado.</div>'
+     +'<table><thead><tr><th>Vendedor</th><th class="r">'+Y.cy+'</th><th class="r">'+Y.py+'</th><th class="r">Objetivo</th><th class="r">Avance</th><th class="r">Cartera</th><th class="r">En juego</th><th class="r">Nuevos</th></tr></thead><tbody>';
+    T.vendRank.forEach(function(r){
+      var cl=!r.tieneObj?'':(r.av>=1?'ok':(r.av>=0.85?'wr':'bad'));
+      var jp=r.cartera>0?r.juego/r.cartera:0;
+      b+='<tr><td>'+_pe(r.v)+'</td><td class="r">'+fmt(r.cur)+'</td><td class="r">'+fmt(r.prior)+'</td><td class="r">'+(r.tieneObj?fmt(r.obj):'—')+'</td>'
+       +'<td class="r '+cl+'">'+(r.tieneObj?(r.av*100).toFixed(0)+'%':'nuevo')+'</td><td class="r">'+fmt(r.cartera)+'</td>'
+       +'<td class="r '+(jp>=0.2?'bad':(jp>=0.1?'wr':''))+'">'+fmt(r.juego)+(r.cartera>0?' · '+(jp*100).toFixed(0)+'%':'')+'</td>'
+       +'<td class="r">'+r.nuevos+'</td></tr>';
+    });
+    b+='</tbody></table>';
+  }
+
+  // 5 · regiones
+  var pierden=T.regiones.filter(function(r){return r.dif<0;});
+  var ganan=T.regiones.filter(function(r){return r.dif>0;}).sort(function(a,b2){return b2.dif-a.dif;});
+  if(pierden.length||ganan.length){
+    b+='<h2>5 · Crecimiento por región</h2><div class="note">En sacos contra el año pasado, para ver el tamaño real de la fuga.</div>'
+     +'<table><thead><tr><th>Estado</th><th class="r">'+Y.cy+'</th><th class="r">'+Y.py+'</th><th class="r">Diferencia</th><th class="r">Crecimiento</th></tr></thead><tbody>';
+    pierden.concat(ganan).forEach(function(r){
+      b+='<tr><td>'+_pe(r.est)+'</td><td class="r">'+fmt(r.cur)+'</td><td class="r">'+fmt(r.prior)+'</td>'
+       +'<td class="r '+(r.dif<0?'bad':'ok')+'">'+(r.dif>=0?'+':'')+fmt(r.dif)+'</td>'
+       +'<td class="r '+(r.crec<0?'bad':'ok')+'">'+pct(r.crec)+'</td></tr>';
+    });
+    b+='</tbody></table>';
+  }
+
+  // 6 · acciones
+  b+='<h2>6 · Qué atender primero</h2><div class="note">Clientes con más sacos/mes en juego.</div>';
+  if(!T.acciones.length)b+='<div class="note ok">Sin clientes en riesgo ni en fuga.</div>';
+  else{
+    b+='<table><thead><tr><th>Cliente</th><th>Vendedor</th><th>Estado</th><th>Situación</th><th class="r">Sac/mes en juego</th></tr></thead><tbody>';
+    T.acciones.forEach(function(a){b+='<tr><td>'+_pe(a.c.nombre)+'</td><td>'+_pe(a.c.vendedor||'—')+'</td><td>'+_pe(a.c.estado||'—')+'</td><td class="wr">'+_pe(a.tipo)+'</td><td class="r bad">'+fmt(a.val)+'</td></tr>';});
+    b+='</tbody></table>';
+  }
+
+  // 7 · perdidos
+  if(T.lostTop.length){
+    b+='<h2>7 · Clientes de '+Y.py+' que ya no compran</h2><div class="note">Recuperables: ya te conocían y ya compraban.</div>'
+     +'<table><thead><tr><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="r">Traía en '+Y.py+'</th></tr></thead><tbody>';
+    T.lostTop.forEach(function(r){b+='<tr><td>'+_pe(r.nombre)+'</td><td>'+_pe(r.vend||'—')+'</td><td>'+_pe(r.estado||'—')+'</td><td class="r bad">'+fmt(r.prior)+'</td></tr>';});
+    b+='</tbody></table>';
+  }
+
+  b+='<div class="foot">Silver Kan · Tablero de dirección · programa de ventas 04MAS. Reporte generado con los filtros activos al momento de la descarga.</div>';
+  var partes=['Tablero'];
+  if(F.v)partes.push(String(F.v).replace(/[^A-Za-z0-9]+/g,'_'));
+  if(F.e)partes.push(String(F.e).replace(/[^A-Za-z0-9]+/g,'_'));
+  if(F.m)partes.push(MES_NOM[F.m]+(F.d?('_d'+F.d):''));
+  partes.push(_pdStamp());
+  openPrintDoc(partes.join('_'),b);
 }
 
 function showTab(name){
