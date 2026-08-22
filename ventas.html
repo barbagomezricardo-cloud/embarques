@@ -2270,6 +2270,7 @@ function _pdFecha(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};re
 function _pdStamp(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 
 function tableroPDF(){
+  var _sn=0; var _S=function(t){return '<h2>'+(++_sn)+' \u00b7 '+t+'</h2>';};
   var T=tableroCalc();
   if(!T){alert('Carga primero el archivo de ventas para poder generar el PDF.');return;}
   var Y=T.Y, P=T.P, F=T.F;
@@ -2286,7 +2287,7 @@ function tableroPDF(){
   // 1 · objetivo
   var avc=T.av>=1?'#15803d':(T.av>=0.85?'#b45309':'#b91c1c');
   var falta=Math.max(0,Math.round(T.obj-T.curTot));
-  b+='<h2>1 · ¿Cómo vamos contra el objetivo?</h2>'
+  b+=_S('\u00bfC\u00f3mo vamos contra el objetivo?')
    +'<div class="note">Objetivo = '+Y.py+' del mismo periodo +'+(P.gTarget*100).toFixed(0)+'%.</div><div class="cards">'
    +_pdCard(fmt(T.curTot),'Venta '+Y.cy,_pe(T.periodoTxt),'#a16207')
    +_pdCard(fmt(T.priorTot),Y.py+' mismo periodo','base de comparación','#555')
@@ -2299,7 +2300,7 @@ function tableroPDF(){
   var jc=T.pctJuego>=0.2?'#b91c1c':(T.pctJuego>=0.1?'#b45309':'#15803d');
   var rc=T.retencion>=0.85?'#15803d':(T.retencion>=0.7?'#b45309':'#b91c1c');
   var cc=T.conc>=0.5?'#b91c1c':(T.conc>=0.35?'#b45309':'#15803d');
-  b+='<h2>2 · Salud de la cartera</h2>'
+  b+=_S('Salud de la cartera')
    +'<div class="note">Riesgo = 30 a 365 días sin comprar. Fuga = sigue comprando pero cayó más de 15% contra su propio promedio. Miden el estado actual del cliente, así que no dependen del corte por mes o día.</div><div class="cards">'
    +_pdCard(fmt(T.carteraMes),T.filtrando?'Cartera filtrada':'Cartera del equipo','sac/mes · '+_pl(T.nClientes,'cliente')+' · '+_pl(T.activos,'activo'),'#a16207')
    +_pdCard(fmt(T.enJuego),'Sacos/mes en juego',(T.pctJuego*100).toFixed(0)+'% de la cartera · '+_pl(T.riesgoN+T.fugaN,'cliente'),jc)
@@ -2315,7 +2316,7 @@ function tableroPDF(){
   // 3 · mezcla
   var uc=T.uso>=0.95?'#b91c1c':(T.uso>=0.85?'#b45309':'#15803d');
   var head=T.uso>0?(1/T.uso-1):0;
-  b+='<h2>3 · Mezcla y capacidad</h2><div class="cards">'
+  b+=_S('Mezcla y capacidad')+'<div class="cards">'
    +_pdCard((T.mixPrem*100).toFixed(1)+'%',T.filtrando?'Mix premium (filtrado)':'Mix premium del equipo','Premium 25/20 + Silver Cat 15','#6d28d9')
    +_pdCard(fmt(T.tonMes),'Toneladas / mes',T.filtrando?'solo lo filtrado':'terminado + promoción','#1e40af')
    +_pdCard(T.filtrando?'—':((T.uso*100).toFixed(0)+'%'),'Uso de planta',T.filtrando?'aplica al total':(head>2?'capacidad de sobra':'queda '+pct(head)+' de volumen'),T.filtrando?'#777':uc)
@@ -2324,7 +2325,7 @@ function tableroPDF(){
 
   // 4 · vendedores
   if(T.vendRank.length){
-    b+='<h2>4 · Vendedores — avance real vs objetivo</h2><div class="note">Del más atrasado al más adelantado.</div>'
+    b+=_S('Vendedores \u2014 avance real vs objetivo')+'<div class="note">Del más atrasado al más adelantado.</div>'
      +'<table><thead><tr><th>Vendedor</th><th class="r">'+Y.cy+'</th><th class="r">'+Y.py+'</th><th class="r">Objetivo</th><th class="r">Avance</th><th class="r">Cartera</th><th class="r">En juego</th><th class="r">Nuevos</th></tr></thead><tbody>';
     T.vendRank.forEach(function(r){
       var cl=!r.tieneObj?'':(r.av>=1?'ok':(r.av>=0.85?'wr':'bad'));
@@ -2341,7 +2342,7 @@ function tableroPDF(){
   var pierden=T.regiones.filter(function(r){return r.dif<0;});
   var ganan=T.regiones.filter(function(r){return r.dif>0;}).sort(function(a,b2){return b2.dif-a.dif;});
   if(pierden.length||ganan.length){
-    b+='<h2>5 · Crecimiento por región</h2><div class="note">En sacos contra el año pasado, para ver el tamaño real de la fuga.</div>'
+    b+=_S('Crecimiento por regi\u00f3n')+'<div class="note">En sacos contra el año pasado, para ver el tamaño real de la fuga.</div>'
      +'<table><thead><tr><th>Estado</th><th class="r">'+Y.cy+'</th><th class="r">'+Y.py+'</th><th class="r">Diferencia</th><th class="r">Crecimiento</th></tr></thead><tbody>';
     pierden.concat(ganan).forEach(function(r){
       b+='<tr><td>'+_pe(r.est)+'</td><td class="r">'+fmt(r.cur)+'</td><td class="r">'+fmt(r.prior)+'</td>'
@@ -2352,7 +2353,7 @@ function tableroPDF(){
   }
 
   // 6 · acciones
-  b+='<h2>6 · Qué atender primero</h2><div class="note">Clientes con más sacos/mes en juego.</div>';
+  b+=_S('Qu\u00e9 atender primero')+'<div class="note">Clientes con más sacos/mes en juego.</div>';
   if(!T.acciones.length)b+='<div class="note ok">Sin clientes en riesgo ni en fuga.</div>';
   else{
     b+='<table><thead><tr><th>Cliente</th><th>Vendedor</th><th>Estado</th><th>Situación</th><th class="r">Sac/mes en juego</th></tr></thead><tbody>';
@@ -2362,7 +2363,7 @@ function tableroPDF(){
 
   // 7 · perdidos
   if(T.lostTop.length){
-    b+='<h2>7 · Clientes de '+Y.py+' que ya no compran</h2><div class="note">Recuperables: ya te conocían y ya compraban.</div>'
+    b+=_S('Clientes de '+Y.py+' que ya no compran')+'<div class="note">Recuperables: ya te conocían y ya compraban.</div>'
      +'<table><thead><tr><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="r">Traía en '+Y.py+'</th></tr></thead><tbody>';
     T.lostTop.forEach(function(r){b+='<tr><td>'+_pe(r.nombre)+'</td><td>'+_pe(r.vend||'—')+'</td><td>'+_pe(r.estado||'—')+'</td><td class="r bad">'+fmt(r.prior)+'</td></tr>';});
     b+='</tbody></table>';

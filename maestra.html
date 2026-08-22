@@ -608,6 +608,7 @@ function _pdCard(v,l,s,col){return '<div class="card" style="border-left-color:'
 function _pdFecha(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());}
 function _pdStamp(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function resumenPDF(){
+  var _sn=0; var _S=function(t){return '<h2>'+(++_sn)+' \u00b7 '+t+'</h2>';};
   var T=resumenCalc();
   if(!T.tieneVentas&&!T.tieneAlertas){alert('Todavía no hay datos publicados para generar el PDF.');return;}
   var b='<h1>Mercadotecnia y Ventas — Resumen de dirección</h1>'
@@ -615,7 +616,7 @@ function resumenPDF(){
    +'<div class="chips"><span class="chip">👤 '+_pe(T.vend||'Todos los vendedores')+'</span>'+(T.cutLabel?('<span class="chip">📅 '+_pe(T.cutLabel)+'</span>'):'')+'</div>';
   if(T.tieneVentas){
     var avc=T.av>=1?'#15803d':(T.av>=0.8?'#b45309':'#b91c1c');
-    b+='<h2>1 · Venta vs objetivo — '+_pe(T.cutLabel)+'</h2>'
+    b+=_S('Venta vs objetivo \u2014 '+_pe(T.cutLabel))
      +'<div class="note">Objetivo = mismo periodo del año anterior +'+((T.gTarget||0)*100).toFixed(0)+'%.</div><div class="cards">'
      +_pdCard(fmt(T.real),'Venta real (sacos)','','#a16207')
      +_pdCard(fmt(T.obj),'Objetivo','','#1e40af')
@@ -627,7 +628,7 @@ function resumenPDF(){
     var R=T.res;
     var jc=T.pctJuego>=0.2?'#b91c1c':(T.pctJuego>=0.1?'#b45309':'#15803d');
     var rc=T.ret>=0.85?'#15803d':(T.ret>=0.7?'#b45309':'#b91c1c');
-    b+='<h2>2 · Salud de la cartera</h2>'
+    b+=_S('Salud de la cartera')
      +'<div class="note">Riesgo = 30 a 365 días sin comprar. Fuga = sigue comprando pero cayó más de 15% contra su propio promedio.</div><div class="cards">'
      +_pdCard(fmt(R.cartera),'Cartera sac/mes',_pl(R.clientes,'cliente')+' · '+_pl(R.activos,'activo'),'#a16207')
      +_pdCard(fmt(T.enJuego),'Sacos/mes en juego',(T.pctJuego*100).toFixed(0)+'% de la cartera',jc)
@@ -641,30 +642,30 @@ function resumenPDF(){
   }
   if(T.tieneAlertas){
     var nv=T.nuevos;
-    b+='<h2>3 · Clientes y regiones</h2><div class="cards">'
+    b+=_S('Clientes y regiones')+'<div class="cards">'
      +_pdCard(nv.count+' / '+nv.meta,'Clientes nuevos vs meta','',nv.count>=nv.meta?'#15803d':'#b45309')
      +_pdCard(String(T.sinCompra.length),'Clientes sin comprar','',T.sinCompra.length?'#b45309':'#15803d')
      +_pdCard(String(T.fuga.length),'Clientes en fuga','',T.fuga.length?'#b91c1c':'#15803d')
      +_pdCard(String(T.regBajo.length),'Regiones bajo objetivo','',T.regBajo.length?'#b91c1c':'#15803d')
      +'</div>';
     if(T.fuga.length){
-      b+='<h2>4 · Clientes en fuga lenta ('+T.fuga.length+')</h2><table><thead><tr><th>Cliente</th><th>Estado</th><th class="r">Pierde sac/mes</th><th class="r">Caída</th></tr></thead><tbody>';
+      b+=_S('Clientes en fuga lenta ('+T.fuga.length+')')+'<table><thead><tr><th>Cliente</th><th>Estado</th><th class="r">Pierde sac/mes</th><th class="r">Caída</th></tr></thead><tbody>';
       T.fuga.slice(0,25).forEach(function(f){b+='<tr><td>'+_pe(f.n)+'</td><td>'+_pe(f.est||'')+'</td><td class="r">'+fmt(f.perd)+'</td><td class="r bad">'+f.drop+'%</td></tr>';});
       b+='</tbody></table>'+(T.fuga.length>25?'<div class="note">Se listan los 25 de mayor volumen perdido.</div>':'');
     }
     if(T.sinCompra.length){
-      b+='<h2>5 · Clientes sin comprar ('+T.sinCompra.length+')</h2><table><thead><tr><th>Cliente</th><th>Estado</th><th>Última compra</th><th class="r">Prom. sac/mes</th><th class="r">Días</th></tr></thead><tbody>';
+      b+=_S('Clientes sin comprar ('+T.sinCompra.length+')')+'<table><thead><tr><th>Cliente</th><th>Estado</th><th>Última compra</th><th class="r">Prom. sac/mes</th><th class="r">Días</th></tr></thead><tbody>';
       T.sinCompra.slice(0,25).forEach(function(c){b+='<tr><td>'+_pe(c.n)+'</td><td>'+_pe(c.est||'')+'</td><td>'+_pe(c.ult||'—')+'</td><td class="r">'+fmt(c.prom||0)+'</td><td class="r '+((c.dias!=null&&c.dias>=45)?'bad':'wr')+'">'+(c.dias==null?'—':c.dias)+'</td></tr>';});
       b+='</tbody></table>'+(T.sinCompra.length>25?'<div class="note">Se listan los 25 con más días sin comprar.</div>':'');
     }
     if(T.regBajo.length){
-      b+='<h2>6 · Regiones abajo del objetivo ('+T.regBajo.length+')</h2><table><thead><tr><th>Estado</th><th class="r">Actual</th><th class="r">Año anterior</th><th class="r">Diferencia</th><th class="r">Crecimiento</th></tr></thead><tbody>';
+      b+=_S('Regiones abajo del objetivo ('+T.regBajo.length+')')+'<table><thead><tr><th>Estado</th><th class="r">Actual</th><th class="r">Año anterior</th><th class="r">Diferencia</th><th class="r">Crecimiento</th></tr></thead><tbody>';
       T.regBajo.forEach(function(r){var dif=(r.cur||0)-(r.prior||0);b+='<tr><td>'+_pe(r.est)+'</td><td class="r">'+fmt(r.cur)+'</td><td class="r">'+fmt(r.prior)+'</td><td class="r '+(dif<0?'bad':'ok')+'">'+(dif>=0?'+':'')+fmt(dif)+'</td><td class="r '+(r.crec<0?'bad':'wr')+'">'+(r.crec>=0?'+':'')+(r.crec*100).toFixed(0)+'%</td></tr>';});
       b+='</tbody></table>';
     }
   }
   if(RES&&RES.lostTop&&RES.lostTop.length){
-    b+='<h2>7 · Clientes de '+(RES.py||'año anterior')+' que ya no compran</h2><div class="note">Recuperables: ya te conocían y ya compraban.</div>'
+    b+=_S('Clientes de '+(RES.py||'a\u00f1o anterior')+' que ya no compran')+'<div class="note">Recuperables: ya te conocían y ya compraban.</div>'
      +'<table><thead><tr><th>Cliente</th><th>Estado</th><th class="r">Traía sac/mes</th></tr></thead><tbody>';
     RES.lostTop.forEach(function(r){b+='<tr><td>'+_pe(r.n)+'</td><td>'+_pe(r.est||'')+'</td><td class="r bad">'+fmt(r.prior)+'</td></tr>';});
     b+='</tbody></table>';
