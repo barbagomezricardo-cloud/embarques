@@ -666,10 +666,17 @@ function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
     if(isPremiumPlus(p))premMixU+=cu;      // Familia Mix (+bono): Premium 25/20 + Silver Cat 15
   }
   const pc=getPremCfg();
-  // Premium se mide contra el PROMEDIO MENSUAL del cliente (no la compra puntual del mes) -> evita clientes mañosos
+  // Premium se mide contra el PROMEDIO MENSUAL del cliente (no la compra puntual del mes) -> evita clientes mañosos.
+  // IMPORTANTE: la meta que se le exige al mes evaluado es la que estuvo VIGENTE durante ese mes, es decir la que
+  // se le fijó el día 1 con los 6 meses que YA estaban cerrados en ese momento — sin incluir el propio mes evaluado.
+  // Ejemplo: al evaluar julio, la meta es la de ene-jun (la que se le anunció el 1 de julio), NO la de feb-jul.
+  // Si se usara feb-jul se le movería la portería después del partido, porque esa ventana ya incluye julio.
   var _cmpA=(completos&&completos.length)?completos:meses;
   var _refM=(refMonthly!=null)?refMonthly:(_cmpA.length?_cmpA.reduce(function(a,m){return a+((mesData&&mesData[m])||0);},0)/_cmpA.length:0);
-  var _denP=(_refM||0)*(win.cur.length||1);
+  var _corte=win.cur.length?Math.min.apply(null,win.cur):um;                       // primer mes del periodo evaluado
+  var _winMeta=_cmpA.filter(function(m){return m<_corte;}).sort(function(a,b){return a-b;}).slice(-6);
+  var _refP=_winMeta.length?_winMeta.reduce(function(a,m){return a+((mesData&&mesData[m])||0);},0)/_winMeta.length:(_refM||0);
+  var _denP=(_refP||0)*(win.cur.length||1);
   const mixPrem=_denP>0?premBaseU/_denP*100:0;   // % premium BASE vs PROMEDIO (para el 3%)
   const mixPlus=_denP>0?premMixU/_denP*100:0;    // % familia MIX vs PROMEDIO (para +0.5/+1%)
   const premOk=mixPrem>=(pc.umbralBase!=null?pc.umbralBase:UMBRAL_PREM);
