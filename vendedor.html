@@ -489,6 +489,13 @@ function descBloques(c,t){
   if(!t||t[0]==='INICIAL')return '';
   var fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
   var vig=(c.desc!=null)?c.desc:null;
+  // Si el reporte publicado en la nube todavía es de una versión anterior, no trae el desglose.
+  // Se avisa en vez de pintar bloques a medias con ceros.
+  if(vig==null&&!c.evalSac){
+    return '<div class="dbox"><div class="dlbl">Desglose del descuento</div>'+
+      '<div class="dsub" style="margin-top:4px">Para verlo, tu gerente debe volver a publicar el reporte desde el programa de ventas. '+
+      'Mientras tanto abajo siguen las metas del periodo.</div></div>';
+  }
   var h='';
   // ── A · lo que paga HOY ──
   if(vig!=null){
