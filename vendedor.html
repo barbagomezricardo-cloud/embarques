@@ -247,27 +247,42 @@ function syncBar(){
 }
 
 let CLISTEST='';
-function setClistEst(v){CLISTEST=v;const qi=document.getElementById('q');renderList(qi?qi.value:'');}
+function setClistEst(v){CLISTEST=v;paintClist();}   // sólo repinta la lista: no toca el buscador
+// ── Lista de clientes ─────────────────────────────────────────────────────────
+// El buscador NO se vuelve a dibujar mientras se escribe: sólo se repinta la lista de abajo.
+// Si se redibujara el <input> en cada letra, el teléfono cerraría el teclado y se perdería
+// lo tecleado. Por eso la lista vive en su propio contenedor (#clistBody).
+var CLISTQ='', LASTKEY=0;
+function onListInput(v){ CLISTQ=v; LASTKEY=Date.now(); paintClist(); }
+function buscandoAhora(){ return !!CLISTQ || (Date.now()-LASTKEY)<120000; }
+function paintClist(){
+  var box=document.getElementById('clistBody'); if(!box)return;
+  var q=CLISTQ;
+  var arr=Object.values(CLIENTS).filter(function(c){return !q||c.nombre.includes(q.toUpperCase());});
+  if(CLISTEST)arr=arr.filter(function(c){return (c.estado||'(sin estado)')===CLISTEST;});
+  arr.sort(function(a,b){return b.avg-a.avg;});
+  let h='';
+h+='<div class="hint">'+(APPVEND?('<b style="color:#E8A020">'+APPVEND+'</b> · '):'')+arr.length+(CLISTEST?(' en '+CLISTEST):' clientes')+(APPQ?(' · '+perWord()+' '+perLabel()):'')+' · toca uno para ver su tarjeta</div><div class="list">';
+arr.slice(0,120).forEach(c=>{const t=tierOf(c.avg);h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b><div style="font-size:11px;color:#9fb0cc">'+fmt(c.avg)+' sacos/mes'+(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')+'</div></div><span class="lv" style="background:'+NIVCOL[t[0]]+';color:#fff">'+nivLab(t[0])+'</span></div>';});
+  h+='</div>';
+  if(!arr.length)h+='<div class="hint">Sin resultados.</div>';
+  box.innerHTML=h;
+}
 function renderList(q){
   const app=document.getElementById('app');app.style.display='block';
   CARDOPEN=false; VIEW='clientes';
-  let arr=Object.values(CLIENTS).filter(c=>!q||c.nombre.includes(q.toUpperCase()));
-  if(CLISTEST)arr=arr.filter(c=>(c.estado||'(sin estado)')===CLISTEST);
-  arr.sort((a,b)=>b.avg-a.avg);
-  // opciones de estado (solo si hay estados en los datos)
+  if(q!==undefined&&q!==null)CLISTQ=String(q);
   const estCnt={}; Object.values(CLIENTS).forEach(c=>{const e=c.estado||'(sin estado)';estCnt[e]=(estCnt[e]||0)+1;});
   const estKeys=Object.keys(estCnt).filter(e=>e!=='(sin estado)').sort();
   let h=syncBar()+viewTabs();
-  h+='<input class="search" id="q" placeholder="Buscar cliente..." value="'+q.replace(/"/g,'')+'" oninput="renderList(this.value)">';
+  h+='<input class="search" id="q" placeholder="Buscar cliente..." value="'+CLISTQ.replace(/"/g,'')+'" oninput="onListInput(this.value)">';
   if(estKeys.length){
-    h+='<select onchange="setClistEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:8px"><option value="">📍 Todos los estados ('+Object.keys(CLIENTS).length+')</option>'+estKeys.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(CLISTEST===e?' selected':'')+'>'+e+' — '+estCnt[e]+'</option>';}).join('')+(estCnt['(sin estado)']?('<option value="(sin estado)"'+(CLISTEST==='(sin estado)'?' selected':'')+'>Sin estado — '+estCnt['(sin estado)']+'</option>'):'')+'</select>';
+h+='<select onchange="setClistEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:8px"><option value="">📍 Todos los estados ('+Object.keys(CLIENTS).length+')</option>'+estKeys.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(CLISTEST===e?' selected':'')+'>'+e+' — '+estCnt[e]+'</option>';}).join('')+(estCnt['(sin estado)']?('<option value="(sin estado)"'+(CLISTEST==='(sin estado)'?' selected':'')+'>Sin estado — '+estCnt['(sin estado)']+'</option>'):'')+'</select>';
   }
-  h+='<div class="hint">'+(APPVEND?('<b style="color:#E8A020">'+APPVEND+'</b> · '):'')+arr.length+(CLISTEST?(' en '+CLISTEST):' clientes')+(APPQ?(' · '+perWord()+' '+perLabel()):'')+' · toca uno para ver su tarjeta</div><div class="list">';
-  arr.slice(0,120).forEach(c=>{const t=tierOf(c.avg);h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b><div style="font-size:11px;color:#9fb0cc">'+fmt(c.avg)+' sacos/mes'+(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')+'</div></div><span class="lv" style="background:'+NIVCOL[t[0]]+';color:#fff">'+nivLab(t[0])+'</span></div>';});
-  h+='</div>';
-  if(!arr.length)h+='<div class="hint">Sin resultados.</div>';
+  h+='<div id="clistBody"></div>';
   app.innerHTML=h;
-  const qi=document.getElementById('q');if(qi&&q){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
+  paintClist();
+  const qi=document.getElementById('q');if(qi&&CLISTQ){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 
 let PROSPQ='', PROSPFILT='pend';
@@ -528,7 +543,8 @@ function skPoll(){ if(!CLOUD.v)return;
   // corta la sesión abierta si el gerente desactiva a este vendedor
   fetch(base+'/skan/_vblock/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){if(vBlocked(b))skVendBlocked();}).catch(function(){});
   if(VIEW!=='clientes'||CARDOPEN)return;   // no refrescar mientras una tarjeta está abierta (se cerraría sola)
-  fetch(base+'/skan/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ if(CARDOPEN)return; var qi=document.getElementById('q'); var qv=qi?qi.value:''; applyPayload(p); renderList(qv); } }).catch(function(){}); }
+  if(buscandoAhora())return;               // ni encima de una búsqueda en curso: se cerraría el teclado
+  fetch(base+'/skan/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ if(CARDOPEN)return; applyPayload(p); renderList(CLISTQ); } }).catch(function(){}); }
 // ── Candado por DISPOSITIVO: el primer teléfono que abre el link queda autorizado; otro teléfono se bloquea ──
 function skDeviceBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">📵</div><h2 style="color:#E8A020;margin:10px 0">App bloqueada en este teléfono</h2><p class="hint">Esta app ya está activada en otro dispositivo. Si cambiaste de teléfono, pide a tu gerente que <b>libere tu acceso</b>.</p></div>';}
 /* Safari (sobre todo iPhone) borra localStorage solo (Intelligent Tracking Prevention tras ~7 días sin
