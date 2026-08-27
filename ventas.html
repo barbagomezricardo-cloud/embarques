@@ -3246,6 +3246,12 @@ function buildVendorPayloads(){
   const MES_NOM_L={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
   // Meses del periodo a evaluar: mensual = solo el último mes; trimestral = el trimestre
   const evalMonths=(evalP==='MES')?[lastMonth]:q.months;
+  // Mes que se EVALUÓ para el descuento vigente (el último ya cerrado) y el previo con el que se comparó
+  // el crecimiento. Si lastMonth ya está cerrado, no hay mes en curso todavía.
+  const _COMP=(DATA.completos&&DATA.completos.length)?DATA.completos.slice().sort((a,b)=>a-b):[];
+  const MESEVAL=_COMP.length?_COMP[_COMP.length-1]:0;
+  const MESANT =_COMP.length>1?_COMP[_COMP.length-2]:0;
+  const MESCURSO=(lastMonth&&lastMonth!==MESEVAL)?lastMonth:0;   // 0 = el mes en curso aún no tiene ventas
   const evalLabel=(evalP==='MES')?(MES_NOM_L[lastMonth]||''):q.label;
   const byV={};
   DATA.clients.forEach(c=>{ if(!((c.promMes||0)>0))return; const v=c.vendedor||'(sin asignar)'; (byV[v]=byV[v]||[]).push(c); });
@@ -3264,7 +3270,15 @@ function buildVendorPayloads(){
       let qtd=0; evalMonths.forEach(m=>{qtd+=(c.qualMes&&c.qualMes[m])||0;});
       let qp=0,qpb=0; const pm=c.prodMes||{}; for(const p in pm){ if(isPremiumPlus(p)){ evalMonths.forEach(m=>{const s=(pm[p]&&pm[p][m])||0; qp+=s; qpb+=s;}); } }   // base y mix ahora cuentan Premium 25/20 + Silver Cat 15
       const pmOut={}; for(const p in pm){ const mm={}; for(const k in pm[p]){ const qy=Math.round(pm[p][k]||0); if(qy>0)mm[k]=qy; } if(Object.keys(mm).length)pmOut[p]=mm; }   // compras por producto y mes (para la credencial y filtros)
-      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb),e:(c.estado||''),vd:(c.vendedor||''),pm:pmOut};
+      // Descuento VIGENTE (congelado al cierre del mes evaluado) y las piezas que lo explican,
+      // para que las apps muestren el desglose sin volver a calcularlo y sin poder desviarse.
+      const evalSac=Math.round((c.qualMes&&c.qualMes[MESEVAL])||0);
+      const antSac =Math.round((c.qualMes&&c.qualMes[MESANT])||0);
+      let premEval=0; for(const p in pm){ if(isPremiumPlus(p)) premEval+=(pm[p]&&pm[p][MESEVAL])||0; }
+      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb),e:(c.estado||''),vd:(c.vendedor||''),pm:pmOut,
+        desc:Math.round((c.desc||0)*1000)/1000, crecio:!!c.crecio, premOk:!!c.premOk,
+        boost:Math.round(premBoost(c.mixPlus||0,getPremCfg())*1000)/1000,
+        evalSac:evalSac, antSac:antSac, premEval:Math.round(premEval)};
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
@@ -3305,7 +3319,7 @@ function buildVendorPayloads(){
       curTot:Math.round(yrows.filter(function(r){return r.vend===v;}).reduce(function(a,r){return a+(r.cur||0);},0)),
       priorTot:Math.round(yrows.filter(function(r){return r.vend===v;}).reduce(function(a,r){return a+(r.prior||0);},0)),
       cy:Yv.cy||0,py:Yv.py||0};
-    out[v]={v:v,period:period,lastMonth:lastMonth,q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows,res:res};
+    out[v]={v:v,period:period,lastMonth:lastMonth,mesEval:MESEVAL,mesAnt:MESANT,mesCurso:MESCURSO,q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows,res:res};
   });
   // ── Cobradores: clonan la cartera de "su" vendedor con su propia marca de agua y licencia (excluidos del índice de gerencia) ──
   (COBRADORES||[]).forEach(function(cb){
