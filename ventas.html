@@ -902,10 +902,18 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     const peakMes=meses.length?meses.reduce((a,b)=>mesTotal[a]>mesTotal[b]?a:b):0;
     const totalSacos=Object.values(mesTotal).reduce((a,b)=>a+b,0);
 
-    // Meses "completos" del periodo (excluye meses claramente parciales, p.ej. el mes en curso)
+    // Meses "completos" del periodo. Dos condiciones, las dos obligatorias:
+    //  1) el mes no puede ser el que está EN CURSO. Un mes a medias siempre trae menos sacos que
+    //     uno completo, así que si se cuenta, toda la cartera aparece desplomándose y los clientes
+    //     pierden el bono de crecimiento que sí ganaron. El nivel, el crecimiento y el mix premium
+    //     se calculan SIEMPRE con meses ya cerrados.
+    //  2) el mes no puede ser anómalamente flaco (menos del 40% del mes más grande), que delata
+    //     un periodo mal exportado.
     const _mesArr=Object.keys(mesTotal).map(Number);
     const _maxMes=Math.max(...Object.values(mesTotal),1);
-    const _completos=_mesArr.filter(m=>mesTotal[m]>=0.4*_maxMes);
+    const _hoyY=TODAY.getFullYear(), _hoyM=TODAY.getMonth()+1;
+    const _mesEnCurso=((LAST_DATA_YEAR||_hoyY)===_hoyY)?_hoyM:0;   // 0 = los datos son de un año ya cerrado
+    const _completos=_mesArr.filter(m=>m!==_mesEnCurso && mesTotal[m]>=0.4*_maxMes);
     const _nComplete=_completos.length||1;
     // Nivel: promedio de los ÚLTIMOS 6 MESES CERRADOS (ventana que se recorre sola conforme avanza el tiempo)
     const _completos6=_completos.slice().sort((a,b)=>a-b).slice(-6);
