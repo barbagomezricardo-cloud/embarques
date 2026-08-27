@@ -144,6 +144,9 @@ function parseHash(){
 function applyPayload(p){
   APPVEND=p.v||''; APPPERIOD=p.period||''; APPMONTH=p.lastMonth||p.m||0;
   MESEVAL=p.mesEval||0; MESANT=p.mesAnt||0; MESCURSO=p.mesCurso||0;
+  // Reportes publicados por una versión anterior no traen estos campos: se deducen del
+  // último mes con datos, para que las etiquetas de mes nunca queden en blanco ni en enero.
+  if(!MESCURSO&&!MESEVAL&&APPMONTH){ MESCURSO=APPMONTH; MESEVAL=((APPMONTH-2+12)%12)+1; MESANT=((APPMONTH-3+12)%12)+1; }
   APPQ=p.q||(APPMONTH?quarterOf(APPMONTH):null);
   APPUPDATED=p.updatedStr||'';
   if(p.prem){PREM=Object.assign({base:3,u1:5,e1:0.5,u2:7.5,e2:1.0},p.prem);} // % del Bono Premium+ definidos por el gerente
@@ -484,7 +487,7 @@ function prodMesHtml(c){
 // nunca puede desviarse del número oficial. El proyectado sí se calcula aquí, con lo
 // que el cliente lleva comprado en el mes en curso.
 var MESNOM={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
-function mesSig(m){ return MESNOM[(m%12)+1]||''; }
+function mesSig(m){ return m?(MESNOM[(m%12)+1]||'el mes siguiente'):'el mes siguiente'; }   // sin mes conocido NO debe caer en enero
 function descBloques(c,t){
   if(!t||t[0]==='INICIAL')return '';
   var fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
