@@ -791,7 +791,7 @@ function descBloques(c,t){
     pz.push({t:'Fijo de su nivel',v:fijo,ok:true});
     pz.push({t:'Creció '+(c.antSac!=null&&c.evalSac!=null?('de '+fmt(c.antSac)+' a '+fmt(c.evalSac)+' sacos'):('+'+uc+'%')),v:(c.crecio?kc:0),ok:!!c.crecio});
     pz.push({t:'Premium base ('+fmt(c.premEval||0)+' sacos, '+(c.mix||0).toFixed(1)+'%)',v:(c.premOk?kp:0),ok:!!c.premOk});
-    pz.push({t:'Premium+ (mix '+(c.mixp||0).toFixed(1)+'%)',v:(c.boost||0),ok:(c.boost||0)>0});
+    pz.push({t:'Premium+ '+((c.boost||0)>=PREM.e2?'escalón 2 (≥'+PREM.u2+'%)':((c.boost||0)>0?'escalón 1 (≥'+PREM.u1+'%)':'(no alcanzó el '+PREM.u1+'%)'))+' · mix '+(c.mixp||0).toFixed(1)+'%',v:(c.boost||0),ok:(c.boost||0)>0});
     h+='<div class="dbox">';
     h+='<div class="dtop"><div><div class="dlbl">Descuento que paga en '+(MESNOM[MESCURSO]||'este mes')+'</div>'+
        '<div class="dsub">Se calculó al cerrar '+(MESNOM[MESEVAL]||'el mes pasado')+' y ya no cambia</div></div>'+
@@ -824,12 +824,16 @@ function descBloques(c,t){
   // premium base
   h+='<div class="drow'+(okPrem?' si':' no')+'"><span>'+(okPrem?'✓':'○')+' Premium base: lleva '+fmt(pbNow)+' de '+fmt(mBase)+' sacos</span><b>'+(okPrem?'+'+kp.toFixed(2)+'%':'+'+kp.toFixed(2)+'% pendiente')+'</b></div>';
   h+=barra(mBase>0?pbNow/mBase*100:0, okPrem?'#22c55e':'#E8A020');
-  // premium+
-  var sigMeta=(pctMix>=PREM.u2)?null:((pctMix>=PREM.u1)?m2:m1);
-  var sigExtra=(pctMix>=PREM.u2)?null:((pctMix>=PREM.u1)?PREM.e2:PREM.e1);
-  h+='<div class="drow'+(boostNow>0?' si':' no')+'"><span>'+(boostNow>0?'✓':'○')+' Premium+: lleva '+fmt(pmNow)+' sacos ('+pctMix.toFixed(1)+'%)</span><b>'+(boostNow>0?('+'+boostNow.toFixed(2)+'%'):'—')+'</b></div>';
-  h+=barra(m2>0?pmNow/m2*100:0, boostNow>0?'#22c55e':'#E8A020');
-  if(sigMeta!=null)h+='<div class="dhint">Con '+fmt(Math.max(0,sigMeta-pmNow))+' sacos más de premium o gato sube a +'+sigExtra.toFixed(2)+'% extra.</div>';
+  // Premium+ · los dos escalones por separado, cada uno con su meta en sacos.
+  // Son EXCLUYENTES: se cobra el más alto alcanzado, no los dos.
+  var ok1=pctMix>=PREM.u1, ok2=pctMix>=PREM.u2;
+  h+='<div class="drow'+(ok1?' si':' no')+'"><span>'+(ok1?'✓':'○')+' Premium+ escalón 1 (mix ≥'+PREM.u1+'%): lleva '+fmt(pmNow)+' de '+fmt(m1)+' sacos</span><b>'+(ok2?'—':(ok1?('+'+PREM.e1.toFixed(2)+'%'):('+'+PREM.e1.toFixed(2)+'% pendiente')))+'</b></div>';
+  h+=barra(m1>0?pmNow/m1*100:0, ok1?'#22c55e':'#E8A020');
+  h+='<div class="drow'+(ok2?' si':' no')+'"><span>'+(ok2?'✓':'○')+' Premium+ escalón 2 (mix ≥'+PREM.u2+'%): lleva '+fmt(pmNow)+' de '+fmt(m2)+' sacos</span><b>'+(ok2?('+'+PREM.e2.toFixed(2)+'%'):('+'+PREM.e2.toFixed(2)+'% pendiente'))+'</b></div>';
+  h+=barra(m2>0?pmNow/m2*100:0, ok2?'#22c55e':'#E8A020');
+  var sigMeta=ok2?null:(ok1?m2:m1);
+  var sigExtra=ok2?null:(ok1?PREM.e2:PREM.e1);
+  if(sigMeta!=null)h+='<div class="dhint">Con '+fmt(Math.max(0,sigMeta-pmNow))+' sacos más de premium o gato sube a +'+sigExtra.toFixed(2)+'% extra. Los dos escalones no se suman: cuenta el más alto que alcance.</div>';
   else h+='<div class="dhint">Ya está en el Premium+ máximo.</div>';
   h+='</div>';
   return h;
