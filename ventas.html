@@ -540,6 +540,7 @@ const isPremiumPlus = n => PREMIUM_RE.test(n) || GATO_RE.test(n);
 const PETFOOD_RE = /PET\s*FOOD/i;
 const PESO_SACO_KG = 25;
 const normName=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+const ESTADOS_MX=['AGUASCALIENTES','BAJA CALIFORNIA','BAJA CALIFORNIA SUR','CAMPECHE','CHIAPAS','CHIHUAHUA','CIUDAD DE MEXICO','COAHUILA','COLIMA','DURANGO','GUANAJUATO','GUERRERO','HIDALGO','JALISCO','MEXICO','MICHOACAN','MORELOS','NAYARIT','NUEVO LEON','OAXACA','PUEBLA','QUERETARO','QUINTANA ROO','SAN LUIS POTOSI','SINALOA','SONORA','TABASCO','TAMAULIPAS','TLAXCALA','VERACRUZ','YUCATAN','ZACATECAS'];
 const mergeDup=s=>String(s).replace(/\s*\(\d+\)\s*$/,'').replace(/^Z{1,4}[\s._-]+/i,'').trim();
 const EXCLUDED_CLIENTS=new Set(["\"PROBA HD PROCESADORA DE BARREDURAS HD\"", "ADRIAN GARZA ELIZONDO.", "ADRIAN OYERVIDEZ SEPULVEDA.", "AGRICOLA COMERCIAL AGCEMA.", "ANGELA OLVERA AZUARA.", "APIABA DEL NORTE", "ARMANDO DIAS GARCIA.", "CARLOS EDUARDO FIGUEROA ZEPEDA.", "CENTRO COMERCIAL BOULEVARD DE CEDRAL.", "CEREALES Y FRUTAS BRAMBILA.", "CLASE AGROINDUSTRIAL.", "CLAUDIA JUDITH GASTELUM BANUELOS.", "COMERCIALIZADORA BUENA PATA SA DE CV.", "COMERCIALIZADORA DE GRANOS Y SEMILLAS SAN LUIS.", "COMERCIALIZADORA Y DISTRIBUIDORA MAF.", "COMPANIA GENERAL DE VIVERES.", "DIEGO ABRAHAM HERRERA LOBATO.", "DIEGO ARMANDO GONZALEZ GONZALEZ.", "DISTRIBUIDORA EL CHARAL.", "DISTRIBUIDORA Y ENVASADORA JAVA.", "EDGAR GUADALUPE LOPEZ DURAN.", "EDGAR ISRAEL VAZQUEZ LUIS", "EMMANUEL GARCIA TOLEDO.", "ENRIQUE HERNANDEZ DORANTES", "ENRIQUE HERNANDEZ VEGA.", "ERIC RAFAEL GONZALEZ CISNEROS", "FACTOR AGROINDUSTRIAL.", "FAUSTINO TAPIA TELLEZ.", "FEDERICO VEGA DAVILA.", "FERNANDO IVAN GARCIA LOMELI.", "FORRAJES EL TUNAL.", "FORRAJES ESCOBEDO.", "GIAN CARLO EMMANUEL RODRIGUEZ FLORES.", "GILBERTO AVILA VIDAURRI", "GILBERTO MARQUEZ SANCHEZ.", "GRACE ANAHI GUILLEN.", "GRUPO DEL TORO MX", "HACIENDA CORTAZAR.", "ISRAEL MONTES LOPEZ.", "J. REFUGIO INFANTE.", "J. TRINIDAD RUIZ RUIZ.", "JERONIMO TRINIDAD FLORES", "JESUS GERARDO TORRES TABOADA.", "JORGE ALFREDO PEREZ VIVANCO.", "JORGE ALVAREZ CANO.", "JORGE MONTES VEGA.", "JOSE ALEJANDRO LOPEZ GARCIA.", "JOSE ASCENCION MENDOZA GARCIA.", "JOSE DE JESUS NARVAEZ OROZCO.", "JOSE DE JESUS PADILLA RAMIREZ", "JOSE LUIS DE LIRA PALACIOS.", "JOSE SANTIAGO RIVERA FLORES.", "JUAN ADRIAN MEDINA VAZQUEZ.", "JUAN ANTONIO URRUTIA RODRIGUEZ", "JUAN DIEGO DAVALOS DE LUNA", "JUAN JOSE SAINZ HERNANDEZ.", "KARINA SANCHEZ CARDONA.", "KARLA CORINA ZUNIGA RODRIGUEZ", "LAURO CASTILLO PACHECO.", "LEOBARDO MARTINEZ COELLO.", "LIDERES EN ALIMENTOS", "LUIS ENRIQUE CANALES TORRES.", "LUIS ISMAEL OTERO SALAZAR.", "LUIS MIGUEL ROSETE CRUZ", "MA JOAQUINA CARRIZALES VEGA.", "MARCELA LANDEROS ALVAREZ.", "MARCELINO JESUS BAENA CURIEL.", "MARIA DEL CARMEN SONIA ARTEAGA ALVAREZ.", "MARIA FERNANDA RAMOS HERRERA.", "MARIA ROSA FLORES GARIBAY", "MARTIN GARCIA LEOCADIO.", "NANCY GUADALUPE MORENO SANCHEZ", "NUESTRA SENORA DE LOS ALTOS.", "OSSAN PRODUCTS.", "PABLO ROJAS VILLALON.", "PEDRO HERNANDEZ RUANO.", "RAYMUNDO CUATEPOTZO GUERRERO.", "RENATO HERNANDEZ HERNANDEZ.", "RIGOBERTO CASILLAS GARCIA.", "RIGOBERTO CORTES TOVAR.", "ROBERTO SANCHEZ LOPEZ.", "RODOLFO RUIZ BLANCO.", "ROGELIO AVALOS INFANTE", "ROYS ABARROTERA.", "RUBEN ALONSO SAUCEDO CHAVARRIA.", "SEMILLAS Y CEREALES EL AGUILA.", "SEMILLAS Y CEREALES EL CAMPESINO", "SEMILLEROS UNIDOS LOS PRIMOS.", "SILVIA GILDO GONZALEZ.", "SOCIEDAD DIST. DE BALANCEADOS EL CHETAS", "TANIA KARINA CAMPOS FLORES", "TRUCK PARTS AND SERVICE CHAVEZ HERMOSILLO.", "VICENTE DERICK FRIAS PEREA.", "VICTOR MANUEL CADENA DE MERCED."]);
 
@@ -1738,7 +1739,67 @@ function addMapping(){ if(!reqSuper())return;
   const m=getMapping();m[c]={e,v};saveMapping(m);pushConfigCloud(true);
   if(DATA){DATA.mapping=getMapping();for(const cl of DATA.clients){if(cl.nombre===c){cl.estado=e;cl.vendedor=v;}}recalcAggregates();renderMap();renderClienteTable();renderVendedores();renderRiesgo();renderAlertas();renderConfig();}
   document.getElementById('m-cliente').value='';document.getElementById('m-estado').value='';document.getElementById('m-vend').value='';
+  refreshMapDependientes();                      // <- sin esto el cambio se guarda pero no se ve
+  mapToast('✓ Guardado: '+c+' → '+e+' · '+v);
+}
+// Un cambio de mapeo altera los totales por vendedor y por estado (incluidos los clientes
+// históricos que ya no compran). DATA.yoy está cacheado: hay que tirarlo y repintar, si no
+// el usuario guarda y la pantalla no cambia — parece que el botón no hizo nada.
+function refreshMapDependientes(){
+  try{
+    if(DATA){ DATA.mapping=getMapping(); DATA.yoy=null; computeYoY(); }
+    if(typeof renderObjetivos==='function')renderObjetivos();
+    if(typeof renderTablero==='function')renderTablero();
+    if(typeof renderNuevos==='function')renderNuevos();
+    if(typeof renderMap==='function')renderMap();
+  }catch(err){console.error(err);}
   renderMapeoTable();
+}
+function mapToast(txt){
+  var d=document.getElementById('map-toast');
+  if(!d){d=document.createElement('div');d.id='map-toast';
+    d.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:99999;background:#065f46;color:#d1fae5;border:1px solid #10b981;border-radius:9px;padding:10px 16px;font-size:.86rem;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.45)';
+    document.body.appendChild(d);}
+  d.textContent=txt; d.style.display='block';
+  clearTimeout(window._mapToastT); window._mapToastT=setTimeout(function(){d.style.display='none';},2600);
+}
+// Asignación directa desde la lista de pendientes (sin pasar por el formulario de arriba).
+// Resuelve el nombre contra el mapeo real: los clientes históricos suelen estar escritos
+// distinto en la base del año anterior (acentos, ñ) que en el mapeo.
+function setMapField(nombre,campo,valor){
+  if(!reqSuper())return;
+  var m=getMapping();
+  var mN=new Map(); for(var k in m) if(m[k]&&(m[k].e||m[k].v)) mN.set(nkey(k),k);
+  var real=resolveKey(nombre,mN)||nombre.toUpperCase();
+  var info=m[real]||{e:'',v:''};
+  var e=(campo==='e')?String(valor||'').toUpperCase():(info.e||'');
+  var v=(campo==='v')?String(valor||'').toUpperCase():(info.v||'');
+  if(!e&&!v){return;}
+  m[real]={e:e,v:v}; saveMapping(m); pushConfigCloud(true);
+  if(DATA){for(var i=0;i<DATA.clients.length;i++){var cl=DATA.clients[i];if(nkey(cl.nombre)===nkey(real)){cl.estado=e;cl.vendedor=v;}}try{recalcAggregates();}catch(err){}}
+  refreshMapDependientes();
+  mapToast('✓ '+real+' → '+(e||'(sin estado)')+' · '+(v||'(sin vendedor)'));
+}
+// <select> de estado listo para asignar en un clic desde las listas de pendientes
+function selEstado(nombre,actual){
+  var cs=String(nombre).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var h='<select onchange="setMapField(\''+cs+'\',\'e\',this.value)" style="background:#0b1428;border:1px solid '+(actual?'#334155':'#ef4444')+';color:#fff;border-radius:5px;padding:3px 5px;font-size:.74rem;max-width:170px">';
+  h+='<option value=""'+(actual?'':' selected')+'>— elegir estado —</option>';
+  for(var i=0;i<ESTADOS_MX.length;i++){var e=ESTADOS_MX[i];h+='<option'+(e===actual?' selected':'')+'>'+e+'</option>';}
+  return h+'</select>';
+}
+function selVend(nombre,actual,lista){
+  var cs=String(nombre).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var h='<select onchange="setMapField(\''+cs+'\',\'v\',this.value)" style="background:#0b1428;border:1px solid '+(actual?'#334155':'#ef4444')+';color:#fff;border-radius:5px;padding:3px 5px;font-size:.74rem;max-width:160px">';
+  h+='<option value=""'+(actual?'':' selected')+'>— elegir vendedor —</option>';
+  for(var i=0;i<lista.length;i++){var v=lista[i];h+='<option'+(v===actual?' selected':'')+'>'+v+'</option>';}
+  return h+'</select>';
+}
+function vendedoresConocidos(){
+  var s={};
+  try{var m=getMapping();for(var k in m){if(m[k]&&m[k].v)s[m[k].v]=1;}}catch(e){}
+  if(DATA&&DATA.clients)DATA.clients.forEach(function(c){if(c.vendedor&&c.vendedor!=='SIN DATOS')s[c.vendedor]=1;});
+  return Object.keys(s).sort();
 }
 function renderMapeoTable(){
   const m=getMapping();const entries=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
@@ -1757,16 +1818,15 @@ function renderMapeoTable(){
     const hr=(DATA.yoy.rows||[]).filter(r=>r.perdido&&r.priorFull>0&&((!r.estado||r.estado==='SIN DATOS')||(!r.vend||r.vend==='SIN DATOS')))
       .sort((a,b)=>b.priorFull-a.priorFull);
     if(hr.length){
-      const th=hr.reduce((a,r)=>a+r.priorFull,0);
+      const th=hr.reduce((a,r)=>a+r.priorFull,0); const VLIST=vendedoresConocidos();
       hHist='<div style="background:#2a2412;border:1px solid #a16207;border-left:4px solid #eab308;border-radius:8px;padding:11px 13px;margin-top:10px">'
         +'<div style="font-weight:800;color:#fbbf24;font-size:.9rem">⚠ '+hr.length+' clientes HISTÓRICOS sin mapeo completo — '+fmt(th)+' sacos del año anterior</div>'
         +'<div style="font-size:.74rem;color:#cbd5e1;margin:4px 0 8px">Son clientes que compraban el año pasado y este año no han facturado. Su volumen SÍ cuenta en el objetivo bruto; si no tienen vendedor y estado, ese objetivo no le toca a nadie y la suma no cuadra. Asígnalos aquí.</div>'
+        +'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:6px">Elige el estado en la lista desplegable y se guarda solo — no hace falta el formulario de arriba.</div>'
         +'<table class="mt"><thead><tr><th>Cliente</th><th style="text-align:right">Sacos año ant.</th><th>Vendedor</th><th>Estado</th><th></th></tr></thead><tbody>';
       hr.slice(0,40).forEach(function(r){
-        const cs=String(r.nombre||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        const vv=(r.vend&&r.vend!=='SIN DATOS')?r.vend:'<span style="color:#f87171">(sin vendedor)</span>';
-        const ee=(r.estado&&r.estado!=='SIN DATOS')?r.estado:'<span style="color:#f87171">(vacío)</span>';
-        hHist+='<tr><td>'+r.nombre+'</td><td style="text-align:right">'+fmt(r.priorFull)+'</td><td>'+vv+'</td><td>'+ee+'</td><td><button class="btn-del" style="background:#2563EB;white-space:nowrap" onclick="editMapping(\''+cs+'\')">✎ asignar</button></td></tr>';
+
+        hHist+='<tr><td>'+r.nombre+'</td><td style="text-align:right">'+fmt(r.priorFull)+'</td><td>'+((r.vend&&r.vend!=='SIN DATOS')?r.vend:selVend(r.nombre,'',VLIST))+'</td><td>'+selEstado(r.nombre,(r.estado&&r.estado!=='SIN DATOS')?r.estado:'')+'</td><td></td></tr>';
       });
       hHist+='</tbody></table>'+(hr.length>40?'<div style="font-size:.68rem;color:#94a3b8;margin-top:4px">Se muestran los 40 mayores de '+hr.length+'.</div>':'')+'</div>';
     }
@@ -1777,12 +1837,16 @@ function renderMapeoTable(){
   h+='<div style="font-weight:800;color:#f87171;font-size:.9rem">⚠ '+rows.length+' clientes del reporte actual SIN estado (lugar) — su venta ('+fmt(tot)+' sacos) cae en SIN DATOS en el mapa</div>';
   h+='<div style="font-size:.74rem;color:#cbd5e1;margin:4px 0 8px">El mapa colorea por ESTADO. Aunque el cliente tenga vendedor, si su estado está vacío va a SIN DATOS. Pulsa ✎ para precargar el formulario de arriba y asignarle su estado.</div>';
   h+='<table class="mt"><thead><tr><th>Cliente</th><th style="text-align:right">Sacos</th><th>Vendedor</th><th>Estado</th><th></th></tr></thead><tbody>';
-  rows.forEach(c=>{const cs=(c.nombre||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");const vv=c.vendedor?c.vendedor:'<span style="color:#f87171">(sin vendedor)</span>';const ee=(c.estado&&c.estado!=='SIN DATOS')?c.estado:'<span style="color:#f87171">(vacío)</span>';h+='<tr><td>'+c.nombre+'</td><td style="text-align:right">'+fmt(c.total||0)+'</td><td>'+vv+'</td><td>'+ee+'</td><td><button class="btn-del" style="background:#2563EB;white-space:nowrap" onclick="editMapping(\''+cs+'\')">✎ asignar</button></td></tr>';});
+  const VL2=vendedoresConocidos();
+  rows.forEach(c=>{const vv=c.vendedor?c.vendedor:selVend(c.nombre,'',VL2);h+='<tr><td>'+c.nombre+'</td><td style="text-align:right">'+fmt(c.total||0)+'</td><td>'+vv+'</td><td>'+selEstado(c.nombre,(c.estado&&c.estado!=='SIN DATOS')?c.estado:'')+'</td><td></td></tr>';});
   h+='</tbody></table></div>';
   pend.innerHTML=h+hHist;
 }
 function editMapping(c){
-  const m=getMapping();const info=m[c]||{e:'',v:''};
+  const m=getMapping();
+  const _mN=new Map(); for(const k in m) if(m[k]&&(m[k].e||m[k].v)) _mN.set(nkey(k),k);
+  const _r=resolveKey(c,_mN); if(_r)c=_r;      // el histórico puede estar escrito distinto (ñ, acentos)
+  const info=m[c]||{e:'',v:''};
   document.getElementById('m-cliente').value=c;
   document.getElementById('m-estado').value=info.e||'';
   document.getElementById('m-vend').value=info.v||'';
