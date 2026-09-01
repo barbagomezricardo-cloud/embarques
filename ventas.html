@@ -1783,14 +1783,14 @@ function setMapField(nombre,campo,valor){
 // <select> de estado listo para asignar en un clic desde las listas de pendientes
 function selEstado(nombre,actual){
   var cs=String(nombre).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-  var h='<select onchange="setMapField(\''+cs+'\',\'e\',this.value)" style="background:#0b1428;border:1px solid '+(actual?'#334155':'#ef4444')+';color:#fff;border-radius:5px;padding:3px 5px;font-size:.74rem;max-width:170px">';
+  var h='<select '+(SK_SUPER?'':'disabled title="Modo visor: desbloquea con el candado de la cabecera" ')+'onchange="setMapField(\''+cs+'\',\'e\',this.value)" style="background:#0b1428;border:1px solid '+(actual?'#334155':'#ef4444')+';color:#fff;border-radius:5px;padding:3px 5px;font-size:.74rem;max-width:170px;opacity:'+(SK_SUPER?'1':'.5')+'">';
   h+='<option value=""'+(actual?'':' selected')+'>— elegir estado —</option>';
   for(var i=0;i<ESTADOS_MX.length;i++){var e=ESTADOS_MX[i];h+='<option'+(e===actual?' selected':'')+'>'+e+'</option>';}
   return h+'</select>';
 }
 function selVend(nombre,actual,lista){
   var cs=String(nombre).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-  var h='<select onchange="setMapField(\''+cs+'\',\'v\',this.value)" style="background:#0b1428;border:1px solid '+(actual?'#334155':'#ef4444')+';color:#fff;border-radius:5px;padding:3px 5px;font-size:.74rem;max-width:160px">';
+  var h='<select '+(SK_SUPER?'':'disabled title="Modo visor: desbloquea con el candado de la cabecera" ')+'onchange="setMapField(\''+cs+'\',\'v\',this.value)" style="background:#0b1428;border:1px solid '+(actual?'#334155':'#ef4444')+';color:#fff;border-radius:5px;padding:3px 5px;font-size:.74rem;max-width:160px;opacity:'+(SK_SUPER?'1':'.5')+'">';
   h+='<option value=""'+(actual?'':' selected')+'>— elegir vendedor —</option>';
   for(var i=0;i<lista.length;i++){var v=lista[i];h+='<option'+(v===actual?' selected':'')+'>'+v+'</option>';}
   return h+'</select>';
@@ -1809,7 +1809,14 @@ function renderMapeoTable(){
   if(dl&&DATA&&DATA.clients){dl.innerHTML=DATA.clients.map(c=>`<option value="${(c.nombre||'').replace(/"/g,'')}">`).join('');}
   // pendientes: clientes del reporte actual SIN estado (caen en SIN DATOS del mapa)
   const pend=document.getElementById('mapeo-pending'); if(!pend)return;
-  if(!DATA||!DATA.clients){pend.innerHTML='';return;}
+  // Si está en modo visor no se puede guardar nada: hay que decirlo aquí, antes el usuario
+  // elegía en la lista y "no pasaba nada".
+  const avisoVisor = SK_SUPER ? '' :
+    '<div style="background:#2a1512;border:1px solid #7f1d1d;border-left:4px solid #ef4444;border-radius:8px;padding:11px 13px;margin-bottom:10px">'
+    +'<div style="font-weight:800;color:#f87171;font-size:.9rem">🔒 Estás en MODO VISOR — no puedes guardar cambios</div>'
+    +'<div style="font-size:.76rem;color:#cbd5e1;margin:4px 0 8px">Toca el botón <b>🔒 Modo visor</b> de la cabecera e ingresa la contraseña de super-usuario. Mientras tanto las listas de abajo están bloqueadas.</div>'
+    +'<button class="btn-add" onclick="toggleSuper()">🔓 Desbloquear ahora</button></div>';
+  if(!DATA||!DATA.clients){pend.innerHTML=avisoVisor;return;}
   const rows=DATA.clients.filter(c=>!c.estado||c.estado==='SIN DATOS').sort((a,b)=>b.total-a.total);
   // ── históricos: clientes del año anterior que ya no compran y les falta estado o vendedor ──
   let hHist='';
@@ -1831,7 +1838,7 @@ function renderMapeoTable(){
       hHist+='</tbody></table>'+(hr.length>40?'<div style="font-size:.68rem;color:#94a3b8;margin-top:4px">Se muestran los 40 mayores de '+hr.length+'.</div>':'')+'</div>';
     }
   }catch(e){}
-  if(!rows.length){pend.innerHTML='<div style="background:#0f2a17;border:1px solid #1a7a3f;border-radius:8px;padding:10px 12px;color:#4ade80;font-size:.82rem">✓ Todos los clientes del reporte actual tienen ESTADO asignado. No hay ventas cayendo en SIN DATOS por falta de mapeo.</div>'+hHist;return;}
+  if(!rows.length){pend.innerHTML=avisoVisor+'<div style="background:#0f2a17;border:1px solid #1a7a3f;border-radius:8px;padding:10px 12px;color:#4ade80;font-size:.82rem">✓ Todos los clientes del reporte actual tienen ESTADO asignado. No hay ventas cayendo en SIN DATOS por falta de mapeo.</div>'+hHist;return;}
   const tot=rows.reduce((a,c)=>a+(c.total||0),0);
   let h='<div style="background:#2a1512;border:1px solid #7f1d1d;border-left:4px solid #ef4444;border-radius:8px;padding:11px 13px">';
   h+='<div style="font-weight:800;color:#f87171;font-size:.9rem">⚠ '+rows.length+' clientes del reporte actual SIN estado (lugar) — su venta ('+fmt(tot)+' sacos) cae en SIN DATOS en el mapa</div>';
@@ -1840,7 +1847,7 @@ function renderMapeoTable(){
   const VL2=vendedoresConocidos();
   rows.forEach(c=>{const vv=c.vendedor?c.vendedor:selVend(c.nombre,'',VL2);h+='<tr><td>'+c.nombre+'</td><td style="text-align:right">'+fmt(c.total||0)+'</td><td>'+vv+'</td><td>'+selEstado(c.nombre,(c.estado&&c.estado!=='SIN DATOS')?c.estado:'')+'</td><td></td></tr>';});
   h+='</tbody></table></div>';
-  pend.innerHTML=h+hHist;
+  pend.innerHTML=avisoVisor+h+hHist;
 }
 function editMapping(c){
   const m=getMapping();
@@ -3372,7 +3379,7 @@ function applyRole(){
   // si el visor está en una pestaña no permitida, mándalo a la primera permitida
   if(!SK_SUPER){ var ap=document.querySelector('.pane.active'); if(ap){ var id=ap.id.replace('pane-',''); if(VISOR_TABS.indexOf(id)<0 && typeof showTab==='function') showTab('grafica'); } }
 }
-function toggleSuper(){
+function toggleSuper(){ setTimeout(function(){try{renderMapeoTable();}catch(e){}},60);
   if(SK_SUPER){ SK_SUPER=false; applyRole(); return; }
   var p=prompt('Contraseña de super-usuario (para editar configuración, mapeo y publicar):'); if(p===null) return;
   if(p===SUPER_PWD){ SK_SUPER=true; applyRole(); } else { alert('Contraseña incorrecta.'); }
