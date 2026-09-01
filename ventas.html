@@ -516,6 +516,18 @@ const MAPPING_BASE = {"ABARROTERA SANTANA":{"e":"JALISCO","v":"ARMANDO"},"ABARRO
 
 // ── COLORES ───────────────────────────────────────────────────────────────────
 const PROD_COLORS = {"MI BOOB 20 KGS":"#E8A020","SILVER KAN 18% 25 KGS":"#2563EB","PET FOOD  20 KG (R)":"#1A7A3F","SILVER KAN CACHORRO 20 KGS":"#8B5CF6","KAN KAN 25 KG":"#EC4899","SILVER CAT 15 KGS":"#14B8A6","SILVER KAN 18% 5 KGS":"#84CC16","KAN KAN 20 KGS":"#F97316","SILVER KAN PREMIUM+22% DE 25 KG + 2 KILOS EXTRAS":"#64748B"};
+// ── Dueño histórico (clientes de 2024-2025 que ya no aparecen en el reporte del año en curso) ──
+// Sin esto, su venta del año anterior entra al objetivo BRUTO pero no al de ningún vendedor,
+// y la suma de los vendedores nunca cuadra con el total. Fuente: BD 24-25 VENTAS (columna Vendedor).
+const MAPPING_HIST = {"ABARROTES 19 HERMANOS":{"e": "", "v": "ADMINISTRACION"}, "AGRICOLA COMERCIAL AGCEMA":{"e": "", "v": "ARMANDO"}, "ALFONSO GOMEZ CORONADO":{"e": "", "v": "ARMANDO"}, "ALICIA ZAVALA BARRIGA":{"e": "", "v": "VICTOR MANUEL"}, "ANDRES GUTIERREZ CUENCA":{"e": "", "v": "VICTOR MANUEL"}, "ANGEL FABIAN MANZO ROBLEDO":{"e": "", "v": "ADMINISTRACION"}, "ARSENIA GALEANO MENDOZA":{"e": "", "v": "VICTOR MANUEL"}, "BLANCA MARICELA MACIEL GARCIA":{"e": "", "v": "ADMINISTRACION"}, "CARLOS ALBERTO ACEVEDO ROBLES":{"e": "", "v": "ARMANDO"}, "CENTRO COMERCIAL BOULEVARD DE CEDRAL":{"e": "", "v": "ARMANDO"}, "CLAUDIA EDITHGALVEZ GALLARDO":{"e": "", "v": "JOSE MANUEL AVILA"}, "CLAUDIA JUDITH GASTELUM BAÑUELOS":{"e": "", "v": "ARMANDO"}, "COMERCIALIZADORA Y DISTRIBUIDORA MAF":{"e": "", "v": "VICTOR MANUEL"}, "CONSORCIO AGROVETERINARIO DEL CAMPO":{"e": "", "v": "VICTOR MANUEL"}, "CREMERIA DE OCCIDENTE":{"e": "", "v": "ARMANDO"}, "DESPACHO ATOTONILCO":{"e": "", "v": "ADMINISTRACION"}, "DESPACHO OJO DE AGUA DE LATILLAS":{"e": "", "v": "ADMINISTRACION"}, "DESPACHO SAN FRANSISCO DE ASIS":{"e": "", "v": "ADMINISTRACION"}, "DESPACHO SAN IGNACIO CERRO GORDO":{"e": "", "v": "ADMINISTRACION"}, "DESPACHO SAN JOSE DE GRACIA":{"e": "", "v": "ADMINISTRACION"}, "DIEGO ABRAHAM HERRERA LOBATO":{"e": "", "v": "ARMANDO"}, "EMMANUEL GARCIA TOLEDO":{"e": "", "v": "DAGOVIET"}, "ENRIQUE HERNANDEZ VEGA":{"e": "", "v": "VICTOR MANUEL"}, "FORRAJES EL TUNAL SA DE CV":{"e": "", "v": "VICTOR MANUEL"}, "FORRAJES ESCOBEDO":{"e": "", "v": "ARMANDO"}, "FRANCISCO JAVIER CABALLERO ONTIVEROS":{"e": "", "v": "ARMANDO"}, "GONZALO HERNANDEZ NIETO":{"e": "", "v": "VICTOR MANUEL"}, "GUILLERMO GARCIA ARTEAGA":{"e": "", "v": "DAGOVIET"}, "HACIENDA CORTAZAR":{"e": "", "v": "VICTOR MANUEL"}, "HECTOR HUERTA  ALVAREZ":{"e": "", "v": "ARMANDO"}, "ISRAEL GARCIA SOTELO":{"e": "", "v": "VICTOR MANUEL"}, "JOSE ALFREDO VELAZQUEZ GONZALEZ":{"e": "JALISCO", "v": "ARMANDO"}, "JOSE ASCENCION MENDOZA GARCIA":{"e": "", "v": "VICTOR MANUEL"}, "JOSE DE JESUS GONZALEZ MENDEZ":{"e": "", "v": "VICTOR MANUEL"}, "JOSE DE JESUS NARVAEZ OROZCO":{"e": "", "v": "DAGOVIET"}, "JUAN ADRIAN MEDINA VAZQUEZ":{"e": "", "v": "ARMANDO"}, "JUAN MANUEL RODRIGUEZ GONZALEZ":{"e": "", "v": "ADMINISTRACION"}, "JULISSA OVALLE ARELLANO":{"e": "", "v": "ARMANDO"}, "MA ELVIA RUIZ RUIZ":{"e": "", "v": "ARMANDO"}, "MA. JOAQUINA CARRIZALES VEGA":{"e": "TAMAULIPAS", "v": "ARMANDO"}, "MARIA GUADALUPE CORONA  AVALOS":{"e": "", "v": "ARMANDO"}, "MIGUEL ANGEL BIURQUEZ HERNANDEZ":{"e": "", "v": "VICTOR MANUEL"}, "MOISES LOPEZ DOMIGUEZ":{"e": "", "v": "VICTOR MANUEL"}, "NUESTRA SEÑORA DE LOS ALTOS":{"e": "", "v": "ADMINISTRACION"}, "PABLO ROJAS VILLALON":{"e": "", "v": "VICTOR MANUEL"}, "ROBERTO TEJADA HERNANDEZ":{"e": "", "v": "ARMANDO"}, "ROBLEDO SOLDADORES INDUSTRIALES (RSI)":{"e": "", "v": "ADMINISTRACION"}, "RODRIGO ROMO":{"e": "", "v": "ARMANDO"}, "ROLANDO PEREZ CANO":{"e": "", "v": "JOSE MANUEL AVILA"}, "ROYS ABARROTERA":{"e": "", "v": "ARMANDO"}, "RUBEN ALONSO SAUCEDO CHAVARRIA":{"e": "", "v": "ARMANDO"}, "SEMILLAS Y CEREALES EL CAMPECINO":{"e": "", "v": "ARMANDO"}, "SILVIA GILDO GONZALEZ":{"e": "", "v": "ARMANDO"}, "SOCIEDAD COOPERATIVA DE GANADEROS ORGANIZADOS DE COAHUILA":{"e": "", "v": "ARMANDO"}, "STEFANO ADRIAN GARCIA CANO":{"e": "", "v": "DAGOVIET"}, "SUPER CUACO":{"e": "", "v": "ARMANDO"}, "SUPER MAY MARKET":{"e": "", "v": "JOSE MANUEL AVILA"}, "TRUCK PARTS AND SERVICE CHAVEZ HERMOSILLO":{"e": "", "v": "ARMANDO"}, "VICENTE DERICK FRIAS PEREA":{"e": "", "v": "ARMANDO"}, "VICTOR MANUEL LOPEZ SALAS":{"e": "", "v": "DAGOVIET"}};
+for(const _k in MAPPING_HIST){ if(!MAPPING_BASE[_k]) MAPPING_BASE[_k]=MAPPING_HIST[_k]; }
+// ── Clientes que cambiaron de nombre en Odoo: se tratan como el MISMO cliente ──
+// izquierda = nombre nuevo (año en curso), derecha = nombre con el que está la base del año anterior.
+// ── Registros duplicados dentro de la base del año anterior (el mismo cliente cargado dos veces) ──
+// Se suman en uno solo; si no, su volumen infla el objetivo sin que nadie pueda recuperarlo.
+const BASE_MERGE = {"MA ELVIA RUIZ RUIZ":"MA. ELVIA RUIZ RUIZ"};
+const CLI_ALIAS = {"JOSE ALFREDO VELAZQUEZ GONZALEZ":"ALFREDO VELAZQUEZ GONZALEZ", "MA. JOAQUINA CARRIZALES VEGA":"MA JOAQUINA CARRIZALES VEGA", "MOISES LOPEZ":"MOISES LOPEZ DOMIGUEZ", "ROBERTO CARLOS SANCHEZ MONROY":"ARSENIA GALEANO MENDOZA", "RODRIGO ROMO GUTIERREZ":"RODRIGO ROMO"};
+
 const VEND_COLORS = {"ARMANDO":"#E8A020","CITLALI":"#22c55e","ADMINISTRACION":"#94a3b8","VICTOR":"#2563EB","VARIOS":"#1A7A3F","JOSE":"#8B5CF6","DAGOVIET":"#EC4899","VICTOR MANUEL":"#14B8A6","JOSE MANUEL AVILA":"#F97316"};
 const MES_NOM = {1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"};
 // Niveles según tu Apps Script
@@ -1738,7 +1750,28 @@ function renderMapeoTable(){
   const pend=document.getElementById('mapeo-pending'); if(!pend)return;
   if(!DATA||!DATA.clients){pend.innerHTML='';return;}
   const rows=DATA.clients.filter(c=>!c.estado||c.estado==='SIN DATOS').sort((a,b)=>b.total-a.total);
-  if(!rows.length){pend.innerHTML='<div style="background:#0f2a17;border:1px solid #1a7a3f;border-radius:8px;padding:10px 12px;color:#4ade80;font-size:.82rem">✓ Todos los clientes del reporte actual tienen ESTADO asignado. No hay ventas cayendo en SIN DATOS por falta de mapeo.</div>';return;}
+  // ── históricos: clientes del año anterior que ya no compran y les falta estado o vendedor ──
+  let hHist='';
+  try{
+    if(!DATA.yoy)computeYoY();
+    const hr=(DATA.yoy.rows||[]).filter(r=>r.perdido&&r.priorFull>0&&((!r.estado||r.estado==='SIN DATOS')||(!r.vend||r.vend==='SIN DATOS')))
+      .sort((a,b)=>b.priorFull-a.priorFull);
+    if(hr.length){
+      const th=hr.reduce((a,r)=>a+r.priorFull,0);
+      hHist='<div style="background:#2a2412;border:1px solid #a16207;border-left:4px solid #eab308;border-radius:8px;padding:11px 13px;margin-top:10px">'
+        +'<div style="font-weight:800;color:#fbbf24;font-size:.9rem">⚠ '+hr.length+' clientes HISTÓRICOS sin mapeo completo — '+fmt(th)+' sacos del año anterior</div>'
+        +'<div style="font-size:.74rem;color:#cbd5e1;margin:4px 0 8px">Son clientes que compraban el año pasado y este año no han facturado. Su volumen SÍ cuenta en el objetivo bruto; si no tienen vendedor y estado, ese objetivo no le toca a nadie y la suma no cuadra. Asígnalos aquí.</div>'
+        +'<table class="mt"><thead><tr><th>Cliente</th><th style="text-align:right">Sacos año ant.</th><th>Vendedor</th><th>Estado</th><th></th></tr></thead><tbody>';
+      hr.slice(0,40).forEach(function(r){
+        const cs=String(r.nombre||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const vv=(r.vend&&r.vend!=='SIN DATOS')?r.vend:'<span style="color:#f87171">(sin vendedor)</span>';
+        const ee=(r.estado&&r.estado!=='SIN DATOS')?r.estado:'<span style="color:#f87171">(vacío)</span>';
+        hHist+='<tr><td>'+r.nombre+'</td><td style="text-align:right">'+fmt(r.priorFull)+'</td><td>'+vv+'</td><td>'+ee+'</td><td><button class="btn-del" style="background:#2563EB;white-space:nowrap" onclick="editMapping(\''+cs+'\')">✎ asignar</button></td></tr>';
+      });
+      hHist+='</tbody></table>'+(hr.length>40?'<div style="font-size:.68rem;color:#94a3b8;margin-top:4px">Se muestran los 40 mayores de '+hr.length+'.</div>':'')+'</div>';
+    }
+  }catch(e){}
+  if(!rows.length){pend.innerHTML='<div style="background:#0f2a17;border:1px solid #1a7a3f;border-radius:8px;padding:10px 12px;color:#4ade80;font-size:.82rem">✓ Todos los clientes del reporte actual tienen ESTADO asignado. No hay ventas cayendo en SIN DATOS por falta de mapeo.</div>'+hHist;return;}
   const tot=rows.reduce((a,c)=>a+(c.total||0),0);
   let h='<div style="background:#2a1512;border:1px solid #7f1d1d;border-left:4px solid #ef4444;border-radius:8px;padding:11px 13px">';
   h+='<div style="font-weight:800;color:#f87171;font-size:.9rem">⚠ '+rows.length+' clientes del reporte actual SIN estado (lugar) — su venta ('+fmt(tot)+' sacos) cae en SIN DATOS en el mapa</div>';
@@ -1746,7 +1779,7 @@ function renderMapeoTable(){
   h+='<table class="mt"><thead><tr><th>Cliente</th><th style="text-align:right">Sacos</th><th>Vendedor</th><th>Estado</th><th></th></tr></thead><tbody>';
   rows.forEach(c=>{const cs=(c.nombre||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");const vv=c.vendedor?c.vendedor:'<span style="color:#f87171">(sin vendedor)</span>';const ee=(c.estado&&c.estado!=='SIN DATOS')?c.estado:'<span style="color:#f87171">(vacío)</span>';h+='<tr><td>'+c.nombre+'</td><td style="text-align:right">'+fmt(c.total||0)+'</td><td>'+vv+'</td><td>'+ee+'</td><td><button class="btn-del" style="background:#2563EB;white-space:nowrap" onclick="editMapping(\''+cs+'\')">✎ asignar</button></td></tr>';});
   h+='</tbody></table></div>';
-  pend.innerHTML=h;
+  pend.innerHTML=h+hHist;
 }
 function editMapping(c){
   const m=getMapping();const info=m[c]||{e:'',v:''};
@@ -2045,12 +2078,15 @@ function tableroCalc(){
   rows.forEach(r=>{curTot+=rowCur(r);priorTot+=rowPrior(r);});
   const obj=priorTot*(1+P.gTarget);
   const av=obj>0?curTot/obj:0;
+  let perdTot=0,perdN=0; rows.forEach(r=>{if(r.perdido){const p=rowPrior(r);if(p>0){perdTot+=p;perdN++;}}});
+  const perdList=rows.filter(r=>r.perdido&&rowPrior(r)>0)
+    .map(r=>({n:r.nombre,v:r.vend||'SIN DATOS',p:rowPrior(r),pf:r.priorFull})).sort((a,b)=>b.p-a.p);
   const crec=priorTot>0?(curTot/priorTot-1):(curTot>0?1:0);
 
   // 2) Cartera y dinero en juego
   let carteraMes=0,riesgoN=0,riesgoSac=0,fugaN=0,fugaSac=0,activos=0;
   const perVend={};
-  const vd=v=>perVend[v]||(perVend[v]={cur:0,prior:0,nuevos:0,cartera:0,rSac:0,fSac:0,clientes:0});
+  const vd=v=>perVend[v]||(perVend[v]={cur:0,prior:0,nuevos:0,cartera:0,rSac:0,fSac:0,clientes:0,perd:0});
   for(const c of clientes){
     const d=vd(c.vendedor||'SIN DATOS');
     carteraMes+=c.promMes||0; d.cartera+=c.promMes||0; d.clientes++;
@@ -2098,9 +2134,9 @@ function tableroCalc(){
   const uso=P.capTonMes>0?(tonMes/P.capTonMes):0;
 
   // 8) Ranking de vendedores
-  rows.forEach(r=>{const d=vd(r.vend||'SIN DATOS');d.cur+=rowCur(r);d.prior+=rowPrior(r);if(r.nuevo)d.nuevos++;});
+  rows.forEach(r=>{const d=vd(r.vend||'SIN DATOS');d.cur+=rowCur(r);d.prior+=rowPrior(r);if(r.nuevo)d.nuevos++;if(r.perdido)d.perd+=rowPrior(r);});
   const vendRank=Object.keys(perVend).map(v=>{const d=perVend[v];const o=d.prior*(1+P.gTarget);
-    return {v:v,cur:d.cur,prior:d.prior,obj:o,av:o>0?d.cur/o:(d.cur>0?1.5:0),tieneObj:o>0,
+    return {v:v,cur:d.cur,prior:d.prior,obj:o,av:o>0?d.cur/o:(d.cur>0?1.5:0),tieneObj:o>0,perd:d.perd,
       nuevos:d.nuevos,cartera:d.cartera,clientes:d.clientes,juego:d.rSac+d.fSac};})
     .filter(x=>x.cur>0||x.prior>0||x.cartera>0)
     .sort((a,b)=>a.av-b.av);
@@ -2122,7 +2158,8 @@ function tableroCalc(){
   return {Y,P,F,win,filtrando,cortaDia,periodoTxt,nClientes:clientes.length,
     curTot,priorTot,obj,av,crec,carteraMes,riesgoN,riesgoSac,fugaN,fugaSac,activos,enJuego,pctJuego,
     baseN:base.length,keepN:keep.length,lostN:lost.length,retencion,lostSac,lostTop,
-    nuevosN:nuevos.length,metaN,nuevosSac,conc,top10,mixPrem,tonMes,promoWin,uso,vendRank,regiones,acciones};
+    nuevosN:nuevos.length,metaN,nuevosSac,conc,top10,mixPrem,tonMes,promoWin,uso,vendRank,regiones,acciones,
+    perdTot,perdN,perdList};
 }
 
 function renderTablero(){
@@ -2156,6 +2193,7 @@ function renderTablero(){
     ${big(fmt(T.priorTot),Y.py+' mismo periodo','base de comparación','#94a3b8')}
     ${big(fmt(T.obj),'Objetivo','+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}
     ${big((T.av*100).toFixed(0)+'%','Avance vs objetivo',T.av>=1?'✓ vas arriba':'faltan '+fmt(falta)+' sacos',avCol)}
+    ${big(fmt(T.perdTot),'Cartera perdida en el objetivo',T.perdN+' clientes que compraban y hoy no; ya asignados a su vendedor','#fbbf24')}
     ${big(pct(T.crec),'Crecimiento real','vs '+Y.py,crCol)}
   </div>`;
 
@@ -2189,8 +2227,20 @@ function renderTablero(){
   </div>`;
 
   // ── Vendedores ──
-  h+=sect('4 · Vendedores — avance real vs objetivo','Ordenados del más atrasado al más adelantado: por ahí empieza la junta.');
-  h+=`<div style="overflow:auto"><table class="dt"><thead><tr><th>Vendedor</th><th style="text-align:right">${Y.cy}</th><th style="text-align:right">${Y.py}</th><th style="text-align:right">Objetivo</th><th style="text-align:right">Avance</th><th style="text-align:center">Sem.</th><th style="text-align:right">Cartera</th><th style="text-align:right">En juego</th><th style="text-align:right">Nuevos</th></tr></thead><tbody>`;
+  if(T.perdTot>0){
+    h+=sect('3b · Cartera perdida — el objetivo que hay que reactivar','Clientes que compraban el año pasado y este año no han facturado nada. Su volumen sigue dentro del objetivo y ya tiene responsable: es margen recuperable, no un hueco.');
+    h+=`<div style="overflow:auto"><table class="dt"><thead><tr><th>Cliente</th><th>Responsable</th><th style="text-align:right">${Y.py} periodo</th><th style="text-align:right">${Y.py} año</th><th style="text-align:right">Objetivo que arrastra</th></tr></thead><tbody>`;
+    for(const r of T.perdList.slice(0,25)){
+      h+=`<tr><td style="font-weight:600">${r.n}</td><td style="color:#cbd5e1">${r.v}</td>
+        <td style="text-align:right;color:#fbbf24;font-weight:700">${fmt(r.p)}</td>
+        <td style="text-align:right;color:#94a3b8">${fmt(r.pf)}</td>
+        <td style="text-align:right;color:#94a3b8">${fmt(r.p*(1+P.gTarget))}</td></tr>`;
+    }
+    h+=`</tbody><tfoot><tr style="background:#14243f;font-weight:700;color:#fff"><td>TOTAL (${T.perdN} clientes)</td><td></td><td style="text-align:right">${fmt(T.perdTot)}</td><td></td><td style="text-align:right">${fmt(T.perdTot*(1+P.gTarget))}</td></tr></tfoot></table></div>`;
+    if(T.perdList.length>25)h+=`<div style="font-size:.68rem;color:#64748b;margin-top:4px">Se muestran los 25 mayores de ${T.perdList.length}.</div>`;
+  }
+  h+=sect('4 · Vendedores — avance real vs objetivo','Ordenados del más atrasado al más adelantado. "A recuperar" son sacos de clientes suyos que dejaron de comprar: ese volumen ya está dentro de su objetivo.');
+  h+=`<div style="overflow:auto"><table class="dt"><thead><tr><th>Vendedor</th><th style="text-align:right">${Y.cy}</th><th style="text-align:right">${Y.py}</th><th style="text-align:right">Objetivo</th><th style="text-align:right">Avance</th><th style="text-align:right">A recuperar</th><th style="text-align:center">Sem.</th><th style="text-align:right">Cartera</th><th style="text-align:right">En juego</th><th style="text-align:right">Nuevos</th></tr></thead><tbody>`;
   for(const r of T.vendRank){
     const sem=!r.tieneObj?'⚪':r.av>=1?'🟢':r.av>=0.85?'🟡':'🔴';
     const col=!r.tieneObj?'#64748b':semColor(r.av);
@@ -2200,6 +2250,7 @@ function renderTablero(){
       <td style="text-align:right;color:#94a3b8">${fmt(r.prior)}</td>
       <td style="text-align:right;color:#94a3b8">${r.tieneObj?fmt(r.obj):'—'}</td>
       <td style="text-align:right;font-weight:700;color:${col}">${r.tieneObj?(r.av*100).toFixed(0)+'%':'nuevo'}</td>
+      <td style="text-align:right;color:${r.perd>0?'#fbbf24':'#334155'}" title="Sacos del año anterior de clientes suyos que este año no le compran">${r.perd>0?fmt(r.perd):'—'}</td>
       <td style="text-align:center;font-size:1.02rem">${sem}</td>
       <td style="text-align:right;color:#cbd5e1">${fmt(r.cartera)}</td>
       <td style="text-align:right;color:${jp>=0.2?'var(--red)':jp>=0.1?'#f59e0b':'#94a3b8'}">${fmt(r.juego)}${r.cartera>0?' · '+(jp*100).toFixed(0)+'%':''}</td>
@@ -2338,15 +2389,28 @@ function tableroPDF(){
    +_pdCard(fmt(T.promoWin),'Toneladas de promoción',_pe(T.periodoTxt),'#b45309')
    +'</div>';
 
+  // 3b · cartera perdida
+  if(T.perdTot>0){
+    b+=_S('Cartera perdida \u2014 objetivo por reactivar')
+     +'<div class="note">Clientes que compraban el año pasado y este año no han facturado. Su volumen sigue dentro del objetivo y ya tiene responsable.</div>'
+     +'<table><thead><tr><th>Cliente</th><th>Responsable</th><th class="r">'+Y.py+' periodo</th><th class="r">'+Y.py+' año</th><th class="r">Objetivo</th></tr></thead><tbody>';
+    T.perdList.slice(0,20).forEach(function(r){
+      b+='<tr><td>'+_pe(r.n)+'</td><td>'+_pe(r.v)+'</td><td class="r">'+fmt(r.p)+'</td><td class="r">'+fmt(r.pf)+'</td><td class="r">'+fmt(r.p*(1+P.gTarget))+'</td></tr>';
+    });
+    b+='<tr><td><b>TOTAL ('+T.perdN+' clientes)</b></td><td></td><td class="r"><b>'+fmt(T.perdTot)+'</b></td><td></td><td class="r"><b>'+fmt(T.perdTot*(1+P.gTarget))+'</b></td></tr>';
+    b+='</tbody></table>';
+  }
+
   // 4 · vendedores
   if(T.vendRank.length){
     b+=_S('Vendedores \u2014 avance real vs objetivo')+'<div class="note">Del más atrasado al más adelantado.</div>'
-     +'<table><thead><tr><th>Vendedor</th><th class="r">'+Y.cy+'</th><th class="r">'+Y.py+'</th><th class="r">Objetivo</th><th class="r">Avance</th><th class="r">Cartera</th><th class="r">En juego</th><th class="r">Nuevos</th></tr></thead><tbody>';
+     +'<table><thead><tr><th>Vendedor</th><th class="r">'+Y.cy+'</th><th class="r">'+Y.py+'</th><th class="r">Objetivo</th><th class="r">Avance</th><th class="r">A recuperar</th><th class="r">Cartera</th><th class="r">En juego</th><th class="r">Nuevos</th></tr></thead><tbody>';
     T.vendRank.forEach(function(r){
       var cl=!r.tieneObj?'':(r.av>=1?'ok':(r.av>=0.85?'wr':'bad'));
       var jp=r.cartera>0?r.juego/r.cartera:0;
       b+='<tr><td>'+_pe(r.v)+'</td><td class="r">'+fmt(r.cur)+'</td><td class="r">'+fmt(r.prior)+'</td><td class="r">'+(r.tieneObj?fmt(r.obj):'—')+'</td>'
-       +'<td class="r '+cl+'">'+(r.tieneObj?(r.av*100).toFixed(0)+'%':'nuevo')+'</td><td class="r">'+fmt(r.cartera)+'</td>'
+       +'<td class="r '+cl+'">'+(r.tieneObj?(r.av*100).toFixed(0)+'%':'nuevo')+'</td>'
+       +'<td class="r">'+(r.perd>0?fmt(r.perd):'—')+'</td><td class="r">'+fmt(r.cartera)+'</td>'
        +'<td class="r '+(jp>=0.2?'bad':(jp>=0.1?'wr':''))+'">'+fmt(r.juego)+(r.cartera>0?' · '+(jp*100).toFixed(0)+'%':'')+'</td>'
        +'<td class="r">'+r.nuevos+'</td></tr>';
     });
@@ -2530,6 +2594,8 @@ function _numset(s){return (s.match(/\d+/g)||[]).map(Number).sort((a,b)=>a-b).jo
 function resolveKey(name,normToOrig){
   const nk=nkey(name);
   if(normToOrig.has(nk))return normToOrig.get(nk);
+  const _al=(typeof CLI_ALIAS!=='undefined')?CLI_ALIAS[nk]:null;   // cliente renombrado en Odoo
+  if(_al){const _ak=nkey(_al); if(normToOrig.has(_ak))return normToOrig.get(_ak);}
   const nt=nk.split(' ').filter(Boolean); const nkNums=_numset(nk);
   let best=null,bestsc=0,subMatch=null;
   for(const[k,orig] of normToOrig){
@@ -2547,6 +2613,17 @@ function getPriorBaseline(){
   const cy=(DATA&&DATA.dataYear)||2026; const py=cy-1;
   let b=null; try{b=JSON.parse(localStorage.getItem('baseline04mas_'+py)||'null');}catch(e){}
   if(!b){ if(py===2025)b=BASELINE_2025; else if(py===2024)b=BASELINE_2024; }
+  if(b&&typeof BASE_MERGE!=='undefined'){                       // fusiona duplicados del año anterior
+    b=JSON.parse(JSON.stringify(b));
+    const _idx=new Map(); for(const k in b) _idx.set(nkey(k),k);
+    for(const src in BASE_MERGE){
+      const ks=_idx.get(nkey(src)), kd=_idx.get(nkey(BASE_MERGE[src]));
+      if(!ks||!kd||ks===kd)continue;
+      const a=b[ks], d=b[kd];
+      if(a&&a.m){ d.m=d.m||new Array(12).fill(0); for(let i=0;i<12;i++) d.m[i]=(d.m[i]||0)+(a.m[i]||0); d.t=(d.t||0)+(a.t||0); }
+      delete b[ks];
+    }
+  }
   return {cy,py,data:b||{}};
 }
 
@@ -2577,7 +2654,7 @@ function computeYoY(){
     return{nombre:c.nombre,estado:c.estado||'SIN DATOS',vend:c.vendedor||'SIN DATOS',
       cur,curFull,prior,priorFull,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
       nuevo:(!b||priorFull===0)&&cur>0,firstMes:act.length?Math.min(...act):0,
-      tonsCur:clientTons(c),curM,priorM};
+      tonsCur:clientTons(c),curM,priorM,perdido:false};
   });
   // 2) clientes que estaban en el año anterior y ya no compran (para totales/vendedor/estado justos)
   const map=getMapping(); const mNorm=new Map(); for(const k in map) if(map[k]&&(map[k].e||map[k].v)) mNorm.set(nkey(k),k);
@@ -2589,7 +2666,7 @@ function computeYoY(){
     const priorM0=Array(12).fill(0); if(b&&b.m) for(let i=0;i<12;i++) priorM0[i]=b.m[i]||0;
     rows.push({nombre:k,estado:(info&&info.e)||'SIN DATOS',vend:(info&&info.v)||'SIN DATOS',
       cur:0,curFull:0,prior,priorFull,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
-      nuevo:false,firstMes:0,tonsCur:0,curM:Array(12).fill(0),priorM:priorM0});
+      nuevo:false,firstMes:0,tonsCur:0,curM:Array(12).fill(0),priorM:priorM0,perdido:true});
   }
   const tbm={};
   for(const c of DATA.clients){for(const[p,md] of Object.entries(c.prodMes||{})){const kg=prodKg(p);for(const[m,s] of Object.entries(md)){if(complete.includes(Number(m)))tbm[m]=(tbm[m]||0)+s*kg/1000;}}}
@@ -2613,9 +2690,9 @@ function renderObjetivos(){
   const gv={},ge={};const unV={p:0,c:0},unE={p:0,c:0};
   for(const r of Y.rows){
     if(r.vend==='SIN DATOS'){unV.p+=r.prior;unV.c+=r.cur;}
-    else{(gv[r.vend]=gv[r.vend]||{p:0,c:0,n:0,t:0});gv[r.vend].p+=r.prior;gv[r.vend].c+=r.cur;gv[r.vend].n+=r.nuevo?1:0;gv[r.vend].t+=r.tonsCur;}
+    else{(gv[r.vend]=gv[r.vend]||{p:0,c:0,n:0,t:0,pr:0});gv[r.vend].p+=r.prior;gv[r.vend].c+=r.cur;gv[r.vend].n+=r.nuevo?1:0;gv[r.vend].t+=r.tonsCur;gv[r.vend].pr+=r.perdido?r.prior:0;}
     if(r.estado==='SIN DATOS'){unE.p+=r.prior;unE.c+=r.cur;}
-    else{(ge[r.estado]=ge[r.estado]||{p:0,c:0,n:0,t:0});ge[r.estado].p+=r.prior;ge[r.estado].c+=r.cur;ge[r.estado].n+=r.nuevo?1:0;ge[r.estado].t+=r.tonsCur;}
+    else{(ge[r.estado]=ge[r.estado]||{p:0,c:0,n:0,t:0,pr:0});ge[r.estado].p+=r.prior;ge[r.estado].c+=r.cur;ge[r.estado].n+=r.nuevo?1:0;ge[r.estado].t+=r.tonsCur;ge[r.estado].pr+=r.perdido?r.prior:0;}
   }
   const card=(label,val,sub,col)=>`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid ${col||'#E8A020'};border-radius:8px;padding:12px 14px;min-width:150px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:${col||'#fff'}">${val}</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">${label}</div><div style="font-size:.68rem;color:#64748b">${sub||''}</div></div>`;
   let h=`<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">🎯 Objetivos, capacidad de planta y zonas</div>
@@ -2644,14 +2721,14 @@ function renderObjetivos(){
   // Vendedores
   const tbl=(title,obj,col1,un)=>{
     const st=_objSort[col1]||{k:'c',asc:false};
-    const gv2=(v,k)=>k==='cr'?(v.p?v.c/v.p-1:0):k==='av'?(v.p?v.c/(v.p*(1+P.gTarget)):0):(v[k]||0);
+    const gv2=(v,k)=>k==='cr'?(v.p?v.c/v.p-1:0):k==='av'?(v.p?v.c/(v.p*(1+P.gTarget)):0):k==='obj'?((v.p||0)*(1+P.gTarget)):(v[k]||0);
     let rows=Object.entries(obj).sort((a,b)=>{if(st.k==='name'){return st.asc?(a[0]<b[0]?-1:1):(a[0]>b[0]?-1:1);}const va=gv2(a[1],st.k),vb=gv2(b[1],st.k);return st.asc?va-vb:vb-va;});
-    let TP=0,TC=0,TT=0,TN=0;for(const[,v] of rows){TP+=v.p;TC+=v.c;TT+=v.t;TN+=v.n;}
+    let TP=0,TC=0,TT=0,TN=0,TR=0;for(const[,v] of rows){TP+=v.p;TC+=v.c;TT+=v.t;TN+=v.n;TR+=v.pr||0;}
     const ar=k=>st.k===k?(st.asc?' ▲':' ▼'):' ↕';
     const th=(k,lbl,al)=>`<th onclick="objSort('${col1}','${k}')" style="padding:7px 9px;text-align:${al};cursor:pointer;user-select:none">${lbl}${ar(k)}</th>`;
     let s=`<div style="font-size:.9rem;font-weight:700;color:#fff;margin:14px 0 6px">${title} <span style="font-size:.68rem;color:#64748b;font-weight:400">(clic en encabezado para ordenar)</span></div>
     <table style="width:100%;border-collapse:collapse;font-size:.78rem"><thead><tr style="background:#1e3a6b;color:#fff">
-    ${th('name',col1,'left')}${th('p','Sacos '+Y.py,'right')}${th('c','Sacos '+Y.cy,'right')}${th('cr','Crec.%','right')}${th('obj','Objetivo','right')}${th('av','Avance','right')}${th('t','Ton '+Y.cy,'right')}${th('n','Nuevos','right')}</tr></thead><tbody>`;
+    ${th('name',col1,'left')}${th('p','Sacos '+Y.py,'right')}${th('c','Sacos '+Y.cy,'right')}${th('cr','Crec.%','right')}${th('obj','Objetivo','right')}${th('av','Avance','right')}${th('pr','A recuperar','right')}${th('t','Ton '+Y.cy,'right')}${th('n','Nuevos','right')}</tr></thead><tbody>`;
     for(const[name,v] of rows){
       const cr=v.p?v.c/v.p-1:0;const obj2=v.p*(1+P.gTarget);const av=obj2?v.c/obj2:0;
       s+=`<tr style="border-bottom:1px solid #1e293b">
@@ -2661,17 +2738,19 @@ function renderObjetivos(){
       <td style="padding:6px;text-align:right;color:${cr>=0?'#4ade80':'#f87171'}">${pct(cr)}</td>
       <td style="padding:6px;text-align:right;color:#94a3b8">${fmt(obj2)}</td>
       <td style="padding:6px;text-align:right;font-weight:700;color:${semColor(av)}">${(av*100).toFixed(0)}%</td>
+      <td style="padding:6px;text-align:right;color:${v.pr>0?'#fbbf24':'#334155'}" title="Sacos del año anterior de clientes suyos que este año no le han comprado">${v.pr>0?fmt(v.pr):'—'}</td>
       <td style="padding:6px;text-align:right;color:#cbd5e1">${fmt(v.t)}</td>
       <td style="padding:6px;text-align:right;color:#7dd3fc">${v.n||''}</td></tr>`;
     }
-    const trow=(lbl,p,c,t,n,bg)=>{const cr=p?c/p-1:0;return `<tr style="background:${bg};font-weight:700;color:#fff"><td style="padding:6px 9px">${lbl}</td><td style="padding:6px;text-align:right">${fmt(p)}</td><td style="padding:6px;text-align:right">${fmt(c)}</td><td style="padding:6px;text-align:right;color:${cr>=0?'#4ade80':'#f87171'}">${p?pct(cr):''}</td><td></td><td></td><td style="padding:6px;text-align:right">${t!=null?fmt(t):''}</td><td style="padding:6px;text-align:right">${n!=null?(n||''):''}</td></tr>`;};
-    s+=trow('TOTAL asignados',TP,TC,TT,TN,'#14243f');
-    if(un&&(un.p||un.c)){s+=trow('Sin asignar (históricos que ya no compran)',un.p,un.c,null,null,'#2a1e14');s+=trow('TOTAL GENERAL (venta bruta)',TP+un.p,TC+un.c,null,null,'#0b2f1a');}
+    const trow=(lbl,p,c,t,n,bg,pr)=>{const cr=p?c/p-1:0;return `<tr style="background:${bg};font-weight:700;color:#fff"><td style="padding:6px 9px">${lbl}</td><td style="padding:6px;text-align:right">${fmt(p)}</td><td style="padding:6px;text-align:right">${fmt(c)}</td><td style="padding:6px;text-align:right;color:${cr>=0?'#4ade80':'#f87171'}">${p?pct(cr):''}</td><td></td><td></td><td style="padding:6px;text-align:right;color:#fbbf24">${pr!=null&&pr>0?fmt(pr):''}</td><td style="padding:6px;text-align:right">${t!=null?fmt(t):''}</td><td style="padding:6px;text-align:right">${n!=null?(n||''):''}</td></tr>`;};
+    s+=trow('TOTAL asignados',TP,TC,TT,TN,'#14243f',TR);
+    if(un&&(un.p||un.c)){s+=trow('⚠ Sin asignar — asígnalos en Mapeo para que la suma cuadre',un.p,un.c,null,null,'#2a1e14');s+=trow('TOTAL GENERAL (venta bruta)',TP+un.p,TC+un.c,null,null,'#0b2f1a');}
+    else{s+=trow('✓ TOTAL GENERAL (venta bruta) = suma de '+col1.toLowerCase()+'s',TP,TC,null,null,'#0b2f1a');}
     return s+'</tbody></table>';
   };
   h+=tbl('📦 Vendedores — real vs año anterior y vs objetivo',gv,'Vendedor',unV);
   h+=tbl('🗺 Estados — real vs año anterior',ge,'Estado',unE);
-  h+=`<div style="font-size:.72rem;color:#64748b;margin-top:8px;padding:6px 4px">"Venta bruta" incluye a los clientes históricos que ya no compran; "asignados" son los que hoy tienen vendedor/estado. Los % de crecimiento se calculan solo sobre asignados.</div>`;
+  h+=`<div style="font-size:.72rem;color:#64748b;margin-top:8px;padding:6px 4px"><b>A recuperar</b> = sacos que ese vendedor le vendió el año pasado a clientes suyos que este año no le han comprado nada. Ese volumen sigue dentro de su objetivo: no es castigo, es cartera por reactivar. Cuando ningún cliente queda sin asignar, la suma de los vendedores es exactamente la venta bruta.</div>`;
   box.innerHTML=h;
 }
 
@@ -2745,8 +2824,11 @@ function _vendMonthly(vf){
   }
   // Año-anterior de clientes que YA NO están en el reporte de este año (se fueron): también cuenta para el objetivo total.
   // Va a la bolsa global (vf='') y a "(sin asignar)" para no penalizar a ningún vendedor con clientes que perdió.
-  if(!vf||vf==='(sin asignar)'){
-    for(const k in B){ if(seen.has(k))continue; const arr=B[k].m||[]; for(let i=0;i<12;i++)prior[i]+=arr[i]||0; }
+  const _map=getMapping(); const _mN=new Map(); for(const k in _map) if(_map[k]&&(_map[k].e||_map[k].v)) _mN.set(nkey(k),k);
+  for(const k in B){ if(seen.has(k))continue;
+    const _rk=resolveKey(k,_mN); const _own=(_rk&&_map[_rk]&&_map[_rk].v)||'(sin asignar)';
+    if(vf&&vf!==_own)continue;                     // el histórico perdido cuenta para SU vendedor
+    const arr=B[k].m||[]; for(let i=0;i<12;i++)prior[i]+=arr[i]||0;
   }
   return {cur,prior};
 }
