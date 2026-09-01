@@ -632,6 +632,10 @@ function descBloques(c,t){
       'Mientras tanto abajo siguen las metas del periodo.</div></div>';
   }
   var h='';
+  // Mes que corre hoy. Si el reporte cargado termina justo al cerrar un mes, MESCURSO viene en 0
+  // (todavía no hay ventas del mes nuevo): entonces el mes en curso es el siguiente al evaluado.
+  var mesAct = MESCURSO || (MESEVAL ? ((MESEVAL%12)+1) : 0);
+  var enCurso = !!MESCURSO;   // ¿el reporte YA trae ventas del mes que corre?
   // ── A · lo que paga HOY ──
   if(vig!=null){
     var pz=[];
@@ -640,7 +644,7 @@ function descBloques(c,t){
     pz.push({t:'Premium base ('+fmt(c.premEval||0)+' sacos, '+(c.mix||0).toFixed(1)+'%)',v:(c.premOk?kp:0),ok:!!c.premOk});
     pz.push({t:'Premium+ '+((c.boost||0)>=PREM.e2?'escalón 2 (≥'+PREM.u2+'%)':((c.boost||0)>0?'escalón 1 (≥'+PREM.u1+'%)':'(no alcanzó el '+PREM.u1+'%)'))+' · mix '+(c.mixp||0).toFixed(1)+'%',v:(c.boost||0),ok:(c.boost||0)>0});
     h+='<div class="dbox">';
-    h+='<div class="dtop"><div><div class="dlbl">Descuento que paga en '+(MESNOM[MESCURSO]||'este mes')+'</div>'+
+    h+='<div class="dtop"><div><div class="dlbl">Descuento que paga en '+(MESNOM[mesAct]||'este mes')+'</div>'+
        '<div class="dsub">Se calculó al cerrar '+(MESNOM[MESEVAL]||'el mes pasado')+' y ya no cambia</div></div>'+
        '<div class="dnum">'+vig.toFixed(2)+'%</div></div>';
     pz.forEach(function(p){
@@ -651,19 +655,23 @@ function descBloques(c,t){
   // ── B · lo que va construyendo para el mes siguiente ──
   var refVol=Math.round(c.avg||0);
   var mBase=Math.round(PREM.base/100*refVol), m1=Math.round(PREM.u1/100*refVol), m2=Math.round(PREM.u2/100*refVol);
-  var pbNow=c.qpb||0, pmNow=c.qp||0;
+  // Sin ventas del mes en curso, el avance arranca en cero: si se usara c.cur se estaría
+  // mostrando otra vez el mes ya evaluado como si fuera progreso del mes nuevo.
+  var pbNow=enCurso?(c.qpb||0):0, pmNow=enCurso?(c.qp||0):0;
   var pctBase=refVol>0?(pbNow/refVol*100):0, pctMix=refVol>0?(pmNow/refVol*100):0;
   var okPrem=pctBase>=PREM.base;
   var boostNow=premBoost(pctMix);
-  var base=c.evalSac||0, hoy=c.cur||0;
+  var base=c.evalSac||0, hoy=enCurso?(c.cur||0):0;
   var crecNow=base>0?((hoy-base)/base*100):0;
   var okCrec=(base>0&&hoy>0&&crecNow>=uc);
   var proy=fijo+(okCrec?kc:0)+(okPrem?kp:0)+boostNow;
   var metaCrec=Math.round(base*(1+uc/100));
   function barra(pct,col){ return '<div class="pbar"><i style="width:'+Math.max(0,Math.min(100,pct))+'%;background:'+col+'"></i></div>'; }
   h+='<div class="dbox proy">';
-  h+='<div class="dtop"><div><div class="dlbl">Va ganando para '+(mesSig(MESCURSO||MESEVAL))+'</div>'+
-     '<div class="dsub">Con lo que lleva comprado en '+(MESNOM[MESCURSO]||'el mes en curso')+'. Cambia con cada pedido.</div></div>'+
+  h+='<div class="dtop"><div><div class="dlbl">Va ganando para '+(mesSig(mesAct))+'</div>'+
+     '<div class="dsub">'+(enCurso
+        ? ('Con lo que lleva comprado en '+(MESNOM[mesAct]||'el mes en curso')+'. Cambia con cada pedido.')
+        : ((MESNOM[mesAct]||'El mes')+' apenas comienza: el avance se verá en cuanto se cargue el primer reporte del mes.'))+'</div></div>'+
      '<div class="dnum proyn">'+proy.toFixed(2)+'%</div></div>';
   // crecimiento
   h+='<div class="drow'+(okCrec?' si':' no')+'"><span>'+(okCrec?'✓':'○')+' Crecer +'+uc+'%: lleva '+fmt(hoy)+' de '+fmt(metaCrec)+' sacos</span><b>'+(okCrec?'+'+kc.toFixed(2)+'%':'+'+kc.toFixed(2)+'% pendiente')+'</b></div>';
