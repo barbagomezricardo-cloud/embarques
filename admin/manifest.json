@@ -1,0 +1,9 @@
+{
+  "name": "Silver Kan — Administración",
+  "short_name": "SK Admin",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0F1E3C",
+  "theme_color": "#1A2E5A",
+  "icons": []
+}
