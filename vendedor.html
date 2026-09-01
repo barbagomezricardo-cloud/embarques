@@ -98,9 +98,13 @@ let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
 let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){CARDOPEN=false;OBSEDIT=-1;VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else renderList('');}
+function setView(v){CARDOPEN=false;OBSEDIT=-1;VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else if(v==='monitoreo')abrirMonitoreo();else renderList('');}
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
-function viewTabs(){return '<div style="display:flex;gap:6px;margin-bottom:10px">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+'</div>';}
+function viewTabs(){return '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+(esAdminApp()?vtBtn('monitoreo','\uD83D\uDD0E Monitoreo'):'')+'</div>';}
+// Acceso especial: la pestaña Monitoreo solo existe para la cuenta de ADMINISTRACIÓN.
+// El resto de los vendedores sigue viendo únicamente su propia cartera.
+function _kp(s){return (s||'').toString().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function esAdminApp(){var k=_kp(CLOUD.v||APPVEND||'');return k==='ADMINISTRACION'||k==='ADMINISTRACIN';}
 function premBoost(mix){return mix>=PREM.u2?PREM.e2:(mix>=PREM.u1?PREM.e1:0);}
 const NIVLAB={DIAMANTE_PLUS:'DIAMANTE PLUS'};
 const MES_NOM={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
@@ -304,6 +308,134 @@ h+='<select onchange="setClistEst(this.value)" style="width:100%;background:var(
   const qi=document.getElementById('q');if(qi&&CLISTQ){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 
+function volverLista(){ CARDOPEN=false; if(VIEW==='monitoreo')renderMonitoreo(); else renderList(''); }
+
+/* ── MONITOREO — solo para la cuenta de ADMINISTRACIÓN ────────────────────────
+   Trae la cartera de TODOS los vendedores desde la nube (el mismo _index.json que
+   usa la app de gerencia) y la muestra en una sola lista, para poder buscar
+   cualquier cliente por nombre o estado y abrir su tarjeta igual que su vendedor.
+   El buscador no se redibuja al teclear: solo se repinta #monBody, si no el
+   teléfono cierra el teclado.                                                   */
+var MONCLI={}, MONQ='', MONEST='', MONVEND='', MONORD='avg', MONLOADED=false, MONCARGANDO=false, MONERR='';
+function abrirMonitoreo(){
+  if(!esAdminApp()){ VIEW='clientes'; renderList(''); return; }   // solo administración
+  VIEW='monitoreo'; CARDOPEN=false;
+  if(MONLOADED){ renderMonitoreo(); return; }
+  renderMonitoreo();
+  cargarMonitoreo();
+}
+function cargarMonitoreo(){
+  if(MONCARGANDO)return; MONCARGANDO=true; MONERR='';
+  var base=(CLOUD.db||SK_DB).replace(/\/$/,'');
+  fetch(base+'/skan/_index.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(idx){
+    var vs=(idx&&idx.vendors)||[];
+    if(!vs.length)throw new Error('sin vendedores publicados');
+    return Promise.all(vs.map(function(k){
+      return fetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;});
+    }));
+  }).then(function(ps){
+    var m={};
+    (ps||[]).forEach(function(p){
+      if(!p||!p.rows)return;
+      var vn=p.v||'';
+      p.rows.forEach(function(r){
+        m[r.n]={nombre:r.n,vend:r.vd||vn,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,
+          qtd:(r.qtd!=null?r.qtd:(r.cur||0)),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null,
+          desc:(r.desc!=null?r.desc:null),crecio:!!r.crecio,premOk:!!r.premOk,boost:r.boost||0,
+          evalSac:r.evalSac||0,antSac:r.antSac||0,premEval:r.premEval||0};
+      });
+    });
+    MONCLI=m; MONLOADED=true; MONCARGANDO=false;
+    if(VIEW==='monitoreo')renderMonitoreo();
+  }).catch(function(e){
+    MONCARGANDO=false; MONERR='No se pudo cargar la cartera completa. Revisa tu internet y toca Reintentar.';
+    if(VIEW==='monitoreo')renderMonitoreo();
+  });
+}
+function recargarMonitoreo(){ MONLOADED=false; MONCLI={}; cargarMonitoreo(); renderMonitoreo(); }
+function onMonInput(v){ MONQ=v; paintMon(); }
+function setMonEst(v){ MONEST=v; paintMon(); }
+function setMonVend(v){ MONVEND=v; paintMon(); }
+function setMonOrd(v){ MONORD=v; paintMon(); }
+function monFiltrados(){
+  var q=(MONQ||'').toUpperCase();
+  var arr=Object.keys(MONCLI).map(function(k){return MONCLI[k];});
+  if(q)arr=arr.filter(function(c){return (c.nombre||'').indexOf(q)>=0 || (c.estado||'').toUpperCase().indexOf(q)>=0;});
+  if(MONEST)arr=arr.filter(function(c){return (c.estado||'(sin estado)')===MONEST;});
+  if(MONVEND)arr=arr.filter(function(c){return (c.vend||'(sin vendedor)')===MONVEND;});
+  if(MONORD==='nombre')arr.sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'');});
+  else if(MONORD==='desc')arr.sort(function(a,b){return (b.desc||0)-(a.desc||0)||b.avg-a.avg;});
+  else arr.sort(function(a,b){return b.avg-a.avg;});
+  return arr;
+}
+function monKpi(val,lbl){
+  return '<div style="flex:1;min-width:92px;background:var(--mid);border:1px solid #2a3a5c;border-left:3px solid var(--gold);border-radius:9px;padding:8px 10px">'
+    +'<div style="font-size:17px;font-weight:800;color:#fff">'+val+'</div><div style="font-size:10.5px;color:#9fb0cc">'+lbl+'</div></div>';
+}
+function paintMon(){
+  var box=document.getElementById('monBody'); if(!box)return;
+  if(MONERR){box.innerHTML='<div class="hint" style="color:#f87171">'+MONERR+'</div><button class="back" onclick="recargarMonitoreo()">↻ Reintentar</button>';return;}
+  if(!MONLOADED){box.innerHTML='<div class="hint">Cargando la cartera de todos los vendedores…</div>';return;}
+  var arr=monFiltrados(), totSac=0, conDesc=0, sumDesc=0;
+  arr.forEach(function(c){totSac+=c.avg||0;if(c.desc!=null&&c.desc>0){conDesc++;sumDesc+=c.desc;}});
+  var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+    +monKpi(fmt(arr.length),'clientes')+monKpi(fmt(totSac),'sacos/mes')
+    +monKpi(conDesc?((sumDesc/conDesc).toFixed(2)+'%'):'—','descuento prom.')+'</div>';
+  h+='<div class="hint">Toca cualquier cliente para abrir su tarjeta completa, igual que la ve su vendedor.</div><div class="list">';
+  arr.slice(0,300).forEach(function(c){
+    var t=tierOf(c.avg);
+    var d=(c.desc!=null)?(Number(c.desc).toFixed(2)+'%'):'—';
+    h+='<div class="li" onclick="showCard(\''+String(c.nombre).replace(/'/g,"\\'")+'\')">'
+      +'<div style="min-width:0"><b>'+c.nombre+'</b>'
+      +'<div style="font-size:11px;color:#9fb0cc">'+fmt(c.avg)+' sacos/mes'+(c.estado?(' · '+c.estado):' · <span style="color:#f87171">sin estado</span>')+'</div>'
+      +'<div style="font-size:11px;color:#7f92b0">'+(c.vend||'(sin vendedor)')+' · desc '+d+'</div></div>'
+      +'<span class="lv" style="background:'+NIVCOL[t[0]]+';color:#fff">'+nivLab(t[0])+'</span></div>';
+  });
+  h+='</div>';
+  if(!arr.length)h+='<div class="hint">Sin resultados con esos filtros.</div>';
+  else if(arr.length>300)h+='<div class="hint">Se muestran los 300 primeros de '+arr.length+'. Afina la búsqueda o el filtro para ver el resto.</div>';
+  box.innerHTML=h;
+}
+function renderMonitoreo(){
+  var app=document.getElementById('app'); app.style.display='block';
+  CARDOPEN=false; VIEW='monitoreo';
+  var estCnt={},vendCnt={},n=0;
+  for(var k in MONCLI){var c=MONCLI[k];n++;
+    var e=c.estado||'(sin estado)'; estCnt[e]=(estCnt[e]||0)+1;
+    var v=c.vend||'(sin vendedor)'; vendCnt[v]=(vendCnt[v]||0)+1;}
+  var estKeys=Object.keys(estCnt).filter(function(e){return e!=='(sin estado)';}).sort();
+  var vendKeys=Object.keys(vendCnt).sort();
+  var h=syncBar()+viewTabs();
+  h+='<div style="background:#10233f;border:1px solid #2a3a5c;border-left:4px solid var(--gold);border-radius:10px;padding:10px 12px;margin-bottom:9px">'
+    +'<div style="font-weight:800;color:var(--gold);font-size:14px">🔎 Monitoreo — cartera completa</div>'
+    +'<div style="font-size:11.5px;color:#9fb0cc;margin-top:2px">Todos los clientes de todos los vendedores'+(n?(' ('+n+')'):'')+'. Busca por nombre o estado y abre la tarjeta de cualquiera para comparar.</div>'
+    +'<button class="back" style="margin-top:7px" onclick="recargarMonitoreo()">↻ Actualizar cartera</button></div>';
+  h+='<input class="search" id="monq" placeholder="Buscar cliente o estado..." value="'+String(MONQ).replace(/"/g,'')+'" oninput="onMonInput(this.value)">';
+  if(estKeys.length){
+    h+='<select onchange="setMonEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:7px">'
+      +'<option value="">📍 Todos los estados ('+n+')</option>'
+      +estKeys.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(MONEST===e?' selected':'')+'>'+e+' — '+estCnt[e]+'</option>';}).join('')
+      +(estCnt['(sin estado)']?('<option value="(sin estado)"'+(MONEST==='(sin estado)'?' selected':'')+'>Sin estado — '+estCnt['(sin estado)']+'</option>'):'')
+      +'</select>';
+  }
+  if(vendKeys.length){
+    h+='<div style="display:flex;gap:6px;margin-bottom:9px">'
+      +'<select onchange="setMonVend(this.value)" style="flex:1;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:10px;color:#fff;font-size:14px">'
+      +'<option value="">👤 Todos los vendedores</option>'
+      +vendKeys.map(function(v){return '<option value="'+v.replace(/"/g,'')+'"'+(MONVEND===v?' selected':'')+'>'+v+' — '+vendCnt[v]+'</option>';}).join('')
+      +'</select>'
+      +'<select onchange="setMonOrd(this.value)" style="flex:1;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:10px;color:#fff;font-size:14px">'
+      +'<option value="avg"'+(MONORD==='avg'?' selected':'')+'>↕ Mayor volumen</option>'
+      +'<option value="desc"'+(MONORD==='desc'?' selected':'')+'>↕ Mayor descuento</option>'
+      +'<option value="nombre"'+(MONORD==='nombre'?' selected':'')+'>↕ Nombre A-Z</option>'
+      +'</select></div>';
+  }
+  h+='<div id="monBody"></div>';
+  app.innerHTML=h;
+  paintMon();
+  var qi=document.getElementById('monq'); if(qi&&MONQ){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
+}
+
 let PROSPQ='', PROSPFILT='pend';
 function visKey(){return 'visitas04mas_'+(APPVEND||'v');}
 function getVisitas(){try{return JSON.parse(localStorage.getItem(visKey())||'{}');}catch(e){return {};}}
@@ -500,6 +632,10 @@ function descBloques(c,t){
       'Mientras tanto abajo siguen las metas del periodo.</div></div>';
   }
   var h='';
+  // Mes que corre hoy. Si el reporte cargado termina justo al cerrar un mes, MESCURSO viene en 0
+  // (todavía no hay ventas del mes nuevo): entonces el mes en curso es el siguiente al evaluado.
+  var mesAct = MESCURSO || (MESEVAL ? ((MESEVAL%12)+1) : 0);
+  var enCurso = !!MESCURSO;   // ¿el reporte YA trae ventas del mes que corre?
   // ── A · lo que paga HOY ──
   if(vig!=null){
     var pz=[];
@@ -508,7 +644,7 @@ function descBloques(c,t){
     pz.push({t:'Premium base ('+fmt(c.premEval||0)+' sacos, '+(c.mix||0).toFixed(1)+'%)',v:(c.premOk?kp:0),ok:!!c.premOk});
     pz.push({t:'Premium+ '+((c.boost||0)>=PREM.e2?'escalón 2 (≥'+PREM.u2+'%)':((c.boost||0)>0?'escalón 1 (≥'+PREM.u1+'%)':'(no alcanzó el '+PREM.u1+'%)'))+' · mix '+(c.mixp||0).toFixed(1)+'%',v:(c.boost||0),ok:(c.boost||0)>0});
     h+='<div class="dbox">';
-    h+='<div class="dtop"><div><div class="dlbl">Descuento que paga en '+(MESNOM[MESCURSO]||'este mes')+'</div>'+
+    h+='<div class="dtop"><div><div class="dlbl">Descuento que paga en '+(MESNOM[mesAct]||'este mes')+'</div>'+
        '<div class="dsub">Se calculó al cerrar '+(MESNOM[MESEVAL]||'el mes pasado')+' y ya no cambia</div></div>'+
        '<div class="dnum">'+vig.toFixed(2)+'%</div></div>';
     pz.forEach(function(p){
@@ -519,19 +655,23 @@ function descBloques(c,t){
   // ── B · lo que va construyendo para el mes siguiente ──
   var refVol=Math.round(c.avg||0);
   var mBase=Math.round(PREM.base/100*refVol), m1=Math.round(PREM.u1/100*refVol), m2=Math.round(PREM.u2/100*refVol);
-  var pbNow=c.qpb||0, pmNow=c.qp||0;
+  // Sin ventas del mes en curso, el avance arranca en cero: si se usara c.cur se estaría
+  // mostrando otra vez el mes ya evaluado como si fuera progreso del mes nuevo.
+  var pbNow=enCurso?(c.qpb||0):0, pmNow=enCurso?(c.qp||0):0;
   var pctBase=refVol>0?(pbNow/refVol*100):0, pctMix=refVol>0?(pmNow/refVol*100):0;
   var okPrem=pctBase>=PREM.base;
   var boostNow=premBoost(pctMix);
-  var base=c.evalSac||0, hoy=c.cur||0;
+  var base=c.evalSac||0, hoy=enCurso?(c.cur||0):0;
   var crecNow=base>0?((hoy-base)/base*100):0;
   var okCrec=(base>0&&hoy>0&&crecNow>=uc);
   var proy=fijo+(okCrec?kc:0)+(okPrem?kp:0)+boostNow;
   var metaCrec=Math.round(base*(1+uc/100));
   function barra(pct,col){ return '<div class="pbar"><i style="width:'+Math.max(0,Math.min(100,pct))+'%;background:'+col+'"></i></div>'; }
   h+='<div class="dbox proy">';
-  h+='<div class="dtop"><div><div class="dlbl">Va ganando para '+(mesSig(MESCURSO||MESEVAL))+'</div>'+
-     '<div class="dsub">Con lo que lleva comprado en '+(MESNOM[MESCURSO]||'el mes en curso')+'. Cambia con cada pedido.</div></div>'+
+  h+='<div class="dtop"><div><div class="dlbl">Va ganando para '+(mesSig(mesAct))+'</div>'+
+     '<div class="dsub">'+(enCurso
+        ? ('Con lo que lleva comprado en '+(MESNOM[mesAct]||'el mes en curso')+'. Cambia con cada pedido.')
+        : ((MESNOM[mesAct]||'El mes')+' apenas comienza: el avance se verá en cuanto se cargue el primer reporte del mes.'))+'</div></div>'+
      '<div class="dnum proyn">'+proy.toFixed(2)+'%</div></div>';
   // crecimiento
   h+='<div class="drow'+(okCrec?' si':' no')+'"><span>'+(okCrec?'✓':'○')+' Crecer +'+uc+'%: lleva '+fmt(hoy)+' de '+fmt(metaCrec)+' sacos</span><b>'+(okCrec?'+'+kc.toFixed(2)+'%':'+'+kc.toFixed(2)+'% pendiente')+'</b></div>';
@@ -555,7 +695,7 @@ function descBloques(c,t){
 }
 
 function showCard(name){
-  const c=CLIENTS[name];if(!c)return;CARDOPEN=true;const t=tierOf(c.avg);const nx=nextTier(t[0]);
+  const c=CLIENTS[name]||(typeof MONCLI!=='undefined'&&MONCLI[name]);if(!c)return;CARDOPEN=true;const t=tierOf(c.avg);const nx=nextTier(t[0]);
   const fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
   const maintain=t[0]==='INICIAL'?200:t[1];
   const M=PMULT();                       // 1 si evaluación mensual, 3 si trimestral
@@ -603,7 +743,7 @@ function showCard(name){
     need+='<div class="row"><span class="t">Mantener '+nivLab(t[0])+'</span><span class="v">'+fmt(maintainQ)+' sacos<br>en el '+PW+'</span></div>';
     if(nx)need+='<div class="row"><span class="t">Subir a '+nivLab(nx[0])+'</span><span class="v">'+fmt(nextQ)+' sacos<br>en el '+PW+'</span></div>';
   }
-  app.innerHTML='<button class="back" onclick="renderList(\'\')">‹ Volver a la lista</button>'+syncBar()+
+  app.innerHTML='<button class="back" onclick="volverLista()">‹ Volver a la lista</button>'+syncBar()+
    '<div class="card"><div class="top" style="background:'+NIVBG[t[0]]+'"><h2>'+c.nombre+'</h2>'+(c.vend?'<div class="vend">Vendedor: '+c.vend+'</div>':'')+'<div class="badge">Nivel '+nivLab(t[0])+'</div></div>'+
    '<div class="kpis"><div class="kpi"><div class="n">'+fmt(c.avg)+'</div><div class="l">sacos/mes</div></div>'+
    '<div class="kpi"><div class="n">'+c.mix.toFixed(1)+'%</div><div class="l">Premium '+(c.mix>=PREM.base?'✓':'(falta '+PREM.base+'%)')+'</div></div>'+
