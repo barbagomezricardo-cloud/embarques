@@ -3577,8 +3577,8 @@ function corteDiffVend(){
   return Object.keys(vs).map(function(k){return vs[k];}).sort(function(a,b){return Math.abs(b.dif)-Math.abs(a.dif);});
 }
 function doCorte(){
+  if(!reqSuper())return;                       // configuración delicada: solo super-usuario
   if(!DATA){alert('Carga primero el reporte de Odoo.');return;}
-  if(!reqSuper())return;
   var dd=mesCerradoData();
   if(!dd){alert('El reporte cargado todavía no tiene ningún mes cerrado.');return;}
   var prev=corteVigente(),msg;
@@ -3616,22 +3616,26 @@ function renderCorteBar(){
   var c=corteVigente(),dd=mesCerradoData(),pend=cortePendiente(),diffs=corteDiffs();
   var vit=mesVitrinaCalc(mesEvalVigente(),((DATA.meses&&DATA.meses.length&&Math.max.apply(null,DATA.meses)!==mesEvalVigente())?Math.max.apply(null,DATA.meses):0),(DATA.dataYear||0));
   var bg,bd,ic,tit,sub,btn='';
+  // El CORTE es configuración delicada: solo el super-usuario puede marcarlo, rehacerlo o deshacerlo.
+  // El visor sí ve en qué mes va el corte (lo necesita para cuadrar contra Odoo), pero sin botones.
+  var PUEDE=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
+  var candado='<span title="Solo el super-usuario puede marcar o deshacer el corte" style="background:#e2e8f0;color:#475569;border-radius:6px;padding:5px 10px;font-weight:700;font-size:.71rem;white-space:nowrap">🔒 Solo super-usuario</span>';
   var btnCorte='<button onclick="doCorte()" style="background:#16a34a;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-weight:800;font-size:.76rem;cursor:pointer;white-space:nowrap">✅ Marcar corte de '+mesL(dd)+'</button>';
   if(!dd){
     bg='#f1f5f9';bd='#cbd5e1';ic='📄';tit='Sin meses cerrados en este reporte';sub='En cuanto el reporte traiga un mes completo podrás marcar el corte.';
   }else if(!c){
     bg='#eff6ff';bd='#bfdbfe';ic='📌';tit='Aún no has marcado ningún corte';
     sub='Hoy el programa decide solo con los datos: evalúa <b>'+mesL(dd)+'</b>. Si marcas el corte, ese mes queda congelado y las apps pasan a mostrar los objetivos de <b>'+mesL(mesSigN(dd))+'</b> aunque la venta vaya en 0.';
-    btn=btnCorte;
+    btn=PUEDE?btnCorte:candado;
   }else if(pend){
     bg='#fffbeb';bd='#fcd34d';ic='⏳';tit='Corte pendiente: ya hay datos completos de '+mesL(pend);
     sub='El corte vigente sigue siendo <b>'+mesL(c.mes)+'</b> ('+c.fecha+'), así que los descuentos NO se han movido. Revisa que el reporte cuadre contra Odoo y marca el corte de '+mesL(pend)+' para que se evalúe.';
-    btn='<button onclick="doCorte()" style="background:#d97706;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-weight:800;font-size:.76rem;cursor:pointer;white-space:nowrap">✅ Marcar corte de '+mesL(pend)+'</button>';
+    btn=PUEDE?('<button onclick="doCorte()" style="background:#d97706;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-weight:800;font-size:.76rem;cursor:pointer;white-space:nowrap">✅ Marcar corte de '+mesL(pend)+'</button>'):candado;
   }else{
     bg='#f0fdf4';bd='#86efac';ic='✅';tit='Corte de '+mesL(c.mes)+' confirmado';
     sub='Hecho el '+c.fecha+(c.archivo?(' con <b>'+String(c.archivo).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</b>'):'')+'. Los descuentos están congelados con '+mesL(c.mes)+' y las apps muestran los objetivos de <b>'+mesL(vit)+'</b>.';
-    btn='<button onclick="doCorte()" style="background:#334155;color:#fff;border:none;border-radius:7px;padding:6px 11px;font-weight:700;font-size:.72rem;cursor:pointer;white-space:nowrap">↻ Rehacer corte</button>'
-      +'<button onclick="deshacerCorte()" style="background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:7px;padding:6px 11px;font-weight:700;font-size:.72rem;cursor:pointer;margin-left:6px;white-space:nowrap">Deshacer</button>';
+    btn=PUEDE?('<button onclick="doCorte()" style="background:#334155;color:#fff;border:none;border-radius:7px;padding:6px 11px;font-weight:700;font-size:.72rem;cursor:pointer;white-space:nowrap">↻ Rehacer corte</button>'
+      +'<button onclick="deshacerCorte()" style="background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:7px;padding:6px 11px;font-weight:700;font-size:.72rem;cursor:pointer;margin-left:6px;white-space:nowrap">Deshacer</button>'):candado;
   }
   var h='<div style="background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:9px 13px;margin:0 0 8px;display:flex;gap:11px;align-items:flex-start">'
     +'<div style="font-size:1.05rem;line-height:1.2">'+ic+'</div>'
