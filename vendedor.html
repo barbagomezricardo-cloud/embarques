@@ -116,6 +116,20 @@ function nivLab(n){return NIVLAB[n]||n;}
 const NIVCOL={DIAMANTE_PLUS:'#7c3aed',DIAMANTE:'#0e7490',PLATINO:'#475569',ORO:'#a16207',PLATA:'#64748b',BRONCE:'#b45309',COBRE:'#b87333',INICIAL:'#6b7280'};
 const NIVBG={DIAMANTE_PLUS:'linear-gradient(135deg,#6d28d9,#c4b5fd)',DIAMANTE:'linear-gradient(135deg,#0891b2,#22d3ee)',PLATINO:'linear-gradient(135deg,#475569,#94a3b8)',ORO:'linear-gradient(135deg,#a16207,#f5c842)',PLATA:'linear-gradient(135deg,#64748b,#cbd5e1)',BRONCE:'linear-gradient(135deg,#b45309,#f0a868)',COBRE:'linear-gradient(135deg,#8a5a2b,#d4915d)',INICIAL:'linear-gradient(135deg,#4b5563,#9ca3af)'};
 var MESEVAL=0, MESANT=0, MESCURSO=0, MESVIT=0, CORTE=null;
+var VITLAB='';
+// Mes/periodo QUE CORRE hoy (lo manda el calendario vía MESVIT) y sus etiquetas.
+function mesVitApp(){ return MESVIT || MESCURSO || (MESEVAL?((MESEVAL%12)+1):0); }
+function mesPrevApp(){ var m=mesVitApp(); return m?(((m-2+12)%12)+1):0; }
+function vitLabelApp(){ if(VITLAB)return VITLAB; var m=mesVitApp(); if(!m)return ''; return (APPEVAL==='MES')?(MES_NOM[m]||''):(quarterOf(m).label||''); }
+function prevLabelApp(){ var m=mesPrevApp(); if(!m)return 'el periodo pasado'; return (APPEVAL==='MES')?(MES_NOM[m]||'el mes pasado'):'el trimestre pasado'; }
+// Lo que lleva EN EL PERIODO QUE CORRE. Si el reporte todavía no trae ventas de ese periodo va en 0
+// (antes se repetía el mes ya cerrado como si fuera avance del mes nuevo).
+function vaEnCurso(c){ if(!c)return 0; if(c.vitSac!=null)return c.vitSac||0; return (MESCURSO&&MESCURSO===mesVitApp())?(c.cur||0):0; }
+// Base del bono de crecimiento = lo que compró el PERIODO ANTERIOR. NUNCA el promedio de 6 meses:
+// ese promedio solo define el nivel del cliente y la meta de premium.
+function baseCrecApp(c){ if(!c)return 0; return (c.baseCrec!=null)?(c.baseCrec||0):(c.evalSac||0); }
+function premBaseNow(c){ return (c&&c.vitPB!=null)?(c.vitPB||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qpb)||0):0); }
+function premMixNow(c){ return (c&&c.vitPM!=null)?(c.vitPM||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qp)||0):0); }
 let CLIENTS={}, APPVEND='', APPPERIOD='', APPMONTH=0, APPQ=null, APPUPDATED='', CLOUD={db:'',v:''};
 let APPEVAL='TRIM', APPEVALLABEL='';                       // periodo de evaluación (definido por el gerente)
 function PMULT(){return APPEVAL==='MES'?1:3;}               // metas: mensuales (x1) o trimestrales (x3)
@@ -149,6 +163,7 @@ function applyPayload(p){
   APPVEND=p.v||''; APPPERIOD=p.period||''; APPMONTH=p.lastMonth||p.m||0;
   MESEVAL=p.mesEval||0; MESANT=p.mesAnt||0; MESCURSO=p.mesCurso||0;
   MESVIT=p.mesVitrina||0; CORTE=p.corte||null;   // mes en vitrina (lo manda el calendario) y corte confirmado
+  VITLAB=p.vitLabel||'';
   // Reportes publicados por una versión anterior no traen estos campos: se deducen del
   // último mes con datos, para que las etiquetas de mes nunca queden en blanco ni en enero.
   if(!MESCURSO&&!MESEVAL&&APPMONTH){ MESCURSO=APPMONTH; MESEVAL=((APPMONTH-2+12)%12)+1; MESANT=((APPMONTH-3+12)%12)+1; }
@@ -162,7 +177,8 @@ function applyPayload(p){
   VENTAS=p.ventas||null;
   ALERTAS=p.alertas||null;
   CLIENTS={};
-  (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null,desc:(r.desc!=null?r.desc:null),crecio:!!r.crecio,premOk:!!r.premOk,boost:r.boost||0,evalSac:r.evalSac||0,antSac:r.antSac||0,premEval:r.premEval||0};});
+  (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null,desc:(r.desc!=null?r.desc:null),crecio:!!r.crecio,premOk:!!r.premOk,boost:r.boost||0,evalSac:r.evalSac||0,antSac:r.antSac||0,premEval:r.premEval||0,
+    vitSac:(r.vitSac!=null?r.vitSac:null),baseCrec:(r.baseCrec!=null?r.baseCrec:null),vitPB:(r.vitPB!=null?r.vitPB:null),vitPM:(r.vitPM!=null?r.vitPM:null)};});
   applyWatermark();
 }
 function fetchCloud(){
@@ -638,7 +654,7 @@ function descBloques(c,t){
   // El mes que se muestra lo manda el calendario (MESVIT): el día 1 ya se ven los objetivos
   // del mes nuevo aunque todavía no se haya cargado una sola venta. Solo hay avance real
   // (enCurso) cuando el reporte ya trae ventas de ESE mismo mes.
-  var mesAct = MESVIT || MESCURSO || (MESEVAL ? ((MESEVAL%12)+1) : 0);
+  var mesAct = mesVitApp();
   var enCurso = !!MESCURSO && MESCURSO===mesAct;
   // ── A · lo que paga HOY ──
   if(vig!=null){
@@ -661,11 +677,11 @@ function descBloques(c,t){
   var mBase=Math.round(PREM.base/100*refVol), m1=Math.round(PREM.u1/100*refVol), m2=Math.round(PREM.u2/100*refVol);
   // Sin ventas del mes en curso, el avance arranca en cero: si se usara c.cur se estaría
   // mostrando otra vez el mes ya evaluado como si fuera progreso del mes nuevo.
-  var pbNow=enCurso?(c.qpb||0):0, pmNow=enCurso?(c.qp||0):0;
+  var pbNow=premBaseNow(c), pmNow=premMixNow(c);
   var pctBase=refVol>0?(pbNow/refVol*100):0, pctMix=refVol>0?(pmNow/refVol*100):0;
   var okPrem=pctBase>=PREM.base;
   var boostNow=premBoost(pctMix);
-  var base=c.evalSac||0, hoy=enCurso?(c.cur||0):0;
+  var base=baseCrecApp(c), hoy=vaEnCurso(c);   // base = periodo ANTERIOR · hoy = periodo EN CURSO
   var crecNow=base>0?((hoy-base)/base*100):0;
   var okCrec=(base>0&&hoy>0&&crecNow>=uc);
   var proy=fijo+(okCrec?kc:0)+(okPrem?kp:0)+boostNow;
@@ -678,8 +694,12 @@ function descBloques(c,t){
         : ((MESNOM[mesAct]||'El mes')+' apenas comienza: el avance se verá en cuanto se cargue el primer reporte del mes.'))+'</div></div>'+
      '<div class="dnum proyn">'+proy.toFixed(2)+'%</div></div>';
   // crecimiento
-  h+='<div class="drow'+(okCrec?' si':' no')+'"><span>'+(okCrec?'✓':'○')+' Crecer +'+uc+'%: lleva '+fmt(hoy)+' de '+fmt(metaCrec)+' sacos</span><b>'+(okCrec?'+'+kc.toFixed(2)+'%':'+'+kc.toFixed(2)+'% pendiente')+'</b></div>';
-  h+=barra(metaCrec>0?hoy/metaCrec*100:0, okCrec?'#22c55e':'#E8A020');
+  if(base>0){
+    h+='<div class="drow'+(okCrec?' si':' no')+'"><span>'+(okCrec?'✓':'○')+' Crecer +'+uc+'%: lleva '+fmt(hoy)+' de '+fmt(metaCrec)+' sacos<br><span style="font-size:11px;opacity:.75">Compró '+fmt(base)+' en '+prevLabelApp()+'</span></span><b>'+(okCrec?'+'+kc.toFixed(2)+'%':'+'+kc.toFixed(2)+'% pendiente')+'</b></div>';
+    h+=barra(metaCrec>0?hoy/metaCrec*100:0, okCrec?'#22c55e':'#E8A020');
+  }else{
+    h+='<div class="drow no"><span>○ Crecer +'+uc+'%: no compró en '+prevLabelApp()+', este bono no aplica</span><b>+'+kc.toFixed(2)+'% no aplica</b></div>';
+  }
   // premium base
   h+='<div class="drow'+(okPrem?' si':' no')+'"><span>'+(okPrem?'✓':'○')+' Premium base: lleva '+fmt(pbNow)+' de '+fmt(mBase)+' sacos</span><b>'+(okPrem?'+'+kp.toFixed(2)+'%':'+'+kp.toFixed(2)+'% pendiente')+'</b></div>';
   h+=barra(mBase>0?pbNow/mBase*100:0, okPrem?'#22c55e':'#E8A020');
@@ -705,15 +725,19 @@ function showCard(name){
   const M=PMULT();                       // 1 si evaluación mensual, 3 si trimestral
   const PW=perWord();                     // 'mes' o 'trimestre'
   const qLab=perLabel();
+  const vitLab=vitLabelApp()||qLab;        // periodo QUE CORRE (no el ya cerrado)
+  const qtdNow=vaEnCurso(c);               // lo que lleva en ese periodo
+  const qpbNow=premBaseNow(c), qpNow=premMixNow(c);
   // metas del periodo (mensual x1 o trimestral x3)
   const maintainQ=maintain*M;
   const nextQ=nx?nx[1]*M:null;
-  const growQ=t[0]==='INICIAL'?null:Math.round(c.avg*M*(1+uc/100));
+  const gBase=baseCrecApp(c);              // periodo ANTERIOR: es contra esto que se mide el crecimiento
+  const growQ=(t[0]==='INICIAL'||gBase<=0)?null:Math.round(gBase*(1+uc/100));
   const bronceRitmo=200*M;
   const refVol=Math.round((c.avg||0)*M);                 // referencia = PROMEDIO MENSUAL del cliente × periodo (evita mañosos)
   const premNeedQ=Math.round(PREM.base/100*refVol);
-  const qpBasePct=(refVol>0)?((c.qpb||0)/refVol*100):0;  // % premium BASE vs promedio → 3%
-  const qpMixPct=(refVol>0)?((c.qp||0)/refVol*100):0;    // % familia MIX vs promedio → +0.5/+1%
+  const qpBasePct=(refVol>0)?(qpbNow/refVol*100):0;     // % premium BASE vs promedio → 3%
+  const qpMixPct=(refVol>0)?(qpNow/refVol*100):0;       // % familia MIX vs promedio → +0.5/+1%
   const premOk=qpBasePct>=PREM.base;
   const curBoost=premBoost(qpMixPct);
   const descMax=t[0]==='INICIAL'?0:(fijo+kc+kp+PREM.e2);
@@ -721,20 +745,22 @@ function showCard(name){
   // avance del periodo en curso
   let qnow='';
   if(APPQ){
-    const meta=maintainQ; const pct=meta>0?Math.min(100,Math.round((c.qtd||0)/meta*100)):0;
-    const faltaMant=Math.max(0,maintainQ-(c.qtd||0));
+    const meta=maintainQ; const pct=meta>0?Math.min(100,Math.round(qtdNow/meta*100)):0;
+    const faltaMant=Math.max(0,maintainQ-qtdNow);
     const s=t[0]==='INICIAL'
-      ? ((c.qtd||0)>=bronceRitmo? 'Ya lleva ritmo para entrar a Cobre este '+PW+'.' : 'Le faltan '+fmt(bronceRitmo-(c.qtd||0))+' sacos en el '+PW+' para el ritmo de Cobre.')
+      ? (qtdNow>=bronceRitmo? 'Ya lleva ritmo para entrar a Cobre este '+PW+'.' : 'Le faltan '+fmt(bronceRitmo-qtdNow)+' sacos en el '+PW+' para el ritmo de Cobre.')
       : (faltaMant<=0? '✓ Ya aseguró el volumen para mantener '+nivLab(t[0])+' este '+PW+'.' : 'Le faltan '+fmt(faltaMant)+' sacos en el '+PW+' para asegurar su nivel.');
-    qnow='<div class="qnow"><div class="h">Va este '+PW+' ('+qLab+')</div><div class="b">'+fmt(c.qtd||0)+' sacos</div><div class="bar"><i style="width:'+pct+'%"></i></div><div class="s">'+s+'</div></div>';
+    qnow='<div class="qnow"><div class="h">Va este '+PW+' ('+vitLab+')</div><div class="b">'+fmt(qtdNow)+' sacos</div><div class="bar"><i style="width:'+pct+'%"></i></div><div class="s">'+s+'</div></div>';
   }
   let need='';
   if(t[0]==='INICIAL'){
     need='<div class="row no"><span class="t">Para entrar a Cobre y empezar a ganar descuento</span><span class="v">'+fmt(bronceRitmo)+' sacos<br>en el '+PW+'</span></div>';
   }else{
     need+='<h3>Para GANAR el tope de su nivel ('+(fijo+kc+kp).toFixed(2)+'%)</h3>';
-    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium base ≥'+PREM.base+'% de su promedio<br><span style="font-size:11px;color:#8792a3">Silver Kan Premium 25/20 + Silver Cat 15 · va '+fmt(c.qpb||0)+' sacos ('+qpBasePct.toFixed(1)+'%)</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
-    need+='<div class="row"><span class="t">Crecer +'+uc+'% vs. su ritmo</span><span class="v">llegar a '+fmt(growQ)+' sacos<br>en el '+PW+'</span></div>';
+    need+='<div class="row'+(premOk?' ok':' no')+'"><span class="t">Premium base ≥'+PREM.base+'% de su promedio<br><span style="font-size:11px;color:#8792a3">Silver Kan Premium 25/20 + Silver Cat 15 · va '+fmt(qpbNow)+' sacos ('+qpBasePct.toFixed(1)+'%) en '+vitLab+'</span></span><span class="v">'+fmt(premNeedQ)+' sacos<br>premium'+(premOk?' ✓':'')+'</span></div>';
+    need+=(growQ!=null)
+      ? '<div class="row"><span class="t">Crecer +'+uc+'% vs. '+prevLabelApp()+'<br><span style="font-size:11px;color:#8792a3">Compró '+fmt(gBase)+' sacos en '+prevLabelApp()+'</span></span><span class="v">llegar a '+fmt(growQ)+' sacos<br>en '+vitLab+'</span></div>'
+      : '<div class="row no"><span class="t">Crecer +'+uc+'% vs. '+prevLabelApp()+'</span><span class="v">no compró en '+prevLabelApp()+':<br>este bono no aplica</span></div>';
     // Bono Premium+ — descuento EXTRA por subir el mix premium
     const need1=Math.round(PREM.u1/100*refVol);
     const need2=Math.round(PREM.u2/100*refVol);
@@ -742,7 +768,7 @@ function showCard(name){
     need+='<div style="font-size:11.5px;color:#3d4552;padding:0 2px 8px">Cuenta cualquier presentación de <b>Premium (25 kg o 20 kg)</b> o <b>Silver Cat 15 kg</b>. Compra estos sacos en el '+PW+' para ganar el descuento extra:</div>';
     need+='<div class="row'+(qpMixPct>=PREM.u1?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need1)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u1+'%)</span></span><span class="v">+'+PREM.e1+'% extra'+(qpMixPct>=PREM.u1?' ✓':'')+'</span></div>';
     need+='<div class="row'+(qpMixPct>=PREM.u2?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need2)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u2+'%)</span></span><span class="v">+'+PREM.e2+'% extra'+(qpMixPct>=PREM.u2?' ✓':'')+'</span></div>';
-    need+='<div style="font-size:11px;color:#8792a3;padding:2px 4px 8px">Va '+fmt(c.qp||0)+' sacos premium/gato ('+qpMixPct.toFixed(1)+'%). Bono actual del cliente: <b>+'+curBoost.toFixed(2)+'%</b>.</div>';
+    need+='<div style="font-size:11px;color:#8792a3;padding:2px 4px 8px">Va '+fmt(qpNow)+' sacos premium/gato ('+qpMixPct.toFixed(1)+'%) en '+vitLab+'. Bono actual del cliente: <b>+'+curBoost.toFixed(2)+'%</b>.</div>';
     need+='<h3>Para MANTENER o SUBIR de nivel</h3>';
     need+='<div class="row"><span class="t">Mantener '+nivLab(t[0])+'</span><span class="v">'+fmt(maintainQ)+' sacos<br>en el '+PW+'</span></div>';
     if(nx)need+='<div class="row"><span class="t">Subir a '+nivLab(nx[0])+'</span><span class="v">'+fmt(nextQ)+' sacos<br>en el '+PW+'</span></div>';
