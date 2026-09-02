@@ -230,6 +230,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
     <button id="btn-super" onclick="toggleSuper()" style="background:#334155;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer;margin-left:10px">🔒 Modo visor</button>
     <span style="font-size:.72rem;color:#4B5563;margin-left:auto">Procesado localmente · sin envío de datos</span>
   </div>
+  <div id="corte-bar" style="display:none;padding:0 14px"></div>
   <div class="kpi-bar">
     <div class="kpi"><div class="kpi-val" id="k-sacos">—</div><div class="kpi-lbl">Sacos totales</div><div class="kpi-sub" id="k-sacos-sub"></div></div>
     <div class="kpi"><div class="kpi-val" id="k-clients">—</div><div class="kpi-lbl">Clientes</div><div class="kpi-sub" id="k-vip-sub"></div></div>
@@ -997,6 +998,7 @@ function renderDashboard(fname){
   document.getElementById('dashboard').style.display='flex';
   document.getElementById('dashboard').style.flexDirection='column';
   document.getElementById('file-badge').textContent=fname||'Archivo';
+  try{renderCorteBar();}catch(e){}
 
   const alertas=D.clients.filter(c=>c.dias>=15&&c.dias<=365);
   const criticos=D.clients.filter(c=>c.dias>=45).length;
@@ -3381,7 +3383,7 @@ function applyRole(){
   // si el visor está en una pestaña no permitida, mándalo a la primera permitida
   if(!SK_SUPER){ var ap=document.querySelector('.pane.active'); if(ap){ var id=ap.id.replace('pane-',''); if(VISOR_TABS.indexOf(id)<0 && typeof showTab==='function') showTab('grafica'); } }
 }
-function toggleSuper(){ setTimeout(function(){try{renderMapeoTable();}catch(e){}},60);
+function toggleSuper(){ setTimeout(function(){try{renderMapeoTable();}catch(e){}try{renderCorteBar();}catch(e){}},60);
   if(SK_SUPER){ SK_SUPER=false; applyRole(); return; }
   var p=prompt('Contraseña de super-usuario (para editar configuración, mapeo y publicar):'); if(p===null) return;
   if(p===SUPER_PWD){ SK_SUPER=true; applyRole(); } else { alert('Contraseña incorrecta.'); }
@@ -3404,9 +3406,16 @@ function buildVendorPayloads(){
   // Mes que se EVALUÓ para el descuento vigente (el último ya cerrado) y el previo con el que se comparó
   // el crecimiento. Si lastMonth ya está cerrado, no hay mes en curso todavía.
   const _COMP=(DATA.completos&&DATA.completos.length)?DATA.completos.slice().sort((a,b)=>a-b):[];
-  const MESEVAL=_COMP.length?_COMP[_COMP.length-1]:0;
-  const MESANT =_COMP.length>1?_COMP[_COMP.length-2]:0;
+  const _DDEVAL=_COMP.length?_COMP[_COMP.length-1]:0;
+  // Mes evaluado: manda el CORTE confirmado. Sin corte, manda el reporte (comportamiento de siempre).
+  const _CORTE=(typeof corteVigente==='function')?corteVigente():null;
+  const MESEVAL=((typeof mesEvalVigente==='function')?mesEvalVigente():0)||_DDEVAL;
+  const _iEv=_COMP.indexOf(MESEVAL);
+  const MESANT =(_iEv>0)?_COMP[_iEv-1]:(_COMP.length>1?_COMP[_COMP.length-2]:0);
   const MESCURSO=(lastMonth&&lastMonth!==MESEVAL)?lastMonth:0;   // 0 = el mes en curso aún no tiene ventas
+  // Mes VITRINA: el que las apps muestran como "en curso". Lo manda el calendario real, para que
+  // el día 1 ya se vean los objetivos del mes nuevo aunque todavía no se cargue una sola venta.
+  const MESVIT=((typeof mesVitrinaCalc==='function')?mesVitrinaCalc(MESEVAL,MESCURSO,(DATA.dataYear||0)):0)||(MESEVAL?((MESEVAL%12)+1):0);
   const evalLabel=(evalP==='MES')?(MES_NOM_L[lastMonth]||''):q.label;
   const byV={};
   DATA.clients.forEach(c=>{ if(!((c.promMes||0)>0))return; const v=c.vendedor||'(sin asignar)'; (byV[v]=byV[v]||[]).push(c); });
@@ -3474,7 +3483,7 @@ function buildVendorPayloads(){
       curTot:Math.round(yrows.filter(function(r){return r.vend===v;}).reduce(function(a,r){return a+(r.cur||0);},0)),
       priorTot:Math.round(yrows.filter(function(r){return r.vend===v;}).reduce(function(a,r){return a+(r.prior||0);},0)),
       cy:Yv.cy||0,py:Yv.py||0};
-    out[v]={v:v,period:period,lastMonth:lastMonth,mesEval:MESEVAL,mesAnt:MESANT,mesCurso:MESCURSO,q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows,res:res};
+    out[v]={v:v,period:period,lastMonth:lastMonth,mesEval:MESEVAL,mesAnt:MESANT,mesCurso:MESCURSO,mesVitrina:MESVIT,corte:(_CORTE?{mes:_CORTE.mes,fecha:_CORTE.fecha}:null),q:q,evalPeriod:evalP,evalLabel:evalLabel,updated:now.getTime(),updatedStr:updatedStr,prem:getPremCfg(),cobre:getCobreCfg(),prospects:vprosp,ventas:ventas,alertas:alertas,rows:rows,res:res};
   });
   // ── Cobradores: clonan la cartera de "su" vendedor con su propia marca de agua y licencia (excluidos del índice de gerencia) ──
   (COBRADORES||[]).forEach(function(cb){
@@ -3512,6 +3521,142 @@ function toggleVendedor(vkey,vname,btn){ if(!reqSuper())return;
   req.then(function(){ setVendBtn(btn,willBlock); alert(willBlock?('⛔ App de '+(vname||vkey)+' desactivada. Se bloquea en su teléfono en menos de 1 minuto.'):('✅ App de '+(vname||vkey)+' reactivada.')); })
      .catch(function(){alert('No se pudo cambiar (revisa internet/licencia).');});
 }
+// ══ CORTE DE MES ══════════════════════════════════════════════════════════════
+// El "corte" es la confirmación explícita de que un reporte de Odoo es el DEFINITIVO de un mes.
+//  · Congela qué mes se evalúa (descuentos y bonos ya no se mueven solos con cada carga).
+//  · Libera de inmediato los objetivos del mes siguiente en todas las apps, aunque la venta vaya en 0.
+//  · Guarda una foto de los totales: si un reporte posterior mueve un mes ya cerrado
+//    (porque Odoo facturó algo con fecha anterior), el programa lo detecta y avisa.
+const CORTE_KEY='corte04mas';
+const MESLARGO={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
+function mesL(m){return MESLARGO[m]||('mes '+m);}
+function mesSigN(m){return m?((m%12)+1):0;}
+function getCorte(){try{var o=JSON.parse(localStorage.getItem(CORTE_KEY)||'null');return(o&&o.mes)?o:null;}catch(e){return null;}}
+function saveCorteObj(o){try{localStorage.setItem(CORTE_KEY,JSON.stringify(o));}catch(e){}}
+// El corte solo aplica al mismo año de los datos cargados (un reporte de otro año no lo usa).
+function corteVigente(){var c=getCorte();if(!c)return null;var y=(DATA&&DATA.dataYear)||0;if(y&&c.anio&&c.anio!==y)return null;return c;}
+// Último mes que los DATOS dan por cerrado (comportamiento histórico del programa).
+function mesCerradoData(){var C=(DATA&&DATA.completos&&DATA.completos.length)?DATA.completos.slice().sort(function(a,b){return a-b;}):[];return C.length?C[C.length-1]:0;}
+// Mes que se EVALÚA hoy: manda el corte confirmado; si nunca se ha hecho corte, mandan los datos.
+function mesEvalVigente(){var dd=mesCerradoData(),c=corteVigente();if(!c)return dd;if(dd&&dd<c.mes)return dd;return c.mes;}
+// Mes VITRINA: el que las apps muestran como "en curso". Lo manda el calendario real
+// (día 1 del mes nuevo ⇒ objetivos del mes nuevo aunque la venta esté en 0), salvo que
+// el reporte venga adelantado o los datos sean de un año ya cerrado.
+function mesVitrinaCalc(mesEval,mesCurso,dataYear){
+  var hoy=new Date();
+  if(dataYear&&dataYear===hoy.getFullYear()){var cm=hoy.getMonth()+1;return(mesCurso&&mesCurso>cm)?mesCurso:cm;}
+  return mesCurso||(mesEval?mesSigN(mesEval):0);
+}
+// Hay un mes cerrado en los datos MÁS NUEVO que el corte confirmado ⇒ falta confirmar corte.
+function cortePendiente(){var dd=mesCerradoData(),c=corteVigente();if(!dd||!c)return 0;return dd>c.mes?dd:0;}
+function snapTotales(){
+  var mesTot={},vendMes={};
+  if(!DATA)return{mesTot:mesTot,vendMes:vendMes};
+  for(var m in(DATA.mesTotal||{}))mesTot[m]=Math.round(DATA.mesTotal[m]||0);
+  (DATA.clients||[]).forEach(function(c){
+    var v=c.vendedor||'(sin asignar)',tgt=vendMes[v]||(vendMes[v]={}),qm=c.qualMes||c.mesData||{};
+    for(var k in qm)tgt[k]=Math.round((tgt[k]||0)+(qm[k]||0));
+  });
+  return{mesTot:mesTot,vendMes:vendMes};
+}
+// Diferencias contra la foto del corte, SOLO en meses ya cerrados (≤ mes del corte).
+function corteDiffs(){
+  var c=corteVigente();if(!c||!c.mesTot)return[];
+  var snap=snapTotales(),out=[],m;
+  for(m in c.mesTot){if(Number(m)>c.mes)continue;var a=Math.round(c.mesTot[m]||0),b=Math.round(snap.mesTot[m]||0);if(Math.abs(b-a)>=1)out.push({mes:Number(m),antes:a,ahora:b,dif:b-a});}
+  for(m in snap.mesTot){if(Number(m)>c.mes)continue;if(c.mesTot[m]==null){var bb=Math.round(snap.mesTot[m]||0);if(bb>=1)out.push({mes:Number(m),antes:0,ahora:bb,dif:bb});}}
+  out.sort(function(x,y){return x.mes-y.mes;});return out;
+}
+// Detalle por vendedor de los meses que se movieron (para saber a quién le cambió el número).
+function corteDiffVend(){
+  var c=corteVigente();if(!c||!c.vendMes)return[];
+  var ds=corteDiffs();if(!ds.length)return[];
+  var meses=ds.map(function(d){return d.mes;}),snap=snapTotales(),vs={},v,m2;
+  for(v in c.vendMes){for(m2 in c.vendMes[v]){if(meses.indexOf(Number(m2))<0)continue;var a=Math.round(c.vendMes[v][m2]||0),b=Math.round(((snap.vendMes[v]||{})[m2])||0);if(Math.abs(b-a)>=1){vs[v]=vs[v]||{v:v,dif:0,det:[]};vs[v].dif+=(b-a);vs[v].det.push(mesL(Number(m2))+': '+fmt(a)+'→'+fmt(b));}}}
+  for(v in snap.vendMes){for(m2 in snap.vendMes[v]){if(meses.indexOf(Number(m2))<0)continue;if(((c.vendMes[v]||{})[m2])==null){var bb2=Math.round(snap.vendMes[v][m2]||0);if(bb2>=1){vs[v]=vs[v]||{v:v,dif:0,det:[]};vs[v].dif+=bb2;vs[v].det.push(mesL(Number(m2))+': 0→'+fmt(bb2));}}}}
+  return Object.keys(vs).map(function(k){return vs[k];}).sort(function(a,b){return Math.abs(b.dif)-Math.abs(a.dif);});
+}
+function doCorte(){
+  if(!DATA){alert('Carga primero el reporte de Odoo.');return;}
+  if(!reqSuper())return;
+  var dd=mesCerradoData();
+  if(!dd){alert('El reporte cargado todavía no tiene ningún mes cerrado.');return;}
+  var prev=corteVigente(),msg;
+  if(prev&&prev.mes===dd){
+    msg='Ya existe un corte de '+mesL(dd)+' (hecho el '+prev.fecha+').\n\n¿Rehacerlo con el reporte que está cargado ahora?\nSe actualiza la foto de los totales y se vuelve a publicar a la nube.';
+  }else{
+    msg='¿Confirmar el CORTE de '+mesL(dd).toUpperCase()+' '+(DATA.dataYear||'')+'?\n\n'
+      +'• El descuento de todos los clientes se congela con los números de '+mesL(dd)+'.\n'
+      +'• Las apps pasan a mostrar los objetivos de '+mesL(mesSigN(dd))+' aunque la venta vaya en 0.\n'
+      +'• Se guarda una foto de los totales: si un reporte posterior mueve algo de '+mesL(dd)+' o de un mes anterior, el programa te avisa.\n'
+      +'• Se publica a la nube para que vendedores y gerencia lo vean igual.';
+  }
+  if(!confirm(msg))return;
+  var snap=snapTotales(),now=new Date(),p=function(n){return('0'+n).slice(-2);};
+  saveCorteObj({anio:(DATA.dataYear||now.getFullYear()),mes:dd,ts:now.getTime(),
+    fecha:p(now.getDate())+'/'+p(now.getMonth()+1)+'/'+now.getFullYear()+' '+p(now.getHours())+':'+p(now.getMinutes()),
+    archivo:((document.getElementById('file-badge')||{}).textContent||''),
+    mesTot:snap.mesTot,vendMes:snap.vendMes});
+  renderCorteBar();
+  try{if(typeof refreshMapDependientes==='function')refreshMapDependientes();}catch(e){}
+  try{if(typeof publishCloud==='function')publishCloud();}catch(e){}
+}
+function deshacerCorte(){
+  if(!reqSuper())return;
+  var c=getCorte();if(!c)return;
+  if(!confirm('¿Deshacer el corte de '+mesL(c.mes)+'?\n\nEl programa volverá a decidir el mes evaluado solo con lo que traiga el reporte, como antes.'))return;
+  try{localStorage.removeItem(CORTE_KEY);}catch(e){}
+  renderCorteBar();
+}
+function toggleCorteDet(){var d=document.getElementById('corte-det');if(!d)return;d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none';}
+function renderCorteBar(){
+  var bar=document.getElementById('corte-bar');if(!bar)return;
+  if(!DATA){bar.innerHTML='';bar.style.display='none';return;}
+  bar.style.display='block';
+  var c=corteVigente(),dd=mesCerradoData(),pend=cortePendiente(),diffs=corteDiffs();
+  var vit=mesVitrinaCalc(mesEvalVigente(),((DATA.meses&&DATA.meses.length&&Math.max.apply(null,DATA.meses)!==mesEvalVigente())?Math.max.apply(null,DATA.meses):0),(DATA.dataYear||0));
+  var bg,bd,ic,tit,sub,btn='';
+  var btnCorte='<button onclick="doCorte()" style="background:#16a34a;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-weight:800;font-size:.76rem;cursor:pointer;white-space:nowrap">✅ Marcar corte de '+mesL(dd)+'</button>';
+  if(!dd){
+    bg='#f1f5f9';bd='#cbd5e1';ic='📄';tit='Sin meses cerrados en este reporte';sub='En cuanto el reporte traiga un mes completo podrás marcar el corte.';
+  }else if(!c){
+    bg='#eff6ff';bd='#bfdbfe';ic='📌';tit='Aún no has marcado ningún corte';
+    sub='Hoy el programa decide solo con los datos: evalúa <b>'+mesL(dd)+'</b>. Si marcas el corte, ese mes queda congelado y las apps pasan a mostrar los objetivos de <b>'+mesL(mesSigN(dd))+'</b> aunque la venta vaya en 0.';
+    btn=btnCorte;
+  }else if(pend){
+    bg='#fffbeb';bd='#fcd34d';ic='⏳';tit='Corte pendiente: ya hay datos completos de '+mesL(pend);
+    sub='El corte vigente sigue siendo <b>'+mesL(c.mes)+'</b> ('+c.fecha+'), así que los descuentos NO se han movido. Revisa que el reporte cuadre contra Odoo y marca el corte de '+mesL(pend)+' para que se evalúe.';
+    btn='<button onclick="doCorte()" style="background:#d97706;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-weight:800;font-size:.76rem;cursor:pointer;white-space:nowrap">✅ Marcar corte de '+mesL(pend)+'</button>';
+  }else{
+    bg='#f0fdf4';bd='#86efac';ic='✅';tit='Corte de '+mesL(c.mes)+' confirmado';
+    sub='Hecho el '+c.fecha+(c.archivo?(' con <b>'+String(c.archivo).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</b>'):'')+'. Los descuentos están congelados con '+mesL(c.mes)+' y las apps muestran los objetivos de <b>'+mesL(vit)+'</b>.';
+    btn='<button onclick="doCorte()" style="background:#334155;color:#fff;border:none;border-radius:7px;padding:6px 11px;font-weight:700;font-size:.72rem;cursor:pointer;white-space:nowrap">↻ Rehacer corte</button>'
+      +'<button onclick="deshacerCorte()" style="background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:7px;padding:6px 11px;font-weight:700;font-size:.72rem;cursor:pointer;margin-left:6px;white-space:nowrap">Deshacer</button>';
+  }
+  var h='<div style="background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:9px 13px;margin:0 0 8px;display:flex;gap:11px;align-items:flex-start">'
+    +'<div style="font-size:1.05rem;line-height:1.2">'+ic+'</div>'
+    +'<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:.83rem;color:#1e293b">'+tit+'</div>'
+    +'<div style="font-size:.75rem;color:#475569;margin-top:2px;line-height:1.45">'+sub+'</div></div>'
+    +'<div style="display:flex;align-items:center">'+btn+'</div></div>';
+  if(diffs.length){
+    var tot=diffs.reduce(function(a,d){return a+d.dif;},0);
+    h+='<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:9px 13px;margin:0 0 8px">'
+      +'<div style="display:flex;gap:11px;align-items:flex-start">'
+      +'<div style="font-size:1.05rem;line-height:1.2">⚠️</div><div style="flex:1;min-width:0">'
+      +'<div style="font-weight:800;font-size:.83rem;color:#991b1b">Se movió un mes que ya estaba cerrado ('+(tot>=0?'+':'')+fmt(tot)+' sacos)</div>'
+      +'<div style="font-size:.75rem;color:#7f1d1d;margin-top:2px;line-height:1.45">Este reporte trae facturas con fecha de un mes que ya se había cortado. El descuento vigente NO cambió (sigue congelado con la foto del corte), pero conviene revisar en Odoo por qué se movió.</div>'
+      +'<div style="font-size:.75rem;color:#7f1d1d;margin-top:5px">'
+      +diffs.map(function(d){return '<b>'+mesL(d.mes)+'</b>: se cerró con '+fmt(d.antes)+' → ahora calcula '+fmt(d.ahora)+' <b>('+(d.dif>=0?'+':'')+fmt(d.dif)+')</b>';}).join(' · ')+'</div>'
+      +'<div style="margin-top:6px"><button onclick="toggleCorteDet()" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-weight:700;font-size:.71rem;cursor:pointer">Ver a qué vendedor le cambió</button></div>'
+      +'<div id="corte-det" style="display:none;margin-top:7px;font-size:.73rem;color:#7f1d1d">'
+      +(function(){var vv=corteDiffVend();if(!vv.length)return '<i>Sin diferencias atribuibles a un vendedor.</i>';
+        return '<table style="width:100%;border-collapse:collapse"><tr style="text-align:left;color:#991b1b"><th style="padding:2px 6px">Vendedor</th><th style="padding:2px 6px;text-align:right">Δ sacos</th><th style="padding:2px 6px">Detalle</th></tr>'
+        +vv.map(function(x){return '<tr style="border-top:1px solid #fecaca"><td style="padding:3px 6px;font-weight:700">'+String(x.v).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</td><td style="padding:3px 6px;text-align:right;font-weight:800">'+(x.dif>=0?'+':'')+fmt(x.dif)+'</td><td style="padding:3px 6px">'+x.det.join(' · ')+'</td></tr>';}).join('')+'</table>';})()
+      +'</div></div></div></div>';
+  }
+  bar.innerHTML=h;
+}
+
 function publishCloud(){
   // Publicar SÍ lo pueden hacer los usuarios comunes (secretarias): cargan Odoo y suben los datos.
   const cfg=getCloudCfg(); if(!cfg.db){alert('Falta la URL de la base de datos.');return;}

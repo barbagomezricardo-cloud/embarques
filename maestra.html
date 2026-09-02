@@ -105,7 +105,7 @@ function nextTier(n){const i=TIERS.findIndex(t=>t[0]===n);return i>0?TIERS[i-1]:
 function nivLab(n){return NIVLAB[n]||n;}
 const NIVCOL={DIAMANTE_PLUS:'#7c3aed',DIAMANTE:'#0e7490',PLATINO:'#475569',ORO:'#a16207',PLATA:'#64748b',BRONCE:'#b45309',COBRE:'#b87333',INICIAL:'#6b7280'};
 const NIVBG={DIAMANTE_PLUS:'linear-gradient(135deg,#6d28d9,#c4b5fd)',DIAMANTE:'linear-gradient(135deg,#0891b2,#22d3ee)',PLATINO:'linear-gradient(135deg,#475569,#94a3b8)',ORO:'linear-gradient(135deg,#a16207,#f5c842)',PLATA:'linear-gradient(135deg,#64748b,#cbd5e1)',BRONCE:'linear-gradient(135deg,#b45309,#f0a868)',COBRE:'linear-gradient(135deg,#8a5a2b,#d4915d)',INICIAL:'linear-gradient(135deg,#4b5563,#9ca3af)'};
-var MESEVAL=0, MESANT=0, MESCURSO=0;
+var MESEVAL=0, MESANT=0, MESCURSO=0, MESVIT=0, CORTE=null;
 let CLIENTS={}, APPVEND='', APPPERIOD='', APPMONTH=0, APPQ=null, APPUPDATED='', CLOUD={db:'',v:''};
 let APPEVAL='TRIM', APPEVALLABEL='';                       // periodo de evaluación (definido por el gerente)
 function PMULT(){return APPEVAL==='MES'?1:3;}               // metas: mensuales (x1) o trimestrales (x3)
@@ -125,6 +125,7 @@ function parseHash(){
 function applyPayload(p){
   APPVEND=p.v||''; APPPERIOD=p.period||''; APPMONTH=p.lastMonth||p.m||0;
   MESEVAL=p.mesEval||0; MESANT=p.mesAnt||0; MESCURSO=p.mesCurso||0;
+  MESVIT=p.mesVitrina||0; CORTE=p.corte||null;   // mes en vitrina (lo manda el calendario) y corte confirmado
   // Reportes publicados por una versión anterior no traen estos campos: se deducen del
   // último mes con datos, para que las etiquetas de mes nunca queden en blanco ni en enero.
   if(!MESCURSO&&!MESEVAL&&APPMONTH){ MESCURSO=APPMONTH; MESEVAL=((APPMONTH-2+12)%12)+1; MESANT=((APPMONTH-3+12)%12)+1; }
@@ -483,12 +484,14 @@ function buildAgg(){
   for(var z=0;z<12;z++){cur.push(0);prior.push(0);}
   var sinCompra=[],fuga=[],focos=[],nuevosCount=0,nuevosMeta=0,nuevosLista=[],regMap={};
   var meses=[],gTarget=0,lastMonth=0,esDiario=false,priorDaily={},prem=null,cobre=null,evalPeriod='TRIM',evalLabel='',updatedStr=MUP;
+  var mesEval=0,mesAnt=0,mesCurso=0,mesVitrina=0,corte=null;   // mes evaluado / en vitrina / corte confirmado (vienen igual en todos los vendedores)
   // acumuladores del resumen ejecutivo (contadores crudos: se suman entre vendedores sin distorsionarse)
   var R={cartera:0,clientes:0,activos:0,riesgoN:0,riesgoSac:0,fugaN:0,fugaSac:0,retBase:0,retKeep:0,lostN:0,lostSac:0,premSac:0,totSac:0,curTot:0,priorTot:0,cy:0,py:0},hayRes=false,lostTop=[];
   VKEYS.forEach(function(k){var p=VDATA[k];if(!p)return;
     if(p.rows)rows=rows.concat(p.rows);
     if(p.prospects)prospects=prospects.concat(p.prospects);
     prem=prem||p.prem;cobre=cobre||p.cobre;evalPeriod=p.evalPeriod||evalPeriod;evalLabel=p.evalLabel||evalLabel;updatedStr=updatedStr||p.updatedStr;
+    mesEval=mesEval||p.mesEval||0;mesAnt=mesAnt||p.mesAnt||0;mesCurso=mesCurso||p.mesCurso||0;mesVitrina=mesVitrina||p.mesVitrina||0;corte=corte||p.corte||null;
     var V=p.ventas;if(V){meses=(V.meses&&V.meses.length)?V.meses:meses;gTarget=V.gTarget||gTarget;lastMonth=V.lastMonth||lastMonth;esDiario=esDiario||V.esDiario;priorDaily=(V.priorDaily&&Object.keys(V.priorDaily).length)?V.priorDaily:priorDaily;
       for(var i=0;i<12;i++){cur[i]+=(V.cur&&V.cur[i])||0;prior[i]+=(V.prior&&V.prior[i])||0;}
       promoSac+=V.promoSac||0;newDisc+=V.newDisc||0;
@@ -512,7 +515,7 @@ function buildAgg(){
   sinCompra.sort(function(a,b){return (b.dias||0)-(a.dias||0);});
   fuga.sort(function(a,b){return (b.perd||0)-(a.perd||0);});
   var regiones=Object.keys(regMap).map(function(e){var o=regMap[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:o.cur,prior:o.prior,crec:crec};}).sort(function(a,b){return a.crec-b.crec;});
-  return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,prem:prem,cobre:cobre,prospects:prospects,rows:rows,res:(hayRes?R:null),
+  return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,mesEval:mesEval,mesAnt:mesAnt,mesCurso:mesCurso,mesVitrina:mesVitrina,corte:corte,prem:prem,cobre:cobre,prospects:prospects,rows:rows,res:(hayRes?R:null),
     ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario},
     alertas:{sinCompra:sinCompra,fuga:fuga,focos:focos.slice(0,12),nuevos:{count:nuevosCount,meta:nuevosMeta,lista:nuevosLista},regiones:regiones,gTarget:gTarget}};
 }
@@ -867,8 +870,11 @@ function descBloques(c,t){
   var h='';
   // Mes que corre hoy. Si el reporte cargado termina justo al cerrar un mes, MESCURSO viene en 0
   // (todavía no hay ventas del mes nuevo): entonces el mes en curso es el siguiente al evaluado.
-  var mesAct = MESCURSO || (MESEVAL ? ((MESEVAL%12)+1) : 0);
-  var enCurso = !!MESCURSO;   // ¿el reporte YA trae ventas del mes que corre?
+  // El mes que se muestra lo manda el calendario (MESVIT): el día 1 ya se ven los objetivos
+  // del mes nuevo aunque todavía no se haya cargado una sola venta. Solo hay avance real
+  // (enCurso) cuando el reporte ya trae ventas de ESE mismo mes.
+  var mesAct = MESVIT || MESCURSO || (MESEVAL ? ((MESEVAL%12)+1) : 0);
+  var enCurso = !!MESCURSO && MESCURSO===mesAct;
   // ── A · lo que paga HOY ──
   if(vig!=null){
     var pz=[];
@@ -878,7 +884,7 @@ function descBloques(c,t){
     pz.push({t:'Premium+ '+((c.boost||0)>=PREM.e2?'escalón 2 (≥'+PREM.u2+'%)':((c.boost||0)>0?'escalón 1 (≥'+PREM.u1+'%)':'(no alcanzó el '+PREM.u1+'%)'))+' · mix '+(c.mixp||0).toFixed(1)+'%',v:(c.boost||0),ok:(c.boost||0)>0});
     h+='<div class="dbox">';
     h+='<div class="dtop"><div><div class="dlbl">Descuento que paga en '+(MESNOM[mesAct]||'este mes')+'</div>'+
-       '<div class="dsub">Se calculó al cerrar '+(MESNOM[MESEVAL]||'el mes pasado')+' y ya no cambia</div></div>'+
+       '<div class="dsub">Se calculó al cerrar '+(MESNOM[MESEVAL]||'el mes pasado')+' y ya no cambia'+(CORTE&&CORTE.fecha?(' · corte del '+CORTE.fecha):'')+'</div></div>'+
        '<div class="dnum">'+vig.toFixed(2)+'%</div></div>';
     pz.forEach(function(p){
       h+='<div class="drow'+(p.ok?' si':' no')+'"><span>'+(p.ok?'✓':'✗')+' '+p.t+'</span><b>'+(p.v>0?('+'+p.v.toFixed(2)+'%'):'—')+'</b></div>';
