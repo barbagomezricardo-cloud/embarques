@@ -708,6 +708,18 @@ function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
   return{desc,descMax,crecio,premOk,mixPrem,mixPlus,boost};
 }
 
+// Descuento que estuvo VIGENTE durante el mes m: se evalúa con los meses ya cerrados
+// ANTES de m, que es la meta que se le anunció al cliente el día 1 de ese mes.
+function descMesCliente(c,m){
+  if(!c||!m)return 0;
+  const comp=((DATA&&DATA.completos)||[]).filter(x=>x<m).sort((a,b)=>a-b);
+  if(!comp.length)return 0;
+  const w6=comp.slice(-6);
+  const qm=c.qualMes||c.mesData||{};
+  const prom=Math.round(w6.reduce((a,x)=>a+(qm[x]||0),0)/(w6.length||1));
+  if(!(prom>0))return 0;
+  try{ const d=calcDesc(calcNivel(prom),qm,c.prodMes||{},comp,prom); return d.desc||0; }catch(e){ return 0; }
+}
 function daysAgo(date){if(!date)return 999;return Math.floor((TODAY-date)/86400000);}
 
 // ── DROP ZONE ─────────────────────────────────────────────────────────────────
@@ -837,7 +849,7 @@ function processExcel(buf,fname){
 function processPivot(rows,fname){
   try{
     document.getElementById('load-msg').textContent='Procesando ventas facturadas...';
-    const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={},promoCliProd={};
+    const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={},promoCliProd={},promoCliProdMes={};
     const lastReal={},yearCount={},diaMes={},diaMesCli={},clienteVend={};let esDiario=false;let curVendor=null;
     // Detectar jerarquía: cliente->producto->mes  vs  cliente->mes->producto
     let productFirst=false,seenClient=false;
@@ -873,6 +885,9 @@ function processPivot(rows,fname){
       var _pn=(prodTxt.split(']').slice(1).join(']').trim())||prodTxt;   // nombre del producto regalado
       if(!promoCliProd[cli])promoCliProd[cli]={};
       promoCliProd[cli][_pn]=(promoCliProd[cli][_pn]||0)+val;
+      // ...y desglosado por mes, para poder valuar mes a mes lo que se regaló
+      if(mes>0){ if(!promoCliProdMes[cli])promoCliProdMes[cli]={}; if(!promoCliProdMes[cli][_pn])promoCliProdMes[cli][_pn]={};
+        promoCliProdMes[cli][_pn][mes]=(promoCliProdMes[cli][_pn][mes]||0)+val; }
       if(mes>0){const kgm=(prodTxt.toUpperCase().match(/(\d+(?:\.\d+)?)\s*KG/g)||[]).slice(-1)[0];promoMesTon[mes]=(promoMesTon[mes]||0)+val*(kgm?parseFloat(kgm):25)/1000;}
     };
     const prodInfo=(t)=>{const mp=t.match(/\[(\S+)\]/);if(!mp)return null;const code=mp[1].toUpperCase();return {es04:t.toUpperCase().includes('04MAS'),promo:/[PB]\d*$/.test(code),name:t.split(']').slice(1).join(']').trim()};};
@@ -911,7 +926,7 @@ function processPivot(rows,fname){
     for(const c in lastReal){const f=lastReal[c];lastDate[c]=esDiario?f:new Date(f.getFullYear(),f.getMonth()+1,0);}
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiario;
     window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND=clienteVend;
-    LAST_PROMO_PROD=promoCliProd;
+    LAST_PROMO_PROD=promoCliProd; window.LAST_PROMO_PM=promoCliProdMes;
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname);
   }catch(err){console.error(err);alert('Error procesando el archivo:\n'+err.message);resetDash();}
 }
@@ -969,7 +984,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       const ld=lastDate[nombre]||null;
       const dias=daysAgo(ld);
       const prodMes=byClienteProdMes[nombre]||{};
-      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},lastDate:ld,dias};
+      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
     }).sort((a,b)=>b.promMes-a.promMes);
 
     // El vendedor se toma del MAPEO curado (vendedores reales + administración), NO del export de Odoo.
@@ -1970,9 +1985,32 @@ const COSTOS_DEF=[
  {code:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',costo:74.11,precio:102}
 ];
 function _pk(s){return (s||'').toUpperCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'');}
+// Clave de producto por FAMILIA + presentación. Odoo escribe el mismo producto de muchas
+// formas ("kan kan 25 kg R", "MI BOOB 20 KGS  (2)", "PROMOCION MI BOOB 20KG", "SILVER KAT"
+// vs "SILVER CAT"...), y con la comparación literal NINGÚN saco regalado encontraba su costo:
+// el costo del programa salía en $0. Con esta clave, todas las variantes caen en el mismo producto.
+function _famKey(name){
+  let n=String(name||'').toUpperCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'');
+  n=n.replace(/^\s*(PROMOCION|BONIFICACION)\s*(DE\s+)?/,'');   // el regalo cuesta lo mismo que el producto
+  n=n.replace(/KAT/g,'CAT');
+  const limpio=n.replace(/(\d+(?:\.\d+)?)\s*%/g,' ');         // el % de proteína no es presentación
+  let kg=0; const mm=limpio.match(/\d+(?:\.\d+)?/g)||[];
+  for(const v of mm){ const x=parseFloat(v); if(x>=5){kg=x;break;} }
+  let fam;
+  if(/PET\s*FOOD/.test(n))fam='PETFOOD';
+  else if(/RAFIA/.test(n))fam='RAFIA';
+  else if(/MI\s*BOOB/.test(n))fam='MIBOOB';
+  else if(/KAN\s*KAN/.test(n))fam='KANKAN';
+  else if(/CACHORRO/.test(n))fam='CACHORRO';
+  else if(/CAT/.test(n))fam='CAT';
+  else if(/PREMIUM/.test(n))fam='PREMIUM';
+  else if(/SILVER\s*KAN/.test(n))fam='SILVERKAN';
+  else fam=_pk(n);
+  return fam+'|'+kg;
+}
 function getCostos(){let arr=null;try{arr=JSON.parse(localStorage.getItem('costos04mas')||'null');}catch(e){}if(!Array.isArray(arr)||!arr.length)arr=COSTOS_DEF.map(x=>Object.assign({},x));return arr;}
 function saveCostos(arr){try{localStorage.setItem('costos04mas',JSON.stringify(arr));}catch(e){}}
-function costMap(){const arr=getCostos();const m={};arr.forEach(x=>{m[_pk(x.name)]={costo:+x.costo||0,precio:+x.precio||0,name:x.name,code:x.code||''};});return m;}
+function costMap(){const arr=getCostos();const m={};arr.forEach(x=>{m[_famKey(x.name)]={costo:+x.costo||0,precio:+x.precio||0,name:x.name,code:x.code||''};});return m;}
 function setCosto(i,field,val){const arr=getCostos();if(!arr[i])return;arr[i][field]=(field==='name'?val:(parseFloat(val)||0));saveCostos(arr);renderRentabilidad();}
 function addCostoProd(name){const arr=getCostos();arr.push({code:'',name:(name||'NUEVO PRODUCTO'),costo:0,precio:0});saveCostos(arr);renderRentabilidad();}
 function resetCostos(){if(!confirm('¿Restaurar los costos y precios a los valores originales (jul-2026)?'))return;localStorage.removeItem('costos04mas');renderRentabilidad();}
@@ -1980,6 +2018,8 @@ function _money(n){return '$'+fmt(n);}
 function _pctCol(p,thr){return p>=thr?'#4ade80':(p>=thr*0.6?'#f59e0b':'#ef4444');}
 let RENT_VF='',RENT_EST='',RENT_THR=12,RENT_EDIT_OPEN=false;
 function rentSet(k,v){if(k==='vf')RENT_VF=v;else if(k==='est')RENT_EST=v;else if(k==='thr')RENT_THR=parseFloat(v)||12;renderRentabilidad();}
+function getMesDesc(){try{const v=parseInt(localStorage.getItem('mesDesc04mas'),10);return (v>=1&&v<=12)?v:9;}catch(e){return 9;}}
+function setMesDesc(v){try{localStorage.setItem('mesDesc04mas',String(parseInt(v,10)||9));}catch(e){}renderRentabilidad();}
 function renderRentabilidad(){
   const box=document.getElementById('rent-content'); if(!box)return;
   if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la rentabilidad del programa.</div>';return;}
@@ -1991,12 +2031,12 @@ function renderRentabilidad(){
     if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
     if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
     const pm=c.prodMes||{}; let rev=0,cost=0;
-    for(const p in pm){ let sac=0; for(const m in pm[p])sac+=pm[p][m]||0; if(sac<=0)continue; const cc=CM[_pk(p)];
+    for(const p in pm){ let sac=0; for(const m in pm[p])sac+=pm[p][m]||0; if(sac<=0)continue; const cc=CM[_famKey(p)];
       if(cc){ rev+=sac*cc.precio; cost+=sac*cc.costo; if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0}; byProd[p].sac+=sac; byProd[p].rev+=sac*cc.precio; byProd[p].cost+=sac*cc.costo; }
       else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
     // costo de sacos regalados (promo/bonificación) por su producto real
     let promoCost=0; const pp=c.promoProd||{};
-    for(const p in pp){ const sac=pp[p]||0; if(sac<=0)continue; const cc=CM[_pk(p)];
+    for(const p in pp){ const sac=pp[p]||0; if(sac<=0)continue; const cc=CM[_famKey(p)];
       if(cc){ promoCost+=sac*cc.costo; if(!byProdPromo[p])byProdPromo[p]={sac:0,cost:0}; byProdPromo[p].sac+=sac; byProdPromo[p].cost+=sac*cc.costo; }
       else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
     if(rev<=0&&promoCost<=0)continue;
@@ -2029,6 +2069,75 @@ function renderRentabilidad(){
   const ahorro=TPROMO-TDISC;
   h+='<div style="background:'+(ahorro>=0?'#0f2e1c':'#3a1414')+';border:1px solid '+(ahorro>=0?'#1a7a3f':'#7f1d1d')+';border-radius:10px;padding:10px 14px;margin:6px 0 16px;font-size:.8rem;color:'+(ahorro>=0?'#a9f0c4':'#fecaca')+'">'+
      (ahorro>=0?'✅ El cambio te conviene: ':'⚠ Ojo: ')+'el esquema nuevo de <b>descuento %</b> costaría <b>'+_money(TDISC)+'</b> vs <b>'+_money(TPROMO)+'</b> de los sacos regalados → '+(ahorro>=0?'ahorro de <b>'+_money(ahorro)+'</b> ('+(TPROMO>0?(ahorro/TPROMO*100).toFixed(0):'0')+'% menos)':'costaría <b>'+_money(-ahorro)+'</b> MÁS')+' sobre este volumen.</div>';
+
+  // ══ LO QUE ESTOY DANDO, MES A MES ═══════════════════════════════════════════
+  // Hasta el mes anterior al arranque del esquema el costo fueron los SACOS REGALADOS.
+  // Desde el arranque es el DESCUENTO %, valuado con el % que estuvo vigente cada mes
+  // (el que se le anunció al cliente el día 1, no el de hoy).
+  const MDESC=getMesDesc();
+  const MM={};
+  const _ens=(m)=>MM[m]||(MM[m]={rev:0,cost:0,psac:0,pcost:0,disc:0,descW:0});
+  for(const c of DATA.clients){
+    if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
+    if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
+    const revM={},costM={};
+    const pm=c.prodMes||{};
+    for(const p in pm){ const cc=CM[_famKey(p)]; if(!cc)continue; const mo=pm[p];
+      for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; revM[k]=(revM[k]||0)+sac*cc.precio; costM[k]=(costM[k]||0)+sac*cc.costo; } }
+    for(const k in revM){ const o=_ens(+k); o.rev+=revM[k]; o.cost+=costM[k];
+      const d=descMesCliente(c,+k); o.disc+=revM[k]*d/100; o.descW+=d*revM[k]; }
+    const ppm=c.promoProdMes||{};
+    for(const p in ppm){ const cc=CM[_famKey(p)]; const mo=ppm[p];
+      for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; const o=_ens(+k); o.psac+=sac; if(cc)o.pcost+=sac*cc.costo; } }
+  }
+  const _mk=Object.keys(MM).map(Number).sort((a,b)=>a-b);
+  if(_mk.length){
+    let aRev=0,aDado=0,nRev=0,nDado=0,nDescW=0;   // a = esquema viejo (regalo) · n = esquema nuevo (descuento)
+    let filas='';
+    _mk.forEach(m=>{
+      const o=MM[m], nuevo=(m>=MDESC);
+      const dado=nuevo?o.disc:o.pcost;
+      const pctD=o.rev>0?dado/o.rev*100:0;
+      const descProm=o.rev>0?o.descW/o.rev:0;
+      if(nuevo){ nRev+=o.rev; nDado+=dado; nDescW+=o.descW; } else { aRev+=o.rev; aDado+=dado; }
+      const col=pctD<=3?'#4ade80':(pctD<=5?'#fbbf24':'#f87171');
+      filas+='<tr style="border-top:1px solid #16233f">'
+        +'<td style="padding:6px 8px;color:#e8eef7;font-weight:700">'+MES_NOM[m]+'</td>'
+        +'<td style="text-align:center"><span style="background:'+(nuevo?'#1e3a5f':'#3a2a12')+';color:'+(nuevo?'#7dd3fc':'#f0a868')+';border-radius:5px;padding:1px 7px;font-size:.66rem;font-weight:700">'+(nuevo?'DESCUENTO':'REGALO')+'</span></td>'
+        +'<td style="text-align:right;color:#cbd5e1">'+_money(o.rev)+'</td>'
+        +'<td style="text-align:right;color:#94a3b8">'+(o.psac>0?fmt(Math.round(o.psac)):'—')+'</td>'
+        +'<td style="text-align:right;color:#7dd3fc;font-weight:700">'+(nuevo?descProm.toFixed(2)+'%':'—')+'</td>'
+        +'<td style="text-align:right;font-weight:800;color:'+col+'">'+_money(dado)+'</td>'
+        +'<td style="text-align:right;font-weight:800;color:'+col+'">'+pctD.toFixed(2)+'%</td></tr>';
+    });
+    const pctA=aRev>0?aDado/aRev*100:0, pctN=nRev>0?nDado/nRev*100:0;
+    const dif=pctN-pctA;
+    h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">📅 Lo que estoy dando, mes a mes</div>';
+    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Antes de '+(MES_NOM[MDESC]||'')+' el costo del programa eran los <b style="color:#f0a868">sacos regalados</b> (valuados a tu costo). Desde '+(MES_NOM[MDESC]||'')+' es el <b style="color:#7dd3fc">descuento %</b>, calculado con el porcentaje que estuvo vigente cada mes para cada cliente, sobre su venta real de ese mes. '
+      +'<label style="margin-left:8px">El esquema arrancó en: <select onchange="setMesDesc(this.value)" style="background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:2px 6px;font-size:.72rem">'
+      +[1,2,3,4,5,6,7,8,9,10,11,12].map(function(x){return '<option value="'+x+'"'+(x===MDESC?' selected':'')+'>'+MES_NOM[x]+'</option>';}).join('')+'</select></label></div>';
+    if(nRev>0){
+      const c1=dif<=0?'#0f2e1c':'#3a1414', c2=dif<=0?'#1a7a3f':'#7f1d1d', c3=dif<=0?'#a9f0c4':'#fecaca';
+      h+='<div style="background:'+c1+';border:1px solid '+c2+';border-radius:10px;padding:11px 14px;margin-bottom:10px;font-size:.8rem;color:'+c3+'">'
+        +(dif<=0?'✅ Estás dando MENOS que antes: ':'⚠ Estás dando MÁS que antes: ')
+        +'con el esquema nuevo llevas <b>'+_money(nDado)+'</b> sobre <b>'+_money(nRev)+'</b> de venta = <b>'+pctN.toFixed(2)+'%</b>, '
+        +'contra <b>'+pctA.toFixed(2)+'%</b> del periodo de regalos ('+MES_NOM[_mk[0]]+'–'+MES_NOM[MDESC-1>0?MDESC-1:1]+'). '
+        +'Diferencia: <b>'+(dif>=0?'+':'')+dif.toFixed(2)+' puntos</b>. '
+        +'Al ritmo del periodo anterior habrías dado '+_money(nRev*pctA/100)+', así que vas '+(dif<=0?'ahorrando':'gastando')+' <b>'+_money(Math.abs(nRev*pctA/100-nDado))+'</b>.'
+        +'<div style="font-size:.72rem;margin-top:4px;opacity:.85">Descuento promedio ponderado de todos los clientes desde '+MES_NOM[MDESC]+': <b>'+(nRev>0?(nDescW/nRev).toFixed(2):'0')+'%</b>.</div></div>';
+    } else {
+      h+='<div style="background:#111c34;border:1px solid #334155;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.78rem;color:#cbd5e1">Todavía no hay ventas cargadas desde '+(MES_NOM[MDESC]||'')+', así que aún no hay nada que comparar con el periodo de regalos ('+pctA.toFixed(2)+'% de la venta).</div>';
+    }
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:660px"><thead><tr style="color:#9fb0cc">'
+      +'<th style="text-align:left;padding:6px 8px">Mes</th><th style="text-align:center">Esquema</th><th style="text-align:right">Venta (precio lista)</th>'
+      +'<th style="text-align:right">Sacos regalados</th><th style="text-align:right">Desc. promedio</th><th style="text-align:right">Lo que diste</th><th style="text-align:right">% de la venta</th></tr></thead><tbody>'+filas;
+    const tRev=aRev+nRev, tDado=aDado+nDado;
+    h+='<tr style="background:#14243f;font-weight:800;color:#fff"><td style="padding:6px 8px">TOTAL</td><td></td>'
+      +'<td style="text-align:right">'+_money(tRev)+'</td><td></td><td></td>'
+      +'<td style="text-align:right">'+_money(tDado)+'</td>'
+      +'<td style="text-align:right">'+(tRev>0?(tDado/tRev*100).toFixed(2):'0')+'%</td></tr>';
+    h+='</tbody></table></div>';
+  }
   // por vendedor
   h+='<div style="font-weight:800;color:#cbd5e1;margin:6px 0 6px">Por vendedor</div>';
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:right">Cli.</th><th style="text-align:right">Ingreso</th><th style="text-align:right">M. bruto</th><th style="text-align:right">Promo/bonif</th><th style="text-align:right">Neto c/promo</th><th style="text-align:right">Desc. %</th><th style="text-align:right">Neto c/desc</th></tr></thead><tbody>';
