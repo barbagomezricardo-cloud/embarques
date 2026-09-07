@@ -3437,7 +3437,10 @@ function buildVendorPayloads(){
   const VITLAB=(evalP==='MES')?(MES_NOM_L[MESVIT]||''):(quarterOf(MESVIT).label||'');
   const evalLabel=(evalP==='MES')?(MES_NOM_L[lastMonth]||''):q.label;
   const byV={};
-  DATA.clients.forEach(c=>{ if(!((c.promMes||0)>0))return; const v=c.vendedor||'(sin asignar)'; (byV[v]=byV[v]||[]).push(c); });
+  // Se publica TODO cliente con actividad en el año, aunque su promedio de los últimos 6 meses
+  // cerrados dé 0. Antes se caían de la app dos grupos: los que dejaron de comprar hace más de
+  // 6 meses (justo los que hay que ir a recuperar) y los de volumen tan chico que redondeaba a 0.
+  DATA.clients.forEach(c=>{ if(!((c.promMes||0)>0) && !((c.total||0)>0))return; const v=c.vendedor||'(sin asignar)'; (byV[v]=byV[v]||[]).push(c); });
   // Publica SIEMPRE la bolsa "(sin asignar)": ahí viaja el año-anterior de los clientes que ya se fueron, para que el objetivo total cuadre en la gerencia
   if(!byV['(sin asignar)']) byV['(sin asignar)']=[];
   const now=new Date(); const pad=n=>('0'+n).slice(-2);
@@ -3464,11 +3467,16 @@ function buildVendorPayloads(){
       let baseCrec=0; VITPREV.forEach(function(m){ baseCrec+=(c.qualMes&&c.qualMes[m])||0; });
       let vitPB=0,vitPM=0;
       for(const p in pm){ if(isPremiumPlus(p)) VITM.forEach(function(m){ const s2=(pm[p]&&pm[p][m])||0; vitPB+=s2; vitPM+=s2; }); }
+      // Última compra y volumen del año: para que un cliente inactivo se vea como inactivo
+      // en la app (con su fecha) y no como un cliente en ceros sin explicación.
+      const _actM=Object.keys(c.mesData||{}).map(Number).filter(function(m){return (c.mesData[m]||0)>0;}).sort(function(a,b){return a-b;});
+      const ultM=_actM.length?_actM[_actM.length-1]:0;
       return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb),e:(c.estado||''),vd:(c.vendedor||''),pm:pmOut,
         desc:Math.round((c.desc||0)*1000)/1000, crecio:!!c.crecio, premOk:!!c.premOk,
         boost:Math.round(premBoost(c.mixPlus||0,getPremCfg())*1000)/1000,
         evalSac:evalSac, antSac:antSac, premEval:Math.round(premEval),
-        vitSac:Math.round(vitSac), baseCrec:Math.round(baseCrec), vitPB:Math.round(vitPB), vitPM:Math.round(vitPM)};
+        vitSac:Math.round(vitSac), baseCrec:Math.round(baseCrec), vitPB:Math.round(vitPB), vitPM:Math.round(vitPM),
+        ult:ultM, tot:Math.round(c.total||0)};
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
