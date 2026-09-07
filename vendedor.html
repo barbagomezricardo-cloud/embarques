@@ -136,6 +136,7 @@ function ultMesTxt(c){ var m=c&&c.ult; return m?('su última compra fue en '+(ME
 function premBaseNow(c){ return (c&&c.vitPB!=null)?(c.vitPB||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qpb)||0):0); }
 function premMixNow(c){ return (c&&c.vitPM!=null)?(c.vitPM||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qp)||0):0); }
 let CLIENTS={}, APPVEND='', APPPERIOD='', APPMONTH=0, APPQ=null, APPUPDATED='', CLOUD={db:'',v:''};
+var RES=null;
 let APPEVAL='TRIM', APPEVALLABEL='';                       // periodo de evaluación (definido por el gerente)
 function PMULT(){return APPEVAL==='MES'?1:3;}               // metas: mensuales (x1) o trimestrales (x3)
 function perWord(){return APPEVAL==='MES'?'mes':'trimestre';}
@@ -180,6 +181,7 @@ function applyPayload(p){
   if(p.cobre)COBRE=Object.assign({enabled:false,opcion:1,pct:0.5,min:300,umbral:20},p.cobre);
   PROSPECTS=Array.isArray(p.prospects)?p.prospects:[];
   VENTAS=p.ventas||null;
+  RES=p.res||null;
   ALERTAS=p.alertas||null;
   CLIENTS={};
   (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null,desc:(r.desc!=null?r.desc:null),crecio:!!r.crecio,premOk:!!r.premOk,boost:r.boost||0,evalSac:r.evalSac||0,antSac:r.antSac||0,premEval:r.premEval||0,
@@ -592,6 +594,12 @@ function renderVentas(){
   var V=VENTAS; var g=V.gTarget||0; var meses=V.meses;
   var lm=V.lastMonth||meses[meses.length-1];
   var curLm=(V.cur&&V.cur[lm-1])||0, priorLm=(V.prior&&V.prior[lm-1])||0, objLm=priorLm*(1+g), avLm=objLm>0?curLm/objLm:0;
+  // De dónde sale el objetivo: el % configurado se aplica sobre TODA la base 2025, y esa base
+  // incluye a los clientes que dejaron de comprar. Se muestra partido para que el vendedor vea
+  // que el % sí se respeta y que lo demás es recuperación, no una meta más alta.
+  var vivoLm=(V.priorVivo&&V.priorVivo[lm-1]!=null)?V.priorVivo[lm-1]:priorLm;
+  var perdLm=Math.max(0,priorLm-vivoLm);
+  var objVivo=vivoLm*(1+g), objRec=perdLm*(1+g);
   function kcard(n,l,col){return '<div style="flex:1;min-width:90px;background:#162340;border:1px solid #22304d;border-radius:12px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:10.5px;color:#9fb0cc;margin-top:2px">'+l+'</div></div>';}
   var avcol=avLm>=1?'#22c55e':(avLm>=0.8?'#f59e0b':'#ef4444');
   h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:2px 0 8px">Tu venta — '+(APPVEND||'')+'</div>';
@@ -599,6 +607,21 @@ function renderVentas(){
   var crecLm=priorLm>0?(curLm/priorLm-1)*100:(curLm>0?100:0); var crecCol=crecLm>=0?'#22c55e':'#ef4444';
   var faltaLm=Math.max(0,Math.round(objLm-curLm));
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+kcard((crecLm>=0?'+':'')+crecLm.toFixed(0)+'%','vs. mismo mes año ant.',crecCol)+kcard(faltaLm>0?fmt(faltaLm):'✓ logrado','Faltan para el objetivo',faltaLm>0?'#f59e0b':'#22c55e')+'</div>';
+  if(perdLm>0){
+    var lost=(RES&&RES.lostTop)?RES.lostTop.slice(0,6):[];
+    h+='<div style="background:#162340;border:1px solid #22304d;border-left:4px solid #E8A020;border-radius:12px;padding:12px;margin-top:10px">'
+     +'<div style="font-size:12px;color:#9fb0cc;font-weight:800;text-transform:uppercase;letter-spacing:.3px">De dónde sale tu objetivo de '+MESN[lm]+'</div>'
+     +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d">'
+     +'<span>Crecer +'+(g*100).toFixed(0)+'% sobre tu cartera actual<br><span style="font-size:11px;color:#9fb0cc">compró '+fmt(Math.round(vivoLm))+' en '+MESN[lm]+' del año pasado</span></span>'
+     +'<b style="white-space:nowrap">'+fmt(Math.round(objVivo))+'</b></div>'
+     +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d">'
+     +'<span>Reponer la venta de los que dejaron de comprar<br><span style="font-size:11px;color:#f0a868">recuperándolos o con clientes nuevos</span></span>'
+     +'<b style="white-space:nowrap;color:#E8A020">'+fmt(Math.round(objRec))+'</b></div>'
+     +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#fff;font-weight:900;padding:6px 0 0"><span>Objetivo del mes</span><b>'+fmt(Math.round(objLm))+'</b></div>'
+     +(lost.length?('<div style="font-size:11px;color:#9fb0cc;margin-top:7px;line-height:1.5"><b style="color:#f0a868">Se fueron:</b> '+lost.map(function(x){return x.n+' ('+fmt(x.prior)+')';}).join(' · ')+'</div>'):'')
+     +'<div style="font-size:11px;color:#7c8aa5;margin-top:7px;line-height:1.45">El +'+(g*100).toFixed(0)+'% que fijó la dirección se respeta y se mide sobre tu cartera actual. Lo demás es venta que el año pasado ya era tuya y hoy no está: esa no se perdona, se repone recuperando a esos clientes o consiguiendo nuevos que los sustituyan. La venta siempre tiene que superarse.</div>'
+     +'</div>';
+  }
   if(V.esDiario&&V.dia&&V.dia[lm]&&V.dia[lm].length){
     var d=V.dia[lm]; var cut=0; for(var i=0;i<d.length;i++)if(d[i]>0)cut=i+1;
     var realCut=0; for(var a2=0;a2<cut;a2++)realCut+=d[a2]||0;

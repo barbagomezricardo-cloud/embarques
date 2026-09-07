@@ -506,8 +506,8 @@ function selectVendor(v){
 }
 function buildAgg(){
   var rows=[],prospects=[];
-  var cur=[],prior=[],dia={},promoSac=0,newDisc=0;
-  for(var z=0;z<12;z++){cur.push(0);prior.push(0);}
+  var cur=[],prior=[],priorVivo=[],priorPerd=[],dia={},promoSac=0,newDisc=0;
+  for(var z=0;z<12;z++){cur.push(0);prior.push(0);priorVivo.push(0);priorPerd.push(0);}
   var sinCompra=[],fuga=[],focos=[],nuevosCount=0,nuevosMeta=0,nuevosLista=[],regMap={};
   var meses=[],gTarget=0,lastMonth=0,esDiario=false,priorDaily={},prem=null,cobre=null,evalPeriod='TRIM',evalLabel='',updatedStr=MUP;
   var mesEval=0,mesAnt=0,mesCurso=0,mesVitrina=0,corte=null;   // mes evaluado / en vitrina / corte confirmado (vienen igual en todos los vendedores)
@@ -519,7 +519,7 @@ function buildAgg(){
     prem=prem||p.prem;cobre=cobre||p.cobre;evalPeriod=p.evalPeriod||evalPeriod;evalLabel=p.evalLabel||evalLabel;updatedStr=updatedStr||p.updatedStr;
     mesEval=mesEval||p.mesEval||0;mesAnt=mesAnt||p.mesAnt||0;mesCurso=mesCurso||p.mesCurso||0;mesVitrina=mesVitrina||p.mesVitrina||0;corte=corte||p.corte||null;
     var V=p.ventas;if(V){meses=(V.meses&&V.meses.length)?V.meses:meses;gTarget=V.gTarget||gTarget;lastMonth=V.lastMonth||lastMonth;esDiario=esDiario||V.esDiario;priorDaily=(V.priorDaily&&Object.keys(V.priorDaily).length)?V.priorDaily:priorDaily;
-      for(var i=0;i<12;i++){cur[i]+=(V.cur&&V.cur[i])||0;prior[i]+=(V.prior&&V.prior[i])||0;}
+      for(var i=0;i<12;i++){cur[i]+=(V.cur&&V.cur[i])||0;prior[i]+=(V.prior&&V.prior[i])||0;priorVivo[i]+=(V.priorVivo&&V.priorVivo[i])||0;priorPerd[i]+=(V.priorPerd&&V.priorPerd[i])||0;}
       promoSac+=V.promoSac||0;newDisc+=V.newDisc||0;
       if(V.dia)for(var mm in V.dia){var arr=V.dia[mm]||[];if(!dia[mm])dia[mm]=[];for(var d=0;d<arr.length;d++)dia[mm][d]=(dia[mm][d]||0)+(arr[d]||0);}
     }
@@ -542,7 +542,7 @@ function buildAgg(){
   fuga.sort(function(a,b){return (b.perd||0)-(a.perd||0);});
   var regiones=Object.keys(regMap).map(function(e){var o=regMap[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:o.cur,prior:o.prior,crec:crec};}).sort(function(a,b){return a.crec-b.crec;});
   return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,mesEval:mesEval,mesAnt:mesAnt,mesCurso:mesCurso,mesVitrina:mesVitrina,corte:corte,prem:prem,cobre:cobre,prospects:prospects,rows:rows,res:(hayRes?R:null),
-    ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario},
+    ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,priorVivo:priorVivo,priorPerd:priorPerd,dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario},
     alertas:{sinCompra:sinCompra,fuga:fuga,focos:focos.slice(0,12),nuevos:{count:nuevosCount,meta:nuevosMeta,lista:nuevosLista},regiones:regiones,gTarget:gTarget}};
 }
 function masterLoad(){
@@ -827,6 +827,12 @@ function renderVentas(){
   var V=VENTAS; var g=V.gTarget||0; var meses=V.meses;
   var lm=V.lastMonth||meses[meses.length-1];
   var curLm=(V.cur&&V.cur[lm-1])||0, priorLm=(V.prior&&V.prior[lm-1])||0, objLm=priorLm*(1+g), avLm=objLm>0?curLm/objLm:0;
+  // El % configurado se aplica sobre toda la base 2025 (incluye a los que se fueron): así la suma
+  // de vendedores cuadra con el objetivo bruto. Se muestra partido para que se vea qué parte es
+  // crecimiento sobre la cartera viva y qué parte es reponer lo que se perdió.
+  var vivoLm=(V.priorVivo&&V.priorVivo[lm-1]!=null)?V.priorVivo[lm-1]:priorLm;
+  var perdLm=Math.max(0,priorLm-vivoLm);
+  var objVivo=vivoLm*(1+g), objRec=perdLm*(1+g);
   function kcard(n,l,col){return '<div style="flex:1;min-width:90px;background:#162340;border:1px solid #22304d;border-radius:12px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:10.5px;color:#9fb0cc;margin-top:2px">'+l+'</div></div>';}
   var avcol=avLm>=1?'#22c55e':(avLm>=0.8?'#f59e0b':'#ef4444');
   h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:2px 0 8px">Tu venta — '+(APPVEND||'')+'</div>';
@@ -834,6 +840,21 @@ function renderVentas(){
   var crecLm=priorLm>0?(curLm/priorLm-1)*100:(curLm>0?100:0); var crecCol=crecLm>=0?'#22c55e':'#ef4444';
   var faltaLm=Math.max(0,Math.round(objLm-curLm));
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+kcard((crecLm>=0?'+':'')+crecLm.toFixed(0)+'%','vs. mismo mes año ant.',crecCol)+kcard(faltaLm>0?fmt(faltaLm):'✓ logrado','Faltan para el objetivo',faltaLm>0?'#f59e0b':'#22c55e')+'</div>';
+  if(perdLm>0){
+    var lost=(RES&&RES.lostTop)?RES.lostTop.slice(0,6):[];
+    h+='<div style="background:#162340;border:1px solid #22304d;border-left:4px solid #E8A020;border-radius:12px;padding:12px;margin-top:10px">'
+     +'<div style="font-size:12px;color:#9fb0cc;font-weight:800;text-transform:uppercase;letter-spacing:.3px">De dónde sale tu objetivo de '+MESN[lm]+'</div>'
+     +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d">'
+     +'<span>Crecer +'+(g*100).toFixed(0)+'% sobre tu cartera actual<br><span style="font-size:11px;color:#9fb0cc">compró '+fmt(Math.round(vivoLm))+' en '+MESN[lm]+' del año pasado</span></span>'
+     +'<b style="white-space:nowrap">'+fmt(Math.round(objVivo))+'</b></div>'
+     +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d">'
+     +'<span>Reponer la venta de los que dejaron de comprar<br><span style="font-size:11px;color:#f0a868">recuperándolos o con clientes nuevos</span></span>'
+     +'<b style="white-space:nowrap;color:#E8A020">'+fmt(Math.round(objRec))+'</b></div>'
+     +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#fff;font-weight:900;padding:6px 0 0"><span>Objetivo del mes</span><b>'+fmt(Math.round(objLm))+'</b></div>'
+     +(lost.length?('<div style="font-size:11px;color:#9fb0cc;margin-top:7px;line-height:1.5"><b style="color:#f0a868">Se fueron:</b> '+lost.map(function(x){return x.n+' ('+fmt(x.prior)+')';}).join(' · ')+'</div>'):'')
+     +'<div style="font-size:11px;color:#7c8aa5;margin-top:7px;line-height:1.45">El +'+(g*100).toFixed(0)+'% que fijó la dirección se respeta y se mide sobre tu cartera actual. Lo demás es venta que el año pasado ya era tuya y hoy no está: esa no se perdona, se repone recuperando a esos clientes o consiguiendo nuevos que los sustituyan. La venta siempre tiene que superarse.</div>'
+     +'</div>';
+  }
   if(V.esDiario&&V.dia&&V.dia[lm]&&V.dia[lm].length){
     var d=V.dia[lm]; var cut=0; for(var i=0;i<d.length;i++)if(d[i]>0)cut=i+1;
     var realCut=0; for(var a2=0;a2<cut;a2++)realCut+=d[a2]||0;
