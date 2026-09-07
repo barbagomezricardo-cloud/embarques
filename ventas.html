@@ -2974,9 +2974,9 @@ function renderGrafica(){
         const hcol=av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444';
         const who=vf?vf:'Todos los vendedores';
         const gapTxt=gapMes>0?('A este ritmo cerrarías <b>'+fmt(Math.round(gapMes))+'</b> sacos por DEBAJO del objetivo del mes.'):('A este ritmo cerrarías <b>'+fmt(Math.round(-gapMes))+'</b> sacos por ENCIMA del objetivo del mes.');
-        const headline=`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:5px solid ${hcol};border-radius:8px;padding:11px 14px;margin-bottom:10px"><div style="font-size:.95rem;font-weight:800;color:${hcol}">${who} — ${MES_NOM[m]} al día ${cut}: ${estTxt} — avance ${(av*100).toFixed(0)}%</div><div style="font-size:.76rem;color:#cbd5e1;margin-top:3px">Llevas <b>${fmt(realTot)}</b> sacos vs objetivo <b>${fmt(Math.round(obj))}</b> al día ${cut}. ${gapTxt} Proyección al cierre del mes: <b>${fmt(Math.round(projMes))}</b> vs objetivo <b>${fmt(Math.round(objMes))}</b>.</div></div>`;
-        const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' al día '+cut,fmt(realTot),MES_NOM[m]+(vf?' · '+vf:''),'#22c55e')}${card(Y.py+' días 1–'+cut,fmt(Math.round(baseFecha)),vf?'estimado':'para comparar','#94a3b8')}${card('Objetivo al día '+cut,fmt(Math.round(obj)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(0)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(1)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
-        const auxCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Ritmo diario',fmt(Math.round(cut?realTot/cut:0)),'sacos/día (prom. al día '+cut+')','#38bdf8')}${card('Proyección cierre '+MES_NOM[m],fmt(Math.round(projMes)),objMes?((projMes/objMes*100).toFixed(0)+'% del objetivo del mes'):'','#a78bfa')}${card('Objetivo del mes',fmt(Math.round(objMes)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card(gapMes>0?'Falta para cerrar en meta':'Excedente proyectado',fmt(Math.round(Math.abs(gapMes)))+' sacos',gapMes>0?'a este ritmo':'por encima',gapMes>0?'#eab308':'#22c55e')}</div>`;
+        const headline=`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:5px solid ${hcol};border-radius:8px;padding:11px 14px;margin-bottom:10px"><div style="font-size:.95rem;font-weight:800;color:${hcol}">${who} — ${MES_NOM[m]} al día ${cut}: ${estTxt} — avance ${(av*100).toFixed(2)}%</div><div style="font-size:.76rem;color:#cbd5e1;margin-top:3px">Llevas <b>${fmt(realTot)}</b> sacos vs objetivo <b>${fmt(Math.round(obj))}</b> al día ${cut}. ${gapTxt} Proyección al cierre del mes: <b>${fmt(Math.round(projMes))}</b> vs objetivo <b>${fmt(Math.round(objMes))}</b>.</div></div>`;
+        const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' al día '+cut,fmt(realTot),MES_NOM[m]+(vf?' · '+vf:''),'#22c55e')}${card(Y.py+' días 1–'+cut,fmt(Math.round(baseFecha)),vf?'estimado':'para comparar','#94a3b8')}${card('Objetivo al día '+cut,fmt(Math.round(obj)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
+        const auxCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Ritmo diario',fmt(Math.round(cut?realTot/cut:0)),'sacos/día (prom. al día '+cut+')','#38bdf8')}${card('Proyección cierre '+MES_NOM[m],fmt(Math.round(projMes)),objMes?((projMes/objMes*100).toFixed(2)+'% del objetivo del mes'):'','#a78bfa')}${card('Objetivo del mes',fmt(Math.round(objMes)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card(gapMes>0?'Falta para cerrar en meta':'Excedente proyectado',fmt(Math.round(Math.abs(gapMes)))+' sacos',gapMes>0?'a este ritmo':'por encima',gapMes>0?'#eab308':'#22c55e')}</div>`;
         cards=headline+baseCards+auxCards;
       }
     } else {
@@ -2988,7 +2988,7 @@ function renderGrafica(){
       labels=Array.from({length:12},(_,i)=>MES_NOM[i+1]); n=12;
       titulo=`📈 Venta mensual: ${Y.py} vs ${Y.cy}`;
       sub=`Objetivo a la fecha = ${Y.py} (${mesesTxt(comp)}) × (1+${(P.gTarget*100).toFixed(0)}%). ${vf?('Vendedor: '+vf):''}`;
-      const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' a la fecha',fmt(realTot),mesesTxt(comp),'#22c55e')}${card(Y.py+' mismo periodo',fmt(baseFecha),'para comparar','#94a3b8')}${card('Objetivo a la fecha',fmt(obj),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(0)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(1)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
+      const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' a la fecha',fmt(realTot),mesesTxt(comp),'#22c55e')}${card(Y.py+' mismo periodo',fmt(baseFecha),'para comparar','#94a3b8')}${card('Objetivo a la fecha',fmt(obj),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
       // --- auxiliares: cómo va el vendedor (o el total) vs su objetivo ---
       const gap=obj-realTot;
       const pace=comp.length?realTot/comp.length:0, projA=pace*12;
@@ -3000,7 +3000,8 @@ function renderGrafica(){
       const pos=vf?(rank.findIndex(x=>x.v===vf)+1):0;
       const auxCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">`+
         card(gap>0?'Te falta para el objetivo':'Vas por encima', gap>0?fmt(gap)+' sacos':'+'+fmt(-gap)+' sacos', gap>0?'para ir a ritmo':'excedente a la fecha', gap>0?'#eab308':'#22c55e')+
-        card('Proyección al cierre '+Y.cy, fmt(Math.round(projA)), objA?('objetivo anual '+fmt(Math.round(objA))+' · '+(projA/objA*100).toFixed(0)+'%'):'ritmo actual × 12', (objA&&projA>=objA)?'#22c55e':'#0EA5E9')+
+        card((realTot-baseFecha>=0?'+':'')+fmt(Math.round(realTot-baseFecha))+' sacos', 'Creciste vs '+Y.py+' (en sacos)', (crec>=0?'+':'')+(crec*100).toFixed(2)+'% real · la meta pedía +'+(P.gTarget*100).toFixed(0)+'%', realTot>=baseFecha?'#22c55e':'#ef4444')+
+        card('Proyección al cierre '+Y.cy, fmt(Math.round(projA)), objA?('objetivo anual '+fmt(Math.round(objA))+' · '+(projA/objA*100).toFixed(2)+'%'):'ritmo actual × 12', (objA&&projA>=objA)?'#22c55e':'#0EA5E9')+
         (vf&&pos>0?card('Posición del vendedor', '#'+pos+' de '+rank.length, 'por avance vs objetivo', pos<=Math.ceil(rank.length/3)?'#22c55e':pos<=Math.ceil(2*rank.length/3)?'#eab308':'#ef4444'):'')+
         card('Clientes nuevos'+(vf?'':' (total)'), fmt(nuevosSel), Y.cy+' sin venta en '+Y.py, '#a78bfa')+
         card('Toneladas '+Y.cy, fmt(Math.round(tonsSel)), activosSel+' clientes activos', '#38bdf8')+
@@ -3021,34 +3022,41 @@ function renderGrafica(){
         const futuro=m2>lastData;
         accP+=pv; accO+=ov; if(!futuro){accC+=cv; fecP+=pv; fecO+=ov;}
         const avm=ov>0&&!futuro?cv/ov:0;
+        const crm=(!futuro&&pv>0)?((cv/pv-1)*100):((!futuro&&cv>0)?100:0);   // crecimiento real del mes vs el año pasado
         const col=futuro?'#64748b':(avm>=1?'#4ade80':avm>=0.9?'#fbbf24':'#f87171');
         tb+='<tr'+(futuro?' style="opacity:.72"':'')+'>'
           +'<td style="text-align:left;font-weight:700;color:'+(futuro?'#94a3b8':'#fff')+'">'+MES_NOM[m2]+(futuro?' <span style="font-size:.62rem;color:#64748b">(por venir)</span>':'')+'</td>'
           +'<td style="text-align:right;color:#94a3b8">'+fmt(Math.round(pv))+'</td>'
           +'<td style="text-align:right;color:#7dd3fc;font-weight:700">'+fmt(Math.round(ov))+'</td>'
           +'<td style="text-align:right;color:#fff">'+(futuro?'—':fmt(Math.round(cv)))+'</td>'
-          +'<td style="text-align:right;font-weight:800;color:'+col+'">'+(futuro?'—':(ov>0?(avm*100).toFixed(0)+'%':'—'))+'</td>'
-          +'<td style="text-align:right;color:'+col+'">'+(futuro?'—':fmt(Math.round(cv-ov)))+'</td></tr>';
+          +'<td style="text-align:right;font-weight:800;color:'+col+'">'+(futuro?'—':(ov>0?(avm*100).toFixed(2)+'%':'—'))+'</td>'
+          +'<td style="text-align:right;color:'+col+'">'+(futuro?'—':fmt(Math.round(cv-ov)))+'</td>'
+          +'<td style="text-align:right;font-weight:800;color:'+(futuro?'#64748b':(crm>=0?'#4ade80':'#f87171'))+'">'+(futuro?'—':((crm>=0?'+':'')+crm.toFixed(2)+'%'))+'</td>'
+          +'<td style="text-align:right;color:'+(futuro?'#64748b':(cv-pv>=0?'#4ade80':'#f87171'))+'">'+(futuro?'—':((cv-pv>=0?'+':'')+fmt(Math.round(cv-pv))))+'</td></tr>';
       }
       tablaMeses='<div style="margin-top:14px"><div style="font-size:.85rem;font-weight:800;color:var(--gold);margin-bottom:5px">📋 Objetivo mes por mes (todo el año)</div>'
-        +'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:7px">Objetivo = '+Y.py+' del mismo mes × (1+'+(P.gTarget*100).toFixed(0)+'%). Los meses que aún no llegan ya traen su objetivo calculado, para poder revisarlos por adelantado.'+(vf?(' Vendedor: '+vf+'.'):'')+'</div>'
-        +'<table class="mt" style="font-size:.76rem"><thead><tr><th style="text-align:left">Mes</th><th style="text-align:right">'+Y.py+'</th><th style="text-align:right">Objetivo '+Y.cy+'</th><th style="text-align:right">Venta '+Y.cy+'</th><th style="text-align:right">Avance</th><th style="text-align:right">Dif.</th></tr></thead><tbody>'+tb
+        +'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:7px">Objetivo = '+Y.py+' del mismo mes × (1+'+(P.gTarget*100).toFixed(0)+'%). Los meses que aún no llegan ya traen su objetivo calculado, para poder revisarlos por adelantado. <b>Avance</b> es contra el objetivo (que ya trae el +'+(P.gTarget*100).toFixed(0)+'%); <b>Crec. vs '+Y.py+'</b> es cuánto subió la venta de verdad. Se puede crecer y aun así quedar debajo del objetivo.'+(vf?(' Vendedor: '+vf+'.'):'')+'</div>'
+        +'<table class="mt" style="font-size:.76rem"><thead><tr><th style="text-align:left">Mes</th><th style="text-align:right">'+Y.py+'</th><th style="text-align:right">Objetivo '+Y.cy+'</th><th style="text-align:right">Venta '+Y.cy+'</th><th style="text-align:right">Avance</th><th style="text-align:right">Dif. vs obj.</th><th style="text-align:right">Crec. vs '+Y.py+'</th><th style="text-align:right">Dif. vs '+Y.py+'</th></tr></thead><tbody>'+tb
         +'<tr style="background:#0f2036;font-weight:800;color:#fff"><td style="text-align:left">A LA FECHA ('+(lastData?('Ene–'+MES_NOM[lastData]):'—')+')</td>'
         +'<td style="text-align:right">'+fmt(Math.round(fecP))+'</td>'
         +'<td style="text-align:right;color:#7dd3fc">'+fmt(Math.round(fecO))+'</td>'
         +'<td style="text-align:right">'+fmt(Math.round(accC))+'</td>'
-        +'<td style="text-align:right;color:'+((fecO>0&&accC/fecO>=1)?'#4ade80':(fecO>0&&accC/fecO>=0.9)?'#fbbf24':'#f87171')+'">'+(fecO>0?(accC/fecO*100).toFixed(0)+'%':'—')+'</td>'
-        +'<td style="text-align:right">'+fmt(Math.round(accC-fecO))+'</td></tr>'
+        +'<td style="text-align:right;color:'+((fecO>0&&accC/fecO>=1)?'#4ade80':(fecO>0&&accC/fecO>=0.9)?'#fbbf24':'#f87171')+'">'+(fecO>0?(accC/fecO*100).toFixed(2)+'%':'—')+'</td>'
+        +'<td style="text-align:right">'+fmt(Math.round(accC-fecO))+'</td>'
+        +'<td style="text-align:right;color:'+((fecP>0&&accC>=fecP)?'#4ade80':'#f87171')+'">'+(fecP>0?(((accC/fecP-1)*100>=0?'+':'')+((accC/fecP-1)*100).toFixed(2)+'%'):'—')+'</td>'
+        +'<td style="text-align:right;color:'+((accC-fecP)>=0?'#4ade80':'#f87171')+'">'+((accC-fecP>=0?'+':'')+fmt(Math.round(accC-fecP)))+'</td></tr>'
         +'<tr style="background:#14243f;font-weight:800;color:#fff"><td style="text-align:left">TOTAL AÑO</td>'
         +'<td style="text-align:right">'+fmt(Math.round(accP))+'</td>'
         +'<td style="text-align:right;color:#7dd3fc">'+fmt(Math.round(accO))+'</td>'
         +'<td style="text-align:right;color:#94a3b8">'+fmt(Math.round(accC))+'</td>'
-        +'<td style="text-align:right;color:#94a3b8">'+(accO>0?(accC/accO*100).toFixed(0)+'%':'—')+'</td>'
-        +'<td style="text-align:right;color:#94a3b8">falta '+fmt(Math.round(accO-accC))+'</td></tr>'
+        +'<td style="text-align:right;color:#94a3b8">'+(accO>0?(accC/accO*100).toFixed(2)+'%':'—')+'</td>'
+        +'<td style="text-align:right;color:#94a3b8">falta '+fmt(Math.round(accO-accC))+'</td>'
+        +'<td style="text-align:right;color:#94a3b8">—</td><td style="text-align:right;color:#94a3b8">—</td></tr>'
         +'</tbody></table></div>';
       const gapTxt=gap>0?('Te faltan <b>'+fmt(gap)+'</b> sacos para ir a ritmo de tu objetivo.'):('Llevas <b>'+fmt(-gap)+'</b> sacos por encima del objetivo a la fecha.');
       const projTxt='Proyección al cierre: <b>'+fmt(Math.round(projA))+'</b> sacos'+(objA?(' vs objetivo anual '+fmt(Math.round(objA))):'')+'.';
-      const headline=`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:5px solid ${hcol};border-radius:8px;padding:11px 14px;margin-bottom:10px"><div style="font-size:.95rem;font-weight:800;color:${hcol}">${who}: ${estTxt} — avance ${(av*100).toFixed(0)}%</div><div style="font-size:.76rem;color:#cbd5e1;margin-top:3px">${gapTxt} Creciste <b style="color:${crecCol}">${(crec>=0?'+':'')+(crec*100).toFixed(1)}%</b> vs ${Y.py}. ${projTxt}</div></div>`;
+      const headline=`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:5px solid ${hcol};border-radius:8px;padding:11px 14px;margin-bottom:10px"><div style="font-size:.95rem;font-weight:800;color:${hcol}">${who}: ${estTxt} — avance ${(av*100).toFixed(2)}%</div><div style="font-size:.76rem;color:#cbd5e1;margin-top:3px">${gapTxt} Creciste <b style="color:${crecCol}">${(crec>=0?'+':'')+(crec*100).toFixed(2)}%</b> vs ${Y.py}. ${projTxt}</div>
+      <div style="font-size:.72rem;color:#94a3b8;margin-top:5px;line-height:1.45">El <b>avance</b> y el <b>crecimiento</b> son dos cosas distintas y las dos están bien: creciste ${(crec*100).toFixed(2)}% y la meta pedía ${(P.gTarget*100).toFixed(0)}%, así que vas al ${(av*100).toFixed(2)}% de la meta — (1${crec>=0?'+':''}${(crec*100).toFixed(2)}%) ÷ (1+${(P.gTarget*100).toFixed(0)}%).</div></div>`;
       cards=headline+baseCards+auxCards;
     }
     const maxV=Math.max(...cur,...prior,...(objSerie||[]),1);
