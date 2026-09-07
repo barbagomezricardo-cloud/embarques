@@ -864,7 +864,17 @@ function processPivot(rows,fname){
     let hasVendorLevel=false;{let pn=false;for(let i=2;i<rows.length;i++){const c0=rows[i][0];if(c0===''||c0==null)continue;if(c0 instanceof Date){pn=false;continue;}const t=String(c0).trim();if(t==='Total')continue;if(t.startsWith('[')){pn=false;continue;}if(pn){hasVendorLevel=true;break;}pn=true;}}
     // tipo de la siguiente fila relevante (para distinguir cliente vs vendedor)
     const nextType=(i)=>{for(let j=i+1;j<rows.length;j++){const c0=rows[j][0];if(c0===''||c0==null)continue;if(c0 instanceof Date)return 'date';const t=String(c0).trim();if(t==='Total')continue;if(t.startsWith('['))return 'prod';return 'name';}return 'end';};
-    let cli=null,curMes=0,fdate=null,curKind='skip',curProdName='',filas=0;
+
+    // Pre-pasada: los nombres que en VARIAS partes del archivo van seguidos de producto o fecha
+    // son vendedores (un vendedor se repite una vez por cada cliente suyo; un cliente aparece una sola vez).
+    const VEND_SET=new Set();
+    if(hasVendorLevel){ const _cnt={};
+      for(let k=2;k<rows.length;k++){ const c0=rows[k][0]; if(c0===''||c0==null)continue;
+        if(c0 instanceof Date)continue; const tt=String(c0).trim();
+        if(tt==='Total'||tt.startsWith('['))continue;
+        if(nextType(k)!=='name'){ const nn=normName(tt); _cnt[nn]=(_cnt[nn]||0)+1; } }
+      for(const nn in _cnt) if(_cnt[nn]>=2) VEND_SET.add(nn);
+    }    let cli=null,curMes=0,fdate=null,curKind='skip',curProdName='',filas=0;
     const rec=(prodName,mes,val,fd)=>{
       if(!cli||!mes||val<=0)return;
       if(!byClienteMes[cli])byClienteMes[cli]={};
@@ -915,8 +925,11 @@ function processPivot(rows,fname){
         }
         continue;
       }
-      // Nombre: si le sigue OTRO nombre => es CLIENTE; si le sigue un producto/fecha => es VENDEDOR (1º o adicional) del cliente actual
-      if(hasVendorLevel && nextType(i)!=='name'){
+      // Nombre: si le sigue OTRO nombre => es CLIENTE; si le sigue un producto/fecha => es VENDEDOR (1º o adicional) del cliente actual.
+      // Excepción: si ese nombre ya se identificó como VENDEDOR en otras partes del archivo, es vendedor
+      // aunque aquí le siga otro nombre. Sin esto, cuando Odoo dejaba a un vendedor seguido de un nombre,
+      // el vendedor se colaba como cliente y el cliente real de ese bloque se quedaba sin compras y desaparecía.
+      if(hasVendorLevel && (nextType(i)!=='name' || VEND_SET.has(normName(t)))){
         curVendor=t;curKind='skip';curProdName='';if(cli)clienteVend[cli]=t;continue;
       }
       cli=mergeDup(t.toUpperCase());curMes=0;fdate=null;curKind='skip';curProdName='';curVendor=null;
