@@ -107,6 +107,7 @@ const NIVCOL={DIAMANTE_PLUS:'#7c3aed',DIAMANTE:'#0e7490',PLATINO:'#475569',ORO:'
 const NIVBG={DIAMANTE_PLUS:'linear-gradient(135deg,#6d28d9,#c4b5fd)',DIAMANTE:'linear-gradient(135deg,#0891b2,#22d3ee)',PLATINO:'linear-gradient(135deg,#475569,#94a3b8)',ORO:'linear-gradient(135deg,#a16207,#f5c842)',PLATA:'linear-gradient(135deg,#64748b,#cbd5e1)',BRONCE:'linear-gradient(135deg,#b45309,#f0a868)',COBRE:'linear-gradient(135deg,#8a5a2b,#d4915d)',INICIAL:'linear-gradient(135deg,#4b5563,#9ca3af)'};
 var MESEVAL=0, MESANT=0, MESCURSO=0, MESVIT=0, CORTE=null;
 var VITLAB='';
+var VMODE='obj';   // vista de la pestaña Ventas: 'obj' = contra objetivo · 'yoy' = crecimiento vs año pasado
 // Mes/periodo QUE CORRE hoy (lo manda el calendario vía MESVIT) y sus etiquetas.
 function mesVitApp(){ return MESVIT || MESCURSO || (MESEVAL?((MESEVAL%12)+1):0); }
 function mesPrevApp(){ var m=mesVitApp(); return m?(((m-2+12)%12)+1):0; }
@@ -819,6 +820,7 @@ function resumenPDF(){
   openPrintDoc(nom,b);
 }
 
+function setVMode(m){ VMODE=m; renderVentas(); }
 function renderVentas(){
   var app=document.getElementById('app');app.style.display='block';
   var h=syncBar()+viewTabs();
@@ -827,17 +829,63 @@ function renderVentas(){
   var V=VENTAS; var g=V.gTarget||0; var meses=V.meses;
   var lm=V.lastMonth||meses[meses.length-1];
   var curLm=(V.cur&&V.cur[lm-1])||0, priorLm=(V.prior&&V.prior[lm-1])||0, objLm=priorLm*(1+g), avLm=objLm>0?curLm/objLm:0;
-  // El % configurado se aplica sobre toda la base 2025 (incluye a los que se fueron): así la suma
-  // de vendedores cuadra con el objetivo bruto. Se muestra partido para que se vea qué parte es
-  // crecimiento sobre la cartera viva y qué parte es reponer lo que se perdió.
   var vivoLm=(V.priorVivo&&V.priorVivo[lm-1]!=null)?V.priorVivo[lm-1]:priorLm;
   var perdLm=Math.max(0,priorLm-vivoLm);
   var objVivo=vivoLm*(1+g), objRec=perdLm*(1+g);
   function kcard(n,l,col){return '<div style="flex:1;min-width:90px;background:#162340;border:1px solid #22304d;border-radius:12px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:10.5px;color:#9fb0cc;margin-top:2px">'+l+'</div></div>';}
   var avcol=avLm>=1?'#22c55e':(avLm>=0.8?'#f59e0b':'#ef4444');
-  h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:2px 0 8px">Tu venta — '+(APPVEND||'')+'</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+kcard(fmt(curLm),'Venta '+MESN[lm]+' (sacos)','#E8A020')+kcard(fmt(Math.round(objLm)),'Objetivo del mes')+kcard((objLm>0?(avLm*100).toFixed(0):'—')+'%','Avance',avcol)+'</div>';
   var crecLm=priorLm>0?(curLm/priorLm-1)*100:(curLm>0?100:0); var crecCol=crecLm>=0?'#22c55e':'#ef4444';
+  h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:2px 0 8px">Tu venta — '+(APPVEND||'')+'</div>';
+  // ── Interruptor de vista: contra el objetivo, o contra el año pasado ──
+  // El objetivo trae el +% de la dirección. El vendedor también necesita ver su crecimiento
+  // real: puede haber crecido bien y aun así quedar debajo del objetivo, y eso no se veía.
+  function vbtn(k,txt){ var on=(VMODE===k);
+    return '<button onclick="setVMode(\''+k+'\')" style="flex:1;padding:9px 6px;border-radius:10px;border:1px solid '+(on?'#E8A020':'#22304d')+';background:'+(on?'#E8A020':'#162340')+';color:'+(on?'#151b26':'#9fb0cc')+';font-weight:800;font-size:12px;cursor:pointer">'+txt+'</button>'; }
+  h+='<div style="display:flex;gap:8px;margin-bottom:10px">'+vbtn('obj','🎯 Contra objetivo (+'+(g*100).toFixed(0)+'%)')+vbtn('yoy','📈 Crecimiento vs año pasado')+'</div>';
+
+  if(VMODE==='yoy'){
+    // ── VISTA CRECIMIENTO ────────────────────────────────────────────────────
+    // Acumulado sobre meses CERRADOS, para no comparar un mes a medias contra uno completo.
+    var cierre=(typeof MESEVAL!=='undefined'&&MESEVAL)?MESEVAL:lm;
+    var accC=0,accP=0,nAcc=0;
+    for(var m3=1;m3<=cierre;m3++){ var c3=V.cur[m3-1]||0, p3=V.prior[m3-1]||0; if(c3>0||p3>0){accC+=c3;accP+=p3;nAcc++;} }
+    var accCrec=accP>0?(accC/accP-1)*100:(accC>0?100:0);
+    var accCol=accCrec>=0?'#22c55e':'#ef4444';
+    var difLm=Math.round(curLm-priorLm), difAcc=Math.round(accC-accP);
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +kcard(fmt(curLm),'Venta '+MESN[lm]+' (sacos)','#E8A020')
+      +kcard(fmt(Math.round(priorLm)),MESN[lm]+' año pasado','#9fb0cc')
+      +kcard((crecLm>=0?'+':'')+crecLm.toFixed(1)+'%','Creciste en '+MESN[lm],crecCol)+'</div>';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+      +kcard((difLm>=0?'+':'')+fmt(difLm),'Sacos '+(difLm>=0?'de más':'de menos')+' en '+MESN[lm],crecCol)
+      +kcard((accCrec>=0?'+':'')+accCrec.toFixed(1)+'%','Creciste en el año (Ene–'+MESN[cierre]+')',accCol)
+      +kcard((difAcc>=0?'+':'')+fmt(difAcc),'Sacos '+(difAcc>=0?'de más':'de menos')+' en el año',accCol)+'</div>';
+    h+='<div style="background:#162340;border:1px solid #22304d;border-left:4px solid '+accCol+';border-radius:12px;padding:12px;margin-top:10px">'
+      +'<div style="font-size:12px;color:#9fb0cc;font-weight:800;text-transform:uppercase;letter-spacing:.3px">Tu año contra el año pasado</div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d"><span>Llevas vendido (Ene–'+MESN[cierre]+')</span><b>'+fmt(Math.round(accC))+'</b></div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d"><span>Mismo periodo del año pasado</span><b style="color:#9fb0cc">'+fmt(Math.round(accP))+'</b></div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#fff;font-weight:900;padding:6px 0 0"><span>Diferencia</span><b style="color:'+accCol+'">'+(difAcc>=0?'+':'')+fmt(difAcc)+' sacos ('+(accCrec>=0?'+':'')+accCrec.toFixed(1)+'%)</b></div>'
+      +'<div style="font-size:11px;color:#7c8aa5;margin-top:7px;line-height:1.45">'
+      +(accCrec>=0
+        ? ('Estás vendiendo <b style="color:#22c55e">más</b> que el año pasado.'+(accCrec<g*100?(' Todavía no llegas al +'+(g*100).toFixed(0)+'% que pide la dirección, pero tu venta sí va creciendo.'):' Y además ya vas arriba del objetivo.'))
+        : 'Estás vendiendo <b style="color:#ef4444">menos</b> que el año pasado. Revisa en Alertas qué clientes bajaron o dejaron de comprar.')
+      +' Se compara solo con meses ya cerrados, para no medir un mes a medias contra uno completo.</div></div>';
+    h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:14px 0 8px">Mes a mes: este año vs el año pasado</div>';
+    var maxY=1; meses.forEach(function(m){maxY=Math.max(maxY,(V.cur[m-1]||0),(V.prior[m-1]||0));});
+    meses.forEach(function(m){
+      var cu=V.cur[m-1]||0, pr=V.prior[m-1]||0;
+      var cr=pr>0?(cu/pr-1)*100:(cu>0?100:0), col=cr>=0?'#22c55e':'#ef4444';
+      var enCurso=(m>((typeof MESEVAL!=='undefined'&&MESEVAL)?MESEVAL:lm));
+      h+='<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1"><span style="font-weight:800;color:#e8eef7">'+MESN[m]+(enCurso?' <span style="font-size:10px;color:#7c8aa5">(en curso)</span>':'')+'</span><span>'+fmt(cu)+' vs '+fmt(Math.round(pr))+' · <b style="color:'+col+'">'+(cr>=0?'+':'')+cr.toFixed(0)+'%</b></span></div>'
+       +'<div style="height:9px;background:#0b1628;border-radius:6px;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.min(100,cu/maxY*100)+'%;background:'+col+'"></i></div>'
+       +'<div style="height:5px;background:#0b1628;border-radius:6px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.min(100,pr/maxY*100)+'%;background:#64748b"></i></div></div>';});
+    h+='<div style="font-size:11px;color:#7c8aa5;margin-top:6px">Barra de color = tu venta de este año. Barra gris = el mismo mes del año pasado. Verde si creciste, rojo si bajaste.</div>';
+    h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · solo tuyas · datos del último reporte publicado.</div>';
+    app.innerHTML=h; return;
+  }
+
+  // ── VISTA CONTRA OBJETIVO (la de siempre) ──────────────────────────────────
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'+kcard(fmt(curLm),'Venta '+MESN[lm]+' (sacos)','#E8A020')+kcard(fmt(Math.round(objLm)),'Objetivo del mes')+kcard((objLm>0?(avLm*100).toFixed(0):'—')+'%','Avance',avcol)+'</div>';
   var faltaLm=Math.max(0,Math.round(objLm-curLm));
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+kcard((crecLm>=0?'+':'')+crecLm.toFixed(0)+'%','vs. mismo mes año ant.',crecCol)+kcard(faltaLm>0?fmt(faltaLm):'✓ logrado','Faltan para el objetivo',faltaLm>0?'#f59e0b':'#22c55e')+'</div>';
   if(perdLm>0){
@@ -876,6 +924,7 @@ function renderVentas(){
   h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · solo tuyas · datos del último reporte publicado.</div>';
   app.innerHTML=h;
 }
+
 // ── Desplegable: compras por producto y mes del cliente ──
 function prodMesHtml(c){
   if(!c||!c.pm)return '';
