@@ -2888,14 +2888,20 @@ function renderMetas(){
 
 function getPriorDaily(py){let b=null;try{b=JSON.parse(localStorage.getItem('baseline04mas_daym_'+py)||'null');}catch(e){}if(!b&&py===2025)b=BASELINE_2025_DAYM;return b||{};}
 function _vendMonthly(vf){
-  const cur=Array(12).fill(0),prior=Array(12).fill(0);
+  // prior      = base 2025 completa del vendedor (cartera viva + clientes que perdió) -> con esto
+  //              la suma de los vendedores cuadra con el objetivo bruto de la empresa.
+  // priorVivo  = solo los clientes que TODAVÍA tiene. Es la base sobre la que se le pide el % de
+  //              crecimiento que está configurado en Objetivos.
+  // priorPerd  = los que dejaron de comprar. Es la parte del objetivo que es RECUPERACIÓN, no
+  //              crecimiento, y se muestra por separado para que el vendedor no lea un % inflado.
+  const cur=Array(12).fill(0),prior=Array(12).fill(0),priorVivo=Array(12).fill(0),priorPerd=Array(12).fill(0);
   const B=getPriorBaseline().data; const bN=new Map(); for(const k in B)bN.set(nkey(k),k);
   const seen=new Set();
   for(const c of DATA.clients){ const rk0=resolveKey(c.nombre,bN); if(rk0)seen.add(rk0); }   // TODOS los clientes actuales (de cualquier vendedor)
   for(const c of DATA.clients){ if(vf&&(c.vendedor||'(sin asignar)')!==vf)continue;   // misma etiqueta que al publicar -> no se pierden los clientes sin vendedor
     for(const mm in c.mesData)cur[mm-1]+=c.mesData[mm];
     const rk=resolveKey(c.nombre,bN),arr=(rk&&B[rk]&&B[rk].m)||[];
-    for(let i=0;i<12;i++)prior[i]+=arr[i]||0;
+    for(let i=0;i<12;i++){prior[i]+=arr[i]||0;priorVivo[i]+=arr[i]||0;}
   }
   // Año-anterior de clientes que YA NO están en el reporte de este año (se fueron): también cuenta para el objetivo total.
   // Va a la bolsa global (vf='') y a "(sin asignar)" para no penalizar a ningún vendedor con clientes que perdió.
@@ -2903,9 +2909,9 @@ function _vendMonthly(vf){
   for(const k in B){ if(seen.has(k))continue;
     const _rk=resolveKey(k,_mN); const _own=(_rk&&_map[_rk]&&_map[_rk].v)||'(sin asignar)';
     if(vf&&vf!==_own)continue;                     // el histórico perdido cuenta para SU vendedor
-    const arr=B[k].m||[]; for(let i=0;i<12;i++)prior[i]+=arr[i]||0;
+    const arr=B[k].m||[]; for(let i=0;i<12;i++){prior[i]+=arr[i]||0;priorPerd[i]+=arr[i]||0;}
   }
-  return {cur,prior};
+  return {cur,prior,priorVivo,priorPerd};
 }
 function renderGrafica(){
   const box=document.getElementById('graf-content'); if(!box||!DATA)return;
@@ -3481,7 +3487,7 @@ function buildVendorPayloads(){
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
     byV[v].forEach(function(c){promoSac+=(c.promoSacos||0);var pm=c.prodMes||{};var rnp=0;for(var pp in pm){var mmp=(typeof EQ_find==='function')?EQ_find(pp):null;if(mmp){var qq=0;for(var kk in pm[pp])qq+=pm[pp][kk]||0;rnp+=qq*mmp[2];}}newDisc+=rnp*(c.desc||0)/100;});
-    var ventas={meses:DATA.meses,gTarget:PVEN.gTarget,cur:vm.cur,prior:vm.prior,dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario};
+    var ventas={meses:DATA.meses,gTarget:PVEN.gTarget,cur:vm.cur,prior:vm.prior,priorVivo:vm.priorVivo||null,priorPerd:vm.priorPerd||null,dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario};
     // ── Alertas por vendedor ──
     var cliAll=DATA.clients.filter(function(c){return (c.vendedor||'(sin asignar)')===v;});
     var sinCompra=cliAll.filter(function(c){return c.seg==='EnRiesgo';}).sort(function(a,b){return b.dias-a.dias;}).slice(0,40).map(function(c){return {n:c.nombre,dias:(c.dias>=999?null:c.dias),prom:Math.round(c.promMes||0),est:c.estado||'',ult:(c.lastDate?c.lastDate.toLocaleDateString('es-MX',{day:'2-digit',month:'short'}):'')};});
