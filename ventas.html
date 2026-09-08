@@ -1158,9 +1158,10 @@ function renderClienteTable(){
     const descTxt=_e
       ? `<span style="color:#64748b"><s>${_pol.toFixed(1)}%</s></span> <b style="color:#c99bff">${Number(_e.pct).toFixed(2)}%</b><div style="font-size:.62rem;color:#a78bfa">⚡ hasta ${_fechaMX(_e.hasta)}</div>`
       : `${c.desc.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'');
-    const descBtn=((typeof SK_SUPER!=='undefined')&&SK_SUPER)
-      ? `<div style="margin-top:2px"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="Autorizar un descuento especial por dirección" style="background:#4c1d95;color:#ddd6fe;border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">⚡ especial</button></div>`
-      : '';
+    const _puedeEsp=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
+    // El botón se ve SIEMPRE, aunque estés en modo visor: si no, parece que la función no
+    // existe. En visor sale con candado y, al tocarlo, autorizarDescEsp pide la contraseña.
+    const descBtn=`<div style="margin-top:2px"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?'Autorizar un descuento especial por dirección':'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?'#4c1d95':'#2a2438'};color:${_puedeEsp?'#ddd6fe':'#8b7fa6'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?'⚡ especial':'🔒 especial'}</button></div>`;
     return `<tr>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${c.nombre}">${c.nombre}</td>
       <td style="text-align:right;font-weight:700;color:var(--gold)">${fmt(c.promMes)}</td>
