@@ -127,6 +127,25 @@ function ultMesTxt(c){ var m=c&&c.ult; return m?('su última compra fue en '+(ME
 // Cliente nuevo sin nivel todavía: su ritmo real ya alcanza, pero el promedio de 6 meses
 // lo deja en INICIAL. Gerencia puede autorizarle un % de arranque.
 function esNuevoCand(c){ return !!c && !!c.nvCand && !c.nvAuth; }
+// ── Descuento especial autorizado por dirección ──
+// Manda sobre el % de política mientras no se pase de su fecha de vigencia. La app
+// vuelve a checar la fecha aquí, para que un reporte publicado hace días no siga
+// pagando un permiso que ya venció.
+function _hoyISO(){var d=new Date(),p=function(x){return ('0'+x).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function _fMX(iso){if(!iso)return '';var a=String(iso).split('-');return a.length===3?(a[2]+'/'+a[1]+'/'+a[0]):String(iso);}
+function espApp(c){var e=c&&c.esp;if(!e)return null;if(e.hasta&&_hoyISO()>e.hasta)return null;return e;}
+function descEfApp(c){var e=espApp(c);if(e)return e.pct||0;return (c&&c.desc!=null)?c.desc:0;}
+function espBanner(c){
+  var e=espApp(c); if(!e)return '';
+  var base=(e.base!=null?e.base:(c.desc||0));
+  return '<div style="margin:10px 12px;padding:11px 13px;background:#241a33;border:2px solid #a855f7;border-radius:10px">'
+    +'<div style="font-weight:800;color:#c99bff;font-size:13px">⚡ Descuento especial autorizado por dirección</div>'
+    +'<div style="font-size:19px;font-weight:800;margin-top:4px;color:#fff"><s style="color:#8b7fa6;font-size:15px;font-weight:600">'+Number(base).toFixed(2)+'%</s> &nbsp;→&nbsp; <span style="color:#c99bff">'+Number(e.pct).toFixed(2)+'%</span></div>'
+    +'<div style="font-size:12px;color:#d9c9ee;margin-top:4px;line-height:1.45">'
+    +'<b>Vigente hasta el '+_fMX(e.hasta)+'.</b> Por política le tocaba '+Number(base).toFixed(2)+'%; dirección autorizó '+Number(e.pct).toFixed(2)+'%'+(e.fecha?(' el '+e.fecha):'')+'.'
+    +'<br><b>Motivo:</b> '+String(e.motivo||'—').replace(/</g,'&lt;')
+    +'<br><span style="color:#a78bfa">Al terminar la vigencia regresa solo al % que le dé su nivel.</span></div></div>';
+}
 function tieneArranque(c){ return !!c && !!c.nvAuth; }
 function premBaseNow(c){ return (c&&c.vitPB!=null)?(c.vitPB||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qpb)||0):0); }
 function premMixNow(c){ return (c&&c.vitPM!=null)?(c.vitPM||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qp)||0):0); }
@@ -168,7 +187,8 @@ function applyPayload(p){
   (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:r.vd||APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null,desc:(r.desc!=null?r.desc:null),crecio:!!r.crecio,premOk:!!r.premOk,boost:r.boost||0,evalSac:r.evalSac||0,antSac:r.antSac||0,premEval:r.premEval||0,
     vitSac:(r.vitSac!=null?r.vitSac:null),baseCrec:(r.baseCrec!=null?r.baseCrec:null),vitPB:(r.vitPB!=null?r.vitPB:null),vitPM:(r.vitPM!=null?r.vitPM:null),
     ult:r.ult||0,tot:r.tot||0,
-    nvCand:!!r.nvCand,nvRitmo:r.nvRitmo||0,nvProm6:r.nvProm6||0,nvMeses:r.nvMeses||0,nvAuth:r.nvAuth||null,nvPct:(r.nvPct!=null?r.nvPct:0.5),nvArranque:r.nvArranque||0};});
+    nvCand:!!r.nvCand,nvRitmo:r.nvRitmo||0,nvProm6:r.nvProm6||0,nvMeses:r.nvMeses||0,nvAuth:r.nvAuth||null,nvPct:(r.nvPct!=null?r.nvPct:0.5),nvArranque:r.nvArranque||0,
+    nvFrio:!!r.nvFrio,nvDias:(r.nvDias!=null?r.nvDias:null),esp:r.esp||null};});
 }
 function fetchCloud(){
   const q=parseHash(); CLOUD.db=q.db||''; CLOUD.v=q.v||'';
@@ -290,13 +310,14 @@ function paintClist(){
   arr.sort(function(a,b){return b.avg-a.avg;});
   let h='';
 h+='<div class="hint">'+(APPVEND?('<b style="color:#E8A020">'+APPVEND+'</b> · '):'')+arr.length+(CLISTEST?(' en '+CLISTEST):' clientes')+(APPQ?(' · '+perWord()+' '+perLabel()):'')+' · toca uno para ver su tarjeta</div><div class="list">';
-arr.slice(0,500).forEach(c=>{const t=tierOf(c.avg);const dz=dormido(c);const nv=esNuevoCand(c);const na=tieneArranque(c);
+arr.slice(0,500).forEach(c=>{const t=tierOf(c.avg);const dz=dormido(c);const nv=esNuevoCand(c);const na=tieneArranque(c);const ep=espApp(c);
   h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b><div style="font-size:11px;color:'+(dz?'#f0a868':'#9fb0cc')+'">'
     +(dz?('⏸ '+ultCompraTxt(c)+' · '+fmt(c.tot)+' sacos en el año'):(fmt(c.avg)+' sacos/mes'))
     +(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')
     +(nv?'<div style="font-size:11px;color:#E8A020;font-weight:700;margin-top:2px">⭐ Nuevo · pide autorización de '+c.nvPct+'%</div>':'')
     +(na?'<div style="font-size:11px;color:#4ade80;font-weight:700;margin-top:2px">✅ Arranque '+c.nvAuth.pct+'% autorizado</div>':'')
-    +'</div></div><span class="lv" style="background:'+(nv?'#8a6114':(na?'#166534':(dz?'#7c5a2b':NIVCOL[t[0]])))+';color:#fff">'+(nv?'NUEVO':(dz?'DORMIDO':nivLab(t[0])))+'</span></div>';});
+    +(ep?'<div style="font-size:11px;color:#c99bff;font-weight:700;margin-top:2px">⚡ Especial '+Number(ep.pct).toFixed(2)+'% · hasta '+_fMX(ep.hasta)+'</div>':'')
+    +'</div></div><span class="lv" style="background:'+(ep?'#6b21a8':(nv?'#8a6114':(na?'#166534':(dz?'#7c5a2b':NIVCOL[t[0]]))))+';color:#fff">'+(ep?'ESPECIAL':(nv?'NUEVO':(dz?'DORMIDO':nivLab(t[0]))))+'</span></div>';});
 if(arr.length>500)h+='<div class="hint">Mostrando los primeros 500 de '+arr.length+'. Usa el buscador o el filtro por estado.</div>';
   h+='</div>';
   if(!arr.length)h+='<div class="hint">Sin resultados.</div>';
@@ -346,14 +367,17 @@ function monKpi(val,lbl){
 function paintMon(){
   var box=document.getElementById('monBody'); if(!box)return;
   var arr=monFiltrados(), totSac=0, conDesc=0, sumDesc=0;
-  arr.forEach(function(c){totSac+=c.avg||0;if(c.desc!=null&&c.desc>0){conDesc++;sumDesc+=c.desc;}});
+  arr.forEach(function(c){totSac+=c.avg||0;var _de=descEfApp(c);if(_de>0){conDesc++;sumDesc+=_de;}});
   var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
     +monKpi(fmt(arr.length),'clientes')+monKpi(fmt(totSac),'sacos/mes')
     +monKpi(conDesc?((sumDesc/conDesc).toFixed(2)+'%'):'—','descuento prom.')+'</div>';
   h+='<div class="hint">Toca cualquier cliente para abrir su tarjeta completa, igual que la ve su vendedor.</div><div class="list">';
   arr.slice(0,1000).forEach(function(c){
     var t=tierOf(c.avg);
-    var d=(c.desc!=null)?(Number(c.desc).toFixed(2)+'%'):'—';
+    var _e=espApp(c);
+    var d=_e
+      ? ('<s>'+Number(_e.base!=null?_e.base:(c.desc||0)).toFixed(2)+'%</s> <b style="color:#c99bff">'+Number(_e.pct).toFixed(2)+'% ⚡</b>')
+      : ((c.desc!=null)?(Number(c.desc).toFixed(2)+'%'):'—');
     h+='<div class="li" onclick="showCard(\''+String(c.nombre).replace(/'/g,"\\'")+'\')">'
       +'<div style="min-width:0"><b>'+c.nombre+'</b>'
       +'<div style="font-size:11px;color:#9fb0cc">'+fmt(c.avg)+' sacos/mes'+(c.estado?(' · '+c.estado):' · <span style="color:#f87171">sin estado</span>')+'</div>'
@@ -988,8 +1012,12 @@ function descBloques(c,t){
     pz.push({t:'Premium+ '+((c.boost||0)>=PREM.e2?'escalón 2 (≥'+PREM.u2+'%)':((c.boost||0)>0?'escalón 1 (≥'+PREM.u1+'%)':'(no alcanzó el '+PREM.u1+'%)'))+' · mix '+(c.mixp||0).toFixed(1)+'%',v:(c.boost||0),ok:(c.boost||0)>0});
     h+='<div class="dbox">';
     h+='<div class="dtop"><div><div class="dlbl">Descuento que paga en '+(MESNOM[mesAct]||'este mes')+'</div>'+
-       '<div class="dsub">Se calculó al cerrar '+(MESNOM[MESEVAL]||'el mes pasado')+' y ya no cambia'+(CORTE&&CORTE.fecha?(' · corte del '+CORTE.fecha):'')+'</div></div>'+
-       '<div class="dnum">'+vig.toFixed(2)+'%</div></div>';
+       '<div class="dsub">'+(espApp(c)
+         ? ('Dirección autorizó '+Number(espApp(c).pct).toFixed(2)+'% especial, vigente hasta el '+_fMX(espApp(c).hasta))
+         : ('Se calculó al cerrar '+(MESNOM[MESEVAL]||'el mes pasado')+' y ya no cambia'+(CORTE&&CORTE.fecha?(' · corte del '+CORTE.fecha):'')))+'</div></div>'+
+       '<div class="dnum">'+(espApp(c)
+         ? ('<s style="color:#8b7fa6;font-size:.62em;font-weight:600">'+vig.toFixed(2)+'%</s> <span style="color:#a855f7">'+Number(espApp(c).pct).toFixed(2)+'%</span>')
+         : (vig.toFixed(2)+'%'))+'</div></div>';
     pz.forEach(function(p){
       h+='<div class="drow'+(p.ok?' si':' no')+'"><span>'+(p.ok?'✓':'✗')+' '+p.t+'</span><b>'+(p.v>0?('+'+p.v.toFixed(2)+'%'):'—')+'</b></div>';
     });
@@ -1112,7 +1140,9 @@ function showCard(name){
        +'<div style="font-weight:800;color:#E8A020;font-size:13px">⭐ Cliente nuevo — pide autorización de descuento</div>'
        +'<div style="font-size:12px;color:#e6d3b8;margin-top:3px;line-height:1.45">Ya compra <b>'+fmt(c.nvRitmo)+' sacos/mes</b> desde que entró ('+c.nvMeses+' '+(c.nvMeses===1?'mes':'meses')+'), '
        +'pero como el nivel se saca del promedio de 6 meses le sale <b>'+fmt(c.nvProm6)+'</b> y todavía no gana nivel. '
-       +'<b style="color:#fff">Sugerido: '+c.nvPct+'% de arranque</b> — queda sujeto a autorización de gerencia. Pídelo para no perderlo con la competencia.</div></div>'
+       +'<b style="color:#fff">Sugerido: '+c.nvPct+'% de arranque</b> — queda sujeto a autorización de gerencia. Pídelo para no perderlo con la competencia.'
+       +(c.nvFrio?('<div style="margin-top:5px;color:#f87171;font-weight:700">🔴 Lleva '+(c.nvDias!=null?c.nvDias+' días':'varios meses')+' sin comprar. Este descuento es justo la carta para traerlo de vuelta: visítalo.</div>'):'')
+       +'</div></div>'
      : ''))+
    (dormido(c)
      ? '<div style="margin:10px 12px;padding:10px 12px;background:#3a2a12;border:1px solid #7c5a2b;border-radius:10px">'
@@ -1121,6 +1151,7 @@ function showCard(name){
        +ultMesTxt(c)+'. Como no tiene compras en los últimos 6 meses cerrados, su promedio va en 0 y no tiene nivel ni descuento vigente. '
        +'En cuanto vuelva a comprar recupera nivel solo.</div></div>'
      : '')+
+   espBanner(c)+
    descBloques(c,t)+
    qnow+
    '<div class="need">'+need+'</div>'+

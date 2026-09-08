@@ -285,6 +285,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
         <select id="vnd-fil" onchange="renderClienteTable()"><option value="">Todos vendedores</option></select>
         <span id="tbl-count" style="font-size:.75rem;color:#64748b;margin-left:auto"></span>
       </div>
+      <div id="esp-panel" style="display:none"></div>
       <div class="tbl-wrap">
         <table class="dt" id="cliente-tbl">
           <thead><tr>
@@ -1147,17 +1148,25 @@ function renderClienteTable(){
   document.getElementById('tbl-count').textContent=rows.length+' clientes';
   const segC={VIP:'var(--gold)',Recurrente:'var(--green)',Esporadico:'var(--gray)',EnRiesgo:'var(--red)'};
   const segL={VIP:'VIP',Recurrente:'Recurrente',Esporadico:'Esporádico',EnRiesgo:'En Riesgo'};
+  try{renderEspPanel();}catch(e){}
   document.getElementById('cliente-body').innerHTML=rows.map(c=>{
     const dk=c.tier||TIER_KEY[c.nivel]||c.nivel;
     const diasColor=c.dias>=45?'var(--red)':c.dias>=30?'#f97316':c.dias>=15?'var(--amber)':'var(--green)';
     const diasTxt=c.dias>=999?'—':(c.dias+'d');
-    const descTxt=`${c.desc.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'');
+    const _e=(typeof espVigente==='function')?espVigente(c.nombre):null;
+    const _pol=(typeof descPolitica==='function')?descPolitica(c):c.desc;
+    const descTxt=_e
+      ? `<span style="color:#64748b"><s>${_pol.toFixed(1)}%</s></span> <b style="color:#c99bff">${Number(_e.pct).toFixed(2)}%</b><div style="font-size:.62rem;color:#a78bfa">⚡ hasta ${_fechaMX(_e.hasta)}</div>`
+      : `${c.desc.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'');
+    const descBtn=((typeof SK_SUPER!=='undefined')&&SK_SUPER)
+      ? `<div style="margin-top:2px"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="Autorizar un descuento especial por dirección" style="background:#4c1d95;color:#ddd6fe;border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">⚡ especial</button></div>`
+      : '';
     return `<tr>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${c.nombre}">${c.nombre}</td>
       <td style="text-align:right;font-weight:700;color:var(--gold)">${fmt(c.promMes)}</td>
       <td style="text-align:right;color:#94a3b8">${fmt(c.total)}</td>
       <td><span class="tier-pill tier-${TIER_KEY[c.nivel]||c.nivel}">${TIER_ICONS[c.nivel]||''} ${c.nivel}</span></td>
-      <td style="color:#6ee7b7;font-size:.72rem" title="▲ ganó bono crecimiento · ◆ ganó bono premium · máx ${c.descMax.toFixed(1)}%">${descTxt}</td>
+      <td style="color:#6ee7b7;font-size:.72rem" title="▲ ganó bono crecimiento · ◆ ganó bono premium · máx ${c.descMax.toFixed(1)}%">${descTxt}${descBtn}</td>
       <td style="color:#fbbf24;font-size:.72rem">${c.promoSacos>0?fmt(c.promoSacos):'—'}</td>
       <td><span class="seg-pill" style="background:${segC[c.seg]||'#64748b'};color:${c.seg==='VIP'?'#1A2E5A':'#fff'}">${segL[c.seg]||c.seg}</span></td>
       <td style="text-align:center;font-weight:700;color:${diasColor}">${diasTxt}</td>
@@ -1945,7 +1954,7 @@ function renderEquilibrio(){
       var cost=mm[1],price=mm[2]; rev+=qty*price; cogs+=qty*cost;
       cliRevNP+=qty*price; // PetFood ahora también recibe descuento
     }
-    promo += cliRevNP*(c.desc||0)/100;
+    promo += cliRevNP*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;
   });
   var util=rev-cogs, margB=rev>0?util/rev:0;
   var utilNeta=util-promo, margN=rev>0?utilNeta/rev:0;
@@ -2057,7 +2066,7 @@ function renderRentabilidad(){
       if(cc){ promoCost+=sac*cc.costo; if(!byProdPromo[p])byProdPromo[p]={sac:0,cost:0}; byProdPromo[p].sac+=sac; byProdPromo[p].cost+=sac*cc.costo; }
       else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
     if(rev<=0&&promoCost<=0)continue;
-    const gm=rev-cost, disc=rev*(c.desc||0)/100;
+    const gm=rev-cost, disc=rev*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;
     const netPromo=gm-promoCost, netDisc=gm-disc;
     const netPromoPct=rev>0?netPromo/rev*100:0, netDiscPct=rev>0?netDisc/rev*100:0;
     TR+=rev;TC+=cost;TPROMO+=promoCost;TDISC+=disc;TCL++;
@@ -2768,7 +2777,7 @@ const BASELINE_TON={2024:50913.0,2025:56578.3};   // toneladas reales de Odoo, p
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+var CFG_KEYS=['descEsp04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
@@ -3043,8 +3052,12 @@ function nuevoInfo(c){
   const ult=comp.length?comp[comp.length-1]:0;
   const mesesDesde=desde.length;
   const auth=authDe(c.nombre);
-  const cand=((c.nivel||'')==='INICIAL') && mesesDesde<=cfg.mesesMax && ritmo>=cfg.minSac && (c.dias<=cfg.diasAct);
-  return {cand:cand, ritmo:ritmo, primer:primer, mesesDesde:mesesDesde, prom6:c.promMes||0,
+  // Un cliente nuevo casi siempre compra a saltos: pedirle además una compra en los últimos
+  // 60 dias dejaba fuera justo a los que hay que retener (compraron fuerte una vez y no han
+  // vuelto). Los días ya no descalifican: solo lo marcan como FRÍO para que gerencia lo vea.
+  const cand=((c.nivel||'')==='INICIAL') && mesesDesde<=cfg.mesesMax && ritmo>=cfg.minSac;
+  const frio=(c.dias||0)>cfg.diasAct;
+  return {cand:cand, frio:frio, dias:(c.dias>=999?null:c.dias), ritmo:ritmo, primer:primer, mesesDesde:mesesDesde, prom6:c.promMes||0,
     alcanzaCobre:ritmo>=(((getTierCfg().COBRE||{}).min)||200), auth:auth, pct:cfg.pct, ultMes:ult};
 }
 function autorizarNuevo(nombre){
@@ -3078,6 +3091,84 @@ function pctArranque(c,mes){
   return a.pct||0;
 }
 
+// ══ DESCUENTO ESPECIAL AUTORIZADO POR DIRECCIÓN ══════════════════════════════
+// La política le da al cliente un % por sus logros. Dirección puede pasar por encima
+// de ese % con uno autorizado, con VIGENCIA y MOTIVO. En las apps el % de política
+// sale tachado y a un lado el autorizado, con su fecha límite y el porqué.
+function getDescEsp(){try{return JSON.parse(localStorage.getItem('descEsp04mas')||'{}');}catch(e){return {};}}
+function saveDescEsp(o){try{localStorage.setItem('descEsp04mas',JSON.stringify(o));}catch(e){}}
+function _isoHoy(){var d=new Date(),p=function(x){return ('0'+x).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function _finDeMes(){var d=new Date(),f=new Date(d.getFullYear(),d.getMonth()+1,0),p=function(x){return ('0'+x).slice(-2);};
+  return f.getFullYear()+'-'+p(f.getMonth()+1)+'-'+p(f.getDate());}
+function _fechaMX(iso){if(!iso)return '';var a=String(iso).split('-');return a.length===3?(a[2]+'/'+a[1]+'/'+a[0]):iso;}
+function espRaw(nombre){var e=getDescEsp()[nkey(nombre)];return e||null;}
+function espVigente(nombre){var e=espRaw(nombre);if(!e)return null;if(e.hasta&&_isoHoy()>e.hasta)return null;return e;}
+function espVencido(nombre){var e=espRaw(nombre);return !!(e&&e.hasta&&_isoHoy()>e.hasta);}
+// % que la POLÍTICA le da hoy (nivel ganado, o el arranque autorizado si no ganó nivel)
+function descPolitica(c){var d=(c&&c.desc)||0;if(d>0)return d;
+  return (typeof pctArranque==='function')?pctArranque(c,(typeof MESVIT!=='undefined'?MESVIT:0)):0;}
+// % que REALMENTE se le paga: el especial manda mientras esté vigente
+function descEfec(c){var e=espVigente(c&&c.nombre);if(e)return e.pct||0;return descPolitica(c);}
+function autorizarDescEsp(nombre){
+  if(!reqSuper())return;
+  var c=DATA&&DATA.clients.find(function(x){return x.nombre===nombre;}); if(!c)return;
+  var base=descPolitica(c), ya=espRaw(nombre)||{};
+  var pct=parseFloat(prompt('DESCUENTO ESPECIAL PARA '+nombre+'\n\nPor política le toca: '+base.toFixed(2)+'%\n(nivel '+(c.nivel||'—')+', promedio '+fmt(Math.round(c.promMes||0))+' sacos/mes)\n\n¿Qué % autoriza dirección?',
+    String(ya.pct!=null?ya.pct:(Math.round((base+0.5)*100)/100))));
+  if(!(pct>=0)||isNaN(pct))return;
+  var hasta=prompt('¿Hasta qué día está vigente este '+pct+'%?\n\nFormato AAAA-MM-DD (por omisión, el último día de este mes).', ya.hasta||_finDeMes());
+  if(!hasta)return; hasta=String(hasta).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(hasta)){alert('La fecha debe ir como AAAA-MM-DD, por ejemplo '+_finDeMes()+'.');return;}
+  var motivo=prompt('¿Motivo de la autorización?\n\nLo van a ver el vendedor y el cliente en la tarjeta.', ya.motivo||'');
+  if(!motivo||!String(motivo).trim()){alert('Sin motivo no se autoriza: es el sustento de la excepción.');return;}
+  var now=new Date(),p=function(x){return ('0'+x).slice(-2);};
+  var a=getDescEsp();
+  a[nkey(nombre)]={n:nombre, pct:pct, base:Math.round(base*100)/100, hasta:hasta, motivo:String(motivo).trim(),
+    fecha:p(now.getDate())+'/'+p(now.getMonth()+1)+'/'+now.getFullYear(), anio:(DATA&&DATA.dataYear)||now.getFullYear()};
+  saveDescEsp(a);
+  try{renderClienteTable();}catch(e){} try{renderNuevos();}catch(e){}
+  try{pushConfigCloud(true);}catch(e){} try{autoPublishCloud();}catch(e){}
+  alert('✅ Autorizado '+pct+'% especial a '+nombre+'\nVigente hasta el '+_fechaMX(hasta)+'.\nMotivo: '+String(motivo).trim()+'\n\nSe publica a la nube para que su vendedor lo vea.');
+}
+function quitarDescEsp(nombre){
+  if(!reqSuper())return;
+  if(!confirm('¿Cancelar el descuento especial autorizado a '+nombre+'?\nRegresa al % que le da la política.'))return;
+  var a=getDescEsp(); delete a[nkey(nombre)]; saveDescEsp(a);
+  try{renderClienteTable();}catch(e){} try{renderNuevos();}catch(e){}
+  try{pushConfigCloud(true);}catch(e){} try{autoPublishCloud();}catch(e){}
+}
+function renderEspPanel(){
+  var box=document.getElementById('esp-panel'); if(!box)return;
+  var A=getDescEsp(), ks=Object.keys(A);
+  if(!ks.length){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='';
+  var viv=[],ven=[];
+  ks.forEach(function(k){var e=A[k];(espVencido(e.n)?ven:viv).push(e);});
+  viv.sort(function(a,b){return (b.pct||0)-(a.pct||0);});
+  var PUEDE=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
+  var h='<div style="background:#241a33;border:2px solid #a855f7;border-radius:10px;padding:12px 15px;margin:0 0 12px">'
+   +'<div style="font-size:.92rem;font-weight:800;color:#c99bff">⚡ Descuentos especiales autorizados por dirección ('+viv.length+' vigentes'+(ven.length?(' · '+ven.length+' vencidos'):'')+')</div>'
+   +'<div style="font-size:.73rem;color:#d9c9ee;margin-top:3px">Estos % pasan por encima de la política mientras dure su vigencia. El vendedor los ve en la tarjeta del cliente con el motivo y la fecha límite.</div>'
+   +'<div style="overflow-x:auto;margin-top:9px"><table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:640px"><thead><tr style="background:#3b2a56;color:#fff">'
+   +'<th style="padding:6px 9px;text-align:left">Cliente</th><th style="padding:6px;text-align:right">Política</th><th style="padding:6px;text-align:right">Autorizado</th>'
+   +'<th style="padding:6px;text-align:center">Vigente hasta</th><th style="padding:6px;text-align:left">Motivo</th><th style="padding:6px;text-align:center">Acción</th></tr></thead><tbody>';
+  viv.concat(ven).forEach(function(e){
+    var vnc=espVencido(e.n);
+    h+='<tr style="border-bottom:1px solid #33234d'+(vnc?';opacity:.55':'')+'">'
+      +'<td style="padding:5px 9px;color:#e2e8f0;font-weight:600">'+e.n+'</td>'
+      +'<td style="padding:5px;text-align:right;color:#94a3b8"><s>'+Number(e.base||0).toFixed(2)+'%</s></td>'
+      +'<td style="padding:5px;text-align:right;color:'+(vnc?'#94a3b8':'#c99bff')+';font-weight:800">'+Number(e.pct||0).toFixed(2)+'%</td>'
+      +'<td style="padding:5px;text-align:center;color:'+(vnc?'#f87171':'#e2e8f0')+'">'+_fechaMX(e.hasta)+(vnc?' (vencido)':'')+'</td>'
+      +'<td style="padding:5px;color:#d9c9ee">'+String(e.motivo||'').replace(/</g,'&lt;')+'</td>'
+      +'<td style="padding:5px;text-align:center">'+(PUEDE
+        ? '<button onclick="autorizarDescEsp(\''+e.n.replace(/'/g,"\\'")+'\')" style="background:#7e22ce;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer;margin-right:4px">Editar</button>'
+          +'<button onclick="quitarDescEsp(\''+e.n.replace(/'/g,"\\'")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer">Quitar</button>'
+        : '<span style="color:#94a3b8;font-size:.68rem">🔒 solo super-usuario</span>')+'</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  box.innerHTML=h;
+}
+
 function renderNuevos(){
   const box=document.getElementById('nue-content');if(!box||!DATA)return;
   if(!DATA.yoy)computeYoY();const Y=DATA.yoy;const P=getVParams();
@@ -3103,24 +3194,27 @@ function renderNuevos(){
   const _aut=_cands.filter(x=>x.i.auth), _pend=_cands.filter(x=>!x.i.auth);
   h+=`<div style="background:#2a1e13;border:2px solid #E8A020;border-radius:10px;padding:13px 16px;margin:6px 0 18px">
     <div style="font-size:.95rem;font-weight:800;color:#E8A020">⭐ Clientes nuevos que piden autorización de descuento (${_pend.length} pendientes${_aut.length?(' · '+_aut.length+' ya autorizados'):''})</div>
-    <div style="font-size:.75rem;color:#e6d3b8;margin-top:4px;line-height:1.5">Son clientes que <b>ya compran ritmo suficiente</b> pero siguen en INICIAL porque el nivel se saca del promedio de 6 meses y ellos llevan menos tiempo. Hoy no reciben nada y la competencia los puede jalar. El vendedor ve el aviso en la tarjeta del cliente; el % lo autorizas tú aquí.</div>
+    <div style="font-size:.75rem;color:#e6d3b8;margin-top:4px;line-height:1.5">Son clientes que <b>ya compran ritmo suficiente</b> pero siguen en INICIAL porque el nivel se saca del promedio de 6 meses y ellos llevan menos tiempo. Hoy no reciben nada y la competencia los puede jalar. El vendedor ve el aviso en la tarjeta del cliente; el % lo autorizas tú aquí. Los que no han vuelto a comprar salen marcados <b style="color:#f87171">FRÍO</b>: no se descartan —son justo los que hay que reactivar—, pero sabes que ahí el descuento es para traerlos de vuelta.</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:9px;font-size:.72rem;color:#e6d3b8">
       <label>% sugerido <input type="number" step="0.25" value="${_ncfg.pct}" onchange="setNuevoCfg('pct',this.value)" style="width:64px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
       <label>Vigencia (meses) <input type="number" value="${_ncfg.vigencia}" onchange="setNuevoCfg('vigencia',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
       <label>Mínimo sacos/mes <input type="number" value="${_ncfg.minSac}" onchange="setNuevoCfg('minSac',this.value)" style="width:64px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
       <label>Antigüedad máx. (meses) <input type="number" value="${_ncfg.mesesMax}" onchange="setNuevoCfg('mesesMax',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
+      <label title="Solo sirve para marcarlos en rojo: ya no los saca de la lista" >Marcar frío tras (días) <input type="number" value="${_ncfg.diasAct}" onchange="setNuevoCfg('diasAct',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
     </div></div>`;
   if(_cands.length){
     h+='<div style="overflow-x:auto;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:720px"><thead><tr style="background:#1e3a6b;color:#fff">'
       +'<th style="padding:7px 10px;text-align:left">Cliente</th><th style="padding:7px;text-align:left">Vendedor</th><th style="padding:7px;text-align:left">Estado</th>'
       +'<th style="padding:7px;text-align:right">1ª compra</th><th style="padding:7px;text-align:right">Meses</th>'
-      +'<th style="padding:7px;text-align:right">Ritmo real</th><th style="padding:7px;text-align:right">Prom. 6 meses</th>'
+      +'<th style="padding:7px;text-align:right">Ritmo real</th><th style="padding:7px;text-align:right">Prom. 6 meses</th><th style="padding:7px;text-align:center">Sin comprar</th>'
       +'<th style="padding:7px;text-align:center">Situación</th><th style="padding:7px;text-align:center">Acción</th></tr></thead><tbody>';
     _cands.forEach(x=>{
       const c=x.c, i=x.i;
       const est=i.auth
         ? '<span style="background:#0f2e1c;color:#4ade80;border-radius:5px;padding:2px 8px;font-weight:700">✓ '+i.auth.pct+'% autorizado</span>'
         : '<span style="background:#3a2a12;color:#f0a868;border-radius:5px;padding:2px 8px;font-weight:700">Pendiente</span>';
+      const dTxt=(i.dias==null)?'—':(i.dias+'d');
+      const dCel='<span style="color:'+(i.frio?'#f87171':'#4ade80')+';font-weight:700">'+dTxt+'</span>'+(i.frio?'<div style="font-size:.62rem;color:#f87171;font-weight:800">FRÍO · reactivar</div>':'');
       const acc=i.auth
         ? '<button onclick="quitarNuevo(\''+c.nombre.replace(/'/g,"\\'")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 10px;font-size:.7rem;cursor:pointer">Quitar</button>'
         : '<button onclick="autorizarNuevo(\''+c.nombre.replace(/'/g,"\\'")+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-weight:700;font-size:.7rem;cursor:pointer">Autorizar '+_ncfg.pct+'%</button>';
@@ -3132,6 +3226,7 @@ function renderNuevos(){
         +'<td style="padding:6px;text-align:right;color:#94a3b8">'+(i.mesesDesde||0)+'</td>'
         +'<td style="padding:6px;text-align:right;color:'+(i.alcanzaCobre?'#4ade80':'#e2e8f0')+';font-weight:700">'+fmt(i.ritmo||0)+(i.alcanzaCobre?' ✓':'')+'</td>'
         +'<td style="padding:6px;text-align:right;color:#f87171">'+fmt(i.prom6||0)+'</td>'
+        +'<td style="padding:6px;text-align:center">'+dCel+'</td>'
         +'<td style="padding:6px;text-align:center">'+est+'</td>'
         +'<td style="padding:6px;text-align:center">'+acc+'</td></tr>';
     });
@@ -3842,6 +3937,7 @@ function buildVendorPayloads(){
       // Descuento de arranque autorizado por gerencia: solo aplica si el cliente no ganó nivel.
       const _nvi=(typeof nuevoInfo==='function')?nuevoInfo(c):{cand:false};
       const _arr=(typeof pctArranque==='function')?pctArranque(c,MESVIT):0;
+      const _esp=(typeof espVigente==='function')?espVigente(c.nombre):null;
       const evalSac=Math.round((c.qualMes&&c.qualMes[MESEVAL])||0);
       const antSac =Math.round((c.qualMes&&c.qualMes[MESANT])||0);
       let premEval=0; for(const p in pm){ if(isPremiumPlus(p)) premEval+=(pm[p]&&pm[p][MESEVAL])||0; }
@@ -3860,6 +3956,8 @@ function buildVendorPayloads(){
         nvCand:!!_nvi.cand, nvRitmo:_nvi.ritmo||0, nvProm6:Math.round(_nvi.prom6||0), nvMeses:_nvi.mesesDesde||0,
         nvAuth:(_nvi.auth?{pct:_nvi.auth.pct,fecha:_nvi.auth.fecha,vig:_nvi.auth.vig,desde:_nvi.auth.desde}:null),
         nvPct:(typeof getNuevoCfg==='function')?getNuevoCfg().pct:0.5, nvArranque:_arr,
+        nvFrio:!!_nvi.frio, nvDias:(_nvi.dias!=null?_nvi.dias:null),
+        esp:(_esp?{pct:_esp.pct,base:_esp.base,hasta:_esp.hasta,motivo:_esp.motivo,fecha:_esp.fecha}:null),
         boost:Math.round(premBoost(c.mixPlus||0,getPremCfg())*1000)/1000,
         evalSac:evalSac, antSac:antSac, premEval:Math.round(premEval),
         vitSac:Math.round(vitSac), baseCrec:Math.round(baseCrec), vitPB:Math.round(vitPB), vitPM:Math.round(vitPM),
@@ -3867,7 +3965,7 @@ function buildVendorPayloads(){
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
-    byV[v].forEach(function(c){promoSac+=(c.promoSacos||0);var pm=c.prodMes||{};var rnp=0;for(var pp in pm){var mmp=(typeof EQ_find==='function')?EQ_find(pp):null;if(mmp){var qq=0;for(var kk in pm[pp])qq+=pm[pp][kk]||0;rnp+=qq*mmp[2];}}newDisc+=rnp*(c.desc||0)/100;});
+    byV[v].forEach(function(c){promoSac+=(c.promoSacos||0);var pm=c.prodMes||{};var rnp=0;for(var pp in pm){var mmp=(typeof EQ_find==='function')?EQ_find(pp):null;if(mmp){var qq=0;for(var kk in pm[pp])qq+=pm[pp][kk]||0;rnp+=qq*mmp[2];}}newDisc+=rnp*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;});
     var ventas={meses:DATA.meses,gTarget:PVEN.gTarget,cur:vm.cur,prior:vm.prior,priorVivo:vm.priorVivo||null,priorPerd:vm.priorPerd||null,dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario};
     // ── Alertas por vendedor ──
     var cliAll=DATA.clients.filter(function(c){return (c.vendedor||'(sin asignar)')===v;});
