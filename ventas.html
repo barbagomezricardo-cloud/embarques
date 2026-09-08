@@ -718,7 +718,11 @@ function descMesCliente(c,m){
   const qm=c.qualMes||c.mesData||{};
   const prom=Math.round(w6.reduce((a,x)=>a+(qm[x]||0),0)/(w6.length||1));
   if(!(prom>0))return 0;
-  try{ const d=calcDesc(calcNivel(prom),qm,c.prodMes||{},comp,prom); return d.desc||0; }catch(e){ return 0; }
+  try{ const d=calcDesc(calcNivel(prom),qm,c.prodMes||{},comp,prom);
+       const g=d.desc||0;
+       if(g>0)return g;
+       // sin nivel ganado: si gerencia le autorizó un % de arranque para ese mes, ese es el que costó
+       return (typeof pctArranque==='function')?pctArranque(c,m):0; }catch(e){ return 0; }
 }
 function daysAgo(date){if(!date)return 999;return Math.floor((TODAY-date)/86400000);}
 
@@ -2764,7 +2768,7 @@ const BASELINE_TON={2024:50913.0,2025:56578.3};   // toneladas reales de Odoo, p
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+var CFG_KEYS=['nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
@@ -3014,6 +3018,66 @@ function renderObjetivos(){
   box.innerHTML=h;
 }
 
+// ══ DESCUENTO DE ARRANQUE PARA CLIENTE NUEVO ═════════════════════════════════
+// El nivel se calcula con el promedio de los últimos 6 meses cerrados. Un cliente que
+// empezó a comprar hace poco queda dividido entre 6 aunque solo tuvo 1 o 2 meses de
+// oportunidad, así que se queda en INICIAL y sin descuento aunque su ritmo real ya sea
+// de Cobre. Estos son los que la app marca como candidatos: gerencia autoriza (o no)
+// un % de arranque, y solo entonces se le paga.
+const NUEVO_DEF={pct:0.5, mesesMax:6, minSac:100, vigencia:3, diasAct:60};
+function getNuevoCfg(){try{return Object.assign({},NUEVO_DEF,JSON.parse(localStorage.getItem('nuevoCfg04mas')||'{}'));}catch(e){return Object.assign({},NUEVO_DEF);}}
+function setNuevoCfg(k,v){if(!reqSuper())return;const c=getNuevoCfg();c[k]=parseFloat(v)||0;try{localStorage.setItem('nuevoCfg04mas',JSON.stringify(c));}catch(e){}renderNuevos();try{autoPublishCloud();}catch(e){}}
+function getNuevoAuth(){try{return JSON.parse(localStorage.getItem('nuevoAuth04mas')||'{}');}catch(e){return {};}}
+function saveNuevoAuth(o){try{localStorage.setItem('nuevoAuth04mas',JSON.stringify(o));}catch(e){}}
+function authDe(nombre){const a=getNuevoAuth();return a[nkey(nombre)]||null;}
+// Datos del cliente como "nuevo": ritmo real desde su primera compra vs el promedio de 6 meses
+function nuevoInfo(c){
+  const cfg=getNuevoCfg();
+  const comp=((DATA&&DATA.completos)||[]).slice().sort((a,b)=>a-b);
+  const qm=(c&&(c.qualMes||c.mesData))||{};
+  const act=Object.keys(qm).map(Number).filter(m=>qm[m]>0&&comp.indexOf(m)>=0).sort((a,b)=>a-b);
+  if(!act.length)return {cand:false};
+  const primer=act[0];
+  const desde=comp.filter(m=>m>=primer);
+  const ritmo=desde.length?Math.round(desde.reduce((a,m)=>a+(qm[m]||0),0)/desde.length):0;
+  const ult=comp.length?comp[comp.length-1]:0;
+  const mesesDesde=desde.length;
+  const auth=authDe(c.nombre);
+  const cand=((c.nivel||'')==='INICIAL') && mesesDesde<=cfg.mesesMax && ritmo>=cfg.minSac && (c.dias<=cfg.diasAct);
+  return {cand:cand, ritmo:ritmo, primer:primer, mesesDesde:mesesDesde, prom6:c.promMes||0,
+    alcanzaCobre:ritmo>=(((getTierCfg().COBRE||{}).min)||200), auth:auth, pct:cfg.pct, ultMes:ult};
+}
+function autorizarNuevo(nombre){
+  if(!reqSuper())return;
+  const cfg=getNuevoCfg(); const c=DATA.clients.find(x=>x.nombre===nombre); if(!c)return;
+  const info=nuevoInfo(c);
+  const pct=parseFloat(prompt('¿Qué % de arranque autorizas para '+nombre+'?\n\nSugerido: '+cfg.pct+'%\nSu ritmo real: '+fmt(info.ritmo)+' sacos/mes (promedio de 6 meses: '+fmt(info.prom6)+')\n\nVigencia: '+cfg.vigencia+' meses.', String(cfg.pct)));
+  if(!(pct>0))return;
+  const now=new Date(); const p=n=>('0'+n).slice(-2);
+  const a=getNuevoAuth();
+  a[nkey(nombre)]={n:nombre, pct:pct, desde:(info.ultMes||0), vig:cfg.vigencia,
+    fecha:p(now.getDate())+'/'+p(now.getMonth()+1)+'/'+now.getFullYear(), anio:(DATA.dataYear||now.getFullYear())};
+  saveNuevoAuth(a); renderNuevos();
+  try{pushConfigCloud(true);}catch(e){}
+  try{autoPublishCloud();}catch(e){}
+  alert('✅ Autorizado '+pct+'% de arranque a '+nombre+'.\nSe publica a la nube para que su vendedor lo vea.');
+}
+function quitarNuevo(nombre){
+  if(!reqSuper())return;
+  if(!confirm('¿Quitar el descuento de arranque autorizado a '+nombre+'?'))return;
+  const a=getNuevoAuth(); delete a[nkey(nombre)]; saveNuevoAuth(a); renderNuevos();
+  try{pushConfigCloud(true);}catch(e){}
+  try{autoPublishCloud();}catch(e){}
+}
+// % de arranque VIGENTE para un cliente en un mes dado (0 si no tiene o ya venció)
+function pctArranque(c,mes){
+  const a=authDe(c&&c.nombre); if(!a)return 0;
+  if(a.anio&&DATA&&DATA.dataYear&&a.anio!==DATA.dataYear)return 0;
+  const desde=a.desde||0, vig=a.vig||3;
+  if(mes&&desde&&(mes<desde||mes>desde+vig))return 0;
+  return a.pct||0;
+}
+
 function renderNuevos(){
   const box=document.getElementById('nue-content');if(!box||!DATA)return;
   if(!DATA.yoy)computeYoY();const Y=DATA.yoy;const P=getVParams();
@@ -3031,6 +3095,50 @@ function renderNuevos(){
   for(const m of DATA.meses){acc+=byMes[m]||0;const ok=(byMes[m]||0)>=P.metaNuevos;
     h+=`<tr style="border-bottom:1px solid #1e293b"><td style="padding:6px 10px;color:#e2e8f0">${MES_NOM[m]}</td><td style="padding:6px;text-align:right;color:#fff;font-weight:600">${byMes[m]||0}</td><td style="padding:6px;text-align:right;color:#94a3b8">${acc}</td><td style="padding:6px;text-align:right;color:#94a3b8">${P.metaNuevos}</td><td style="padding:6px;text-align:center;color:${ok?'#22c55e':'#ef4444'}">${ok?'✔':'✘'}</td></tr>`;}
   h+='</tbody></table>';
+
+  // ── Candidatos a descuento de arranque ──────────────────────────────────────
+  const _ncfg=getNuevoCfg();
+  const _cands=DATA.clients.map(c=>({c:c,i:nuevoInfo(c)})).filter(x=>x.i.cand||x.i.auth);
+  _cands.sort((a,b)=>(b.i.ritmo||0)-(a.i.ritmo||0));
+  const _aut=_cands.filter(x=>x.i.auth), _pend=_cands.filter(x=>!x.i.auth);
+  h+=`<div style="background:#2a1e13;border:2px solid #E8A020;border-radius:10px;padding:13px 16px;margin:6px 0 18px">
+    <div style="font-size:.95rem;font-weight:800;color:#E8A020">⭐ Clientes nuevos que piden autorización de descuento (${_pend.length} pendientes${_aut.length?(' · '+_aut.length+' ya autorizados'):''})</div>
+    <div style="font-size:.75rem;color:#e6d3b8;margin-top:4px;line-height:1.5">Son clientes que <b>ya compran ritmo suficiente</b> pero siguen en INICIAL porque el nivel se saca del promedio de 6 meses y ellos llevan menos tiempo. Hoy no reciben nada y la competencia los puede jalar. El vendedor ve el aviso en la tarjeta del cliente; el % lo autorizas tú aquí.</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:9px;font-size:.72rem;color:#e6d3b8">
+      <label>% sugerido <input type="number" step="0.25" value="${_ncfg.pct}" onchange="setNuevoCfg('pct',this.value)" style="width:64px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
+      <label>Vigencia (meses) <input type="number" value="${_ncfg.vigencia}" onchange="setNuevoCfg('vigencia',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
+      <label>Mínimo sacos/mes <input type="number" value="${_ncfg.minSac}" onchange="setNuevoCfg('minSac',this.value)" style="width:64px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
+      <label>Antigüedad máx. (meses) <input type="number" value="${_ncfg.mesesMax}" onchange="setNuevoCfg('mesesMax',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #E8A020;border-radius:6px;padding:3px 6px"></label>
+    </div></div>`;
+  if(_cands.length){
+    h+='<div style="overflow-x:auto;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:720px"><thead><tr style="background:#1e3a6b;color:#fff">'
+      +'<th style="padding:7px 10px;text-align:left">Cliente</th><th style="padding:7px;text-align:left">Vendedor</th><th style="padding:7px;text-align:left">Estado</th>'
+      +'<th style="padding:7px;text-align:right">1ª compra</th><th style="padding:7px;text-align:right">Meses</th>'
+      +'<th style="padding:7px;text-align:right">Ritmo real</th><th style="padding:7px;text-align:right">Prom. 6 meses</th>'
+      +'<th style="padding:7px;text-align:center">Situación</th><th style="padding:7px;text-align:center">Acción</th></tr></thead><tbody>';
+    _cands.forEach(x=>{
+      const c=x.c, i=x.i;
+      const est=i.auth
+        ? '<span style="background:#0f2e1c;color:#4ade80;border-radius:5px;padding:2px 8px;font-weight:700">✓ '+i.auth.pct+'% autorizado</span>'
+        : '<span style="background:#3a2a12;color:#f0a868;border-radius:5px;padding:2px 8px;font-weight:700">Pendiente</span>';
+      const acc=i.auth
+        ? '<button onclick="quitarNuevo(\''+c.nombre.replace(/'/g,"\\'")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 10px;font-size:.7rem;cursor:pointer">Quitar</button>'
+        : '<button onclick="autorizarNuevo(\''+c.nombre.replace(/'/g,"\\'")+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-weight:700;font-size:.7rem;cursor:pointer">Autorizar '+_ncfg.pct+'%</button>';
+      h+='<tr style="border-bottom:1px solid #1e293b">'
+        +'<td style="padding:6px 10px;color:#e2e8f0;font-weight:600">'+c.nombre+'</td>'
+        +'<td style="padding:6px;color:#94a3b8">'+(c.vendedor||'—')+'</td>'
+        +'<td style="padding:6px;color:#94a3b8">'+(c.estado||'—')+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#94a3b8">'+(MES_NOM[i.primer]||'—')+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#94a3b8">'+(i.mesesDesde||0)+'</td>'
+        +'<td style="padding:6px;text-align:right;color:'+(i.alcanzaCobre?'#4ade80':'#e2e8f0')+';font-weight:700">'+fmt(i.ritmo||0)+(i.alcanzaCobre?' ✓':'')+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#f87171">'+fmt(i.prom6||0)+'</td>'
+        +'<td style="padding:6px;text-align:center">'+est+'</td>'
+        +'<td style="padding:6px;text-align:center">'+acc+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  } else {
+    h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:18px">Ahora mismo no hay clientes nuevos que califiquen con estos parámetros.</div>';
+  }
   h+=`<div style="font-size:.9rem;font-weight:700;color:#fff;margin-bottom:6px">Lista de nuevos clientes</div>
   <table style="width:100%;border-collapse:collapse;font-size:.78rem"><thead><tr style="background:#1e3a6b;color:#fff"><th style="padding:7px 10px;text-align:left">Cliente</th><th style="padding:7px;text-align:left">Estado</th><th style="padding:7px;text-align:left">Vendedor</th><th style="padding:7px;text-align:center">Mes</th><th style="padding:7px;text-align:right">Sacos ${Y.cy}</th></tr></thead><tbody>`;
   nuevos.sort((a,b)=>(a.firstMes-b.firstMes)||(b.curFull-a.curFull));
@@ -3731,6 +3839,9 @@ function buildVendorPayloads(){
       const pmOut={}; for(const p in pm){ const mm={}; for(const k in pm[p]){ const qy=Math.round(pm[p][k]||0); if(qy>0)mm[k]=qy; } if(Object.keys(mm).length)pmOut[p]=mm; }   // compras por producto y mes (para la credencial y filtros)
       // Descuento VIGENTE (congelado al cierre del mes evaluado) y las piezas que lo explican,
       // para que las apps muestren el desglose sin volver a calcularlo y sin poder desviarse.
+      // Descuento de arranque autorizado por gerencia: solo aplica si el cliente no ganó nivel.
+      const _nvi=(typeof nuevoInfo==='function')?nuevoInfo(c):{cand:false};
+      const _arr=(typeof pctArranque==='function')?pctArranque(c,MESVIT):0;
       const evalSac=Math.round((c.qualMes&&c.qualMes[MESEVAL])||0);
       const antSac =Math.round((c.qualMes&&c.qualMes[MESANT])||0);
       let premEval=0; for(const p in pm){ if(isPremiumPlus(p)) premEval+=(pm[p]&&pm[p][MESEVAL])||0; }
@@ -3745,7 +3856,10 @@ function buildVendorPayloads(){
       const _actM=Object.keys(c.mesData||{}).map(Number).filter(function(m){return (c.mesData[m]||0)>0;}).sort(function(a,b){return a-b;});
       const ultM=_actM.length?_actM[_actM.length-1]:0;
       return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb),e:(c.estado||''),vd:(c.vendedor||''),pm:pmOut,
-        desc:Math.round((c.desc||0)*1000)/1000, crecio:!!c.crecio, premOk:!!c.premOk,
+        desc:Math.round((((c.desc||0)>0?c.desc:_arr)||0)*1000)/1000, crecio:!!c.crecio, premOk:!!c.premOk,
+        nvCand:!!_nvi.cand, nvRitmo:_nvi.ritmo||0, nvProm6:Math.round(_nvi.prom6||0), nvMeses:_nvi.mesesDesde||0,
+        nvAuth:(_nvi.auth?{pct:_nvi.auth.pct,fecha:_nvi.auth.fecha,vig:_nvi.auth.vig,desde:_nvi.auth.desde}:null),
+        nvPct:(typeof getNuevoCfg==='function')?getNuevoCfg().pct:0.5, nvArranque:_arr,
         boost:Math.round(premBoost(c.mixPlus||0,getPremCfg())*1000)/1000,
         evalSac:evalSac, antSac:antSac, premEval:Math.round(premEval),
         vitSac:Math.round(vitSac), baseCrec:Math.round(baseCrec), vitPB:Math.round(vitPB), vitPM:Math.round(vitPM),

@@ -124,6 +124,10 @@ function baseCrecApp(c){ if(!c)return 0; return (c.baseCrec!=null)?(c.baseCrec||
 function dormido(c){ return !!c && !(c.avg>0) && (c.tot||0)>0; }
 function ultCompraTxt(c){ var m=c&&c.ult; return m?('última compra '+(MES_NOM[m]||'')):'sin compras registradas'; }
 function ultMesTxt(c){ var m=c&&c.ult; return m?('su última compra fue en '+(MES_NOM[m]||'')):'no tiene compras registradas este año'; }
+// Cliente nuevo sin nivel todavía: su ritmo real ya alcanza, pero el promedio de 6 meses
+// lo deja en INICIAL. Gerencia puede autorizarle un % de arranque.
+function esNuevoCand(c){ return !!c && !!c.nvCand && !c.nvAuth; }
+function tieneArranque(c){ return !!c && !!c.nvAuth; }
 function premBaseNow(c){ return (c&&c.vitPB!=null)?(c.vitPB||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qpb)||0):0); }
 function premMixNow(c){ return (c&&c.vitPM!=null)?(c.vitPM||0):((MESCURSO&&MESCURSO===mesVitApp())?((c&&c.qp)||0):0); }
 let CLIENTS={}, APPVEND='', APPPERIOD='', APPMONTH=0, APPQ=null, APPUPDATED='', CLOUD={db:'',v:''};
@@ -163,7 +167,8 @@ function applyPayload(p){
   CLIENTS={};
   (p.rows||[]).forEach(r=>{CLIENTS[r.n]={nombre:r.n,vend:r.vd||APPVEND,avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',pm:r.pm||null,desc:(r.desc!=null?r.desc:null),crecio:!!r.crecio,premOk:!!r.premOk,boost:r.boost||0,evalSac:r.evalSac||0,antSac:r.antSac||0,premEval:r.premEval||0,
     vitSac:(r.vitSac!=null?r.vitSac:null),baseCrec:(r.baseCrec!=null?r.baseCrec:null),vitPB:(r.vitPB!=null?r.vitPB:null),vitPM:(r.vitPM!=null?r.vitPM:null),
-    ult:r.ult||0,tot:r.tot||0};});
+    ult:r.ult||0,tot:r.tot||0,
+    nvCand:!!r.nvCand,nvRitmo:r.nvRitmo||0,nvProm6:r.nvProm6||0,nvMeses:r.nvMeses||0,nvAuth:r.nvAuth||null,nvPct:(r.nvPct!=null?r.nvPct:0.5),nvArranque:r.nvArranque||0};});
 }
 function fetchCloud(){
   const q=parseHash(); CLOUD.db=q.db||''; CLOUD.v=q.v||'';
@@ -285,10 +290,13 @@ function paintClist(){
   arr.sort(function(a,b){return b.avg-a.avg;});
   let h='';
 h+='<div class="hint">'+(APPVEND?('<b style="color:#E8A020">'+APPVEND+'</b> · '):'')+arr.length+(CLISTEST?(' en '+CLISTEST):' clientes')+(APPQ?(' · '+perWord()+' '+perLabel()):'')+' · toca uno para ver su tarjeta</div><div class="list">';
-arr.slice(0,500).forEach(c=>{const t=tierOf(c.avg);const dz=dormido(c);
+arr.slice(0,500).forEach(c=>{const t=tierOf(c.avg);const dz=dormido(c);const nv=esNuevoCand(c);const na=tieneArranque(c);
   h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b><div style="font-size:11px;color:'+(dz?'#f0a868':'#9fb0cc')+'">'
     +(dz?('⏸ '+ultCompraTxt(c)+' · '+fmt(c.tot)+' sacos en el año'):(fmt(c.avg)+' sacos/mes'))
-    +(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')+'</div></div><span class="lv" style="background:'+(dz?'#7c5a2b':NIVCOL[t[0]])+';color:#fff">'+(dz?'DORMIDO':nivLab(t[0]))+'</span></div>';});
+    +(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')
+    +(nv?'<div style="font-size:11px;color:#E8A020;font-weight:700;margin-top:2px">⭐ Nuevo · pide autorización de '+c.nvPct+'%</div>':'')
+    +(na?'<div style="font-size:11px;color:#4ade80;font-weight:700;margin-top:2px">✅ Arranque '+c.nvAuth.pct+'% autorizado</div>':'')
+    +'</div></div><span class="lv" style="background:'+(nv?'#8a6114':(na?'#166534':(dz?'#7c5a2b':NIVCOL[t[0]])))+';color:#fff">'+(nv?'NUEVO':(dz?'DORMIDO':nivLab(t[0])))+'</span></div>';});
 if(arr.length>500)h+='<div class="hint">Mostrando los primeros 500 de '+arr.length+'. Usa el buscador o el filtro por estado.</div>';
   h+='</div>';
   if(!arr.length)h+='<div class="hint">Sin resultados.</div>';
@@ -1093,6 +1101,19 @@ function showCard(name){
    '<div class="kpis"><div class="kpi"><div class="n">'+fmt(c.avg)+'</div><div class="l">sacos/mes</div></div>'+
    '<div class="kpi"><div class="n">'+c.mix.toFixed(1)+'%</div><div class="l">Premium '+(c.mix>=PREM.base?'✓':'(falta '+PREM.base+'%)')+'</div></div>'+
    '<div class="kpi"><div class="n">'+(t[0]==='INICIAL'?'—':fijo.toFixed(2)+'%')+'</div><div class="l">Descuento fijo<br>de su nivel</div></div></div>'+
+   (tieneArranque(c)
+     ? '<div style="margin:10px 12px;padding:11px 13px;background:#0f2e1c;border:2px solid #1a7a3f;border-radius:10px">'
+       +'<div style="font-weight:800;color:#4ade80;font-size:13px">✅ Descuento de arranque autorizado</div>'
+       +'<div style="font-size:12px;color:#c9f2d9;margin-top:3px;line-height:1.45">Gerencia le autorizó <b>'+c.nvAuth.pct+'%</b> por ser cliente nuevo'
+       +(c.nvAuth.fecha?(' el '+c.nvAuth.fecha):'')+(c.nvAuth.vig?(', vigente '+c.nvAuth.vig+' meses'):'')+'. '
+       +'Ya está aplicado en su descuento. Cuando llegue a 200 sacos/mes entra a Cobre y sube.</div></div>'
+     : (esNuevoCand(c)
+     ? '<div style="margin:10px 12px;padding:11px 13px;background:#3a2a12;border:2px solid #E8A020;border-radius:10px">'
+       +'<div style="font-weight:800;color:#E8A020;font-size:13px">⭐ Cliente nuevo — pide autorización de descuento</div>'
+       +'<div style="font-size:12px;color:#e6d3b8;margin-top:3px;line-height:1.45">Ya compra <b>'+fmt(c.nvRitmo)+' sacos/mes</b> desde que entró ('+c.nvMeses+' '+(c.nvMeses===1?'mes':'meses')+'), '
+       +'pero como el nivel se saca del promedio de 6 meses le sale <b>'+fmt(c.nvProm6)+'</b> y todavía no gana nivel. '
+       +'<b style="color:#fff">Sugerido: '+c.nvPct+'% de arranque</b> — queda sujeto a autorización de gerencia. Pídelo para no perderlo con la competencia.</div></div>'
+     : ''))+
    (dormido(c)
      ? '<div style="margin:10px 12px;padding:10px 12px;background:#3a2a12;border:1px solid #7c5a2b;border-radius:10px">'
        +'<div style="font-weight:800;color:#f0a868;font-size:13px">⏸ Cliente dormido</div>'
