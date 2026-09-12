@@ -3144,19 +3144,25 @@ function nuevoInfo(c){
   const comp=((DATA&&DATA.completos)||[]).slice().sort((a,b)=>a-b);
   const qm=(c&&(c.qualMes||c.mesData))||{};
   const act=Object.keys(qm).map(Number).filter(m=>qm[m]>0&&comp.indexOf(m)>=0).sort((a,b)=>a-b);
-  if(!act.length)return {cand:false};
+  if(!act.length)return {cand:false,diluido:false};
   const primer=act[0];
   const desde=comp.filter(m=>m>=primer);
   const ritmo=desde.length?Math.round(desde.reduce((a,m)=>a+(qm[m]||0),0)/desde.length):0;
   const ult=comp.length?comp[comp.length-1]:0;
   const mesesDesde=desde.length;
   const auth=authDe(c.nombre);
+  const esInicial=((c.nivel||'')==='INICIAL');
   // Un cliente nuevo casi siempre compra a saltos: pedirle además una compra en los últimos
   // 60 dias dejaba fuera justo a los que hay que retener (compraron fuerte una vez y no han
   // vuelto). Los días ya no descalifican: solo lo marcan como FRÍO para que gerencia lo vea.
-  const cand=((c.nivel||'')==='INICIAL') && mesesDesde<=cfg.mesesMax && ritmo>=cfg.minSac;
+  const cand=esInicial && mesesDesde<=cfg.mesesMax && ritmo>=cfg.minSac;
+  const prom6=c.promMes||0;
+  // Mismo efecto de dilución que un cliente nuevo, pero en uno que YA ganó un nivel real
+  // (por eso no aparece en la pantalla de candidatos, que solo mira INICIAL). Para éste no
+  // sirve el % de arranque —ya tiene descuento por nivel—; la vía es el descuento especial.
+  const diluido=(!esInicial) && mesesDesde<=cfg.mesesMax && ritmo>=cfg.minSac && prom6>0 && ritmo>=prom6*1.3;
   const frio=(c.dias||0)>cfg.diasAct;
-  return {cand:cand, frio:frio, dias:(c.dias>=999?null:c.dias), ritmo:ritmo, primer:primer, mesesDesde:mesesDesde, prom6:c.promMes||0,
+  return {cand:cand, diluido:diluido, nivel:c.nivel, frio:frio, dias:(c.dias>=999?null:c.dias), ritmo:ritmo, primer:primer, mesesDesde:mesesDesde, prom6:prom6,
     alcanzaCobre:ritmo>=(((getTierCfg().COBRE||{}).min)||200), auth:auth, pct:cfg.pct, ultMes:ult};
 }
 function autorizarNuevo(nombre){
@@ -3333,6 +3339,39 @@ function renderNuevos(){
   } else {
     h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:18px">Ahora mismo no hay clientes nuevos que califiquen con estos parámetros.</div>';
   }
+
+  // ── Clientes YA nivelados pero diluidos por antigüedad corta (mismo efecto, otro nivel) ──
+  const _dil=DATA.clients.map(c=>({c:c,i:nuevoInfo(c)})).filter(x=>x.i.diluido);
+  _dil.sort((a,b)=>(b.i.ritmo||0)-(a.i.ritmo||0));
+  if(_dil.length){
+    h+=`<div style="background:#132a1e;border:2px solid #22c55e;border-radius:10px;padding:13px 16px;margin:6px 0 18px">
+      <div style="font-size:.95rem;font-weight:800;color:#4ade80">📊 Clientes con nivel ganado pero promedio diluido por antigüedad corta (${_dil.length})</div>
+      <div style="font-size:.75rem;color:#c9ecd9;margin-top:4px;line-height:1.5">Ya superaron INICIAL y tienen un descuento real por su nivel, pero como llevan poco tiempo activos, su promedio de 6 meses todavía carga meses en cero antes de su primera compra y sale muy por debajo de su ritmo real de compra — es la misma dilución que sufren los clientes nuevos, solo que a estos ya no los detecta esa pantalla porque ya "ganaron" un nivel. Aquí no aplica el % de arranque —ya tienen descuento por nivel—; si quieres pagarles conforme a su ritmo real, usa <b>descuento especial</b> para fijarles el % que corresponde, con vigencia y motivo.</div>
+    </div>`;
+    h+='<div style="overflow-x:auto;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:760px"><thead><tr style="background:#1e3a6b;color:#fff">'
+      +'<th style="padding:7px 10px;text-align:left">Cliente</th><th style="padding:7px;text-align:left">Vendedor</th><th style="padding:7px;text-align:left">Nivel actual</th>'
+      +'<th style="padding:7px;text-align:right">1ª compra</th><th style="padding:7px;text-align:right">Meses</th>'
+      +'<th style="padding:7px;text-align:right">Ritmo real</th><th style="padding:7px;text-align:right">Prom. 6 meses (oficial)</th>'
+      +'<th style="padding:7px;text-align:right">Desc. político hoy</th><th style="padding:7px;text-align:center">Acción</th></tr></thead><tbody>';
+    _dil.forEach(x=>{
+      const c=x.c, i=x.i;
+      const esp=(typeof espVigente==='function')?espVigente(c.nombre):null;
+      const accTxt=esp?('⚡ '+Number(esp.pct).toFixed(2)+'% especial vigente'):'Dar descuento especial';
+      const dPol=(typeof descPolitica==='function')?descPolitica(c):(c.desc||0);
+      h+='<tr style="border-bottom:1px solid #1e293b">'
+        +'<td style="padding:6px 10px;color:#e2e8f0;font-weight:600">'+c.nombre+'</td>'
+        +'<td style="padding:6px;color:#94a3b8">'+(c.vendedor||'—')+'</td>'
+        +'<td style="padding:6px;color:#94a3b8">'+(c.nivel||'—')+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#94a3b8">'+(MES_NOM[i.primer]||'—')+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#94a3b8">'+(i.mesesDesde||0)+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#4ade80;font-weight:700">'+fmt(i.ritmo||0)+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#f87171">'+fmt(i.prom6||0)+'</td>'
+        +'<td style="padding:6px;text-align:right;color:#e2e8f0">'+Number(dPol||0).toFixed(2)+'%</td>'
+        +'<td style="padding:6px;text-align:center"><button onclick="autorizarDescEsp(\''+c.nombre.replace(/'/g,"\\'")+'\')" style="background:'+(esp?'#7e22ce':'#16a34a')+';color:#fff;border:none;border-radius:6px;padding:3px 10px;font-weight:700;font-size:.7rem;cursor:pointer">'+accTxt+'</button></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+
   h+=`<div style="font-size:.9rem;font-weight:700;color:#fff;margin-bottom:6px">Lista de nuevos clientes</div>
   <table style="width:100%;border-collapse:collapse;font-size:.78rem"><thead><tr style="background:#1e3a6b;color:#fff"><th style="padding:7px 10px;text-align:left">Cliente</th><th style="padding:7px;text-align:left">Estado</th><th style="padding:7px;text-align:left">Vendedor</th><th style="padding:7px;text-align:center">Mes</th><th style="padding:7px;text-align:right">Sacos ${Y.cy}</th></tr></thead><tbody>`;
   nuevos.sort((a,b)=>(a.firstMes-b.firstMes)||(b.curFull-a.curFull));
