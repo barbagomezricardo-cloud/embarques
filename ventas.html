@@ -3025,7 +3025,10 @@ function computeYoY(){
     const priorM=Array(12).fill(0); if(b&&b.m) for(let i=0;i<12;i++) priorM[i]=b.m[i]||0;
     return{nombre:c.nombre,estado:c.estado||'SIN DATOS',vend:c.vendedor||'SIN DATOS',
       cur,curFull,prior,priorFull,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
-      nuevo:(!b||priorFull===0)&&cur>0,firstMes:act.length?Math.min(...act):0,
+      // "nuevo" se juzga con curFull (TODO 2026, incluyendo el mes en curso todavía incompleto):
+      // un cliente cuya única compra cae justo en el mes en curso ya es nuevo de verdad, aunque
+      // ese mes se excluya de "complete" para no ensuciar promedios/comparativas contra el año anterior.
+      nuevo:(!b||priorFull===0)&&curFull>0,firstMes:act.length?Math.min(...act):0,
       tonsCur:clientTons(c),curM,priorM,perdido:false};
   });
   // 2) clientes que estaban en el año anterior y ya no compran (para totales/vendedor/estado justos)
