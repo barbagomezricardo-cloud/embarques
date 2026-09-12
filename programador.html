@@ -341,6 +341,10 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <p class="hint" style="margin-top:0">Marca qué clientes requieren <b>chalanes</b> (ayudantes para descargar) o <b>sacos de bonificación</b>. Los cambios se guardan en la nube y se reflejan al instante en el programador y en la app de cargadores.</p>
       <button class="ghost" onclick="openServEditor()" style="border-color:var(--accent);color:var(--accent)">✏️ Abrir editor de clientes (chalanes / sacos)</button>
       <hr style="border-color:var(--line);margin:16px 0">
+      <h3 style="margin:0 0 8px;font-size:13px">🚧 Motivos de retraso</h3>
+      <p class="hint" style="margin-top:0">Esta es la lista que ven los cargadores en su app al reportar un retraso de carga o de salida. Agrega los que falten y quita los que ya no ocurran — se sincroniza a la app al instante.</p>
+      <button class="ghost" onclick="openMotivosEditor()" style="border-color:var(--accent);color:var(--accent)">✏️ Editar motivos de retraso</button>
+      <hr style="border-color:var(--line);margin:16px 0">
       <h3 style="margin:0 0 8px;font-size:13px">Seguridad y datos</h3>
       <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
         <div class="field"><label>Cambiar contraseña</label><input type="text" id="cfgPwd" placeholder="Nueva contraseña"></div>
@@ -414,6 +418,24 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   </div>
 </div>
 
+<!-- EDITOR DE MOTIVOS DE RETRASO -->
+<div class="overlay" id="motivosOverlay">
+  <div class="modal" style="max-width:640px">
+    <h2>🚧 Motivos de retraso</h2>
+    <div style="padding:14px 18px">
+      <p class="hint" style="margin-top:0">Esta es la lista que ven los cargadores en su app al reportar un retraso. Edita la descripción o quita un motivo con 🗑; se guarda solo y se sincroniza a la app al instante.</p>
+      <div id="motivosList" style="max-height:56vh;overflow:auto;border:1px solid var(--line);border-radius:10px"></div>
+      <div class="serv-addbox">
+        <input id="motNewCod" placeholder="Código (opcional, ej. OP-09)" style="max-width:170px">
+        <input id="motNewDesc" placeholder="Descripción del motivo…" onkeydown="if(event.key==='Enter')addMotivo()">
+        <button class="ghost" onclick="addMotivo()">＋ Agregar</button>
+      </div>
+    </div>
+    <div class="actions"><span class="hint">Los cambios se guardan y sincronizan automáticamente.</span>
+      <button class="primary" onclick="closeMotivosEditor()">Listo</button></div>
+  </div>
+</div>
+
 <!-- FLOTA FORM MODAL -->
 <div class="overlay" id="flotaOverlay">
   <div class="modal" style="max-width:640px">
@@ -467,8 +489,10 @@ const FIREBASE_CONFIG = {
 
 /* ================= CONFIG / CATÁLOGOS ================= */
 const DEFAULT_LIMITES = {"NISSAN":30,"ISUZU":30,"TORTON":40,"TRAILER 30 TON":50,"TRAILER 34 TON":80};
-let CFG = { limites:{...DEFAULT_LIMITES}, semV:15, semA:30, pwd:"admin123", masterPwd:"master-2026", firebase:null, users:[{name:"CARGADOR 1",pin:"1111"}] };
-const MOTIVOS = [
+// Catálogo de motivos de retraso: vive en CFG.motivos (editable desde ⚙ Configuración) y se
+// sincroniza por Firebase a la app de cargadores. Esta lista es solo la semilla por si nunca
+// se ha guardado nada en CFG.motivos (primera vez, o modo local sin Firebase).
+const MOTIVOS_DEFAULT = [
   {cod:"OP-01",desc:"Falta de mercancía / Producto no listo"},
   {cod:"OP-02",desc:"Falta de personal (montacarguistas/auxiliares)"},
   {cod:"OP-03",desc:"Fallo de equipo (montacargas/rampa)"},
@@ -494,8 +518,13 @@ const MOTIVOS = [
   {cod:"SEG-01",desc:"Revisión de seguridad / inspección"},
   {cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"},
 ];
-// mapa código -> descripción, para mostrar el motivo específico en tablero y tabla
-const MOTIVO_MAP = Object.fromEntries(MOTIVOS.map(m=>[m.cod, m.desc]));
+let CFG = { limites:{...DEFAULT_LIMITES}, semV:15, semA:30, pwd:"admin123", masterPwd:"master-2026", firebase:null, users:[{name:"CARGADOR 1",pin:"1111"}], motivos:MOTIVOS_DEFAULT.map(m=>({...m})) };
+// lista de motivos vigente: la de CFG si ya tiene algo, si no la semilla por defecto
+function motivosActuales(){ return (CFG.motivos&&CFG.motivos.length)?CFG.motivos:MOTIVOS_DEFAULT; }
+// mapa código -> descripción, para mostrar el motivo específico en tablero y tabla; se
+// reconstruye cada vez que CFG.motivos cambia (edición local o llegada desde Firebase)
+let MOTIVO_MAP = Object.fromEntries(motivosActuales().map(m=>[m.cod, m.desc]));
+function rebuildMotivoMap(){ MOTIVO_MAP = Object.fromEntries(motivosActuales().map(m=>[m.cod, m.desc])); }
 // descripción legible: si es un código conocido devuelve su texto; si es texto libre lo deja igual
 function motivoDesc(v){ if(v==null||v==='') return ''; const s=String(v).trim(); return MOTIVO_MAP[s] || MOTIVO_MAP[s.toUpperCase()] || s; }
 // etiqueta completa "COD · descripción" para tooltips/celdas
@@ -938,7 +967,7 @@ function openForm(id){
   document.getElementById('cancelBtn').style.display=(id&&unlocked&&!(rec0&&rec0.cancelado))?'inline-flex':'none';
   document.getElementById('saveBtn').style.display=unlocked?'inline-flex':'none';
   document.getElementById('f_tipo').innerHTML='<option value="">—</option>'+Object.keys(CFG.limites).map(t=>`<option>${t}</option>`).join('');
-  document.getElementById('f_motivo').innerHTML='<option value="">—</option>'+MOTIVOS.map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
+  document.getElementById('f_motivo').innerHTML='<option value="">—</option>'+motivosActuales().map(m=>`<option value="${m.cod}">${m.cod} · ${m.desc}</option>`).join('');
   const r=id?DATA.find(x=>x.id===id):{};
   const S=(k,d='')=>{ const v=r[k]; return v==null?d:v; };
   const set=(f,k,d='')=>document.getElementById(f).value=S(k,d);
@@ -1183,6 +1212,7 @@ function sanitize(o){ return JSON.parse(JSON.stringify(o)); }
 
 function loadLocal(){
   try{ const c=localStorage.getItem(CFG_KEY); if(c) CFG={...CFG,...JSON.parse(c)}; }catch(e){}
+  rebuildMotivoMap();
   try{ const a=localStorage.getItem(AUDIT_KEY); if(a) AUDIT=JSON.parse(a); }catch(e){}
   loadFlotaLocal();
   try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=normalize(JSON.parse(d)); return; } }catch(e){}
@@ -1219,7 +1249,11 @@ function initFirebase(){
         if(!fs.exists() && !cv.flotaSeeded){ const o={}; FLOTA.forEach(r=>o[r.id]=sanitize(r)); fbFlota.set(o); fbCfg.update({flotaSeeded:true}); }
       });
       fbData.on('value', snap=>{ const val=snap.val(); if(val){ DATA=normalize(Object.values(val)); render(); } setConn('online','Nube conectada'); document.getElementById('footer').textContent='Programador de embarques · sincronizado en tiempo real con la app de cargadores (Firebase).'; });
-      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; SERV_OVERRIDES=CFG.servClientes||null; try{render();}catch(e){} } });
+      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; SERV_OVERRIDES=CFG.servClientes||null;
+        // la nube todavía no tiene el catálogo de motivos (cuentas ya sembradas antes de este cambio): lo sube ahora
+        if(!v.motivos || !v.motivos.length){ CFG.motivos=MOTIVOS_DEFAULT.map(m=>({...m})); persistCfg(); }
+        rebuildMotivoMap();
+        try{render();}catch(e){} } });
       fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster) renderAudit(); } });
       fbFlota.on('value', snap=>{ const v=snap.val(); if(v){ FLOTA=normalize(Object.values(v)); try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} } renderFlota(); },
         err=>{ console.error('flota:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "flota" en las reglas de Firebase'); });
@@ -1569,6 +1603,50 @@ function addServClient(){
   el.value=''; const f=document.getElementById('servFilter'); if(f)f.value=name; renderServList(name);
   try{render();}catch(e){}
   toast('Cliente agregado');
+}
+
+/* ---- editor de motivos de retraso (CFG.motivos, sincronizado a la app de cargadores) ---- */
+function openMotivosEditor(){ if(!requireUnlock())return; renderMotivosList(); document.getElementById('motivosOverlay').classList.add('show'); }
+function closeMotivosEditor(){ document.getElementById('motivosOverlay').classList.remove('show'); }
+function renderMotivosList(){
+  const box=document.getElementById('motivosList'); if(!box)return;
+  const list=motivosActuales();
+  box.innerHTML = list.length ? list.map((m,i)=>`
+    <div class="servrow">
+      <span style="font-weight:800;font-size:11px;color:var(--accent);min-width:70px;flex-shrink:0">${m.cod}</span>
+      <input class="servn" style="border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--panel2);color:var(--txt)" value="${String(m.desc||'').replace(/"/g,'&quot;')}" onchange="editMotivo(${i},this.value)">
+      <div class="servbtns"><button class="servbtn" style="color:var(--late)" onclick="delMotivo(${i})">🗑 Quitar</button></div>
+    </div>`).join('') : '<div class="hint" style="padding:12px">Sin motivos configurados.</div>';
+}
+function editMotivo(i,val){
+  if(!requireUnlock())return;
+  if(!CFG.motivos)CFG.motivos=motivosActuales().map(m=>({...m}));
+  if(!CFG.motivos[i])return;
+  const v=(val||'').trim(); if(!v){ toast('La descripción no puede quedar vacía'); renderMotivosList(); return; }
+  CFG.motivos[i]={...CFG.motivos[i],desc:v};
+  persistCfg(); rebuildMotivoMap(); toast('Motivo actualizado ✓');
+}
+function delMotivo(i){
+  if(!requireUnlock())return;
+  if(!CFG.motivos)CFG.motivos=motivosActuales().map(m=>({...m}));
+  const m=CFG.motivos[i]; if(!m)return;
+  if(!confirm('¿Quitar el motivo "'+m.cod+' · '+m.desc+'"?\nYa no aparecerá para los cargadores (los registros ya guardados con este motivo no se alteran).'))return;
+  CFG.motivos.splice(i,1);
+  persistCfg(); rebuildMotivoMap(); renderMotivosList(); toast('Motivo eliminado');
+}
+function addMotivo(){
+  if(!requireUnlock())return;
+  const codEl=document.getElementById('motNewCod'), descEl=document.getElementById('motNewDesc');
+  const desc=(descEl.value||'').trim();
+  if(!desc){ toast('Escribe una descripción'); return; }
+  if(!CFG.motivos)CFG.motivos=motivosActuales().map(m=>({...m}));
+  let cod=(codEl.value||'').trim().toUpperCase();
+  if(!cod){ let n=CFG.motivos.length+1; do{ cod='OTRO-'+String(n).padStart(2,'0'); n++; }while(CFG.motivos.some(m=>m.cod===cod)); }
+  if(CFG.motivos.some(m=>m.cod===cod)){ toast('Ese código ya existe'); return; }
+  CFG.motivos.push({cod,desc});
+  persistCfg(); rebuildMotivoMap();
+  codEl.value=''; descEl.value=''; renderMotivosList();
+  toast('Motivo agregado ✓');
 }
 </script>
 </body>

@@ -440,8 +440,12 @@ function stopLoad(id){
   r.finCarga=fin; appAudit(r,'finCarga','Fin de carga (app)','',fin); upd(r); toast('Carga finalizada ✓');
 }
 let pendingStop=null;
-let MOTIVOS=[{cod:"OP-01",desc:"Falta de mercancía / Producto no listo"},{cod:"OP-02",desc:"Falta de personal (montacarguistas/auxiliares)"},{cod:"OP-03",desc:"Fallo de equipo (montacargas/rampa)"},{cod:"OP-04",desc:"Reproceso / reacomodo de tarima"},{cod:"OP-05",desc:"Producto mal etiquetado / cambio de lote"},{cod:"OP-06",desc:"Montacargas ocupado en otra maniobra"},{cod:"OP-07",desc:"Andén ocupado / saturación de andenes"},{cod:"OP-08",desc:"Falta de tarimas / material de empaque"},{cod:"TR-01",desc:"Malas condiciones de la unidad"},{cod:"TR-02",desc:"Llegada tardía (pérdida de ventana de cita)"},{cod:"TR-03",desc:"Documentación incompleta del chofer"},{cod:"TR-04",desc:"Chofer no se presentó / cambió unidad"},{cod:"TR-05",desc:"Unidad sucia / requiere lavado o fumigación"},{cod:"SYS-01",desc:"Falta de pagos / facturación / pedido"},{cod:"SYS-02",desc:"Caída de sistema (SAP/WMS)"},{cod:"SYS-03",desc:"Error en pedido / diferencia de cantidades"},{cod:"CAL-01",desc:"Rechazo por calidad"},{cod:"CAL-02",desc:"Producto dañado / húmedo detectado"},{cod:"MEC-01",desc:"Falla mecánica de la unidad"},{cod:"CLI-01",desc:"Cambio de última hora del cliente"},{cod:"CLI-02",desc:"Cita reprogramada por el cliente"},{cod:"CLIMA-01",desc:"Lluvia / condiciones climáticas"},{cod:"SEG-01",desc:"Revisión de seguridad / inspección"},{cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"}];
-const MOTIVO_MAP=Object.fromEntries(MOTIVOS.map(m=>[m.cod,m.desc]));
+// Semilla local por si nunca llega nada de Firebase (modo local, o antes de que conecte).
+// La lista de verdad la manda el programador de embarques por CFG.motivos — ver fbCfg.on('value') abajo.
+const MOTIVOS_DEFAULT=[{cod:"OP-01",desc:"Falta de mercancía / Producto no listo"},{cod:"OP-02",desc:"Falta de personal (montacarguistas/auxiliares)"},{cod:"OP-03",desc:"Fallo de equipo (montacargas/rampa)"},{cod:"OP-04",desc:"Reproceso / reacomodo de tarima"},{cod:"OP-05",desc:"Producto mal etiquetado / cambio de lote"},{cod:"OP-06",desc:"Montacargas ocupado en otra maniobra"},{cod:"OP-07",desc:"Andén ocupado / saturación de andenes"},{cod:"OP-08",desc:"Falta de tarimas / material de empaque"},{cod:"TR-01",desc:"Malas condiciones de la unidad"},{cod:"TR-02",desc:"Llegada tardía (pérdida de ventana de cita)"},{cod:"TR-03",desc:"Documentación incompleta del chofer"},{cod:"TR-04",desc:"Chofer no se presentó / cambió unidad"},{cod:"TR-05",desc:"Unidad sucia / requiere lavado o fumigación"},{cod:"SYS-01",desc:"Falta de pagos / facturación / pedido"},{cod:"SYS-02",desc:"Caída de sistema (SAP/WMS)"},{cod:"SYS-03",desc:"Error en pedido / diferencia de cantidades"},{cod:"CAL-01",desc:"Rechazo por calidad"},{cod:"CAL-02",desc:"Producto dañado / húmedo detectado"},{cod:"MEC-01",desc:"Falla mecánica de la unidad"},{cod:"CLI-01",desc:"Cambio de última hora del cliente"},{cod:"CLI-02",desc:"Cita reprogramada por el cliente"},{cod:"CLIMA-01",desc:"Lluvia / condiciones climáticas"},{cod:"SEG-01",desc:"Revisión de seguridad / inspección"},{cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"}];
+let MOTIVOS=MOTIVOS_DEFAULT.slice();
+let MOTIVO_MAP=Object.fromEntries(MOTIVOS.map(m=>[m.cod,m.desc]));
+function rebuildMotivoMap(){ MOTIVO_MAP=Object.fromEntries((MOTIVOS&&MOTIVOS.length?MOTIVOS:MOTIVOS_DEFAULT).map(m=>[m.cod,m.desc])); }
 function motivoDesc(v){ if(v==null||v==='')return ''; const s=String(v).trim(); return MOTIVO_MAP[s]||MOTIVO_MAP[s.toUpperCase()]||s; }
 function confirmMotivo(){ const mv=document.getElementById('motivoSel').value; document.getElementById('motivoModal').classList.remove('show');
   if(pendingStop){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=mv; appAudit(r,'finCarga','Fin de carga con motivo (app)','',r.finCarga+' · '+mv); upd(r); toast('Finalizado con motivo'); pendingStop=null; return; }
@@ -459,7 +463,7 @@ let pendingDispatch=null;
 /* ---- persistencia ---- */
 function persist(r){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fbData){ fbData.child(r.id).set(JSON.parse(JSON.stringify(r))); } }
 function loadLocal(){
-  try{ const c=localStorage.getItem(CFG_KEY); if(c){ const o=JSON.parse(c); if(o.limites)LIMITES=o.limites; if(o.users)USERS=o.users; } }catch(e){}
+  try{ const c=localStorage.getItem(CFG_KEY); if(c){ const o=JSON.parse(c); if(o.limites)LIMITES=o.limites; if(o.users)USERS=o.users; if(o.motivos&&o.motivos.length){ MOTIVOS=o.motivos; rebuildMotivoMap(); } } }catch(e){}
   try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=JSON.parse(d); return; } }catch(e){}
   DATA=[];
 }
@@ -475,7 +479,7 @@ function initFirebase(){
     const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
-    fbCfg.on('value',snap=>{ const v=snap.val(); if(v){ if(v.limites)LIMITES=v.limites; if(v.users)USERS=v.users; if('servClientes' in v){ SERV_OVERRIDES=v.servClientes||null; render(); } if(currentUser && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } } });
+    fbCfg.on('value',snap=>{ const v=snap.val(); if(v){ if(v.limites)LIMITES=v.limites; if(v.users)USERS=v.users; if(v.motivos&&v.motivos.length){ MOTIVOS=v.motivos; rebuildMotivoMap(); } if('servClientes' in v){ SERV_OVERRIDES=v.servClientes||null; render(); } if(currentUser && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } } });
   }catch(e){ console.error(e); setConn('local','Local (error)'); } });
 }
 let fbLoaded=false;
