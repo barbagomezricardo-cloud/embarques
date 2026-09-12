@@ -539,8 +539,26 @@ const TIER_ORDER = ["DIAMANTE_PLUS","DIAMANTE","PLATINO","ORO","PLATA","BRONCE",
 const TIER_ICONS = {"DIAMANTE":"💎","PLATINO":"🥇","ORO":"🏅","PLATA":"🥈","BRONCE":"🥉"};
 const TIER_KEY   = {"DIAMANTE":"DIAMANTE","PLATINO":"PLATINO","ORO":"ORO","PLATA":"PLATA","BRONCE":"BRONCE"};
 const PREMIUM_RE = /PREMIUM/i;
-const GATO_RE = /SILVER\s*CAT\s*15/i;           // Silver Cat 15 kg (04MAS006) cuenta como premium para el bono
-const isPremiumPlus = n => PREMIUM_RE.test(n) || GATO_RE.test(n);
+const GATO_RE = /SILVER\s*CAT\s*15/i;           // Silver Cat 15 kg (04MAS006) cuenta como premium para el bono, por default
+// ══ CATÁLOGO DE PRODUCTOS (editable) ══════════════════════════════════════════
+// Antes esto solo se podía tocar editando el código: qué cuenta para el promedio/nivel del
+// cliente (qualMes → promMes → nivel → descuento) y qué cuenta como "Mix Premium" para el
+// bono, era un regex fijo (PREMIUM_RE/GATO_RE). Ahora dirección lo administra en
+// Config → Productos, por código, sin tocar nada más — y si no toca nada, se comporta IGUAL
+// que antes (todo cuenta para el promedio; premium = el mismo criterio de siempre).
+function _prodKeyN(s){ return String(s||'').toUpperCase().replace(/\s+/g,' ').trim(); }
+function getProdCfg(){ try{ return JSON.parse(localStorage.getItem('prodCfg04mas')||'{}'); }catch(e){ return {}; } }
+function saveProdCfg(o){ try{ localStorage.setItem('prodCfg04mas',JSON.stringify(o)); }catch(e){} }
+function prodQualifica(nombreProd){
+  var o=getProdCfg()[_prodKeyN(nombreProd)];
+  return !(o && o.qual===false);                // default: TODO código cuenta, como siempre
+}
+function esPremiumProd(nombreProd){
+  var o=getProdCfg()[_prodKeyN(nombreProd)];
+  if(o && typeof o.prem==='boolean') return o.prem;
+  return PREMIUM_RE.test(nombreProd) || GATO_RE.test(nombreProd);   // default: el criterio de siempre
+}
+const isPremiumPlus = n => esPremiumProd(n);
 const PETFOOD_RE = /PET\s*FOOD/i;
 const PESO_SACO_KG = 25;
 const normName=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
@@ -678,6 +696,7 @@ function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
   const vU=sumM(win.cur), vP=sumM(win.prev);
   let premBaseU=0, premMixU=0;
   for(const[p,pms] of Object.entries(prodMes||{})){
+    if(!prodQualifica(p))continue;         // lo que no cuenta para el promedio, tampoco cuenta aquí
     const cu=win.cur.reduce((a,m)=>a+((pms&&pms[m])||0),0);
     if(isPremiumPlus(p))premBaseU+=cu;     // Premium Base (3%): Silver Kan Premium 25/20 + Silver Cat 15
     if(isPremiumPlus(p))premMixU+=cu;      // Familia Mix (+bono): Premium 25/20 + Silver Cat 15
@@ -983,7 +1002,8 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       // PetFood ahora cuenta para todo el esquema: el volumen calificable = total (incluye PetFood).
       // Se sigue calculando el desglose de PetFood (petMes) solo para mostrarlo; ya NO se resta.
       const petMes={}; for(const _p in _pmx){ if(PETFOOD_RE.test(_p)){ const _mm=_pmx[_p]; for(const _k in _mm) petMes[_k]=(petMes[_k]||0)+(_mm[_k]||0); } }
-      const qualMes={}; for(const _m in mesData){ qualMes[_m]=Math.max(0,(mesData[_m]||0)); }
+      const qualMes={};
+      for(const _p in _pmx){ if(!prodQualifica(_p))continue; const _mm=_pmx[_p]; for(const _m in _mm) qualMes[_m]=(qualMes[_m]||0)+(_mm[_m]||0); }
       const _totalComp=_completos6.reduce((a,m)=>a+(qualMes[m]||0),0);
       const promMes=Math.round(_totalComp/_nComp6);   // promedio de los últimos 6 meses cerrados
       const activos=Object.keys(mesData).map(Number).filter(m=>mesData[m]>0);
@@ -1017,7 +1037,8 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       for(const[p,s] of Object.entries(c.prods)){byEstado[e][p]=(byEstado[e][p]||0)+s;byVendedor[v][p]=(byVendedor[v][p]||0)+s;}
     }
 
-    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos};
+    const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
+    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
@@ -1663,6 +1684,35 @@ function renderConfig(){
     </div>
     <div style="font-size:.68rem;color:#64748b;margin-top:6px">El "extra %" del escalón 2 es el tope máximo del bono (define hasta cuánto sube el descuento del nivel).</div>
   </div>`;
+  // ── Catálogo de productos: qué código entra al promedio y cuál es Mix Premium ──
+  var prodCat=(DATA&&DATA.prodCatalog)||{};
+  var prodList=Object.keys(prodCat).sort(function(a,b){return prodCat[b]-prodCat[a];});
+  var pcfgV=getProdCfg();
+  var phtml='<div style="margin:14px 0 4px;background:#13233f;border:1px solid #2a4c86;border-radius:8px;padding:12px">'
+    +'<div style="font-size:.82rem;font-weight:800;color:#fbbf24;margin-bottom:4px">📦 Productos — qué código entra al promedio y cuál es Mix Premium</div>'
+    +'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:10px">Por default TODO código de venta cuenta para el promedio/nivel del cliente, y Mix Premium es cualquier producto con "PREMIUM" en el nombre + Silver Cat 15. Aquí puedes excluir un código del promedio (por ejemplo si algo no debe contar como venta real para el esquema) o marcar/quitar cuáles son premium. Se aplica al momento, sin recargar el Excel.</div>';
+  if(!prodList.length){
+    phtml+='<div style="font-size:.78rem;color:#64748b">Carga un reporte para ver aquí los productos que trae.</div></div>';
+  } else {
+    phtml+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.76rem;min-width:560px"><thead><tr style="background:#1e3a6b;color:#fff">'
+      +'<th style="padding:6px 9px;text-align:left">Producto</th><th style="padding:6px;text-align:right">Sacos (periodo)</th>'
+      +'<th style="padding:6px;text-align:center">Cuenta para promedio</th><th style="padding:6px;text-align:center">Mix Premium</th><th style="padding:6px;text-align:center">·</th></tr></thead><tbody>';
+    prodList.forEach(function(p){
+      var esc=p.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var qOn=prodQualifica(p), pOn=esPremiumProd(p);
+      var custom=!!pcfgV[_prodKeyN(p)];
+      phtml+='<tr style="border-bottom:1px solid #1e293b">'
+        +'<td style="padding:5px 9px;color:#e2e8f0">'+p+'</td>'
+        +'<td style="padding:5px;text-align:right;color:#94a3b8">'+fmt(prodCat[p])+'</td>'
+        +'<td style="padding:5px;text-align:center"><button onclick="setProdCfg(\''+esc+'\',\'qual\','+(!qOn)+')" style="background:'+(qOn?'#0f2e1c':'#2a1512')+';color:'+(qOn?'#4ade80':'#f87171')+';border:none;border-radius:6px;padding:2px 10px;font-size:.7rem;font-weight:700;cursor:pointer">'+(qOn?'✓ Sí':'✗ No')+'</button></td>'
+        +'<td style="padding:5px;text-align:center"><button onclick="setProdCfg(\''+esc+'\',\'prem\','+(!pOn)+')" style="background:'+(pOn?'#241a33':'#1e2536')+';color:'+(pOn?'#c99bff':'#64748b')+';border:none;border-radius:6px;padding:2px 10px;font-size:.7rem;font-weight:700;cursor:pointer">'+(pOn?'⭐ Sí':'— No')+'</button></td>'
+        +'<td style="padding:5px;text-align:center">'+(custom?('<button onclick="resetProdCfg(\''+esc+'\')" title="Quitar ajuste, volver al criterio de siempre" style="background:transparent;color:#64748b;border:1px solid #3b4a6b;border-radius:6px;padding:1px 7px;font-size:.65rem;cursor:pointer">↺</button>'):'')+'</td>'
+        +'</tr>';
+    });
+    phtml+='</tbody></table></div>';
+  }
+  phtml+='</div>';
+  thtml+=phtml;
   // (El interruptor de Cobre se retiró: Cobre ahora es un nivel normal con esquema, editable arriba.)
   // Chequeo de rentabilidad (fórmula de dirección) sobre los parámetros actuales
   var MARGCHK=0.203;
@@ -1776,6 +1826,54 @@ function recalcAggregates(){
     for(const[p,s] of Object.entries(c.prods)){byEstado[e][p]=(byEstado[e][p]||0)+s;byVendedor[v][p]=(byVendedor[v][p]||0)+s;}
   }
   DATA.byEstado=byEstado;DATA.byVendedor=byVendedor;
+}
+// Vuelve a armar qualMes/promMes/nivel/desc de TODOS los clientes con el catálogo de productos
+// vigente (qué código cuenta para el promedio, cuál es premium). Se llama cada vez que se
+// cambia esa configuración, para que el reporte YA cargado se actualice sin pedir el Excel de nuevo.
+function recalcQualifica(){
+  if(!DATA)return;
+  const comp=(DATA.completos||[]).slice().sort((a,b)=>a-b);
+  const comp6=comp.slice(-6), nComp6=comp6.length||1;
+  for(const c of DATA.clients){
+    const pm=c.prodMes||{};
+    const qualMes={};
+    for(const p in pm){ if(!prodQualifica(p))continue; const mm=pm[p]; for(const m in mm) qualMes[m]=(qualMes[m]||0)+(mm[m]||0); }
+    c.qualMes=qualMes;
+    const totalComp=comp6.reduce((a,m)=>a+(qualMes[m]||0),0);
+    c.promMes=Math.round(totalComp/nComp6);
+    c.nivel=calcNivel(c.promMes);
+    const dsc=calcDesc(c.nivel,c.qualMes,pm,DATA.completos,c.promMes);
+    c.desc=dsc.desc;c.descMax=dsc.descMax;c.crecio=dsc.crecio;c.premOk=dsc.premOk;c.mixPrem=dsc.mixPrem;c.mixPlus=dsc.mixPlus;
+  }
+}
+// Cambia si un código cuenta para el promedio ('qual') o si cuenta como Mix Premium ('prem').
+function setProdCfg(nombre,campo,val){
+  if(!reqSuper())return;
+  const cfg=getProdCfg(); const k=_prodKeyN(nombre);
+  cfg[k]=Object.assign({},cfg[k]);
+  cfg[k][campo]=!!val;
+  saveProdCfg(cfg);
+  if(DATA){
+    recalcQualifica();recalcAggregates();
+    renderMap();renderClienteTable();renderVendedores();renderRiesgo();renderAlertas();renderConfig();
+    if(typeof renderEquilibrio==='function')renderEquilibrio();
+    if(typeof renderRentabilidad==='function')renderRentabilidad();
+    if(typeof renderNuevos==='function')renderNuevos();
+    if(typeof renderTendencia==='function')renderTendencia();
+    if(typeof renderScorecard==='function')renderScorecard();
+  }
+  pushConfigCloud(true);
+  try{autoPublishCloud();}catch(e){}
+}
+// Quita todos los ajustes de un código (regresa al criterio de siempre para ese producto).
+function resetProdCfg(nombre){
+  if(!reqSuper())return;
+  const cfg=getProdCfg(); delete cfg[_prodKeyN(nombre)]; saveProdCfg(cfg);
+  if(DATA){recalcQualifica();recalcAggregates();renderClienteTable();renderConfig();
+    if(typeof renderEquilibrio==='function')renderEquilibrio();
+    if(typeof renderRentabilidad==='function')renderRentabilidad();}
+  pushConfigCloud(true);
+  try{autoPublishCloud();}catch(e){}
 }
 function addMapping(){ if(!reqSuper())return;
   const c=document.getElementById('m-cliente').value.trim().toUpperCase();
@@ -2778,7 +2876,7 @@ const BASELINE_TON={2024:50913.0,2025:56578.3};   // toneladas reales de Odoo, p
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['descEsp04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+var CFG_KEYS=['prodCfg04mas','descEsp04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
