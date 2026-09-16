@@ -239,7 +239,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
     <div class="kpi"><div class="kpi-val" id="k-peak">—</div><div class="kpi-lbl">Mes pico</div><div class="kpi-sub" id="k-peak-sub"></div></div>
   </div>
   <div class="tabs">
-<div class="tabgrp"><div class="glbl">Dirección</div><div class="gtabs"><div class="tab" data-tab="tablero" onclick="showTab('tablero')">📊 Tablero</div></div></div><div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
+<div class="tabgrp"><div class="glbl">Dirección</div><div class="gtabs"><div class="tab" data-tab="tablero" onclick="showTab('tablero')">📊 Tablero</div></div></div><div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp"><div class="glbl">Producción</div><div class="gtabs"><div class="tab" data-tab="proyeccion" onclick="showTab('proyeccion')">🏭 Proyección</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
   </div>
 
   <!-- MAPA -->
@@ -492,6 +492,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
   </div></div>
   <div class="pane" id="pane-equilibrio"><div id="equil-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-rentabilidad"><div id="rent-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
+  <div class="pane" id="pane-proyeccion"><div id="proy-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-ruta"><div style="width:100%;overflow-y:auto;padding:14px">
     <div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">🗺 Planificador de ruta — visitar a todos</div>
     <div class="tbl-ctrl" style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -3044,6 +3045,7 @@ function showTab(name){
   if(name==='ruta'&&typeof renderRuta==='function')renderRuta();
   if(name==='equilibrio'&&typeof renderEquilibrio==='function')renderEquilibrio();
   if(name==='rentabilidad'&&typeof renderRentabilidad==='function')renderRentabilidad();
+  if(name==='proyeccion'&&typeof renderProyeccion==='function')renderProyeccion();
 }
 
 // ── TENDENCIA (mes a mes) ──────────────────────────────────────────────────────
@@ -4786,6 +4788,201 @@ function renderCodesPanel(){
 }
 
 function resetDash(){DATA=null;selState=null;document.getElementById('dashboard').style.display='none';document.getElementById('loading').style.display='none';document.getElementById('dropzone').style.display='flex';document.getElementById('file-input').value='';}
+
+// ====== PROYECCIÓN DE VENTA Y PLANEACIÓN DE PRODUCCIÓN ======
+// Usa el mismo catálogo de 12 productos y la misma clave de familia (_famKey) que ya
+// usa Equilibrio para el costo del programa, así que un saco de promoción/bonificación
+// se agrupa con su producto regular tanto en la venta histórica como en la existencia
+// que se sube desde el reporte de Odoo (que trae los nombres con "[CÓDIGO] " al frente).
+function getProyCfg(){try{return JSON.parse(localStorage.getItem('proyCfg04mas')||'{}');}catch(e){return {};}}
+function saveProyCfg(cfg){try{localStorage.setItem('proyCfg04mas',JSON.stringify(cfg));}catch(e){}}
+function setProyCfgField(field,val){var cfg=getProyCfg();cfg[field]=val;saveProyCfg(cfg);renderProyeccion();}
+function setProyOverride(code,val){
+  var cfg=getProyCfg(); if(!cfg.overrides)cfg.overrides={};
+  var v=parseFloat(val);
+  if(isFinite(v)&&v>=0)cfg.overrides[code]=v; else delete cfg.overrides[code];
+  saveProyCfg(cfg); renderProyeccion();
+}
+function resetProyOverride(code){var cfg=getProyCfg();if(cfg.overrides)delete cfg.overrides[code];saveProyCfg(cfg);renderProyeccion();}
+function resetProyOverrideAll(){if(!confirm('¿Restaurar todas las proyecciones al promedio calculado?'))return;var cfg=getProyCfg();cfg.overrides={};saveProyCfg(cfg);renderProyeccion();}
+function setStockOverride(code,val){
+  var cfg=getProyCfg(); if(!cfg.stockOverride)cfg.stockOverride={};
+  var v=parseFloat(val);
+  if(isFinite(v))cfg.stockOverride[code]=v; else delete cfg.stockOverride[code];
+  saveProyCfg(cfg); renderProyeccion();
+}
+function getStockData(){try{return JSON.parse(localStorage.getItem('stockProd04mas')||'null');}catch(e){return null;}}
+function saveStockData(o){try{localStorage.setItem('stockProd04mas',JSON.stringify(o));}catch(e){}}
+function clearStockData(){if(!confirm('¿Quitar el reporte de existencia cargado?'))return;localStorage.removeItem('stockProd04mas');renderProyeccion();}
+function stripProdCode(name){return String(name||'').replace(/^\s*\[[^\]]*\]\s*/,'');}
+function escProy(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function handleStockFile(file){
+  if(!file)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      processStockRows(rows,file.name);
+    }catch(err){console.error(err);alert('Error leyendo el reporte de existencia de Odoo:\n'+err.message);}
+  };
+  r.onerror=function(){alert('Error al leer el archivo.');};
+  r.readAsArrayBuffer(file);
+  var inp=document.getElementById('stock-file-input'); if(inp)inp.value='';
+}
+function processStockRows(rows,fname){
+  if(!rows||rows.length<2){alert('El reporte de existencia está vacío o no tiene datos.');return;}
+  var hdr=rows[0].map(function(h){return String(h||'').toLowerCase().trim();});
+  var idx=function(re){for(var i=0;i<hdr.length;i++){if(re.test(hdr[i]))return i;}return -1;};
+  var cName=idx(/nombre/);
+  var cAMano=idx(/a la mano/);
+  var cDisp=idx(/disponible/);
+  if(cName<0||(cAMano<0&&cDisp<0)){
+    alert('No se reconoce el formato del reporte de existencia.\n\nSe requiere al menos la columna "Nombre en pantalla" y "Cantidad disponible para uso" (o "Cantidad a la mano").\n\nColumnas detectadas: '+rows[0].join(', '));
+    return;
+  }
+  var byFam={};
+  for(var i=1;i<rows.length;i++){
+    var row=rows[i]; if(!row)continue;
+    var raw=String(row[cName]||'').trim(); if(!raw)continue;
+    var name=stripProdCode(raw);
+    var k=_famKey(name);
+    var aMano=cAMano>=0?(parseFloat(row[cAMano])||0):0;
+    var disp=cDisp>=0?(parseFloat(row[cDisp])||0):aMano;
+    if(!byFam[k])byFam[k]={aMano:0,disponible:0};
+    byFam[k].aMano+=aMano; byFam[k].disponible+=disp;
+  }
+  saveStockData({fname:fname||'reporte de Odoo',ts:Date.now(),byFam:byFam});
+  renderProyeccion();
+}
+
+function proyProductCatalog(){
+  var arr=getCostos();
+  return arr.map(function(p){
+    var k=_famKey(p.name);
+    var kg=parseFloat((k.split('|')[1]))||0;
+    return {code:p.code||p.name,name:p.name,famKey:k,kg:kg};
+  });
+}
+// Suma la venta REAL (sacos regulares + promoción/bonificación — todo lo que sale del
+// almacén) por familia de producto, mes por mes, usando solo meses "completos" del
+// reporte cargado (igual criterio que Equilibrio/Rentabilidad).
+function proySalesAgg(nMeses){
+  var out={};
+  if(typeof DATA==='undefined'||!DATA)return {byFam:out,nMeses:0,mesesUsados:null};
+  var comp=(DATA.completos&&DATA.completos.length)?DATA.completos.slice().sort(function(a,b){return a-b;}):null;
+  var usados=comp;
+  if(comp&&nMeses&&nMeses<comp.length)usados=comp.slice(comp.length-nMeses);
+  function addTo(k,m,v){
+    if(usados&&usados.indexOf(+m)<0)return;
+    if(!out[k])out[k]={meses:{}};
+    out[k].meses[m]=(out[k].meses[m]||0)+v;
+  }
+  DATA.clients.forEach(function(c){
+    var pm=c.prodMes||{};
+    for(var pn in pm){var k=_famKey(pn);var mo=pm[pn];for(var m in mo){addTo(k,m,mo[m]||0);}}
+    var ppm=c.promoProdMes||{};
+    for(var pn2 in ppm){var k2=_famKey(pn2);var mo2=ppm[pn2];for(var m2 in mo2){addTo(k2,m2,mo2[m2]||0);}}
+  });
+  var nM=usados?usados.length:(comp?comp.length:0);
+  for(var k in out){var t=0;for(var mm in out[k].meses)t+=out[k].meses[mm];out[k].total=t;out[k].avg=nM>0?t/nM:0;}
+  return {byFam:out,nMeses:nM,mesesUsados:usados};
+}
+
+function renderProyeccion(){
+  var box=document.getElementById('proy-content'); if(!box)return;
+  if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la proyección de venta y planeación de producción.</div>';return;}
+  var cfg=getProyCfg();
+  var nMesesSel=cfg.nMeses||'todos';
+  var modo=cfg.modo||'mes';
+  var dias=cfg.dias||30;
+  var overrides=cfg.overrides||{};
+  var stockOverride=cfg.stockOverride||{};
+  var stockData=getStockData();
+
+  var agg=proySalesAgg(nMesesSel==='todos'?null:parseInt(nMesesSel,10));
+  var catalog=proyProductCatalog();
+
+  var rows=catalog.map(function(p){
+    var a=agg.byFam[p.famKey]||{total:0,avg:0};
+    var avgMonthly=a.avg||0;
+    var avgDaily=avgMonthly/30.4;
+    var proyeccion=(overrides[p.code]!=null)?overrides[p.code]:(modo==='dias'?avgDaily*dias:avgMonthly);
+    var stockInfo=(stockData&&stockData.byFam&&stockData.byFam[p.famKey])?stockData.byFam[p.famKey]:null;
+    var stock=(stockOverride[p.code]!=null)?stockOverride[p.code]:(stockInfo?stockInfo.disponible:null);
+    var cobertura=(stock!=null&&avgDaily>0)?stock/avgDaily:null;
+    var aFabricar=(stock!=null)?Math.max(0,proyeccion-stock):proyeccion;
+    return {p:p,avgMonthly:avgMonthly,proyeccion:proyeccion,stock:stock,cobertura:cobertura,aFabricar:aFabricar,isOverride:(overrides[p.code]!=null),hasStock:(stock!=null)};
+  });
+
+  rows.sort(function(a,b){
+    if(a.cobertura==null&&b.cobertura==null)return b.avgMonthly-a.avgMonthly;
+    if(a.cobertura==null)return 1;
+    if(b.cobertura==null)return -1;
+    return a.cobertura-b.cobertura;
+  });
+
+  var totalFabricar=rows.reduce(function(s,r){return s+r.aFabricar;},0);
+  var totalProy=rows.reduce(function(s,r){return s+r.proyeccion;},0);
+  var nMesesUsados=agg.nMeses||0;
+
+  function card(lbl,val,sub,col){return '<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+(col||'#3b82f6')+';border-radius:10px;padding:12px 14px;min-width:170px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:'+(col||'#fff')+'">'+val+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+lbl+'</div>'+(sub?'<div style="font-size:.7rem;color:#cbd5e1;margin-top:2px">'+sub+'</div>':'')+'</div>';}
+
+  var h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">🏭 Proyección de venta y planeación de producción</div>';
+  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:14px">Promedia tu venta real (sacos regulares + promoción/bonificación — todo lo que sale del almacén) de los meses completos que ya tienes cargados, para estimar cuánto vas a necesitar de cada producto. Si subes tu reporte de existencia de producto terminado de Odoo, te dice también cuánto fabricar de cada uno y en qué orden.</div>';
+
+  h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;background:#0b1628;border:1px solid #1e3a6b;border-radius:10px;padding:12px 14px">';
+  h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Promediar</label><select onchange="setProyCfgField(\'nMeses\',this.value)" style="background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px">'
+   +['3','6','12','todos'].map(function(v){var lbl=v==='todos'?'Todos los meses completos':'Últimos '+v+' meses';return '<option value="'+v+'" '+(String(nMesesSel)===v?'selected':'')+'>'+lbl+'</option>';}).join('')
+   +'</select></div>';
+  h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Planear para</label><select onchange="setProyCfgField(\'modo\',this.value)" style="background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px"><option value="mes" '+(modo==='mes'?'selected':'')+'>El próximo mes completo</option><option value="dias" '+(modo==='dias'?'selected':'')+'>Un número de días</option></select></div>';
+  if(modo==='dias'){h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Días</label><input type="number" min="1" value="'+dias+'" onchange="setProyCfgField(\'dias\',parseInt(this.value,10)||30)" style="width:90px;background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px"></div>';}
+  h+='<div style="flex:1"></div>';
+  h+='<div style="text-align:right">'
+   +'<input type="file" id="stock-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleStockFile(this.files[0])">'
+   +'<button onclick="document.getElementById(\'stock-file-input\').click()" style="background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer">📦 Cargar existencia de Odoo</button>'
+   +(stockData?('<div style="font-size:.68rem;color:#4ade80;margin-top:5px">✅ '+escProy(stockData.fname)+' · '+new Date(stockData.ts).toLocaleDateString('es-MX')+' · <a href="#" onclick="clearStockData();return false" style="color:#fca5a5">quitar</a></div>'):'<div style="font-size:.68rem;color:#94a3b8;margin-top:5px">Sin reporte de existencia — de momento solo ves la proyección de venta.</div>')
+   +'</div>';
+  h+='</div>';
+
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+   +card('Sacos a fabricar',fmt(totalFabricar),(modo==='dias'?('próximos '+dias+' días'):'próximo mes'),(totalFabricar>0?'#f59e0b':'#22c55e'))
+   +card('Venta proyectada',fmt(totalProy)+' sacos',(modo==='dias'?('próximos '+dias+' días'):'próximo mes'),'#3b82f6')
+   +card('Promedio calculado con',nMesesUsados+' mes(es)','meses completos del reporte de ventas cargado','#7ee2a8')
+   +'</div>';
+
+  if(!stockData){
+    h+='<div style="font-size:.7rem;color:#94a3b8;margin-bottom:8px">⚠ Sin reporte de existencia cargado: "a fabricar" muestra la proyección completa (no se resta ningún stock). Carga el reporte de Odoo arriba, o captura el stock a mano en la columna de la derecha.</div>';
+  }
+
+  h+='<table style="width:100%;font-size:.78rem;border-collapse:collapse">';
+  h+='<tr style="color:#94a3b8;text-align:right"><td style="text-align:left;padding:6px 8px">Producto</td><td style="padding:6px 8px">Prom./mes ('+nMesesUsados+'m)</td><td style="padding:6px 8px">Proyección'+(modo==='dias'?(' ('+dias+'d)'):' (mes)')+'</td><td style="padding:6px 8px">Stock disponible</td><td style="padding:6px 8px">Cobertura</td><td style="padding:6px 8px">A fabricar</td></tr>';
+  rows.forEach(function(r,i){
+    var covColor=r.cobertura==null?'#64748b':(r.cobertura<15?'#ef4444':(r.cobertura<30?'#f59e0b':'#22c55e'));
+    var covTxt=r.cobertura==null?'sin dato':(Math.round(r.cobertura)+' días');
+    var rowBg=i%2===0?'transparent':'#0b1628';
+    h+='<tr style="border-top:1px solid #16233f;background:'+rowBg+'">'
+     +'<td style="padding:6px 8px;color:#e8eef7">'+escProy(r.p.name)+'</td>'
+     +'<td style="padding:6px 8px;text-align:right;color:#cbd5e1">'+fmt(r.avgMonthly)+'</td>'
+     +'<td style="padding:6px 8px;text-align:right">'
+       +'<input type="number" min="0" value="'+Math.round(r.proyeccion)+'" onchange="setProyOverride(\''+escProy(r.p.code)+'\',this.value)" style="width:80px;background:#0b1628;border:1px solid '+(r.isOverride?'#f59e0b':'#3b82f6')+';border-radius:6px;color:#fff;padding:5px;text-align:right">'
+       +(r.isOverride?' <a href="#" onclick="resetProyOverride(\''+escProy(r.p.code)+'\');return false" title="Restaurar al promedio" style="color:#94a3b8">↺</a>':'')
+     +'</td>'
+     +'<td style="padding:6px 8px;text-align:right">'
+       +'<input type="number" value="'+(r.stock!=null?Math.round(r.stock):'')+'" placeholder="—" onchange="setStockOverride(\''+escProy(r.p.code)+'\',this.value)" style="width:80px;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#fff;padding:5px;text-align:right">'
+     +'</td>'
+     +'<td style="padding:6px 8px;text-align:right;color:'+covColor+';font-weight:700">'+covTxt+'</td>'
+     +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:'+(r.aFabricar>0?'#facc15':'#4ade80')+'">'+fmt(r.aFabricar)+'</td>'
+     +'</tr>';
+  });
+  h+='</table>';
+  h+='<div style="margin-top:10px"><a href="#" onclick="resetProyOverrideAll();return false" style="font-size:.72rem;color:#94a3b8">↺ Restaurar todas las proyecciones al promedio</a></div>';
+  h+='<div style="font-size:.68rem;color:#64748b;margin-top:10px">Orden de la tabla: menor cobertura primero (lo más urgente de fabricar arriba). Puedes editar a mano la proyección o el stock de cualquier producto — el cambio se guarda en este navegador.</div>';
+
+  box.innerHTML=h;
+}
 
 renderMapeoTable();
 applyRole();   // arranca en modo visor (config/mapeo/publicar ocultos hasta super-usuario)
