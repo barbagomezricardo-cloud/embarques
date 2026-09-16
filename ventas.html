@@ -2132,19 +2132,37 @@ function renderEquilibrio(){
   if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver el punto de equilibrio y el margen.</div>';return;}
   var comp=(DATA.completos&&DATA.completos.length)?DATA.completos:null;
   var nM=comp?comp.length:(DATA.meses?DATA.meses.length:1); if(!nM)nM=1;
+  var MDESC_EQ=getMesDesc();
+  var CM_EQ=costMap();
   var rev=0,cogs=0,promo=0,unmatched=0;
+  // Costo real del programa, mes por mes — igual criterio que en Rentabilidad: antes de que
+  // arrancara el esquema de descuento % (MDESC_EQ), el costo real fueron los SACOS REGALADOS a
+  // su costo; desde entonces es el descuento % con la tasa que estuvo vigente CADA mes. Antes
+  // esto se aproximaba con la tasa de HOY aplicada a toda la venta del periodo cargado, lo que
+  // inflaba el costo del programa (y por lo tanto el punto de equilibrio) en los meses de antes
+  // del esquema, donde en realidad no se dio ningún descuento en %, sino sacos de regalo.
   DATA.clients.forEach(function(c){
-    var pm=c.prodMes||{}; var pmv=c.prodMesVal||{}; var cliRevNP=0;
-    for(var p in pm){ var months=pm[p]; var qty=0; for(var m in months){ if(!comp||comp.indexOf(+m)>=0) qty+=months[m]||0; }
-      if(qty<=0)continue; var mm=EQ_find(p); if(!mm){unmatched+=qty;continue;}
-      var cost=mm[1],price=mm[2];
-      // Ingreso: $ REAL facturado (Odoo) cuando el reporte lo trae, sumado en la misma ventana de meses; si no, precio de lista.
-      var realRev=0; var monthsV=pmv[p]; if(monthsV){ for(var m2 in monthsV){ if(!comp||comp.indexOf(+m2)>=0) realRev+=monthsV[m2]||0; } }
-      var prev=realRev>0?realRev:qty*price;
-      rev+=prev; cogs+=qty*cost;
-      cliRevNP+=prev; // PetFood ahora también recibe descuento
+    var pm=c.prodMes||{}; var pmv=c.prodMesVal||{};
+    var revPorMes={};
+    for(var p in pm){ var months=pm[p]; var monthsV=pmv[p]||{}; var mm=EQ_find(p);
+      for(var m in months){ if(comp&&comp.indexOf(+m)<0)continue;
+        var qty=months[m]||0; var realV=monthsV[m]||0; if(qty<=0&&realV<=0)continue;
+        if(!mm){ if(qty>0)unmatched+=qty; continue; }
+        var cost=mm[1],price=mm[2];
+        var prev=realV>0?realV:qty*price;
+        rev+=prev; cogs+=qty*cost;
+        revPorMes[m]=(revPorMes[m]||0)+prev;
+      }
     }
-    promo += cliRevNP*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;
+    var ppm=c.promoProdMes||{}; var promoPorMes={};
+    for(var p2 in ppm){ var cc2=CM_EQ[_famKey(p2)]; var mo2=ppm[p2];
+      for(var m2 in mo2){ if(comp&&comp.indexOf(+m2)<0)continue; var sac2=mo2[m2]||0; if(sac2<=0)continue;
+        promoPorMes[m2]=(promoPorMes[m2]||0)+(cc2?sac2*cc2.costo:0); } }
+    var mesesUnion={}; for(var mk in revPorMes)mesesUnion[mk]=1; for(var mk2 in promoPorMes)mesesUnion[mk2]=1;
+    for(var mk3 in mesesUnion){ var mkk=+mk3;
+      if(mkk>=MDESC_EQ){ var d=(typeof descMesCliente==='function')?descMesCliente(c,mkk):0; promo+=(revPorMes[mk3]||0)*d/100; }
+      else { promo+=(promoPorMes[mk3]||0); }
+    }
   });
   var util=rev-cogs, margB=rev>0?util/rev:0;
   var utilNeta=util-promo, margN=rev>0?utilNeta/rev:0;
@@ -2154,7 +2172,7 @@ function renderEquilibrio(){
   var sobre=revMes-be;
   function card(lbl,val,sub,col){return '<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+(col||'#3b82f6')+';border-radius:10px;padding:12px 14px;min-width:150px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:'+(col||'#fff')+'">'+val+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+lbl+'</div>'+(sub?'<div style="font-size:.7rem;color:#cbd5e1;margin-top:2px">'+sub+'</div>':'')+'</div>';}
   var h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">💰 Punto de equilibrio y margen</div>';
-  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:12px">Calculado con el reporte cargado ('+nM+' mes(es)) y tus costos/precios de abajo. La promoción se descuenta incluyendo PetFood. Cambia cualquier celda azul y da Calcular.</div>';
+  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:12px">Calculado con el reporte cargado ('+nM+' mes(es)) y tus costos/precios de abajo. El costo del programa se calcula mes por mes: antes de '+MES_NOM[MDESC_EQ]+' fueron los <b>sacos regalados</b> a su costo; desde '+MES_NOM[MDESC_EQ]+' es el <b>descuento %</b> con la tasa que estuvo vigente cada mes (no la de hoy aplicada a todo el periodo). Cambia el mes de arranque en la pestaña Rentabilidad. Cambia cualquier celda azul y da Calcular.</div>';
   h+=DATA.tieneMontoReal
      ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:10px">✅ El ingreso usa el <b>monto facturado real</b> de Odoo (no precio de lista estimado) donde el archivo lo trae.</div>'
      :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:10px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado).</div>';
@@ -2250,99 +2268,139 @@ function renderRentabilidad(){
   const CM=costMap();
   const vends=[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort();
   const ests=[...new Set(DATA.clients.map(c=>c.estado).filter(Boolean))].sort();
-  let TR=0,TC=0,TPROMO=0,TDISC=0,TCL=0; const byV={}; const cli=[]; const sinCosto={}; const byProd={}; const byProdPromo={};
+  const MDESC=getMesDesc();
+  // ── Una sola pasada: arma el detalle por cliente Y por mes al mismo tiempo, para que el costo
+  // real del programa (sacos regalados antes de que arrancara el esquema de descuento %, o el
+  // descuento % desde que arrancó) se calcule SIEMPRE con el mes y la tasa que realmente estuvo
+  // vigente ese mes — nunca aplicando la tasa de HOY a todo el histórico de ventas. Antes había
+  // dos cálculos distintos que no coincidían entre sí (los KPIs de arriba usaban la tasa vigente
+  // hoy × TODA la venta del periodo Ene-Sep; la tabla "mes a mes" de abajo ya calculaba bien mes
+  // por mes). Ahora todo sale de la misma fuente y los números cuadran entre secciones y pestañas.
+  let TR=0,TC=0,TCL=0; const byV={}; const cli=[]; const sinCosto={}; const byProd={}; const byProdPromo={};
+  const MM={}; const _ens=(m)=>MM[m]||(MM[m]={rev:0,cost:0,psac:0,pcost:0,disc:0,descW:0});
   for(const c of DATA.clients){
     if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
     if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
-    const pm=c.prodMes||{}; const pmv=c.prodMesVal||{}; let rev=0,cost=0;
+    const pm=c.prodMes||{}; const pmv=c.prodMesVal||{};
+    const revM={},costM={};
     // Ingreso: usa el $ REAL facturado (Odoo) cuando el reporte lo trae; si no, cae al precio de lista estimado.
-    for(const p in pm){ let sac=0; for(const m in pm[p])sac+=pm[p][m]||0; if(sac<=0)continue; const cc=CM[_famKey(p)];
-      let realRev=0; const mv=pmv[p]; if(mv){ for(const m in mv) realRev+=mv[m]||0; }
-      if(cc){ const prev=realRev>0?realRev:sac*cc.precio; rev+=prev; cost+=sac*cc.costo; if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0}; byProd[p].sac+=sac; byProd[p].rev+=prev; byProd[p].cost+=sac*cc.costo; }
-      else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
-    // costo de sacos regalados (promo/bonificación) por su producto real
-    let promoCost=0; const pp=c.promoProd||{};
-    for(const p in pp){ const sac=pp[p]||0; if(sac<=0)continue; const cc=CM[_famKey(p)];
-      if(cc){ promoCost+=sac*cc.costo; if(!byProdPromo[p])byProdPromo[p]={sac:0,cost:0}; byProdPromo[p].sac+=sac; byProdPromo[p].cost+=sac*cc.costo; }
-      else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
+    for(const p in pm){ const cc=CM[_famKey(p)]; const mo=pm[p]; const mov=pmv[p]||{};
+      let sacTot=0; for(const m in mo) sacTot+=mo[m]||0;
+      let realTot=0; for(const m in mov) realTot+=mov[m]||0;
+      if(sacTot<=0 && realTot<=0)continue;
+      if(cc){ if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0};
+        // Recorre la UNIÓN de meses con sacos y meses con $ real: algunas filas del reporte traen
+        // dinero con sacos en 0 (ajustes de precio, renglones complementarios de la misma factura —
+        // ver el fix de recMontoOnly en processExcel). Si aquí solo se recorrieran los meses de `mo`,
+        // ese dinero real se perdería de nuevo, aunque ya esté bien capturado en prodMesVal.
+        const _allK=new Set([...Object.keys(mo||{}),...Object.keys(mov||{})]);
+        _allK.forEach(k=>{ const sac=mo[k]||0; const realV=mov[k]||0; if(sac<=0&&realV<=0)return;
+          const pv=realV>0?realV:sac*cc.precio;
+          revM[k]=(revM[k]||0)+pv; costM[k]=(costM[k]||0)+sac*cc.costo;
+          byProd[p].sac+=sac; byProd[p].rev+=pv; byProd[p].cost+=sac*cc.costo; }); }
+      else { sinCosto[p]=(sinCosto[p]||0)+sacTot; } }
+    // sacos regalados (promo/bonificación), a su costo, agrupados por el MES real en que se dieron
+    const pp=c.promoProd||{}; const ppm=c.promoProdMes||{};
+    for(const p in pp)if(!byProdPromo[p])byProdPromo[p]={sac:0,cost:0};
+    const promoM={};
+    for(const p in ppm){ const cc=CM[_famKey(p)]; const mo=ppm[p];
+      for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; const cst=cc?sac*cc.costo:0;
+        promoM[k]=(promoM[k]||0)+cst;
+        if(byProdPromo[p]){ byProdPromo[p].sac+=sac; byProdPromo[p].cost+=cst; }
+        if(!cc) sinCosto[p]=(sinCosto[p]||0)+sac; } }
+    const psacTotal=Object.values(pp).reduce((a,b)=>a+b,0);
+    const allM=new Set([...Object.keys(revM),...Object.keys(promoM)]);
+    if(!allM.size)continue;
+    let rev=0,cost=0,promoCost=0,discReciente=0;
+    allM.forEach(k=>{
+      const kk=+k, rv=revM[k]||0, cs=costM[k]||0, pc=promoM[k]||0;
+      rev+=rv; cost+=cs; promoCost+=pc;
+      const o=_ens(kk); o.rev+=rv; o.cost+=cs; o.pcost+=pc;
+      if(kk>=MDESC){ const d=(typeof descMesCliente==='function')?descMesCliente(c,kk):0; const dd=rv*d/100;
+        o.disc+=dd; o.descW+=d*rv; discReciente+=dd; }
+    });
     if(rev<=0&&promoCost<=0)continue;
-    const gm=rev-cost, disc=rev*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;
-    const netPromo=gm-promoCost, netDisc=gm-disc;
+    const gm=rev-cost;
+    const netPromo=gm-promoCost, netDisc=gm-discReciente;
     const netPromoPct=rev>0?netPromo/rev*100:0, netDiscPct=rev>0?netDisc/rev*100:0;
-    TR+=rev;TC+=cost;TPROMO+=promoCost;TDISC+=disc;TCL++;
-    const v=c.vendedor||'(sin asignar)'; if(!byV[v])byV[v]={rev:0,gm:0,promo:0,disc:0,cl:0}; const b=byV[v]; b.rev+=rev;b.gm+=gm;b.promo+=promoCost;b.disc+=disc;b.cl++;
-    cli.push({n:c.nombre,v:v,e:c.estado||'',rev:rev,gm:gm,promo:promoCost,disc:disc,netPromoPct:netPromoPct,netDiscPct:netDiscPct,desc:c.desc||0,psac:Object.values(pp).reduce((a,b)=>a+b,0)});
+    TR+=rev;TC+=cost;TCL++;
+    const v=c.vendedor||'(sin asignar)'; if(!byV[v])byV[v]={rev:0,gm:0,promo:0,disc:0,cl:0}; const b=byV[v];
+    b.rev+=rev;b.gm+=gm;b.promo+=promoCost;b.disc+=discReciente;b.cl++;
+    cli.push({n:c.nombre,v:v,e:c.estado||'',rev:rev,gm:gm,promo:promoCost,disc:discReciente,netPromoPct:netPromoPct,netDiscPct:netDiscPct,desc:c.desc||0,psac:psacTotal});
   }
-  const TGM=TR-TC, TNETP=TGM-TPROMO, TNETD=TGM-TDISC;
+  const TGM=TR-TC;
+  const _mk=Object.keys(MM).map(Number).sort((a,b)=>a-b);
+  let aRev=0,aCost=0,aDado=0,nRev=0,nCost=0,nDado=0,nDescW=0;   // a = periodo de REGALO (antes de MDESC) · n = periodo de DESCUENTO % (desde MDESC)
+  _mk.forEach(m=>{
+    const o=MM[m], nuevo=(m>=MDESC), dado=nuevo?o.disc:o.pcost;
+    if(nuevo){ nRev+=o.rev; nCost+=o.cost; nDado+=dado; nDescW+=o.descW; } else { aRev+=o.rev; aCost+=o.cost; aDado+=dado; }
+  });
+  const TPROMO=aDado, TDISC=nDado;   // costo REAL del programa, cada uno calculado solo sobre SU propio periodo
+  const mesesA=_mk.filter(m=>m<MDESC), mesesN=_mk.filter(m=>m>=MDESC);
+  const rangoA=mesesA.length?(MES_NOM[mesesA[0]]+(mesesA.length>1?'–'+MES_NOM[mesesA[mesesA.length-1]]:'')):('antes de '+MES_NOM[MDESC]);
+  const rangoN=mesesN.length?(MES_NOM[mesesN[0]]+(mesesN.length>1?'–'+MES_NOM[mesesN[mesesN.length-1]]:'')):('desde '+MES_NOM[MDESC]);
   const pP=x=>TR>0?x/TR*100:0;
   const kpi=(n,l,col)=>'<div style="flex:1;min-width:118px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.7rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
   let h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:3px">💵 Rentabilidad del programa 04MAS</div>';
-  h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">Hasta agosto</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">Desde septiembre</b> será el <b>descuento %</b> (nota de crédito). Aquí ves los dos para comparar. Los costos viven <b>solo en este tablero</b>.</div>';
+  h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">'+rangoA+'</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">'+rangoN+'</b> es el <b>descuento %</b> (nota de crédito), con la tasa que estuvo vigente cada mes. Cada uno se mide sobre SU propia venta — no se mezcla la tasa de hoy con ventas de otros meses. Los costos viven <b>solo en este tablero</b>.</div>';
   h+=DATA.tieneMontoReal
      ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:6px">✅ El ingreso de este reporte usa el <b>monto facturado real</b> de Odoo (no precio de lista estimado) donde el archivo lo trae.</div>'
      :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:6px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado). Sube el export con la columna de $ para ver el ingreso real.</div>';
   // filtros
   const opt=(arr,sel)=>'<option value="">Todos</option>'+arr.map(x=>'<option'+(x===sel?' selected':'')+'>'+x+'</option>').join('');
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px">'+
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 4px">'+
      '<label style="font-size:.78rem;color:#94a3b8">Vendedor:</label><select onchange="rentSet(\'vf\',this.value)">'+opt(vends,RENT_VF)+'</select>'+
      '<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Estado:</label><select onchange="rentSet(\'est\',this.value)">'+opt(ests,RENT_EST)+'</select>'+
      '<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Alerta si neto &lt;</label><input type="number" value="'+RENT_THR+'" onchange="rentSet(\'thr\',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:3px 7px;font-size:.78rem">%</div>';
-  // KPIs
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+kpi(_money(TR),DATA.tieneMontoReal?'Ingreso (real facturado)':'Ingreso (precio lista)')+kpi(_money(TGM)+' · '+pP(TGM).toFixed(1)+'%','Margen bruto')+'</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+
-     kpi('-'+_money(TPROMO)+' · '+pP(TPROMO).toFixed(1)+'%','📦 Costo sacos promo/bonif (hasta agosto)','#fca5a5')+
-     kpi(_money(TNETP)+' · '+(TR>0?TNETP/TR*100:0).toFixed(1)+'%','Margen NETO con promo (real)',_pctCol(TR>0?TNETP/TR*100:0,RENT_THR))+
-     kpi('-'+_money(TDISC)+' · '+pP(TDISC).toFixed(1)+'%','💳 Descuento % (desde septiembre)','#fbbf24')+
-     kpi(_money(TNETD)+' · '+(TR>0?TNETD/TR*100:0).toFixed(1)+'%','Margen NETO con descuento %',_pctCol(TR>0?TNETD/TR*100:0,RENT_THR))+'</div>';
-  // comparación / ahorro
-  const ahorro=TPROMO-TDISC;
-  h+='<div style="background:'+(ahorro>=0?'#0f2e1c':'#3a1414')+';border:1px solid '+(ahorro>=0?'#1a7a3f':'#7f1d1d')+';border-radius:10px;padding:10px 14px;margin:6px 0 16px;font-size:.8rem;color:'+(ahorro>=0?'#a9f0c4':'#fecaca')+'">'+
-     (ahorro>=0?'✅ El cambio te conviene: ':'⚠ Ojo: ')+'el esquema nuevo de <b>descuento %</b> costaría <b>'+_money(TDISC)+'</b> vs <b>'+_money(TPROMO)+'</b> de los sacos regalados → '+(ahorro>=0?'ahorro de <b>'+_money(ahorro)+'</b> ('+(TPROMO>0?(ahorro/TPROMO*100).toFixed(0):'0')+'% menos)':'costaría <b>'+_money(-ahorro)+'</b> MÁS')+' sobre este volumen.</div>';
+  h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:10px">Estos dos filtros aplican a todos los KPIs, a la tabla mes a mes y a las tablas de abajo.</div>';
+  // KPIs — totales de TODO el periodo del reporte
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+     +kpi(_money(TR),DATA.tieneMontoReal?'Ingreso total (real facturado)':'Ingreso total (precio lista)')
+     +kpi(_money(TGM)+' · '+pP(TGM).toFixed(1)+'%','Margen bruto total')
+     +kpi('-'+_money(TPROMO+TDISC)+' · '+pP(TPROMO+TDISC).toFixed(1)+'%','💰 Costo total del programa (regalo + descuento)','#fbbf24')
+     +kpi(_money(TGM-TPROMO-TDISC)+' · '+(TR>0?(TGM-TPROMO-TDISC)/TR*100:0).toFixed(1)+'%','Margen NETO total, real',_pctCol(TR>0?(TGM-TPROMO-TDISC)/TR*100:0,RENT_THR))+'</div>';
+  // KPIs — desglosados por periodo, cada uno sobre SU propia venta (esto es lo que corrige el
+  // desfase que se veía antes contra la tabla "mes a mes": ya no se pisan entre sí).
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'
+     +kpi('-'+_money(TPROMO)+' · '+(aRev>0?TPROMO/aRev*100:0).toFixed(2)+'%','📦 Sacos regalados ('+rangoA+')','#fca5a5')
+     +kpi(_money(aRev-aCost-TPROMO)+' · '+(aRev>0?(aRev-aCost-TPROMO)/aRev*100:0).toFixed(1)+'%','Margen NETO · '+rangoA,_pctCol(aRev>0?(aRev-aCost-TPROMO)/aRev*100:0,RENT_THR))
+     +kpi('-'+_money(TDISC)+' · '+(nRev>0?TDISC/nRev*100:0).toFixed(2)+'%','💳 Descuento % ('+rangoN+')','#fbbf24')
+     +kpi(_money(nRev-nCost-TDISC)+' · '+(nRev>0?(nRev-nCost-TDISC)/nRev*100:0).toFixed(1)+'%','Margen NETO · '+rangoN,_pctCol(nRev>0?(nRev-nCost-TDISC)/nRev*100:0,RENT_THR))+'</div>';
 
-  // ══ LO QUE ESTOY DANDO, MES A MES ═══════════════════════════════════════════
+  // ══ MÁRGENES MES A MES (con lo que se dio de programa) ══════════════════════
   // Hasta el mes anterior al arranque del esquema el costo fueron los SACOS REGALADOS.
   // Desde el arranque es el DESCUENTO %, valuado con el % que estuvo vigente cada mes
-  // (el que se le anunció al cliente el día 1, no el de hoy).
-  const MDESC=getMesDesc();
-  const MM={};
-  const _ens=(m)=>MM[m]||(MM[m]={rev:0,cost:0,psac:0,pcost:0,disc:0,descW:0});
-  for(const c of DATA.clients){
-    if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
-    if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
-    const revM={},costM={};
-    const pm=c.prodMes||{}; const pmv=c.prodMesVal||{};
-    for(const p in pm){ const cc=CM[_famKey(p)]; if(!cc)continue; const mo=pm[p]; const mov=pmv[p]||{};
-      for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; const realV=mov[k]||0; const pv=realV>0?realV:sac*cc.precio; revM[k]=(revM[k]||0)+pv; costM[k]=(costM[k]||0)+sac*cc.costo; } }
-    for(const k in revM){ const o=_ens(+k); o.rev+=revM[k]; o.cost+=costM[k];
-      const d=descMesCliente(c,+k); o.disc+=revM[k]*d/100; o.descW+=d*revM[k]; }
-    const ppm=c.promoProdMes||{};
-    for(const p in ppm){ const cc=CM[_famKey(p)]; const mo=ppm[p];
-      for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; const o=_ens(+k); o.psac+=sac; if(cc)o.pcost+=sac*cc.costo; } }
-  }
-  const _mk=Object.keys(MM).map(Number).sort((a,b)=>a-b);
+  // (el que se le anunció al cliente el día 1, no el de hoy). Ya calculado arriba en MM.
   if(_mk.length){
-    let aRev=0,aDado=0,nRev=0,nDado=0,nDescW=0;   // a = esquema viejo (regalo) · n = esquema nuevo (descuento)
     let filas='';
+    let prevNetoPct=null;
     _mk.forEach(m=>{
       const o=MM[m], nuevo=(m>=MDESC);
       const dado=nuevo?o.disc:o.pcost;
       const pctD=o.rev>0?dado/o.rev*100:0;
       const descProm=o.rev>0?o.descW/o.rev:0;
-      if(nuevo){ nRev+=o.rev; nDado+=dado; nDescW+=o.descW; } else { aRev+=o.rev; aDado+=dado; }
+      const bRuta=o.rev-o.cost, bRutaPct=o.rev>0?bRuta/o.rev*100:0;
+      const neto=bRuta-dado, netoPct=o.rev>0?neto/o.rev*100:0;
       const col=pctD<=3?'#4ade80':(pctD<=5?'#fbbf24':'#f87171');
+      const colNeto=_pctCol(netoPct,RENT_THR);
+      let tend='—';
+      if(prevNetoPct!==null){ const d=netoPct-prevNetoPct; tend='<span style="color:'+(d>=0?'#4ade80':'#f87171')+'">'+(d>=0?'▲':'▼')+' '+(d>=0?'+':'')+d.toFixed(1)+'pp</span>'; }
+      prevNetoPct=netoPct;
       filas+='<tr style="border-top:1px solid #16233f">'
         +'<td style="padding:6px 8px;color:#e8eef7;font-weight:700">'+MES_NOM[m]+'</td>'
         +'<td style="text-align:center"><span style="background:'+(nuevo?'#1e3a5f':'#3a2a12')+';color:'+(nuevo?'#7dd3fc':'#f0a868')+';border-radius:5px;padding:1px 7px;font-size:.66rem;font-weight:700">'+(nuevo?'DESCUENTO':'REGALO')+'</span></td>'
         +'<td style="text-align:right;color:#cbd5e1">'+_money(o.rev)+'</td>'
+        +'<td style="text-align:right;color:#cbd5e1">'+_money(bRuta)+' <span style="color:#64748b">· '+bRutaPct.toFixed(1)+'%</span></td>'
         +'<td style="text-align:right;color:#94a3b8">'+(o.psac>0?fmt(Math.round(o.psac)):'—')+'</td>'
         +'<td style="text-align:right;color:#7dd3fc;font-weight:700">'+(nuevo?descProm.toFixed(2)+'%':'—')+'</td>'
-        +'<td style="text-align:right;font-weight:800;color:'+col+'">'+_money(dado)+'</td>'
-        +'<td style="text-align:right;font-weight:800;color:'+col+'">'+pctD.toFixed(2)+'%</td></tr>';
+        +'<td style="text-align:right;font-weight:700;color:'+col+'">-'+_money(dado)+' <span style="opacity:.75">· '+pctD.toFixed(2)+'%</span></td>'
+        +'<td style="text-align:right;font-weight:800;color:'+colNeto+'">'+_money(neto)+' <span style="opacity:.75">· '+netoPct.toFixed(1)+'%</span></td>'
+        +'<td style="text-align:right;font-size:.7rem">'+tend+'</td></tr>';
     });
     const pctA=aRev>0?aDado/aRev*100:0, pctN=nRev>0?nDado/nRev*100:0;
     const dif=pctN-pctA;
-    h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">📅 Lo que estoy dando, mes a mes</div>';
-    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Antes de '+(MES_NOM[MDESC]||'')+' el costo del programa eran los <b style="color:#f0a868">sacos regalados</b> (valuados a tu costo). Desde '+(MES_NOM[MDESC]||'')+' es el <b style="color:#7dd3fc">descuento %</b>, calculado con el porcentaje que estuvo vigente cada mes para cada cliente, sobre su venta real de ese mes. '
+    h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">📅 Márgenes mes a mes</div>';
+    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Ingreso, margen bruto, costo del programa (regalo o descuento %, el que aplicaba ese mes) y margen NETO real, mes por mes. La última columna compara el margen neto % contra el mes anterior. '
       +'<label style="margin-left:8px">El esquema arrancó en: <select onchange="setMesDesc(this.value)" style="background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:2px 6px;font-size:.72rem">'
       +[1,2,3,4,5,6,7,8,9,10,11,12].map(function(x){return '<option value="'+x+'"'+(x===MDESC?' selected':'')+'>'+MES_NOM[x]+'</option>';}).join('')+'</select></label></div>';
     if(nRev>0){
@@ -2350,21 +2408,24 @@ function renderRentabilidad(){
       h+='<div style="background:'+c1+';border:1px solid '+c2+';border-radius:10px;padding:11px 14px;margin-bottom:10px;font-size:.8rem;color:'+c3+'">'
         +(dif<=0?'✅ Estás dando MENOS que antes: ':'⚠ Estás dando MÁS que antes: ')
         +'con el esquema nuevo llevas <b>'+_money(nDado)+'</b> sobre <b>'+_money(nRev)+'</b> de venta = <b>'+pctN.toFixed(2)+'%</b>, '
-        +'contra <b>'+pctA.toFixed(2)+'%</b> del periodo de regalos ('+MES_NOM[_mk[0]]+'–'+MES_NOM[MDESC-1>0?MDESC-1:1]+'). '
+        +'contra <b>'+pctA.toFixed(2)+'%</b> del periodo de regalos ('+rangoA+'). '
         +'Diferencia: <b>'+(dif>=0?'+':'')+dif.toFixed(2)+' puntos</b>. '
         +'Al ritmo del periodo anterior habrías dado '+_money(nRev*pctA/100)+', así que vas '+(dif<=0?'ahorrando':'gastando')+' <b>'+_money(Math.abs(nRev*pctA/100-nDado))+'</b>.'
-        +'<div style="font-size:.72rem;margin-top:4px;opacity:.85">Descuento promedio ponderado de todos los clientes desde '+MES_NOM[MDESC]+': <b>'+(nRev>0?(nDescW/nRev).toFixed(2):'0')+'%</b>.</div></div>';
+        +'<div style="font-size:.72rem;margin-top:4px;opacity:.85">Descuento promedio ponderado de todos los clientes '+rangoN+': <b>'+(nRev>0?(nDescW/nRev).toFixed(2):'0')+'%</b>.</div></div>';
     } else {
-      h+='<div style="background:#111c34;border:1px solid #334155;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.78rem;color:#cbd5e1">Todavía no hay ventas cargadas desde '+(MES_NOM[MDESC]||'')+', así que aún no hay nada que comparar con el periodo de regalos ('+pctA.toFixed(2)+'% de la venta).</div>';
+      h+='<div style="background:#111c34;border:1px solid #334155;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.78rem;color:#cbd5e1">Todavía no hay ventas cargadas '+rangoN+', así que aún no hay nada que comparar con el periodo de regalos ('+pctA.toFixed(2)+'% de la venta).</div>';
     }
-    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:660px"><thead><tr style="color:#9fb0cc">'
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:820px"><thead><tr style="color:#9fb0cc">'
       +'<th style="text-align:left;padding:6px 8px">Mes</th><th style="text-align:center">Esquema</th><th style="text-align:right">Venta ('+(DATA.tieneMontoReal?'real facturada':'precio lista')+')</th>'
-      +'<th style="text-align:right">Sacos regalados</th><th style="text-align:right">Desc. promedio</th><th style="text-align:right">Lo que diste</th><th style="text-align:right">% de la venta</th></tr></thead><tbody>'+filas;
-    const tRev=aRev+nRev, tDado=aDado+nDado;
+      +'<th style="text-align:right">Margen bruto</th><th style="text-align:right">Sacos regalados</th><th style="text-align:right">Desc. promedio</th>'
+      +'<th style="text-align:right">Costo programa</th><th style="text-align:right">Margen NETO</th><th style="text-align:right">vs mes ant.</th></tr></thead><tbody>'+filas;
+    const tRev=aRev+nRev, tDado=aDado+nDado, tCost=aCost+nCost, tBruta=tRev-tCost, tNeto=tBruta-tDado;
     h+='<tr style="background:#14243f;font-weight:800;color:#fff"><td style="padding:6px 8px">TOTAL</td><td></td>'
-      +'<td style="text-align:right">'+_money(tRev)+'</td><td></td><td></td>'
-      +'<td style="text-align:right">'+_money(tDado)+'</td>'
-      +'<td style="text-align:right">'+(tRev>0?(tDado/tRev*100).toFixed(2):'0')+'%</td></tr>';
+      +'<td style="text-align:right">'+_money(tRev)+'</td>'
+      +'<td style="text-align:right">'+_money(tBruta)+' · '+(tRev>0?(tBruta/tRev*100).toFixed(1):'0')+'%</td>'
+      +'<td></td><td></td>'
+      +'<td style="text-align:right">-'+_money(tDado)+' · '+(tRev>0?(tDado/tRev*100).toFixed(2):'0')+'%</td>'
+      +'<td style="text-align:right">'+_money(tNeto)+' · '+(tRev>0?(tNeto/tRev*100).toFixed(1):'0')+'%</td><td></td></tr>';
     h+='</tbody></table></div>';
   }
 
@@ -2469,7 +2530,8 @@ function renderRentabilidad(){
 
   // por vendedor
   h+='<div style="font-weight:800;color:#cbd5e1;margin:6px 0 6px">Por vendedor</div>';
-  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:right">Cli.</th><th style="text-align:right">Ingreso</th><th style="text-align:right">M. bruto</th><th style="text-align:right">Promo/bonif</th><th style="text-align:right">Neto c/promo</th><th style="text-align:right">Desc. %</th><th style="text-align:right">Neto c/desc</th></tr></thead><tbody>';
+  h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:4px">Ingreso y M. bruto son de todo el periodo del reporte. Promo/bonif y su Neto son de '+rangoA+'; el costo de Descuento % y su Neto son de '+rangoN+' (cada costo, sobre su propio periodo — igual que arriba).</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:right">Cli.</th><th style="text-align:right">Ingreso</th><th style="text-align:right">M. bruto</th><th style="text-align:right">Promo/bonif</th><th style="text-align:right">Neto c/promo</th><th style="text-align:right">Costo descuento %</th><th style="text-align:right">Neto c/desc</th></tr></thead><tbody>';
   Object.entries(byV).sort((a,b)=>b[1].gm-a[1].gm).forEach(([v,b])=>{const nps=b.rev>0?(b.gm-b.promo)/b.rev*100:0;const nds=b.rev>0?(b.gm-b.disc)/b.rev*100:0;h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;font-weight:700">'+v+'</td><td style="text-align:right">'+b.cl+'</td><td style="text-align:right">'+_money(b.rev)+'</td><td style="text-align:right">'+_money(b.gm)+'</td><td style="text-align:right;color:#fca5a5">-'+_money(b.promo)+'</td><td style="text-align:right;font-weight:700;color:'+_pctCol(nps,RENT_THR)+'">'+nps.toFixed(1)+'%</td><td style="text-align:right;color:#fbbf24">-'+_money(b.disc)+'</td><td style="text-align:right;font-weight:700;color:'+_pctCol(nds,RENT_THR)+'">'+nds.toFixed(1)+'%</td></tr>';});
   h+='</tbody></table></div>';
   // por producto
