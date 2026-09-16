@@ -2378,8 +2378,22 @@ function renderRentabilidad(){
   (function(){
     const compAll=(DATA.completos&&DATA.completos.length)?DATA.completos.slice().sort((a,b)=>a-b):[];
     if(compAll.length<2)return;   // no hay suficiente historia cerrada para comparar "antes" vs "ahora"
-    const half=Math.max(1,Math.floor(compAll.length/2));
-    const baseMs=compAll.slice(0,half), recMs=compAll.slice(-(compAll.length-half));
+    // La promoción empezó a EXIGIR la compra del mix premium a partir de agosto: se compara
+    // todo lo anterior (política vieja, sin exigencia) contra agosto en adelante (con exigencia),
+    // en vez de partir el histórico a la mitad. Así, cada mes que cierre después (septiembre,
+    // octubre...) se suma solo al lado "con exigencia" y la comparación se vuelve más sólida
+    // con el tiempo, sin necesidad de tocar el código de nuevo.
+    const MES_MIX_INICIO=8; // agosto
+    let baseMs=compAll.filter(m=>m<MES_MIX_INICIO), recMs=compAll.filter(m=>m>=MES_MIX_INICIO);
+    let usoPartidaFija=true;
+    if(!baseMs.length||!recMs.length){
+      // El reporte cargado no alcanza a cubrir ambos lados de agosto (p.ej. solo trae meses
+      // de antes, o solo de agosto en adelante): se cae de vuelta a partir el histórico a la
+      // mitad para no dejar la sección vacía, aunque ya no representa "antes vs con exigencia".
+      const half=Math.max(1,Math.floor(compAll.length/2));
+      baseMs=compAll.slice(0,half); recMs=compAll.slice(-(compAll.length-half));
+      usoPartidaFija=false;
+    }
     const baseSet=new Set(baseMs), recSet=new Set(recMs);
     function bucketStats(monthSet){
       let premSac=0,premRev=0,premCost=0,noSac=0,noRev=0,noCost=0,totalSacTodos=0;
@@ -2405,7 +2419,10 @@ function renderRentabilidad(){
     const B=bucketStats(baseSet), R=bucketStats(recSet);
     const nomB=baseMs.map(m=>MES_NOM[m]).join('-'), nomR=recMs.map(m=>MES_NOM[m]).join('-');
     h+='<div style="font-weight:800;color:#cbd5e1;margin:22px 0 6px;font-size:.95rem">🌟 Impacto del mix premium <span style="font-weight:400;color:#64748b;font-size:.72rem">(Premium 25/20 + Silver Cat 15)</span></div>';
-    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Compara tus primeros meses cerrados del reporte (<b>'+nomB+'</b>) contra los más recientes (<b>'+nomR+'</b>): ¿le estás vendiendo más premium a tus clientes, y cuánto margen extra te deja eso — separado de si vendiste más caro o más volumen en general?</div>';
+    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">'+(usoPartidaFija
+      ?'Compara <b>'+nomB+'</b> (antes de que la promoción exigiera el mix premium) contra <b>'+nomR+'</b> (desde que empezó a exigirse, en adelante): ¿le estás vendiendo más premium a tus clientes desde entonces, y cuánto margen extra te deja eso — separado de si vendiste más caro o más volumen en general? Según vayan cerrando los meses que siguen, se van sumando aquí solos.'
+      :'Compara tus primeros meses cerrados del reporte (<b>'+nomB+'</b>) contra los más recientes (<b>'+nomR+'</b>): ¿le estás vendiendo más premium a tus clientes, y cuánto margen extra te deja eso — separado de si vendiste más caro o más volumen en general? <span style="color:#f59e0b">(Este reporte no alcanza a cubrir meses de antes y después de agosto, así que aún no se puede comparar contra el inicio de la exigencia del mix; se muestra la partición por mitades mientras tanto.)</span>')
+      +'</div>';
     if(B.totalSacTodos<=0||R.totalSacTodos<=0||R.margPremSac==null||R.margNoSac==null){
       h+='<div style="padding:8px 4px;color:#94a3b8;font-size:.78rem;margin-bottom:16px">No hay suficiente venta premium y no-premium con costo capturado en ambos periodos para calcular esto todavía.</div>';
     }else{
