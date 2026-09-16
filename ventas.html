@@ -930,6 +930,16 @@ function processPivot(rows,fname){
       }
       if(fd){const cm=fd.getFullYear()+'-'+fd.getMonth();mesesCliente[cli][cm]=true;if(!lastReal[cli]||fd>lastReal[cli])lastReal[cli]=fd;const _mm=fd.getMonth()+1,_dd=fd.getDate();(diaMes[_mm]=diaMes[_mm]||new Array(31).fill(0))[_dd-1]+=val;const _dc=diaMesCli[cli]||(diaMesCli[cli]={});(_dc[_mm]=_dc[_mm]||new Array(31).fill(0))[_dd-1]+=val;}
     };
+    // Algunas filas del reporte traen $ facturado (columna Total) con sacos en 0 (ajustes de precio,
+    // renglones complementarios de una misma factura, etc.). Antes esas filas se perdían por completo
+    // porque rec() exige sacos>0; con esto el dinero real sigue contando aunque no sume sacos ese día.
+    const recMontoOnly=(prodName,mes,monto)=>{
+      if(!cli||!mes||monto<=0)return;
+      if(!byClienteProdMesVal[cli])byClienteProdMesVal[cli]={};
+      if(!byClienteProdMesVal[cli][prodName])byClienteProdMesVal[cli][prodName]={};
+      byClienteProdMesVal[cli][prodName][mes]=(byClienteProdMesVal[cli][prodName][mes]||0)+monto;
+      mesTotalVal[mes]=(mesTotalVal[mes]||0)+monto;
+    };
     const recPromo=(prodTxt,mes,val)=>{
       if(!cli||val<=0)return;
       promoCliente[cli]=(promoCliente[cli]||0)+val;
@@ -948,9 +958,12 @@ function processPivot(rows,fname){
       if(c0===''||c0==null)continue;
       if(c0 instanceof Date){
         fdate=c0;curMes=c0.getMonth()+1;yearCount[c0.getFullYear()]=(yearCount[c0.getFullYear()]||0)+1;if(c0.getDate()!==1)esDiario=true;
-        if(productFirst&&cli&&val>0){
-          if(curKind==='fin')rec(curProdName,curMes,val,fdate,monto);
-          else if(curKind==='promo')recPromo(curProdName,curMes,val);
+        if(productFirst&&cli){
+          if(curKind==='fin'){
+            if(val>0)rec(curProdName,curMes,val,fdate,monto);
+            else if(monto>0)recMontoOnly(curProdName,curMes,monto);
+          }
+          else if(curKind==='promo'&&val>0)recPromo(curProdName,curMes,val);
         }
         continue;
       }
@@ -963,7 +976,10 @@ function processPivot(rows,fname){
           else if(pi.promo){curKind='promo';curProdName=t;}
           else{curKind='fin';curProdName=pi.name;}
         }else{
-          if(cli&&curMes&&val>0&&pi.es04){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto); }
+          if(cli&&curMes&&pi.es04){
+            if(val>0){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto); }
+            else if(!pi.promo&&monto>0)recMontoOnly(pi.name,curMes,monto);
+          }
         }
         continue;
       }
