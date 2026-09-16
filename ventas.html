@@ -765,6 +765,7 @@ function handleFile(file){
 // ── PROCESS EXCEL ─────────────────────────────────────────────────────────────
 function processExcel(buf,fname){
   try{
+    window.LAST_VAL_PM=null;window.LAST_VAL_MES=null;window.LAST_TIENE_MONTO=false;
     document.getElementById('load-msg').textContent='Analizando columnas...';
     const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
     // ¿Formato pivote de ventas facturadas? (A1='Column0', jerarquía cliente→mes→producto)
@@ -874,6 +875,12 @@ function processPivot(rows,fname){
   try{
     document.getElementById('load-msg').textContent='Procesando ventas facturadas...';
     const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={},promoCliProd={},promoCliProdMes={};
+    const byClienteProdMesVal={},mesTotalVal={};
+    // Columna de $ facturado (nueva, opcional): la fila de subencabezado (rows[1]) trae 'Total' junto
+    // a la cantidad cuando el export de Odoo incluye el monto. Si no existe, colMonto queda en -1 y
+    // todo el flujo sigue funcionando igual que antes, solo sin datos reales de $ (se usa el estimado).
+    let colMonto=-1;
+    if(rows[1]){ for(let _ci=1;_ci<rows[1].length;_ci++){ if(String(rows[1][_ci]||'').trim().toLowerCase()==='total'){colMonto=_ci;break;} } }
     const lastReal={},yearCount={},diaMes={},diaMesCli={},clienteVend={};let esDiario=false;let curVendor=null;
     // Detectar jerarquía: cliente->producto->mes  vs  cliente->mes->producto
     let productFirst=false,seenClient=false;
@@ -899,7 +906,7 @@ function processPivot(rows,fname){
         if(nextType(k)!=='name'){ const nn=normName(tt); _cnt[nn]=(_cnt[nn]||0)+1; } }
       for(const nn in _cnt) if(_cnt[nn]>=2) VEND_SET.add(nn);
     }    let cli=null,curMes=0,fdate=null,curKind='skip',curProdName='',filas=0;
-    const rec=(prodName,mes,val,fd)=>{
+    const rec=(prodName,mes,val,fd,monto)=>{
       if(!cli||!mes||val<=0)return;
       if(!byClienteMes[cli])byClienteMes[cli]={};
       if(!byClienteProd[cli])byClienteProd[cli]={};
@@ -911,6 +918,12 @@ function processPivot(rows,fname){
       if(!byClienteProdMes[cli][prodName])byClienteProdMes[cli][prodName]={};
       byClienteProdMes[cli][prodName][mes]=(byClienteProdMes[cli][prodName][mes]||0)+val;
       sacosCliente[cli]+=val;mesTotal[mes]=(mesTotal[mes]||0)+val;filas++;
+      if(monto>0){
+        if(!byClienteProdMesVal[cli])byClienteProdMesVal[cli]={};
+        if(!byClienteProdMesVal[cli][prodName])byClienteProdMesVal[cli][prodName]={};
+        byClienteProdMesVal[cli][prodName][mes]=(byClienteProdMesVal[cli][prodName][mes]||0)+monto;
+        mesTotalVal[mes]=(mesTotalVal[mes]||0)+monto;
+      }
       if(fd){const cm=fd.getFullYear()+'-'+fd.getMonth();mesesCliente[cli][cm]=true;if(!lastReal[cli]||fd>lastReal[cli])lastReal[cli]=fd;const _mm=fd.getMonth()+1,_dd=fd.getDate();(diaMes[_mm]=diaMes[_mm]||new Array(31).fill(0))[_dd-1]+=val;const _dc=diaMesCli[cli]||(diaMesCli[cli]={});(_dc[_mm]=_dc[_mm]||new Array(31).fill(0))[_dd-1]+=val;}
     };
     const recPromo=(prodTxt,mes,val)=>{
@@ -927,11 +940,12 @@ function processPivot(rows,fname){
     const prodInfo=(t)=>{const mp=t.match(/\[(\S+)\]/);if(!mp)return null;const code=mp[1].toUpperCase();return {es04:t.toUpperCase().includes('04MAS'),promo:/[PB]\d*$/.test(code),name:t.split(']').slice(1).join(']').trim()};};
     for(let i=2;i<rows.length;i++){
       const c0=rows[i][0];const val=parseFloat(rows[i][1])||0;
+      const monto=colMonto>=0?(parseFloat(rows[i][colMonto])||0):0;
       if(c0===''||c0==null)continue;
       if(c0 instanceof Date){
         fdate=c0;curMes=c0.getMonth()+1;yearCount[c0.getFullYear()]=(yearCount[c0.getFullYear()]||0)+1;if(c0.getDate()!==1)esDiario=true;
         if(productFirst&&cli&&val>0){
-          if(curKind==='fin')rec(curProdName,curMes,val,fdate);
+          if(curKind==='fin')rec(curProdName,curMes,val,fdate,monto);
           else if(curKind==='promo')recPromo(curProdName,curMes,val);
         }
         continue;
@@ -945,7 +959,7 @@ function processPivot(rows,fname){
           else if(pi.promo){curKind='promo';curProdName=t;}
           else{curKind='fin';curProdName=pi.name;}
         }else{
-          if(cli&&curMes&&val>0&&pi.es04){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate); }
+          if(cli&&curMes&&val>0&&pi.es04){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto); }
         }
         continue;
       }
@@ -964,6 +978,7 @@ function processPivot(rows,fname){
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiario;
     window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND=clienteVend;
     LAST_PROMO_PROD=promoCliProd; window.LAST_PROMO_PM=promoCliProdMes;
+    window.LAST_VAL_PM=byClienteProdMesVal; window.LAST_VAL_MES=mesTotalVal; window.LAST_TIENE_MONTO=(colMonto>=0);
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname);
   }catch(err){console.error(err);alert('Error procesando el archivo:\n'+err.message);resetDash();}
 }
@@ -1022,7 +1037,11 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       const ld=lastDate[nombre]||null;
       const dias=daysAgo(ld);
       const prodMes=byClienteProdMes[nombre]||{};
-      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
+      // $ facturado real (cuando el export de Odoo trae la columna de monto): mismo desglose que prodMes
+      // pero en pesos en vez de sacos, para poder usar ingreso real en vez de sac×precio-lista donde exista.
+      const prodMesVal=(window.LAST_VAL_PM&&window.LAST_VAL_PM[nombre])||{};
+      const mesDataVal={}; for(const _p in prodMesVal){ const _mm=prodMesVal[_p]; for(const _m in _mm) mesDataVal[_m]=(mesDataVal[_m]||0)+(_mm[_m]||0); }
+      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,prodMesVal,mesDataVal,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
     }).sort((a,b)=>b.promMes-a.promMes);
 
     // El vendedor se toma del MAPEO curado (vendedores reales + administración), NO del export de Odoo.
@@ -1038,7 +1057,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     }
 
     const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
-    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog};
+    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
@@ -2047,11 +2066,15 @@ function renderEquilibrio(){
   var nM=comp?comp.length:(DATA.meses?DATA.meses.length:1); if(!nM)nM=1;
   var rev=0,cogs=0,promo=0,unmatched=0;
   DATA.clients.forEach(function(c){
-    var pm=c.prodMes||{}; var cliRevNP=0;
+    var pm=c.prodMes||{}; var pmv=c.prodMesVal||{}; var cliRevNP=0;
     for(var p in pm){ var months=pm[p]; var qty=0; for(var m in months){ if(!comp||comp.indexOf(+m)>=0) qty+=months[m]||0; }
       if(qty<=0)continue; var mm=EQ_find(p); if(!mm){unmatched+=qty;continue;}
-      var cost=mm[1],price=mm[2]; rev+=qty*price; cogs+=qty*cost;
-      cliRevNP+=qty*price; // PetFood ahora también recibe descuento
+      var cost=mm[1],price=mm[2];
+      // Ingreso: $ REAL facturado (Odoo) cuando el reporte lo trae, sumado en la misma ventana de meses; si no, precio de lista.
+      var realRev=0; var monthsV=pmv[p]; if(monthsV){ for(var m2 in monthsV){ if(!comp||comp.indexOf(+m2)>=0) realRev+=monthsV[m2]||0; } }
+      var prev=realRev>0?realRev:qty*price;
+      rev+=prev; cogs+=qty*cost;
+      cliRevNP+=prev; // PetFood ahora también recibe descuento
     }
     promo += cliRevNP*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;
   });
@@ -2064,6 +2087,9 @@ function renderEquilibrio(){
   function card(lbl,val,sub,col){return '<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+(col||'#3b82f6')+';border-radius:10px;padding:12px 14px;min-width:150px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:'+(col||'#fff')+'">'+val+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+lbl+'</div>'+(sub?'<div style="font-size:.7rem;color:#cbd5e1;margin-top:2px">'+sub+'</div>':'')+'</div>';}
   var h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">💰 Punto de equilibrio y margen</div>';
   h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:12px">Calculado con el reporte cargado ('+nM+' mes(es)) y tus costos/precios de abajo. La promoción se descuenta incluyendo PetFood. Cambia cualquier celda azul y da Calcular.</div>';
+  h+=DATA.tieneMontoReal
+     ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:10px">✅ El ingreso usa el <b>monto facturado real</b> de Odoo (no precio de lista estimado) donde el archivo lo trae.</div>'
+     :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:10px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado).</div>';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
    +'<div><label style="font-size:.72rem;color:#94a3b8;display:block;margin-bottom:3px">Gastos fijos mensuales ($)</label><input id="eq-gf" type="number" value="'+gf+'" style="width:180px;background:#0b1628;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:9px"></div>'
    +'<button onclick="saveEquil()" style="background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:10px 22px;font-weight:800;cursor:pointer">Calcular</button></div>';
@@ -2077,7 +2103,7 @@ function renderEquilibrio(){
      +'<td style="text-align:right;padding:3px 4px;color:'+mc+';font-weight:700">'+mg.toFixed(1)+'%</td></tr>';});
   h+='</table>';
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-   +card('Ingreso / mes',money(revMes),'a precio de lista, con tu mix actual','#3b82f6')
+   +card('Ingreso / mes',money(revMes),(DATA.tieneMontoReal?'real facturado, con tu mix actual':'a precio de lista, con tu mix actual'),'#3b82f6')
    +card('Utilidad bruta / mes',money(utilMes),'margen bruto '+(margB*100).toFixed(1)+'%','#22c55e')
    +card('Costo del programa / mes',money(promoMes),(rev>0?(promo/rev*100).toFixed(2):'0')+'% de la venta','#f59e0b')
    +card('Utilidad NETA / mes',money(utilNetaMes),'después de la promoción','#7ee2a8')
@@ -2155,9 +2181,11 @@ function renderRentabilidad(){
   for(const c of DATA.clients){
     if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
     if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
-    const pm=c.prodMes||{}; let rev=0,cost=0;
+    const pm=c.prodMes||{}; const pmv=c.prodMesVal||{}; let rev=0,cost=0;
+    // Ingreso: usa el $ REAL facturado (Odoo) cuando el reporte lo trae; si no, cae al precio de lista estimado.
     for(const p in pm){ let sac=0; for(const m in pm[p])sac+=pm[p][m]||0; if(sac<=0)continue; const cc=CM[_famKey(p)];
-      if(cc){ rev+=sac*cc.precio; cost+=sac*cc.costo; if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0}; byProd[p].sac+=sac; byProd[p].rev+=sac*cc.precio; byProd[p].cost+=sac*cc.costo; }
+      let realRev=0; const mv=pmv[p]; if(mv){ for(const m in mv) realRev+=mv[m]||0; }
+      if(cc){ const prev=realRev>0?realRev:sac*cc.precio; rev+=prev; cost+=sac*cc.costo; if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0}; byProd[p].sac+=sac; byProd[p].rev+=prev; byProd[p].cost+=sac*cc.costo; }
       else { sinCosto[p]=(sinCosto[p]||0)+sac; } }
     // costo de sacos regalados (promo/bonificación) por su producto real
     let promoCost=0; const pp=c.promoProd||{};
@@ -2177,6 +2205,9 @@ function renderRentabilidad(){
   const kpi=(n,l,col)=>'<div style="flex:1;min-width:118px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.7rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
   let h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:3px">💵 Rentabilidad del programa 04MAS</div>';
   h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">Hasta agosto</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">Desde septiembre</b> será el <b>descuento %</b> (nota de crédito). Aquí ves los dos para comparar. Los costos viven <b>solo en este tablero</b>.</div>';
+  h+=DATA.tieneMontoReal
+     ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:6px">✅ El ingreso de este reporte usa el <b>monto facturado real</b> de Odoo (no precio de lista estimado) donde el archivo lo trae.</div>'
+     :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:6px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado). Sube el export con la columna de $ para ver el ingreso real.</div>';
   // filtros
   const opt=(arr,sel)=>'<option value="">Todos</option>'+arr.map(x=>'<option'+(x===sel?' selected':'')+'>'+x+'</option>').join('');
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px">'+
@@ -2184,7 +2215,7 @@ function renderRentabilidad(){
      '<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Estado:</label><select onchange="rentSet(\'est\',this.value)">'+opt(ests,RENT_EST)+'</select>'+
      '<label style="font-size:.78rem;color:#94a3b8;margin-left:6px">Alerta si neto &lt;</label><input type="number" value="'+RENT_THR+'" onchange="rentSet(\'thr\',this.value)" style="width:56px;background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:3px 7px;font-size:.78rem">%</div>';
   // KPIs
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+kpi(_money(TR),'Ingreso (precio lista)')+kpi(_money(TGM)+' · '+pP(TGM).toFixed(1)+'%','Margen bruto')+'</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+kpi(_money(TR),DATA.tieneMontoReal?'Ingreso (real facturado)':'Ingreso (precio lista)')+kpi(_money(TGM)+' · '+pP(TGM).toFixed(1)+'%','Margen bruto')+'</div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'+
      kpi('-'+_money(TPROMO)+' · '+pP(TPROMO).toFixed(1)+'%','📦 Costo sacos promo/bonif (hasta agosto)','#fca5a5')+
      kpi(_money(TNETP)+' · '+(TR>0?TNETP/TR*100:0).toFixed(1)+'%','Margen NETO con promo (real)',_pctCol(TR>0?TNETP/TR*100:0,RENT_THR))+
@@ -2206,9 +2237,9 @@ function renderRentabilidad(){
     if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
     if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
     const revM={},costM={};
-    const pm=c.prodMes||{};
-    for(const p in pm){ const cc=CM[_famKey(p)]; if(!cc)continue; const mo=pm[p];
-      for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; revM[k]=(revM[k]||0)+sac*cc.precio; costM[k]=(costM[k]||0)+sac*cc.costo; } }
+    const pm=c.prodMes||{}; const pmv=c.prodMesVal||{};
+    for(const p in pm){ const cc=CM[_famKey(p)]; if(!cc)continue; const mo=pm[p]; const mov=pmv[p]||{};
+      for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; const realV=mov[k]||0; const pv=realV>0?realV:sac*cc.precio; revM[k]=(revM[k]||0)+pv; costM[k]=(costM[k]||0)+sac*cc.costo; } }
     for(const k in revM){ const o=_ens(+k); o.rev+=revM[k]; o.cost+=costM[k];
       const d=descMesCliente(c,+k); o.disc+=revM[k]*d/100; o.descW+=d*revM[k]; }
     const ppm=c.promoProdMes||{};
@@ -2254,7 +2285,7 @@ function renderRentabilidad(){
       h+='<div style="background:#111c34;border:1px solid #334155;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.78rem;color:#cbd5e1">Todavía no hay ventas cargadas desde '+(MES_NOM[MDESC]||'')+', así que aún no hay nada que comparar con el periodo de regalos ('+pctA.toFixed(2)+'% de la venta).</div>';
     }
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:660px"><thead><tr style="color:#9fb0cc">'
-      +'<th style="text-align:left;padding:6px 8px">Mes</th><th style="text-align:center">Esquema</th><th style="text-align:right">Venta (precio lista)</th>'
+      +'<th style="text-align:left;padding:6px 8px">Mes</th><th style="text-align:center">Esquema</th><th style="text-align:right">Venta ('+(DATA.tieneMontoReal?'real facturada':'precio lista')+')</th>'
       +'<th style="text-align:right">Sacos regalados</th><th style="text-align:right">Desc. promedio</th><th style="text-align:right">Lo que diste</th><th style="text-align:right">% de la venta</th></tr></thead><tbody>'+filas;
     const tRev=aRev+nRev, tDado=aDado+nDado;
     h+='<tr style="background:#14243f;font-weight:800;color:#fff"><td style="padding:6px 8px">TOTAL</td><td></td>'
