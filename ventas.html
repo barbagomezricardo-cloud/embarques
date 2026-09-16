@@ -283,9 +283,12 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
         <select id="seg-fil" onchange="renderClienteTable()"><option value="">Todos segmentos</option><option value="VIP">VIP</option><option value="Recurrente">Recurrente</option><option value="Esporadico">Esporádico</option><option value="EnRiesgo">En Riesgo</option></select>
         <select id="est-fil" onchange="renderClienteTable()"><option value="">Todos estados</option></select>
         <select id="vnd-fil" onchange="renderClienteTable()"><option value="">Todos vendedores</option></select>
-        <span id="tbl-count" style="font-size:.75rem;color:#64748b;margin-left:auto"></span>
+        <button onclick="document.getElementById('odoo-desc-input').click()" title="Sube el reporte de descuento comercial que calculó Odoo para compararlo contra tu programa" style="background:#1e3258;color:#7dd3fc;border:1px solid #2563EB;border-radius:6px;padding:5px 10px;font-size:.72rem;cursor:pointer;margin-left:auto">📊 Comparar con Odoo</button>
+        <input type="file" id="odoo-desc-input" accept=".xlsx,.xls" style="display:none" onchange="handleOdooDescFile(this.files[0])">
+        <span id="tbl-count" style="font-size:.75rem;color:#64748b"></span>
       </div>
       <div id="esp-panel" style="display:none"></div>
+      <div id="odoo-diff-panel" style="display:none"></div>
       <div class="tbl-wrap">
         <table class="dt" id="cliente-tbl">
           <thead><tr>
@@ -630,6 +633,7 @@ const ST_LBL = {
 
 // ── ESTADO GLOBAL ─────────────────────────────────────────────────────────────
 let DATA=null, LAST_DATA_YEAR=0, LAST_DIAMES=null, LAST_ESDIARIO=false, selState=null, sortCol='promMes', sortAsc=false, dayFilter=0, tendSortCol='promMes', tendSortAsc=false;
+let ODOO_DESC_ROWS=null, ODOO_DESC_FNAME='', ODOO_DIFF_ONLY=true;   // comparación del descuento vs el reporte de Odoo
 var LAST_PROMO_PROD={};   // {cliente:{producto:sacos}} — sacos regalados como promo/bonificación por producto (para costearlos en Rentabilidad)
 const TODAY=new Date();
 
@@ -1189,15 +1193,20 @@ function renderClienteTable(){
   const segC={VIP:'var(--gold)',Recurrente:'var(--green)',Esporadico:'var(--gray)',EnRiesgo:'var(--red)'};
   const segL={VIP:'VIP',Recurrente:'Recurrente',Esporadico:'Esporádico',EnRiesgo:'En Riesgo'};
   try{renderEspPanel();}catch(e){}
+  try{renderOdooDiff();}catch(e){}
   document.getElementById('cliente-body').innerHTML=rows.map(c=>{
     const dk=c.tier||TIER_KEY[c.nivel]||c.nivel;
     const diasColor=c.dias>=45?'var(--red)':c.dias>=30?'#f97316':c.dias>=15?'var(--amber)':'var(--green)';
     const diasTxt=c.dias>=999?'—':(c.dias+'d');
     const _e=(typeof espVigente==='function')?espVigente(c.nombre):null;
     const _pol=(typeof descPolitica==='function')?descPolitica(c):c.desc;
+    // Fuera del especial (morado), se muestra _pol (descPolitica) y no el c.desc crudo: así el
+    // % de arranque autorizado en la pestaña Nuevos (cuando el cliente aún no gana nivel real,
+    // c.desc=0) también aparece aquí. Es el mismo % que ya usan Rentabilidad/Equilibrio (descEfec).
+    const _deArranque=(_pol>0 && c.desc<=0);
     const descTxt=_e
       ? `<span style="color:#64748b"><s>${_pol.toFixed(1)}%</s></span> <b style="color:#c99bff">${Number(_e.pct).toFixed(2)}%</b><div style="font-size:.62rem;color:#a78bfa">⚡ hasta ${_fechaMX(_e.hasta)}</div>`
-      : `${c.desc.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'');
+      : `${_pol.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'')+(_deArranque?' <span style="color:#7dd3fc" title="% de arranque autorizado en la pestaña Nuevos">🚀</span>':'');
     const _puedeEsp=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
     // El botón se ve SIEMPRE, aunque estés en modo visor: si no, parece que la función no
     // existe. En visor sale con candado y, al tocarlo, autorizarDescEsp pide la contraseña.
@@ -3305,6 +3314,121 @@ function renderEspPanel(){
         : '<span style="color:#94a3b8;font-size:.68rem">🔒 solo super-usuario</span>')+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
+  box.innerHTML=h;
+}
+
+// ══ COMPARACIÓN CONTRA EL REPORTE DE DESCUENTO DE ODOO ═══════════════════════
+// Odoo calcula su propio % de descuento por cliente (reporte "Seguimiento de clientes" /
+// nb.commercial.discount.period). A inicio de mes debería salir IGUAL a lo que calcula este
+// programa. Se sube ese reporte aquí, se hace el match por nombre y se marca cualquier cliente
+// donde el % no cuadre, para no tener que comparar renglón por renglón a mano.
+function handleOdooDescFile(file){
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      processOdooDesc(rows,file.name);
+    }catch(err){console.error(err);alert('Error leyendo el reporte de descuento de Odoo:\n'+err.message);}
+  };
+  r.onerror=()=>alert('Error al leer el archivo.');
+  r.readAsArrayBuffer(file);
+  const inp=document.getElementById('odoo-desc-input'); if(inp)inp.value='';
+}
+function processOdooDesc(rows,fname){
+  if(!rows||rows.length<2){alert('El reporte de descuento de Odoo está vacío o no tiene datos.');return;}
+  const hdr=rows[0].map(h=>String(h||'').toLowerCase().trim());
+  const idx=re=>hdr.findIndex(h=>re.test(h));
+  const cCli=idx(/cliente/);
+  const cVend=idx(/vendedor/);
+  const cNivel=idx(/nivel/);
+  const cProm=hdr.findIndex(h=>h.includes('promedio')&&h.includes('mensual'));
+  const cSug=idx(/sugerido/);
+  const cVal=hdr.findIndex(h=>/v[aá]lido/.test(h));
+  if(cCli<0||cVal<0){
+    alert('No se reconoce el formato del reporte de descuento de Odoo.\n\nSe requiere al menos la columna "Cliente comercial" y "Descuento válido (%)".\n\nColumnas detectadas: '+rows[0].join(', '));
+    return;
+  }
+  const out=[];
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];
+    const nombre=String(row[cCli]||'').trim();
+    if(!nombre)continue;   // salta la fila de totales del periodo (sin nombre de cliente) y filas vacías
+    out.push({
+      nombre: mergeDup(nombre),
+      vendedor: cVend>=0?String(row[cVend]||'').trim():'',
+      nivel: cNivel>=0?String(row[cNivel]||'').trim():'',
+      prom: cProm>=0?(parseFloat(row[cProm])||0):0,
+      sugerido: cSug>=0?(parseFloat(row[cSug])||0):0,
+      valido: parseFloat(row[cVal])||0
+    });
+  }
+  if(!out.length){alert('No se encontraron clientes en el reporte de descuento de Odoo.');return;}
+  ODOO_DESC_ROWS=out; ODOO_DESC_FNAME=fname||'reporte de Odoo';
+  renderOdooDiff();
+}
+function toggleOdooDiffOnly(){ODOO_DIFF_ONLY=!ODOO_DIFF_ONLY;renderOdooDiff();}
+function clearOdooDiff(){ODOO_DESC_ROWS=null;renderOdooDiff();}
+function renderOdooDiff(){
+  const box=document.getElementById('odoo-diff-panel'); if(!box)return;
+  if(!ODOO_DESC_ROWS){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='';
+  if(!DATA){box.innerHTML='<div style="padding:10px;color:#94a3b8;font-size:.78rem">Sube primero tu reporte de ventas para poder comparar contra Odoo.</div>';return;}
+  const _h=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const TOL=0.05;   // tolerancia en puntos porcentuales (redondeo)
+  const byKey={}; DATA.clients.forEach(c=>{byKey[nkey(c.nombre)]=c;});
+  const rows=ODOO_DESC_ROWS.map(o=>{
+    const c=byKey[nkey(o.nombre)];
+    const prog=c?((typeof descEfec==='function')?descEfec(c):(c.desc||0)):null;
+    const dif=(prog!=null)?Math.round((o.valido-prog)*100)/100:null;
+    const estado=c?(Math.abs(dif)<=TOL?'ok':'dif'):'nf';
+    return Object.assign({},o,{c,prog,dif,estado});
+  });
+  const nOk=rows.filter(r=>r.estado==='ok').length;
+  const nDif=rows.filter(r=>r.estado==='dif').length;
+  // un "no encontrado" solo importa si Odoo le calculó algún % — los que están en $0 y no compraron
+  // en el reporte de ventas cargado no son una alerta real, solo ruido de la base completa de Odoo.
+  const nNf=rows.filter(r=>r.estado==='nf'&&(r.valido>0||r.sugerido>0)).length;
+  let shown=rows.filter(r=>r.estado==='dif'||(r.estado==='nf'&&(r.valido>0||r.sugerido>0)));
+  if(!ODOO_DIFF_ONLY)shown=rows.slice();
+  shown.sort((a,b)=>{
+    const oa=a.estado==='dif'?0:(a.estado==='nf'?1:2), ob=b.estado==='dif'?0:(b.estado==='nf'?1:2);
+    if(oa!==ob)return oa-ob;
+    return Math.abs(b.dif||0)-Math.abs(a.dif||0);
+  });
+  let h='<div style="background:#0F1E3C;border:2px solid #2563EB;border-radius:10px;padding:12px 15px;margin:0 0 12px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">';
+  h+='<div><div style="font-size:.92rem;font-weight:800;color:#7dd3fc">📊 Comparación contra el reporte de Odoo ('+_h(ODOO_DESC_FNAME)+')</div>';
+  h+='<div style="font-size:.73rem;color:#94a3b8;margin-top:2px">'+rows.length+' clientes en el reporte · <b style="color:#4ade80">'+nOk+' iguales</b> · <b style="color:#fbbf24">'+nDif+' con diferencia</b>'+(nNf?' · <b style="color:#f87171">'+nNf+' no encontrados en tu programa</b>':'')+'</div></div>';
+  h+='<div style="display:flex;gap:6px;flex-shrink:0">';
+  h+='<button onclick="toggleOdooDiffOnly()" style="background:#1e3258;color:#cbd5e1;border:1px solid #2563EB;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer">'+(ODOO_DIFF_ONLY?'Ver todos':'Ver solo diferencias')+'</button>';
+  h+='<button onclick="clearOdooDiff()" style="background:#3a1414;color:#fecaca;border:1px solid #7f1d1d;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer">✖ Quitar</button>';
+  h+='</div></div>';
+  if(!shown.length){
+    h+='<div style="padding:14px 4px;color:#4ade80;font-size:.8rem">✅ Sin diferencias: tu programa calcula igual que Odoo en los clientes de este reporte.</div>';
+  }else{
+    h+='<div style="overflow-x:auto;margin-top:9px"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:700px"><thead><tr style="background:#14243f;color:#9fb0cc">'
+      +'<th style="padding:6px 9px;text-align:left">Cliente</th><th style="padding:6px;text-align:left">Vendedor (Odoo)</th><th style="padding:6px;text-align:left">Nivel (Odoo)</th>'
+      +'<th style="padding:6px;text-align:right">Odoo sugerido</th><th style="padding:6px;text-align:right">Odoo válido</th>'
+      +'<th style="padding:6px;text-align:right">Tu programa</th><th style="padding:6px;text-align:right">Diferencia</th><th style="padding:6px;text-align:center">Estado</th></tr></thead><tbody>';
+    shown.forEach(r=>{
+      const col=r.estado==='ok'?'#4ade80':(r.estado==='nf'?'#f87171':'#fbbf24');
+      const txt=r.estado==='ok'?'✅ igual':(r.estado==='nf'?'❓ no encontrado':'⚠ diferente');
+      h+='<tr style="border-top:1px solid #16233f">'
+        +'<td style="padding:5px 9px;color:#e8eef7;font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="'+_h(r.nombre)+'">'+_h(r.nombre)+'</td>'
+        +'<td style="color:#94a3b8">'+_h(r.vendedor||'—')+'</td>'
+        +'<td style="color:#94a3b8">'+_h(r.nivel||'—')+'</td>'
+        +'<td style="text-align:right;color:#cbd5e1">'+Number(r.sugerido||0).toFixed(2)+'%</td>'
+        +'<td style="text-align:right;color:#cbd5e1;font-weight:700">'+Number(r.valido||0).toFixed(2)+'%</td>'
+        +'<td style="text-align:right;color:#7dd3fc;font-weight:700">'+(r.prog!=null?Number(r.prog).toFixed(2)+'%':'—')+'</td>'
+        +'<td style="text-align:right;color:'+col+';font-weight:800">'+(r.dif!=null?((r.dif>0?'+':'')+r.dif.toFixed(2)+' pp'):'—')+'</td>'
+        +'<td style="text-align:center;color:'+col+';font-weight:700">'+txt+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='</div>';
   box.innerHTML=h;
 }
 
