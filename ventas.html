@@ -2351,6 +2351,89 @@ function renderRentabilidad(){
       +'<td style="text-align:right">'+(tRev>0?(tDado/tRev*100).toFixed(2):'0')+'%</td></tr>';
     h+='</tbody></table></div>';
   }
+
+  // ══ IMPACTO DEL MIX PREMIUM (Premium 25/20 + Silver Cat 15) ═════════════════
+  // ¿Le estoy vendiendo más productos premium a mis clientes? Y si sí, ¿cuánto margen
+  // EXTRA me deja eso comparado con haber vendido el mismo volumen total con la mezcla
+  // de antes? Es la variación de mezcla clásica de finanzas: se aísla el efecto de vender
+  // MÁS premium (no el de que haya subido el precio o el volumen total), para poder decirle
+  // a dirección "esto es lo que me da la promoción premium" y compararlo contra lo que cuesta
+  // el descuento — así se ve hasta dónde alcanza para sostenerlo o subirlo.
+  (function(){
+    const compAll=(DATA.completos&&DATA.completos.length)?DATA.completos.slice().sort((a,b)=>a-b):[];
+    if(compAll.length<2)return;   // no hay suficiente historia cerrada para comparar "antes" vs "ahora"
+    const half=Math.max(1,Math.floor(compAll.length/2));
+    const baseMs=compAll.slice(0,half), recMs=compAll.slice(-(compAll.length-half));
+    const baseSet=new Set(baseMs), recSet=new Set(recMs);
+    function bucketStats(monthSet){
+      let premSac=0,premRev=0,premCost=0,noSac=0,noRev=0,noCost=0,totalSacTodos=0;
+      DATA.clients.forEach(c=>{
+        const pm=c.prodMes||{}, pmv=c.prodMesVal||{};
+        for(const p in pm){
+          const mo=pm[p], mv=pmv[p]||{};
+          let sac=0,real=0;
+          for(const m in mo){ if(!monthSet.has(+m))continue; sac+=mo[m]||0; real+=mv[m]||0; }
+          if(sac<=0)continue;
+          totalSacTodos+=sac;
+          const esP=isPremiumPlus(p), cc=CM[_famKey(p)];
+          const rev=real>0?real:(cc?sac*cc.precio:0), cost=cc?sac*cc.costo:0;
+          if(esP){ premSac+=sac; if(cc){premRev+=rev;premCost+=cost;} }
+          else { noSac+=sac; if(cc){noRev+=rev;noCost+=cost;} }
+        }
+      });
+      return {premSac,premRev,premCost,noSac,noRev,noCost,totalSacTodos,
+        mixPct: totalSacTodos>0?premSac/totalSacTodos*100:0,
+        margPremSac: (premSac>0&&premRev>0)?(premRev-premCost)/premSac:null,
+        margNoSac: (noSac>0&&noRev>0)?(noRev-noCost)/noSac:null};
+    }
+    const B=bucketStats(baseSet), R=bucketStats(recSet);
+    const nomB=baseMs.map(m=>MES_NOM[m]).join('-'), nomR=recMs.map(m=>MES_NOM[m]).join('-');
+    h+='<div style="font-weight:800;color:#cbd5e1;margin:22px 0 6px;font-size:.95rem">🌟 Impacto del mix premium <span style="font-weight:400;color:#64748b;font-size:.72rem">(Premium 25/20 + Silver Cat 15)</span></div>';
+    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Compara tus primeros meses cerrados del reporte (<b>'+nomB+'</b>) contra los más recientes (<b>'+nomR+'</b>): ¿le estás vendiendo más premium a tus clientes, y cuánto margen extra te deja eso — separado de si vendiste más caro o más volumen en general?</div>';
+    if(B.totalSacTodos<=0||R.totalSacTodos<=0||R.margPremSac==null||R.margNoSac==null){
+      h+='<div style="padding:8px 4px;color:#94a3b8;font-size:.78rem;margin-bottom:16px">No hay suficiente venta premium y no-premium con costo capturado en ambos periodos para calcular esto todavía.</div>';
+    }else{
+      const deltaMixPP=R.mixPct-B.mixPct;
+      const margGapSac=R.margPremSac-R.margNoSac;
+      const sacosDeMas=(deltaMixPP/100)*R.totalSacTodos;
+      const extraMargenPesos=sacosDeMas*margGapSac;
+      const colMix=deltaMixPP>=0?'#4ade80':'#f87171';
+      h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+        +kpi(B.mixPct.toFixed(1)+'%','Mix premium · '+nomB)
+        +kpi(R.mixPct.toFixed(1)+'%','Mix premium · '+nomR)
+        +kpi((deltaMixPP>=0?'+':'')+deltaMixPP.toFixed(1)+' pp','Cambio en el mix',colMix)+'</div>';
+      h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+        +kpi('$'+fmt(R.margPremSac),'Margen por saco · premium ('+nomR+')','#a78bfa')
+        +kpi('$'+fmt(R.margNoSac),'Margen por saco · resto del portafolio','#7dd3fc')
+        +kpi('$'+fmt(margGapSac),'Ventaja del premium, por saco','#4ade80')+'</div>';
+      h+='<div style="background:'+(extraMargenPesos>=0?'#0f2e1c':'#3a1414')+';border:1px solid '+(extraMargenPesos>=0?'#1a7a3f':'#7f1d1d')+';border-radius:10px;padding:11px 14px;margin-bottom:10px;font-size:.8rem;color:'+(extraMargenPesos>=0?'#a9f0c4':'#fecaca')+'">'
+        +(extraMargenPesos>=0
+          ?'✅ Si en <b>'+nomR+'</b> hubieras vendido con la MISMA mezcla que en <b>'+nomB+'</b> (mismo volumen total, '+fmt(R.totalSacTodos)+' sacos), tus clientes habrían comprado <b>'+fmt(Math.abs(sacosDeMas))+' sacos premium menos</b>. Al margen que hoy deja cada saco premium sobre el resto del portafolio (<b>$'+fmt(margGapSac)+'</b> por saco), eso es <b>$'+fmt(extraMargenPesos)+' de margen extra</b> que estás ganando solo por el cambio de mezcla — no por precio ni por volumen total.'
+          :'⚠ Tu mix premium bajó <b>'+Math.abs(deltaMixPP).toFixed(1)+' puntos</b> vs '+nomB+': eso te está costando <b>$'+fmt(Math.abs(extraMargenPesos))+'</b> de margen que sí tenías antes.')
+        +'</div>';
+      // ¿alcanza ese margen extra para pagar lo que cuesta el descuento en el mismo periodo reciente?
+      let discCostoReciente=0;
+      DATA.clients.forEach(c=>{
+        const pm=c.prodMes||{}, pmv=c.prodMesVal||{};
+        recMs.forEach(m=>{
+          let rev=0;
+          for(const p in pm){ const mo=pm[p]; if(!mo||!mo[m])continue; const sac=mo[m]; const real=(pmv[p]&&pmv[p][m])||0; const cc=CM[_famKey(p)]; rev+=real>0?real:(cc?sac*cc.precio:0); }
+          if(rev<=0)return;
+          discCostoReciente+=rev*descMesCliente(c,m)/100;
+        });
+      });
+      if(discCostoReciente>0){
+        const pctCubierto=extraMargenPesos/discCostoReciente*100;
+        h+='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:11px 14px;margin-bottom:16px;font-size:.8rem;color:#cbd5e1">'
+          +'📎 <b>Para justificar el descuento:</b> en '+nomR+' el programa de descuento te costó <b>'+_money(discCostoReciente)+'</b>. '
+          +(extraMargenPesos>=0
+            ?'El margen extra del mix premium (<b>'+_money(extraMargenPesos)+'</b>) cubre <b>'+pctCubierto.toFixed(0)+'%</b> de ese costo'+(pctCubierto>=100?' — el mix premium por sí solo ya paga el descuento completo de este periodo.':', el resto sale del margen bruto normal.')
+            :'El mix premium no compensa el costo del descuento este periodo; el margen extra que tenías antes por vender más premium se redujo.')
+          +' Esta es la referencia real de cuánto margen extra tienes por el cambio hacia premium, para saber hasta dónde puedes sostener o subir el descuento sin perder rentabilidad.</div>';
+      }
+    }
+  })();
+
   // por vendedor
   h+='<div style="font-weight:800;color:#cbd5e1;margin:6px 0 6px">Por vendedor</div>';
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:right">Cli.</th><th style="text-align:right">Ingreso</th><th style="text-align:right">M. bruto</th><th style="text-align:right">Promo/bonif</th><th style="text-align:right">Neto c/promo</th><th style="text-align:right">Desc. %</th><th style="text-align:right">Neto c/desc</th></tr></thead><tbody>';
