@@ -772,6 +772,7 @@ function processExcel(buf,fname){
   try{
     window.LAST_VAL_PM=null;window.LAST_VAL_MES=null;window.LAST_TIENE_MONTO=false;
     window.LAST_VAL_PM_SINIVA=null;window.LAST_VAL_MES_SINIVA=null;window.LAST_TIENE_SUBTOTAL=false;
+    window.LAST_EXCLUIDA_PROD=null;
     document.getElementById('load-msg').textContent='Analizando columnas...';
     const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
     // ¿Formato pivote de ventas facturadas? (A1='Column0', jerarquía cliente→mes→producto)
@@ -883,6 +884,7 @@ function processPivot(rows,fname){
     const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={},promoCliProd={},promoCliProdMes={};
     const byClienteProdMesVal={},mesTotalVal={};
     const byClienteProdMesValSinIva={},mesTotalValSinIva={};
+    const excluidaProd={};   // $ de cotizaciones aún no facturadas (Cant. facturada=0), solo por producto — para informarlo en el Excel descargable de Rentabilidad
     // Columna de $ facturado (nueva, opcional): la fila de subencabezado (rows[1]) trae 'Total' junto
     // a la cantidad cuando el export de Odoo incluye el monto. Si no existe, colMonto queda en -1 y
     // todo el flujo sigue funcionando igual que antes, solo sin datos reales de $ (se usa el estimado).
@@ -966,6 +968,15 @@ function processPivot(rows,fname){
         mesTotalValSinIva[mes]=(mesTotalValSinIva[mes]||0)+montoSinIva;
       }
     };
+    // Igual que arriba: acumula el $ de una fila con Cant. facturada=0, pero SOLO por producto (todo
+    // el periodo, sin mes) y en un bote aparte que nunca toca byClienteProdMesVal/ValSinIva — es
+    // puramente informativo, para la hoja "Cotizaciones excluidas" del Excel descargable de Rentabilidad.
+    const recExcluida=(prodName,monto,montoSinIva)=>{
+      if(!prodName||(monto<=0&&montoSinIva<=0))return;
+      if(!excluidaProd[prodName])excluidaProd[prodName]={sinIva:0,conIva:0};
+      if(montoSinIva>0)excluidaProd[prodName].sinIva+=montoSinIva;
+      if(monto>0)excluidaProd[prodName].conIva+=monto;
+    };
     const recPromo=(prodTxt,mes,val)=>{
       if(!cli||val<=0)return;
       promoCliente[cli]=(promoCliente[cli]||0)+val;
@@ -988,6 +999,7 @@ function processPivot(rows,fname){
         if(productFirst&&cli){
           if(curKind==='fin'){
             if(val>0)rec(curProdName,curMes,val,fdate,monto,montoSinIva);
+            else recExcluida(curProdName,monto,montoSinIva);
             // val<=0 (Cant. facturada=0): cotización aún no facturada — se ignora, no cuenta como venta.
           }
           else if(curKind==='promo'&&val>0)recPromo(curProdName,curMes,val);
@@ -1005,6 +1017,7 @@ function processPivot(rows,fname){
         }else{
           if(cli&&curMes&&pi.es04){
             if(val>0){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto,montoSinIva); }
+            else if(!pi.promo)recExcluida(pi.name,monto,montoSinIva);
             // val<=0 (Cant. facturada=0): cotización aún no facturada — se ignora, no cuenta como venta.
           }
         }
@@ -1027,6 +1040,7 @@ function processPivot(rows,fname){
     LAST_PROMO_PROD=promoCliProd; window.LAST_PROMO_PM=promoCliProdMes;
     window.LAST_VAL_PM=byClienteProdMesVal; window.LAST_VAL_MES=mesTotalVal; window.LAST_TIENE_MONTO=(colMonto>=0);
     window.LAST_VAL_PM_SINIVA=byClienteProdMesValSinIva; window.LAST_VAL_MES_SINIVA=mesTotalValSinIva; window.LAST_TIENE_SUBTOTAL=(colSubtotal>=0);
+    window.LAST_EXCLUIDA_PROD=excluidaProd;
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname);
   }catch(err){console.error(err);alert('Error procesando el archivo:\n'+err.message);resetDash();}
 }
@@ -1110,7 +1124,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     }
 
     const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
-    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL};
+    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},fname:fname};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
@@ -2378,7 +2392,8 @@ function renderRentabilidad(){
   const rangoN=mesesN.length?(MES_NOM[mesesN[0]]+(mesesN.length>1?'–'+MES_NOM[mesesN[mesesN.length-1]]:'')):('desde '+MES_NOM[MDESC]);
   const pP=x=>TR>0?x/TR*100:0;
   const kpi=(n,l,col)=>'<div style="flex:1;min-width:118px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.7rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
-  let h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:3px">💵 Rentabilidad del programa 04MAS</div>';
+  let h='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:3px"><div style="font-size:1.05rem;font-weight:800;color:var(--gold)">💵 Rentabilidad del programa 04MAS</div>'
+     +'<button onclick="descargarExcelPorMes()" title="Descarga, por producto y por mes, los sacos y el $ facturado (sin y con IVA), más lo que quedó excluido por ser cotización aún no facturada" style="background:var(--gold);color:var(--navy);border:none;border-radius:7px;padding:5px 13px;font-size:.76rem;font-weight:800;cursor:pointer">⬇ Descargar Excel (ventas por mes)</button></div>';
   h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">'+rangoA+'</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">'+rangoN+'</b> es el <b>descuento %</b> (nota de crédito), con la tasa que estuvo vigente cada mes. Cada uno se mide sobre SU propia venta — no se mezcla la tasa de hoy con ventas de otros meses. Los costos viven <b>solo en este tablero</b>.</div>';
   h+=DATA.tieneSubtotalSinIva
      ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:6px">✅ El ingreso de este reporte usa el <b>monto facturado real SIN IVA</b> de Odoo (columna Subtotal) — la base correcta para el margen.</div>'
@@ -2598,6 +2613,103 @@ function renderRentabilidad(){
   arr.forEach((x,i)=>{const u=(+x.precio||0)-(+x.costo||0);const mp=(+x.precio>0)?u/(+x.precio)*100:0;h+='<tr style="border-top:1px solid #16233f"><td style="padding:4px 7px"><input value="'+(x.name||'').replace(/"/g,'&quot;')+'" onchange="setCosto('+i+',\'name\',this.value)" style="width:98%;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem"></td><td style="text-align:right"><input type="number" value="'+(x.costo||0)+'" onchange="setCosto('+i+',\'costo\',this.value)" style="width:78px;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem;text-align:right"></td><td style="text-align:right"><input type="number" value="'+(x.precio||0)+'" onchange="setCosto('+i+',\'precio\',this.value)" style="width:78px;background:#0b1628;border:1px solid #24304f;border-radius:5px;color:#cbd5e1;padding:3px 6px;font-size:.72rem;text-align:right"></td><td style="text-align:right;font-weight:700;color:'+(mp>=20?'#4ade80':(mp>=15?'#f59e0b':'#ef4444'))+'">'+mp.toFixed(1)+'%</td></tr>';});
   h+='</tbody></table></details>';
   box.innerHTML=h;
+}
+
+// ── EXPORTAR EXCEL: ventas por mes y producto (sacos, $ sin IVA, $ con IVA) ──────
+// Arma, con lo que ya está cargado en DATA, el mismo tipo de reporte que antes se
+// entregaba aparte (producto × mes: sacos, $ sin IVA, $ con IVA, y lo excluido por
+// ser cotización aún no facturada) para que se pueda generar directo desde el
+// programa, de cualquier reporte que se suba, sin tener que pedirlo por separado.
+// Usa el SheetJS (XLSX) que ya está cargado en la página — todo corre en el navegador,
+// no hace falta servidor.
+function descargarExcelPorMes(){
+  if(typeof DATA==='undefined'||!DATA||!DATA.clients||!DATA.clients.length){alert('Primero sube un reporte de ventas.');return;}
+  if(typeof XLSX==='undefined'||!XLSX.utils){alert('No se pudo cargar el motor de Excel. Revisa tu conexión e intenta de nuevo.');return;}
+  try{
+    // 1) Agregar sacos / $ sin IVA / $ con IVA por producto y mes, sumando TODOS los clientes
+    //    (mismo criterio que ya usa el resto del programa: rec() ya excluyó las cotizaciones
+    //    con Cant. facturada=0 de estos tres mapas, así que aquí ya solo hay venta confirmada).
+    const sacos={},sinIva={},conIva={};
+    for(const c of DATA.clients){
+      const pm=c.prodMes||{}, pv=c.prodMesVal||{}, pvs=c.prodMesValSinIva||{};
+      for(const p in pm){ const mo=pm[p]; const dst=sacos[p]||(sacos[p]={}); for(const m in mo) dst[m]=(dst[m]||0)+(mo[m]||0); }
+      for(const p in pv){ const mo=pv[p]; const dst=conIva[p]||(conIva[p]={}); for(const m in mo) dst[m]=(dst[m]||0)+(mo[m]||0); }
+      for(const p in pvs){ const mo=pvs[p]; const dst=sinIva[p]||(sinIva[p]={}); for(const m in mo) dst[m]=(dst[m]||0)+(mo[m]||0); }
+    }
+    const prodSet=new Set([...Object.keys(sacos),...Object.keys(conIva),...Object.keys(sinIva)]);
+    const totSacos=p=>Object.values(sacos[p]||{}).reduce((a,b)=>a+b,0);
+    const totConIva=p=>Object.values(conIva[p]||{}).reduce((a,b)=>a+b,0);
+    const prods=[...prodSet].sort((a,b)=>(totSacos(b)-totSacos(a))||(totConIva(b)-totConIva(a))||a.localeCompare(b));
+    if(!prods.length){alert('No hay ventas por producto para exportar en este reporte.');return;}
+    const meses=(DATA.meses&&DATA.meses.length)?DATA.meses.slice().sort((a,b)=>a-b):Object.keys(DATA.mesTotal||{}).map(Number).sort((a,b)=>a-b);
+    const mesLbl=meses.map(m=>MES_NOM[m]||('Mes '+m));
+
+    // 2) Hoja "Resumen": qué trae el archivo y con qué base de IVA se calculó
+    const hoy=new Date();
+    const fechaTxt=hoy.toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'});
+    const ivaTxt=DATA.tieneSubtotalSinIva
+      ?'El "sin IVA" viene directo de la columna Subtotal del export de Odoo (no es una tasa estimada: el IVA no es fijo, varía por cliente/régimen fiscal).'
+      :DATA.tieneMontoReal
+        ?'Este reporte no traía la columna Subtotal, así que "Sin IVA por mes" queda en $0 — solo hay monto real CON IVA (columna Total). Sube el export con Subtotal para verlo sin IVA.'
+        :'Este reporte no trae columnas de $ real (Total/Subtotal de Odoo) — no se pudo calcular ingreso, solo sacos.';
+    const resumen=[
+      ['Ventas por mes y producto — generado desde tu programa de ventas'],
+      [],
+      ['Generado',fechaTxt],
+      ['Archivo de origen',DATA.fname||'(sin nombre)'],
+      ['Año de los datos',DATA.dataYear||''],
+      ['Meses incluidos',mesLbl.join(', ')],
+      ['Productos 04MAS incluidos',prods.length],
+      [],
+      ['¿Qué es esto?'],
+      ['Cada una de las siguientes hojas trae los mismos productos como filas y los meses como columnas:'],
+      ['"Sacos por mes" son las unidades facturadas; "Sin IVA por mes" y "Con IVA por mes" son el $ que'],
+      ['realmente se facturó en Odoo (no precio de lista). '+ivaTxt],
+      [],
+      ['Solo se cuenta venta ya FACTURADA (Cant. facturada > 0). Las cotizaciones que todavía no se han'],
+      ['facturado (Cant. facturada = 0) se excluyen de las 3 hojas de arriba — no son venta confirmada — y'],
+      ['se muestran aparte, por producto, en la hoja "Cotizaciones excluidas", para que quede claro cuánto'],
+      ['dinero hay en cotización pendiente de facturar.'],
+    ];
+    const wsResumen=XLSX.utils.aoa_to_sheet(resumen);
+    wsResumen['!cols']=[{wch:34},{wch:62}];
+
+    // 3) Hojas de detalle producto × mes (sacos / sin IVA / con IVA)
+    function hojaMonto(titulo,data){
+      const rows=[[titulo],[],['Producto',...mesLbl,'Total']];
+      prods.forEach(p=>{
+        const mo=data[p]||{};
+        const vals=meses.map(m=>Math.round((mo[m]||0)*100)/100);
+        const total=Math.round(vals.reduce((a,b)=>a+b,0)*100)/100;
+        rows.push([p,...vals,total]);
+      });
+      const ws=XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols']=[{wch:56},...meses.map(()=>({wch:11})),{wch:13}];
+      return ws;
+    }
+    const wsSacos=hojaMonto('Sacos facturados por mes',sacos);
+    const wsSinIva=hojaMonto('Ingreso SIN IVA (Subtotal) por mes',sinIva);
+    const wsConIva=hojaMonto('Ingreso CON IVA (Total) por mes',conIva);
+
+    // 4) Hoja de cotizaciones excluidas (Cant. facturada = 0), solo por producto, todo el periodo
+    const excl=DATA.excluidaProd||{};
+    const exclRows=[['Monto excluido por producto (Cant. facturada = 0 — cotización aún no facturada, todo el periodo)'],[],['Producto','Sin IVA excluido','Con IVA excluido']];
+    prods.forEach(p=>{ const e=excl[p]||{sinIva:0,conIva:0}; exclRows.push([p,Math.round((e.sinIva||0)*100)/100,Math.round((e.conIva||0)*100)/100]); });
+    const wsExcl=XLSX.utils.aoa_to_sheet(exclRows);
+    wsExcl['!cols']=[{wch:56},{wch:16},{wch:16}];
+
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,wsResumen,'Resumen');
+    XLSX.utils.book_append_sheet(wb,wsSacos,'Sacos por mes');
+    XLSX.utils.book_append_sheet(wb,wsSinIva,'Sin IVA por mes');
+    XLSX.utils.book_append_sheet(wb,wsConIva,'Con IVA por mes');
+    XLSX.utils.book_append_sheet(wb,wsExcl,'Cotizaciones excluidas');
+    const nombreArch='Ventas_por_mes_'+(DATA.dataYear||hoy.getFullYear())+'_'+hoy.toISOString().slice(0,10)+'.xlsx';
+    XLSX.writeFile(wb,nombreArch);
+  }catch(err){
+    console.error(err);
+    alert('No se pudo generar el Excel:\n'+err.message);
+  }
 }
 
 /* ── TABLERO DE DIRECCIÓN ───────────────────────────────────────────────────────
