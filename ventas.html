@@ -771,6 +771,7 @@ function handleFile(file){
 function processExcel(buf,fname){
   try{
     window.LAST_VAL_PM=null;window.LAST_VAL_MES=null;window.LAST_TIENE_MONTO=false;
+    window.LAST_VAL_PM_SINIVA=null;window.LAST_VAL_MES_SINIVA=null;window.LAST_TIENE_SUBTOTAL=false;
     document.getElementById('load-msg').textContent='Analizando columnas...';
     const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
     // ¿Formato pivote de ventas facturadas? (A1='Column0', jerarquía cliente→mes→producto)
@@ -881,11 +882,20 @@ function processPivot(rows,fname){
     document.getElementById('load-msg').textContent='Procesando ventas facturadas...';
     const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={},promoCliProd={},promoCliProdMes={};
     const byClienteProdMesVal={},mesTotalVal={};
+    const byClienteProdMesValSinIva={},mesTotalValSinIva={};
     // Columna de $ facturado (nueva, opcional): la fila de subencabezado (rows[1]) trae 'Total' junto
     // a la cantidad cuando el export de Odoo incluye el monto. Si no existe, colMonto queda en -1 y
     // todo el flujo sigue funcionando igual que antes, solo sin datos reales de $ (se usa el estimado).
-    let colMonto=-1;
-    if(rows[1]){ for(let _ci=1;_ci<rows[1].length;_ci++){ if(String(rows[1][_ci]||'').trim().toLowerCase()==='total'){colMonto=_ci;break;} } }
+    // 'Subtotal' (cuando el export de Odoo también la incluye) es ese mismo monto SIN IVA — el IVA no
+    // es una tasa fija por producto (varía mucho de cliente a cliente, seguramente por régimen fiscal
+    // o zona), así que la única forma honesta de tener el ingreso sin IVA es leerlo directo de Odoo.
+    // 'Cant. facturada' (sacos) NO siempre está en la columna 1: en reportes que traen Total+Subtotal,
+    // Odoo recorre las columnas de dinero primero y deja 'Cant. facturada' en la columna 3. Por eso su
+    // posición también se detecta por el nombre del encabezado en vez de asumir siempre la columna 1
+    // — de lo contrario, en un reporte así se leerían pesos donde deberían ir sacos.
+    let colMonto=-1,colSubtotal=-1,colCant=-1;
+    if(rows[1]){ for(let _ci=1;_ci<rows[1].length;_ci++){ const _lbl=String(rows[1][_ci]||'').trim().toLowerCase(); if(colMonto<0&&_lbl==='total')colMonto=_ci; if(colSubtotal<0&&_lbl==='subtotal')colSubtotal=_ci; if(colCant<0&&_lbl.indexOf('cant')===0)colCant=_ci; } }
+    const colVal=colCant>=0?colCant:1;
     const lastReal={},yearCount={},diaMes={},diaMesCli={},clienteVend={};let esDiario=false;let curVendor=null;
     // Detectar jerarquía: cliente->producto->mes  vs  cliente->mes->producto
     let productFirst=false,seenClient=false;
@@ -911,7 +921,7 @@ function processPivot(rows,fname){
         if(nextType(k)!=='name'){ const nn=normName(tt); _cnt[nn]=(_cnt[nn]||0)+1; } }
       for(const nn in _cnt) if(_cnt[nn]>=2) VEND_SET.add(nn);
     }    let cli=null,curMes=0,fdate=null,curKind='skip',curProdName='',filas=0;
-    const rec=(prodName,mes,val,fd,monto)=>{
+    const rec=(prodName,mes,val,fd,monto,montoSinIva)=>{
       if(!cli||!mes||val<=0)return;
       if(!byClienteMes[cli])byClienteMes[cli]={};
       if(!byClienteProd[cli])byClienteProd[cli]={};
@@ -929,17 +939,31 @@ function processPivot(rows,fname){
         byClienteProdMesVal[cli][prodName][mes]=(byClienteProdMesVal[cli][prodName][mes]||0)+monto;
         mesTotalVal[mes]=(mesTotalVal[mes]||0)+monto;
       }
+      if(montoSinIva>0){
+        if(!byClienteProdMesValSinIva[cli])byClienteProdMesValSinIva[cli]={};
+        if(!byClienteProdMesValSinIva[cli][prodName])byClienteProdMesValSinIva[cli][prodName]={};
+        byClienteProdMesValSinIva[cli][prodName][mes]=(byClienteProdMesValSinIva[cli][prodName][mes]||0)+montoSinIva;
+        mesTotalValSinIva[mes]=(mesTotalValSinIva[mes]||0)+montoSinIva;
+      }
       if(fd){const cm=fd.getFullYear()+'-'+fd.getMonth();mesesCliente[cli][cm]=true;if(!lastReal[cli]||fd>lastReal[cli])lastReal[cli]=fd;const _mm=fd.getMonth()+1,_dd=fd.getDate();(diaMes[_mm]=diaMes[_mm]||new Array(31).fill(0))[_dd-1]+=val;const _dc=diaMesCli[cli]||(diaMesCli[cli]={});(_dc[_mm]=_dc[_mm]||new Array(31).fill(0))[_dd-1]+=val;}
     };
     // Algunas filas del reporte traen $ facturado (columna Total) con sacos en 0 (ajustes de precio,
     // renglones complementarios de una misma factura, etc.). Antes esas filas se perdían por completo
     // porque rec() exige sacos>0; con esto el dinero real sigue contando aunque no sume sacos ese día.
-    const recMontoOnly=(prodName,mes,monto)=>{
-      if(!cli||!mes||monto<=0)return;
-      if(!byClienteProdMesVal[cli])byClienteProdMesVal[cli]={};
-      if(!byClienteProdMesVal[cli][prodName])byClienteProdMesVal[cli][prodName]={};
-      byClienteProdMesVal[cli][prodName][mes]=(byClienteProdMesVal[cli][prodName][mes]||0)+monto;
-      mesTotalVal[mes]=(mesTotalVal[mes]||0)+monto;
+    const recMontoOnly=(prodName,mes,monto,montoSinIva)=>{
+      if(!cli||!mes||(monto<=0&&montoSinIva<=0))return;
+      if(monto>0){
+        if(!byClienteProdMesVal[cli])byClienteProdMesVal[cli]={};
+        if(!byClienteProdMesVal[cli][prodName])byClienteProdMesVal[cli][prodName]={};
+        byClienteProdMesVal[cli][prodName][mes]=(byClienteProdMesVal[cli][prodName][mes]||0)+monto;
+        mesTotalVal[mes]=(mesTotalVal[mes]||0)+monto;
+      }
+      if(montoSinIva>0){
+        if(!byClienteProdMesValSinIva[cli])byClienteProdMesValSinIva[cli]={};
+        if(!byClienteProdMesValSinIva[cli][prodName])byClienteProdMesValSinIva[cli][prodName]={};
+        byClienteProdMesValSinIva[cli][prodName][mes]=(byClienteProdMesValSinIva[cli][prodName][mes]||0)+montoSinIva;
+        mesTotalValSinIva[mes]=(mesTotalValSinIva[mes]||0)+montoSinIva;
+      }
     };
     const recPromo=(prodTxt,mes,val)=>{
       if(!cli||val<=0)return;
@@ -954,15 +978,16 @@ function processPivot(rows,fname){
     };
     const prodInfo=(t)=>{const mp=t.match(/\[(\S+)\]/);if(!mp)return null;const code=mp[1].toUpperCase();return {es04:t.toUpperCase().includes('04MAS'),promo:/[PB]\d*$/.test(code),name:t.split(']').slice(1).join(']').trim()};};
     for(let i=2;i<rows.length;i++){
-      const c0=rows[i][0];const val=parseFloat(rows[i][1])||0;
+      const c0=rows[i][0];const val=parseFloat(rows[i][colVal])||0;
       const monto=colMonto>=0?(parseFloat(rows[i][colMonto])||0):0;
+      const montoSinIva=colSubtotal>=0?(parseFloat(rows[i][colSubtotal])||0):0;
       if(c0===''||c0==null)continue;
       if(c0 instanceof Date){
         fdate=c0;curMes=c0.getMonth()+1;yearCount[c0.getFullYear()]=(yearCount[c0.getFullYear()]||0)+1;if(c0.getDate()!==1)esDiario=true;
         if(productFirst&&cli){
           if(curKind==='fin'){
-            if(val>0)rec(curProdName,curMes,val,fdate,monto);
-            else if(monto>0)recMontoOnly(curProdName,curMes,monto);
+            if(val>0)rec(curProdName,curMes,val,fdate,monto,montoSinIva);
+            else if(monto>0||montoSinIva>0)recMontoOnly(curProdName,curMes,monto,montoSinIva);
           }
           else if(curKind==='promo'&&val>0)recPromo(curProdName,curMes,val);
         }
@@ -978,8 +1003,8 @@ function processPivot(rows,fname){
           else{curKind='fin';curProdName=pi.name;}
         }else{
           if(cli&&curMes&&pi.es04){
-            if(val>0){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto); }
-            else if(!pi.promo&&monto>0)recMontoOnly(pi.name,curMes,monto);
+            if(val>0){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto,montoSinIva); }
+            else if(!pi.promo&&(monto>0||montoSinIva>0))recMontoOnly(pi.name,curMes,monto,montoSinIva);
           }
         }
         continue;
@@ -1000,6 +1025,7 @@ function processPivot(rows,fname){
     window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND=clienteVend;
     LAST_PROMO_PROD=promoCliProd; window.LAST_PROMO_PM=promoCliProdMes;
     window.LAST_VAL_PM=byClienteProdMesVal; window.LAST_VAL_MES=mesTotalVal; window.LAST_TIENE_MONTO=(colMonto>=0);
+    window.LAST_VAL_PM_SINIVA=byClienteProdMesValSinIva; window.LAST_VAL_MES_SINIVA=mesTotalValSinIva; window.LAST_TIENE_SUBTOTAL=(colSubtotal>=0);
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname);
   }catch(err){console.error(err);alert('Error procesando el archivo:\n'+err.message);resetDash();}
 }
@@ -1063,7 +1089,11 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       // pero en pesos en vez de sacos, para poder usar ingreso real en vez de sac×precio-lista donde exista.
       const prodMesVal=(window.LAST_VAL_PM&&window.LAST_VAL_PM[nombre])||{};
       const mesDataVal={}; for(const _p in prodMesVal){ const _mm=prodMesVal[_p]; for(const _m in _mm) mesDataVal[_m]=(mesDataVal[_m]||0)+(_mm[_m]||0); }
-      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,prodMesVal,mesDataVal,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
+      // Mismo desglose pero SIN IVA (columna Subtotal de Odoo, cuando el export la trae): es el monto
+      // correcto para márgenes/punto de equilibrio, ya que costos y precio de lista también están sin IVA.
+      const prodMesValSinIva=(window.LAST_VAL_PM_SINIVA&&window.LAST_VAL_PM_SINIVA[nombre])||{};
+      const mesDataValSinIva={}; for(const _p in prodMesValSinIva){ const _mm=prodMesValSinIva[_p]; for(const _m in _mm) mesDataValSinIva[_m]=(mesDataValSinIva[_m]||0)+(_mm[_m]||0); }
+      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,prodMesVal,mesDataVal,prodMesValSinIva,mesDataValSinIva,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
     }).sort((a,b)=>b.promMes-a.promMes);
 
     // El vendedor se toma del MAPEO curado (vendedores reales + administración), NO del export de Odoo.
@@ -1079,7 +1109,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     }
 
     const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
-    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO};
+    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
@@ -2084,15 +2114,19 @@ function prodOf(n){for(var i=0;i<EQ_PRODS.length;i++){if(EQ_PRODS[i].rx.test(n))
 // reporte cargado (no del estimado). Se cachea por reporte: finishBuild() limpia el caché cada
 // vez que se sube un archivo nuevo. Si el reporte no trae columna de $, regresa {} y todo sigue
 // funcionando con el precio manual/por defecto, como antes.
+// Ingreso $ a usar por cliente: SIN IVA (columna Subtotal de Odoo) cuando el reporte la trae —
+// es la base correcta para márgenes y punto de equilibrio, porque costos y precio de lista también
+// están sin IVA — y si no, cae al $ real CON IVA (o {} si el reporte no trae ningún monto).
+function pmvOf(c){ return (DATA&&DATA.tieneSubtotalSinIva ? c.prodMesValSinIva : c.prodMesVal) || {}; }
 var _EQ_REAL_PRICE_CACHE=null;
 function realAvgPricePorProd(){
   if(_EQ_REAL_PRICE_CACHE)return _EQ_REAL_PRICE_CACHE;
   var out={};
-  if(DATA&&DATA.tieneMontoReal&&DATA.clients){
+  if(DATA&&(DATA.tieneMontoReal||DATA.tieneSubtotalSinIva)&&DATA.clients){
     var comp=(DATA.completos&&DATA.completos.length)?DATA.completos:null;
     var acc={};
     DATA.clients.forEach(function(c){
-      var pm=c.prodMes||{}, pmv=c.prodMesVal||{};
+      var pm=c.prodMes||{}, pmv=pmvOf(c);
       for(var p in pm){
         var pr=prodOf(p); if(!pr)continue;
         var mo=pm[p], mv=pmv[p]||{};
@@ -2143,7 +2177,7 @@ function renderEquilibrio(){
   // inflaba el costo del programa (y por lo tanto el punto de equilibrio) en los meses de antes
   // del esquema, donde en realidad no se dio ningún descuento en %, sino sacos de regalo.
   DATA.clients.forEach(function(c){
-    var pm=c.prodMes||{}; var pmv=c.prodMesVal||{};
+    var pm=c.prodMes||{}; var pmv=pmvOf(c);
     var revPorMes={};
     for(var p in pm){ var months=pm[p]; var monthsV=pmv[p]||{}; var mm=EQ_find(p);
       for(var m in months){ if(comp&&comp.indexOf(+m)<0)continue;
@@ -2174,18 +2208,20 @@ function renderEquilibrio(){
   function card(lbl,val,sub,col){return '<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+(col||'#3b82f6')+';border-radius:10px;padding:12px 14px;min-width:150px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:'+(col||'#fff')+'">'+val+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+lbl+'</div>'+(sub?'<div style="font-size:.7rem;color:#cbd5e1;margin-top:2px">'+sub+'</div>':'')+'</div>';}
   var h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">💰 Punto de equilibrio y margen</div>';
   h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:12px">Calculado con el reporte cargado ('+nM+' mes(es)) y tus costos/precios de abajo. El costo del programa se calcula mes por mes: antes de '+MES_NOM[MDESC_EQ]+' fueron los <b>sacos regalados</b> a su costo; desde '+MES_NOM[MDESC_EQ]+' es el <b>descuento %</b> con la tasa que estuvo vigente cada mes (no la de hoy aplicada a todo el periodo). Cambia el mes de arranque en la pestaña Rentabilidad. Cambia cualquier celda azul y da Calcular.</div>';
-  h+=DATA.tieneMontoReal
-     ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:10px">✅ El ingreso usa el <b>monto facturado real</b> de Odoo (no precio de lista estimado) donde el archivo lo trae.</div>'
-     :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:10px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado).</div>';
+  h+=DATA.tieneSubtotalSinIva
+     ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:10px">✅ El ingreso usa el <b>monto facturado real SIN IVA</b> de Odoo (columna Subtotal) — la base correcta para margen y punto de equilibrio.</div>'
+     :DATA.tieneMontoReal
+       ?'<div style="font-size:.72rem;color:#f59e0b;margin-bottom:10px">⚠ El ingreso usa el monto facturado real de Odoo, pero <b>CON IVA</b> (este reporte no trae la columna Subtotal) — el margen y el punto de equilibrio pueden salir un poco optimistas. Sube un reporte con la columna Subtotal para verlo sin IVA.</div>'
+       :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:10px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado).</div>';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
    +'<div><label style="font-size:.72rem;color:#94a3b8;display:block;margin-bottom:3px">Gastos fijos mensuales ($)</label><input id="eq-gf" type="number" value="'+gf+'" style="width:180px;background:#0b1628;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:9px"></div>'
    +'<button onclick="saveEquil()" style="background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:10px 22px;font-weight:800;cursor:pointer">Calcular</button></div>';
   // tabla de costos/precios editable
   h+='<div style="font-size:.75rem;color:#cbd5e1;margin:4px 0 4px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap">Costos y precios por producto (editables)'
-    +(DATA.tieneMontoReal?'<button onclick="resetPreciosReales()" style="background:#134e2a;color:#a9f0c4;border:1px solid #22c55e;border-radius:6px;padding:3px 9px;font-size:.66rem;cursor:pointer;font-weight:600">↺ Usar precios reales del reporte</button>':'')
+    +((DATA.tieneMontoReal||DATA.tieneSubtotalSinIva)?'<button onclick="resetPreciosReales()" style="background:#134e2a;color:#a9f0c4;border:1px solid #22c55e;border-radius:6px;padding:3px 9px;font-size:.66rem;cursor:pointer;font-weight:600">↺ Usar precios reales del reporte</button>':'')
     +'</div>';
-  h+='<div style="font-size:.68rem;color:#94a3b8;margin:-2px 0 6px;max-width:640px">'+(DATA.tieneMontoReal
-      ?'El <b style="color:#4ade80">precio</b> se autocompleta con el promedio real facturado de tu reporte (borde verde). Si lo editas a mano se queda fijo hasta que lo restaures con el botón de arriba. El <b>costo</b> lo sigues capturando tú — Odoo no lo trae.'
+  h+='<div style="font-size:.68rem;color:#94a3b8;margin:-2px 0 6px;max-width:640px">'+((DATA.tieneMontoReal||DATA.tieneSubtotalSinIva)
+      ?'El <b style="color:#4ade80">precio</b> se autocompleta con el promedio real facturado de tu reporte'+(DATA.tieneSubtotalSinIva?' <b>sin IVA</b>':' (con IVA, incluye el impuesto)')+' (borde verde). Si lo editas a mano se queda fijo hasta que lo restaures con el botón de arriba. El <b>costo</b> lo sigues capturando tú — Odoo no lo trae.'
       :'Este reporte no trae columna de $ facturado, así que los precios siguen siendo el estimado que captures a mano.')+'</div>';
   h+='<table style="width:100%;max-width:640px;font-size:.74rem;border-collapse:collapse;margin-bottom:14px"><tr style="color:#94a3b8"><td style="padding:3px 4px">Producto</td><td style="text-align:right;padding:3px 4px">Costo</td><td style="text-align:right;padding:3px 4px">Precio</td><td style="text-align:right;padding:3px 4px">Margen</td></tr>';
   EQ_PRODS.forEach(function(p){var cp=prodCP(p);var mg=cp.price>0?(1-cp.cost/cp.price)*100:0;var mc=mg>=25?'#22c55e':(mg>=15?'#f59e0b':'#ef4444');
@@ -2195,7 +2231,7 @@ function renderEquilibrio(){
      +'<td style="text-align:right;padding:3px 4px;color:'+mc+';font-weight:700">'+mg.toFixed(1)+'%</td></tr>';});
   h+='</table>';
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-   +card('Ingreso / mes',money(revMes),(DATA.tieneMontoReal?'real facturado, con tu mix actual':'a precio de lista, con tu mix actual'),'#3b82f6')
+   +card('Ingreso / mes',money(revMes),(DATA.tieneSubtotalSinIva?'real facturado SIN IVA, con tu mix actual':DATA.tieneMontoReal?'real facturado CON IVA, con tu mix actual':'a precio de lista, con tu mix actual'),'#3b82f6')
    +card('Utilidad bruta / mes',money(utilMes),'margen bruto '+(margB*100).toFixed(1)+'%','#22c55e')
    +card('Costo del programa / mes',money(promoMes),(rev>0?(promo/rev*100).toFixed(2):'0')+'% de la venta','#f59e0b')
    +card('Utilidad NETA / mes',money(utilNetaMes),'después de la promoción','#7ee2a8')
@@ -2282,7 +2318,7 @@ function renderRentabilidad(){
   for(const c of DATA.clients){
     if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
     if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
-    const pm=c.prodMes||{}; const pmv=c.prodMesVal||{};
+    const pm=c.prodMes||{}; const pmv=pmvOf(c);
     const revM={},costM={};
     // Ingreso: usa el $ REAL facturado (Odoo) cuando el reporte lo trae; si no, cae al precio de lista estimado.
     for(const p in pm){ const cc=CM[_famKey(p)]; const mo=pm[p]; const mov=pmv[p]||{};
@@ -2344,9 +2380,11 @@ function renderRentabilidad(){
   const kpi=(n,l,col)=>'<div style="flex:1;min-width:118px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.7rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
   let h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:3px">💵 Rentabilidad del programa 04MAS</div>';
   h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">'+rangoA+'</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">'+rangoN+'</b> es el <b>descuento %</b> (nota de crédito), con la tasa que estuvo vigente cada mes. Cada uno se mide sobre SU propia venta — no se mezcla la tasa de hoy con ventas de otros meses. Los costos viven <b>solo en este tablero</b>.</div>';
-  h+=DATA.tieneMontoReal
-     ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:6px">✅ El ingreso de este reporte usa el <b>monto facturado real</b> de Odoo (no precio de lista estimado) donde el archivo lo trae.</div>'
-     :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:6px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado). Sube el export con la columna de $ para ver el ingreso real.</div>';
+  h+=DATA.tieneSubtotalSinIva
+     ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:6px">✅ El ingreso de este reporte usa el <b>monto facturado real SIN IVA</b> de Odoo (columna Subtotal) — la base correcta para el margen.</div>'
+     :DATA.tieneMontoReal
+       ?'<div style="font-size:.72rem;color:#f59e0b;margin-bottom:6px">⚠ El ingreso de este reporte usa el monto facturado real de Odoo, pero <b>CON IVA</b> (no trae la columna Subtotal) — el margen puede salir un poco optimista. Sube el export con la columna Subtotal para verlo sin IVA.</div>'
+       :'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:6px">ℹ Este reporte no trae la columna de monto facturado — el ingreso se calcula con tu <b>precio de lista</b> (estimado). Sube el export con la columna de $ para ver el ingreso real.</div>';
   // filtros
   const opt=(arr,sel)=>'<option value="">Todos</option>'+arr.map(x=>'<option'+(x===sel?' selected':'')+'>'+x+'</option>').join('');
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 4px">'+
@@ -2356,7 +2394,7 @@ function renderRentabilidad(){
   h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:10px">Estos dos filtros aplican a todos los KPIs, a la tabla mes a mes y a las tablas de abajo.</div>';
   // KPIs — totales de TODO el periodo del reporte
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
-     +kpi(_money(TR),DATA.tieneMontoReal?'Ingreso total (real facturado)':'Ingreso total (precio lista)')
+     +kpi(_money(TR),DATA.tieneSubtotalSinIva?'Ingreso total (real facturado, sin IVA)':DATA.tieneMontoReal?'Ingreso total (real facturado, con IVA)':'Ingreso total (precio lista)')
      +kpi(_money(TGM)+' · '+pP(TGM).toFixed(1)+'%','Margen bruto total')
      +kpi('-'+_money(TPROMO+TDISC)+' · '+pP(TPROMO+TDISC).toFixed(1)+'%','💰 Costo total del programa (regalo + descuento)','#fbbf24')
      +kpi(_money(TGM-TPROMO-TDISC)+' · '+(TR>0?(TGM-TPROMO-TDISC)/TR*100:0).toFixed(1)+'%','Margen NETO total, real',_pctCol(TR>0?(TGM-TPROMO-TDISC)/TR*100:0,RENT_THR))+'</div>';
@@ -2417,7 +2455,7 @@ function renderRentabilidad(){
       h+='<div style="background:#111c34;border:1px solid #334155;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.78rem;color:#cbd5e1">Todavía no hay ventas cargadas '+rangoN+', así que aún no hay nada que comparar con el periodo de regalos ('+pctA.toFixed(2)+'% de la venta).</div>';
     }
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:820px"><thead><tr style="color:#9fb0cc">'
-      +'<th style="text-align:left;padding:6px 8px">Mes</th><th style="text-align:center">Esquema</th><th style="text-align:right">Venta ('+(DATA.tieneMontoReal?'real facturada':'precio lista')+')</th>'
+      +'<th style="text-align:left;padding:6px 8px">Mes</th><th style="text-align:center">Esquema</th><th style="text-align:right">Venta ('+(DATA.tieneSubtotalSinIva?'real facturada, sin IVA':DATA.tieneMontoReal?'real facturada, con IVA':'precio lista')+')</th>'
       +'<th style="text-align:right">Margen bruto</th><th style="text-align:right">Sacos regalados</th><th style="text-align:right">Desc. promedio</th>'
       +'<th style="text-align:right">Costo programa</th><th style="text-align:right">Margen NETO</th><th style="text-align:right">vs mes ant.</th></tr></thead><tbody>'+filas;
     const tRev=aRev+nRev, tDado=aDado+nDado, tCost=aCost+nCost, tBruta=tRev-tCost, tNeto=tBruta-tDado;
@@ -2460,7 +2498,7 @@ function renderRentabilidad(){
     function bucketStats(monthSet){
       let premSac=0,premRev=0,premCost=0,noSac=0,noRev=0,noCost=0,totalSacTodos=0;
       DATA.clients.forEach(c=>{
-        const pm=c.prodMes||{}, pmv=c.prodMesVal||{};
+        const pm=c.prodMes||{}, pmv=pmvOf(c);
         for(const p in pm){
           const mo=pm[p], mv=pmv[p]||{};
           let sac=0,real=0;
@@ -2509,7 +2547,7 @@ function renderRentabilidad(){
       // ¿alcanza ese margen extra para pagar lo que cuesta el descuento en el mismo periodo reciente?
       let discCostoReciente=0;
       DATA.clients.forEach(c=>{
-        const pm=c.prodMes||{}, pmv=c.prodMesVal||{};
+        const pm=c.prodMes||{}, pmv=pmvOf(c);
         recMs.forEach(m=>{
           let rev=0;
           for(const p in pm){ const mo=pm[p]; if(!mo||!mo[m])continue; const sac=mo[m]; const real=(pmv[p]&&pmv[p][m])||0; const cc=CM[_famKey(p)]; rev+=real>0?real:(cc?sac*cc.precio:0); }
