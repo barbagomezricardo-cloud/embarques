@@ -947,9 +947,10 @@ function processPivot(rows,fname){
       }
       if(fd){const cm=fd.getFullYear()+'-'+fd.getMonth();mesesCliente[cli][cm]=true;if(!lastReal[cli]||fd>lastReal[cli])lastReal[cli]=fd;const _mm=fd.getMonth()+1,_dd=fd.getDate();(diaMes[_mm]=diaMes[_mm]||new Array(31).fill(0))[_dd-1]+=val;const _dc=diaMesCli[cli]||(diaMesCli[cli]={});(_dc[_mm]=_dc[_mm]||new Array(31).fill(0))[_dd-1]+=val;}
     };
-    // Algunas filas del reporte traen $ facturado (columna Total) con sacos en 0 (ajustes de precio,
-    // renglones complementarios de una misma factura, etc.). Antes esas filas se perdían por completo
-    // porque rec() exige sacos>0; con esto el dinero real sigue contando aunque no sume sacos ese día.
+    // Filas con 'Cant. facturada' = 0 pero con Total/Subtotal > 0: Ricardo confirmó que son COTIZACIONES
+    // (y sus descuentos) todavía no confirmadas/facturadas — no deben contar como venta ni como descuento
+    // real hasta que sí tengan cantidad facturada. Por eso recMontoOnly() ya NO se invoca (se deja definida
+    // por si en el futuro hace falta distinguir un caso legítimo de ajuste ya facturado con sacos=0).
     const recMontoOnly=(prodName,mes,monto,montoSinIva)=>{
       if(!cli||!mes||(monto<=0&&montoSinIva<=0))return;
       if(monto>0){
@@ -987,7 +988,7 @@ function processPivot(rows,fname){
         if(productFirst&&cli){
           if(curKind==='fin'){
             if(val>0)rec(curProdName,curMes,val,fdate,monto,montoSinIva);
-            else if(monto>0||montoSinIva>0)recMontoOnly(curProdName,curMes,monto,montoSinIva);
+            // val<=0 (Cant. facturada=0): cotización aún no facturada — se ignora, no cuenta como venta.
           }
           else if(curKind==='promo'&&val>0)recPromo(curProdName,curMes,val);
         }
@@ -1004,7 +1005,7 @@ function processPivot(rows,fname){
         }else{
           if(cli&&curMes&&pi.es04){
             if(val>0){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto,montoSinIva); }
-            else if(!pi.promo&&(monto>0||montoSinIva>0))recMontoOnly(pi.name,curMes,monto,montoSinIva);
+            // val<=0 (Cant. facturada=0): cotización aún no facturada — se ignora, no cuenta como venta.
           }
         }
         continue;
@@ -2326,10 +2327,9 @@ function renderRentabilidad(){
       let realTot=0; for(const m in mov) realTot+=mov[m]||0;
       if(sacTot<=0 && realTot<=0)continue;
       if(cc){ if(!byProd[p])byProd[p]={sac:0,rev:0,cost:0};
-        // Recorre la UNIÓN de meses con sacos y meses con $ real: algunas filas del reporte traen
-        // dinero con sacos en 0 (ajustes de precio, renglones complementarios de la misma factura —
-        // ver el fix de recMontoOnly en processExcel). Si aquí solo se recorrieran los meses de `mo`,
-        // ese dinero real se perdería de nuevo, aunque ya esté bien capturado en prodMesVal.
+        // Recorre la UNIÓN de meses con sacos y meses con $ real (por robustez ante cualquier reporte
+        // futuro con meses que no calcen 1:1 entre ambos; hoy processPivot ya sólo guarda $ real en
+        // meses con Cant. facturada>0, así que en la práctica coinciden).
         const _allK=new Set([...Object.keys(mo||{}),...Object.keys(mov||{})]);
         _allK.forEach(k=>{ const sac=mo[k]||0; const realV=mov[k]||0; if(sac<=0&&realV<=0)return;
           const pv=realV>0?realV:sac*cc.precio;
