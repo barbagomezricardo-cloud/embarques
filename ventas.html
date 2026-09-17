@@ -773,6 +773,8 @@ function processExcel(buf,fname){
     window.LAST_VAL_PM=null;window.LAST_VAL_MES=null;window.LAST_TIENE_MONTO=false;
     window.LAST_VAL_PM_SINIVA=null;window.LAST_VAL_MES_SINIVA=null;window.LAST_TIENE_SUBTOTAL=false;
     window.LAST_EXCLUIDA_PROD=null;
+    window.LAST_TODOS_MES_SACOS=null;window.LAST_TODOS_MES_VAL=null;window.LAST_TODOS_MES_VALSINIVA=null;
+    window.LAST_TODOS_PROD_MES_SACOS=null;window.LAST_TODOS_PROD_MES_VALSINIVA=null;
     document.getElementById('load-msg').textContent='Analizando columnas...';
     const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
     // ¿Formato pivote de ventas facturadas? (A1='Column0', jerarquía cliente→mes→producto)
@@ -885,6 +887,25 @@ function processPivot(rows,fname){
     const byClienteProdMesVal={},mesTotalVal={};
     const byClienteProdMesValSinIva={},mesTotalValSinIva={};
     const excluidaProd={};   // $ de cotizaciones aún no facturadas (Cant. facturada=0), solo por producto — para informarlo en el Excel descargable de Rentabilidad
+    // "Todos los productos": réplica cruda del pivote de Odoo, SIN el filtro 04MAS y SIN la regla de
+    // "solo cuenta lo ya facturado" — aquí se suma TODO renglón hoja abajo (incluye descuentos,
+    // bonificaciones y cotizaciones), exactamente como Odoo lo totaliza en pantalla, para poder
+    // cuadrar peso por peso el total general contra lo que Odoo muestra — es un chequeo de
+    // reconciliación, no una métrica de negocio, por eso vive aparte de byClienteProdMes* de arriba.
+    const todosProdMesSacos={},todosProdMesValSinIva={};
+    const todosMesTotalSacos={},todosMesTotalVal={},todosMesTotalValSinIva={};
+    let curProdNameAll='';
+    const recTodos=(prodName,mes,val,monto,montoSinIva)=>{
+      if(!mes)return;
+      const pn=prodName||'(sin producto)';
+      if(!todosProdMesSacos[pn])todosProdMesSacos[pn]={};
+      todosProdMesSacos[pn][mes]=(todosProdMesSacos[pn][mes]||0)+val;
+      todosMesTotalSacos[mes]=(todosMesTotalSacos[mes]||0)+val;
+      if(!todosProdMesValSinIva[pn])todosProdMesValSinIva[pn]={};
+      todosProdMesValSinIva[pn][mes]=(todosProdMesValSinIva[pn][mes]||0)+montoSinIva;
+      todosMesTotalValSinIva[mes]=(todosMesTotalValSinIva[mes]||0)+montoSinIva;
+      todosMesTotalVal[mes]=(todosMesTotalVal[mes]||0)+monto;
+    };
     // Columna de $ facturado (nueva, opcional): la fila de subencabezado (rows[1]) trae 'Total' junto
     // a la cantidad cuando el export de Odoo incluye el monto. Si no existe, colMonto queda en -1 y
     // todo el flujo sigue funcionando igual que antes, solo sin datos reales de $ (se usa el estimado).
@@ -996,6 +1017,10 @@ function processPivot(rows,fname){
       if(c0===''||c0==null)continue;
       if(c0 instanceof Date){
         fdate=c0;curMes=c0.getMonth()+1;yearCount[c0.getFullYear()]=(yearCount[c0.getFullYear()]||0)+1;if(c0.getDate()!==1)esDiario=true;
+        // "Todos los productos": aquí (jerarquía cliente→producto→fecha) cada fila de fecha es la hoja
+        // real del pivote, así que se suma completa — sin filtro 04MAS, sin exigir cli, sin excluir
+        // cotizaciones/descuentos — para cuadrar contra el total que Odoo muestra en pantalla.
+        if(productFirst)recTodos(curProdNameAll,curMes,val,monto,montoSinIva);
         if(productFirst&&cli){
           if(curKind==='fin'){
             if(val>0)rec(curProdName,curMes,val,fdate,monto,montoSinIva);
@@ -1010,11 +1035,16 @@ function processPivot(rows,fname){
       if(t==='Total')continue;
       if(t.startsWith('[')){
         const pi=prodInfo(t);if(!pi)continue;
+        curProdNameAll=pi.name||t;   // para "todos los productos": el nombre se calcula sin importar es04
         if(productFirst){
           if(!pi.es04){curKind='skip';curProdName='';}
           else if(pi.promo){curKind='promo';curProdName=t;}
           else{curKind='fin';curProdName=pi.name;}
         }else{
+          // aquí (jerarquía cliente→fecha→producto) el propio renglón de producto ES la hoja del
+          // pivote (trae ya el valor final) — se suma completo para "todos los productos", igual que
+          // arriba, sin el filtro 04MAS ni la exclusión de cotizaciones.
+          if(curMes)recTodos(curProdNameAll,curMes,val,monto,montoSinIva);
           if(cli&&curMes&&pi.es04){
             if(val>0){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto,montoSinIva); }
             else if(!pi.promo)recExcluida(pi.name,monto,montoSinIva);
@@ -1023,6 +1053,7 @@ function processPivot(rows,fname){
         }
         continue;
       }
+      if(t==='Descuento s/ venta')curProdNameAll=t;  // para "todos los productos": no altera la detección de cliente/vendedor de abajo
       // Nombre: si le sigue OTRO nombre => es CLIENTE; si le sigue un producto/fecha => es VENDEDOR (1º o adicional) del cliente actual.
       // Excepción: si ese nombre ya se identificó como VENDEDOR en otras partes del archivo, es vendedor
       // aunque aquí le siga otro nombre. Sin esto, cuando Odoo dejaba a un vendedor seguido de un nombre,
@@ -1041,6 +1072,8 @@ function processPivot(rows,fname){
     window.LAST_VAL_PM=byClienteProdMesVal; window.LAST_VAL_MES=mesTotalVal; window.LAST_TIENE_MONTO=(colMonto>=0);
     window.LAST_VAL_PM_SINIVA=byClienteProdMesValSinIva; window.LAST_VAL_MES_SINIVA=mesTotalValSinIva; window.LAST_TIENE_SUBTOTAL=(colSubtotal>=0);
     window.LAST_EXCLUIDA_PROD=excluidaProd;
+    window.LAST_TODOS_MES_SACOS=todosMesTotalSacos;window.LAST_TODOS_MES_VAL=todosMesTotalVal;window.LAST_TODOS_MES_VALSINIVA=todosMesTotalValSinIva;
+    window.LAST_TODOS_PROD_MES_SACOS=todosProdMesSacos;window.LAST_TODOS_PROD_MES_VALSINIVA=todosProdMesValSinIva;
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname);
   }catch(err){console.error(err);alert('Error procesando el archivo:\n'+err.message);resetDash();}
 }
@@ -1124,7 +1157,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     }
 
     const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
-    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},fname:fname};
+    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},todosMesSacos:window.LAST_TODOS_MES_SACOS||{},todosMesVal:window.LAST_TODOS_MES_VAL||{},todosMesValSinIva:window.LAST_TODOS_MES_VALSINIVA||{},todosProdMesSacos:window.LAST_TODOS_PROD_MES_SACOS||{},todosProdMesValSinIva:window.LAST_TODOS_PROD_MES_VALSINIVA||{},fname:fname};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
@@ -2683,6 +2716,10 @@ function descargarExcelPorMes(){
       ['facturado (Cant. facturada = 0) se excluyen de las 3 hojas de arriba — no son venta confirmada — y'],
       ['se muestran aparte, por producto, en la hoja "Cotizaciones excluidas", para que quede claro cuánto'],
       ['dinero hay en cotización pendiente de facturar.'],
+      [],
+      ['Las hojas "Todos-Resumen (cuadre)" y "Todos-Sin IVA por prod" son distintas: suman TODO el'],
+      ['reporte de Odoo tal cual viene (cualquier producto, no solo 04MAS, y sin excluir cotizaciones ni'],
+      ['descuentos) — sirven para comparar, mes a mes, contra el total que Odoo te muestra en pantalla.'],
     ];
     const wsResumen=XLSX.utils.aoa_to_sheet(resumen);
     wsResumen['!cols']=[{wch:34},{wch:62}];
@@ -2711,12 +2748,62 @@ function descargarExcelPorMes(){
     const wsExcl=XLSX.utils.aoa_to_sheet(exclRows);
     wsExcl['!cols']=[{wch:56},{wch:16},{wch:16}];
 
+    // 5) Hojas "todos los productos" — para cuadrar contra lo que Odoo muestra en pantalla.
+    //    A diferencia de las hojas de arriba (solo 18 productos 04MAS, solo venta ya facturada),
+    //    estas suman TODO renglón del pivote de Odoo tal cual: cualquier producto (no solo 04MAS),
+    //    cotizaciones (Cant. facturada=0) y descuentos incluidos — igual que el total que ves en Odoo.
+    const todosMesSacos=DATA.todosMesSacos||{}, todosMesVal=DATA.todosMesVal||{}, todosMesValSinIva=DATA.todosMesValSinIva||{};
+    const cuadreRows=[
+      ['Todos los productos — resumen para cuadrar contra Odoo'],
+      [],
+      ['A diferencia de las demás hojas (que solo traen los 18 productos 04MAS y solo venta ya'],
+      ['facturada), esta hoja suma TODO renglón del reporte de Odoo tal cual viene: cualquier'],
+      ['producto (no solo 04MAS), cotizaciones sin facturar y descuentos incluidos — para que puedas'],
+      ['comparar estos totales, mes a mes, contra lo que Odoo te muestra en pantalla en su propio'],
+      ['reporte de "Análisis de ventas". Si algo no cuadra aquí, el problema está en el archivo de'],
+      ['origen (Odoo), no en este programa.'],
+      [],
+      ['Mes','Cant. facturada','Subtotal (sin IVA)','Total (con IVA)'],
+    ];
+    let cuadTotCant=0,cuadTotSin=0,cuadTotCon=0;
+    meses.forEach((m,i)=>{
+      const cant=Math.round((todosMesSacos[m]||0)*100)/100;
+      const sin=Math.round((todosMesValSinIva[m]||0)*100)/100;
+      const con=Math.round((todosMesVal[m]||0)*100)/100;
+      cuadTotCant+=cant;cuadTotSin+=sin;cuadTotCon+=con;
+      cuadreRows.push([mesLbl[i],cant,sin,con]);
+    });
+    cuadreRows.push(['TOTAL',Math.round(cuadTotCant*100)/100,Math.round(cuadTotSin*100)/100,Math.round(cuadTotCon*100)/100]);
+    const wsCuadre=XLSX.utils.aoa_to_sheet(cuadreRows);
+    wsCuadre['!cols']=[{wch:14},{wch:18},{wch:20},{wch:20}];
+
+    // 6) Detalle sin IVA por producto, TODOS los productos (no solo 04MAS) — para ubicar en qué
+    //    producto está la diferencia si el resumen de arriba no cuadra contra Odoo.
+    const todosProdSinIva=DATA.todosProdMesValSinIva||{};
+    const todosProdSacos=DATA.todosProdMesSacos||{};
+    const prodsTodos=Object.keys(todosProdSinIva).sort((a,b)=>{
+      const ta=Object.values(todosProdSinIva[a]||{}).reduce((x,y)=>x+y,0);
+      const tb=Object.values(todosProdSinIva[b]||{}).reduce((x,y)=>x+y,0);
+      return tb-ta||a.localeCompare(b);
+    });
+    const todosDetRows=[['Sin IVA por mes — TODOS los productos (no solo 04MAS)'],[],['Producto',...mesLbl,'Total']];
+    prodsTodos.forEach(p=>{
+      const mo=todosProdSinIva[p]||{};
+      const vals=meses.map(m=>Math.round((mo[m]||0)*100)/100);
+      const total=Math.round(vals.reduce((a,b)=>a+b,0)*100)/100;
+      todosDetRows.push([p,...vals,total]);
+    });
+    const wsTodosDet=XLSX.utils.aoa_to_sheet(todosDetRows);
+    wsTodosDet['!cols']=[{wch:56},...meses.map(()=>({wch:13})),{wch:15}];
+
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,wsResumen,'Resumen');
     XLSX.utils.book_append_sheet(wb,wsSacos,'Sacos por mes');
     XLSX.utils.book_append_sheet(wb,wsSinIva,'Sin IVA por mes');
     XLSX.utils.book_append_sheet(wb,wsConIva,'Con IVA por mes');
     XLSX.utils.book_append_sheet(wb,wsExcl,'Cotizaciones excluidas');
+    XLSX.utils.book_append_sheet(wb,wsCuadre,'Todos-Resumen (cuadre)');
+    XLSX.utils.book_append_sheet(wb,wsTodosDet,'Todos-Sin IVA por prod');
     const nombreArch='Ventas_por_mes_'+(DATA.dataYear||hoy.getFullYear())+'_'+hoy.toISOString().slice(0,10)+'.xlsx';
     XLSX.writeFile(wb,nombreArch);
   }catch(err){
