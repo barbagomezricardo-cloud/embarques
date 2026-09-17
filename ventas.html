@@ -775,6 +775,7 @@ function processExcel(buf,fname){
     window.LAST_EXCLUIDA_PROD=null;
     window.LAST_TODOS_MES_SACOS=null;window.LAST_TODOS_MES_VAL=null;window.LAST_TODOS_MES_VALSINIVA=null;
     window.LAST_TODOS_PROD_MES_SACOS=null;window.LAST_TODOS_PROD_MES_VALSINIVA=null;
+    window.LAST_TODOS_MES_COT=null;window.LAST_DUP_LIST=null;window.LAST_DUP_MES=null;
     document.getElementById('load-msg').textContent='Analizando columnas...';
     const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
     // ¿Formato pivote de ventas facturadas? (A1='Column0', jerarquía cliente→mes→producto)
@@ -894,10 +895,21 @@ function processPivot(rows,fname){
     // reconciliación, no una métrica de negocio, por eso vive aparte de byClienteProdMes* de arriba.
     const todosProdMesSacos={},todosProdMesValSinIva={};
     const todosMesTotalSacos={},todosMesTotalVal={},todosMesTotalValSinIva={};
+    // Para el cuadre: cuánto de cada mes viene de renglones con Cant. facturada=0 (cotización aún no
+    // facturada) y cuánto viene de renglones "fantasma" — el mismo cliente+producto con EXACTAMENTE
+    // el mismo importe repetido en dos fechas cercanas, una de ellas sin cantidad. Ese fantasma es
+    // dinero contado dos veces en el archivo de Odoo (la misma venta con dos fechas) y es la razón
+    // típica de que un mes no cuadre contra la pantalla de Odoo aunque los sacos sí cuadren.
+    const todosMesCot={};                 // $ sin IVA (y con IVA) de renglones con Cant. facturada=0
+    const todosCP={};                     // cliente|producto -> renglones, para detectar fantasmas
     let curProdNameAll='';
-    const recTodos=(prodName,mes,val,monto,montoSinIva)=>{
+    const recTodos=(prodName,mes,val,monto,montoSinIva,fd,cliente)=>{
       if(!mes)return;
       const pn=prodName||'(sin producto)';
+      if(!(val>0)){ if(!todosMesCot[mes])todosMesCot[mes]={sinIva:0,conIva:0};
+        todosMesCot[mes].sinIva+=montoSinIva; todosMesCot[mes].conIva+=monto; }
+      if(fd&&(montoSinIva!==0||monto!==0)){ const _kk=(cliente||'(sin cliente)')+'|'+pn;
+        (todosCP[_kk]||(todosCP[_kk]=[])).push({f:fd.getTime(),cant:val,sub:montoSinIva,tot:monto}); }
       if(!todosProdMesSacos[pn])todosProdMesSacos[pn]={};
       todosProdMesSacos[pn][mes]=(todosProdMesSacos[pn][mes]||0)+val;
       todosMesTotalSacos[mes]=(todosMesTotalSacos[mes]||0)+val;
@@ -1020,7 +1032,7 @@ function processPivot(rows,fname){
         // "Todos los productos": aquí (jerarquía cliente→producto→fecha) cada fila de fecha es la hoja
         // real del pivote, así que se suma completa — sin filtro 04MAS, sin exigir cli, sin excluir
         // cotizaciones/descuentos — para cuadrar contra el total que Odoo muestra en pantalla.
-        if(productFirst)recTodos(curProdNameAll,curMes,val,monto,montoSinIva);
+        if(productFirst)recTodos(curProdNameAll,curMes,val,monto,montoSinIva,c0,cli);
         if(productFirst&&cli){
           if(curKind==='fin'){
             if(val>0)rec(curProdName,curMes,val,fdate,monto,montoSinIva);
@@ -1044,7 +1056,7 @@ function processPivot(rows,fname){
           // aquí (jerarquía cliente→fecha→producto) el propio renglón de producto ES la hoja del
           // pivote (trae ya el valor final) — se suma completo para "todos los productos", igual que
           // arriba, sin el filtro 04MAS ni la exclusión de cotizaciones.
-          if(curMes)recTodos(curProdNameAll,curMes,val,monto,montoSinIva);
+          if(curMes)recTodos(curProdNameAll,curMes,val,monto,montoSinIva,fdate,cli);
           if(cli&&curMes&&pi.es04){
             if(val>0){ if(pi.promo)recPromo(t,curMes,val); else rec(pi.name,curMes,val,fdate,monto,montoSinIva); }
             else if(!pi.promo)recExcluida(pi.name,monto,montoSinIva);
@@ -1072,7 +1084,34 @@ function processPivot(rows,fname){
     window.LAST_VAL_PM=byClienteProdMesVal; window.LAST_VAL_MES=mesTotalVal; window.LAST_TIENE_MONTO=(colMonto>=0);
     window.LAST_VAL_PM_SINIVA=byClienteProdMesValSinIva; window.LAST_VAL_MES_SINIVA=mesTotalValSinIva; window.LAST_TIENE_SUBTOTAL=(colSubtotal>=0);
     window.LAST_EXCLUIDA_PROD=excluidaProd;
+    // Detección de renglones fantasma (la misma venta con dos fechas): mismo cliente+producto,
+    // importe idéntico al centavo (sin IVA y con IVA), fechas a 10 días o menos, y uno de los dos
+    // renglones sin Cant. facturada. Ese es el que infla el mes sin mover sacos.
+    const dupList=[],dupMes={};
+    for(const _kk in todosCP){
+      const arr=todosCP[_kk];
+      const conC=arr.filter(r=>r.cant>0), sinC=arr.filter(r=>!(r.cant>0));
+      if(!conC.length||!sinC.length)continue;
+      const _p=_kk.indexOf('|'), _cli=_kk.slice(0,_p), _prod=_kk.slice(_p+1);
+      sinC.forEach(z=>{
+        let best=null;
+        conC.forEach(c=>{
+          if(Math.abs(z.sub-c.sub)<0.005&&Math.abs(z.tot-c.tot)<0.005&&z.f!==c.f){
+            const dd=Math.abs(z.f-c.f)/86400000;
+            if(!best||dd<best.dd)best={dd:dd,c:c};
+          }
+        });
+        if(best&&best.dd<=10){
+          const mm=new Date(z.f).getMonth()+1;
+          dupList.push({cli:_cli,prod:_prod,fFantasma:z.f,fReal:best.c.f,dias:Math.round(best.dd),cantReal:best.c.cant,sub:z.sub,tot:z.tot,mes:mm});
+          if(!dupMes[mm])dupMes[mm]={sinIva:0,conIva:0};
+          dupMes[mm].sinIva+=z.sub; dupMes[mm].conIva+=z.tot;
+        }
+      });
+    }
+    dupList.sort((a,b)=>b.sub-a.sub);
     window.LAST_TODOS_MES_SACOS=todosMesTotalSacos;window.LAST_TODOS_MES_VAL=todosMesTotalVal;window.LAST_TODOS_MES_VALSINIVA=todosMesTotalValSinIva;
+    window.LAST_TODOS_MES_COT=todosMesCot;window.LAST_DUP_LIST=dupList;window.LAST_DUP_MES=dupMes;
     window.LAST_TODOS_PROD_MES_SACOS=todosProdMesSacos;window.LAST_TODOS_PROD_MES_VALSINIVA=todosProdMesValSinIva;
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname);
   }catch(err){console.error(err);alert('Error procesando el archivo:\n'+err.message);resetDash();}
@@ -1157,7 +1196,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     }
 
     const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
-    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},todosMesSacos:window.LAST_TODOS_MES_SACOS||{},todosMesVal:window.LAST_TODOS_MES_VAL||{},todosMesValSinIva:window.LAST_TODOS_MES_VALSINIVA||{},todosProdMesSacos:window.LAST_TODOS_PROD_MES_SACOS||{},todosProdMesValSinIva:window.LAST_TODOS_PROD_MES_VALSINIVA||{},fname:fname};
+    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},todosMesSacos:window.LAST_TODOS_MES_SACOS||{},todosMesVal:window.LAST_TODOS_MES_VAL||{},todosMesValSinIva:window.LAST_TODOS_MES_VALSINIVA||{},todosProdMesSacos:window.LAST_TODOS_PROD_MES_SACOS||{},todosProdMesValSinIva:window.LAST_TODOS_PROD_MES_VALSINIVA||{},todosMesCot:window.LAST_TODOS_MES_COT||{},dupList:window.LAST_DUP_LIST||[],dupMes:window.LAST_DUP_MES||{},fname:fname};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
@@ -2720,6 +2759,11 @@ function descargarExcelPorMes(){
       ['Las hojas "Todos-Resumen (cuadre)" y "Todos-Sin IVA por prod" son distintas: suman TODO el'],
       ['reporte de Odoo tal cual viene (cualquier producto, no solo 04MAS, y sin excluir cotizaciones ni'],
       ['descuentos) — sirven para comparar, mes a mes, contra el total que Odoo te muestra en pantalla.'],
+      [],
+      ['La hoja "Posibles duplicados" marca la misma venta cargada con dos fechas (mismo cliente,'],
+      ['mismo producto, mismo importe al centavo, una de las dos sin Cant. facturada). Ese dinero se'],
+      ['suma dos veces en el mes aunque los sacos solo se muevan una vez — es la causa más común de'],
+      ['que un mes no cuadre contra Odoo.'],
     ];
     const wsResumen=XLSX.utils.aoa_to_sheet(resumen);
     wsResumen['!cols']=[{wch:34},{wch:62}];
@@ -2775,21 +2819,30 @@ function descargarExcelPorMes(){
       ['reporte de "Análisis de ventas". Si algo no cuadra aquí, el problema está en el archivo de'],
       ['origen (Odoo), no en este programa.'],
       [],
-      ['Mes','Cant. facturada','Subtotal (sin IVA)','Total (con IVA)'],
+      ['Si un mes no cuadra, las últimas columnas dicen por qué: "cotización" es dinero de renglones'],
+      ['con Cant. facturada = 0, y "duplicado" es la misma venta repetida con dos fechas (mismo'],
+      ['cliente, mismo producto, mismo importe al centavo, una de las dos fechas sin cantidad). Ese'],
+      ['duplicado es dinero contado dos veces en el archivo de Odoo — el detalle, cliente por cliente,'],
+      ['está en la hoja "Posibles duplicados".'],
+      [],
+      ['Mes','Cant. facturada','Subtotal (sin IVA)','Total (con IVA)','De lo cual: cotización','De lo cual: duplicado','Subtotal sin duplicados'],
     ];
-    let cuadTotCant=0,cuadTotSin=0,cuadTotCon=0;
+    const cotMes=DATA.todosMesCot||{}, dupMesM=DATA.dupMes||{};
+    let cuadTotCant=0,cuadTotSin=0,cuadTotCon=0,cuadTotCot=0,cuadTotDup=0;
     meses.forEach((m,i)=>{
       const cant=Math.round((todosMesSacos[m]||0)*100)/100;
       const sin=Math.round((todosMesValSinIva[m]||0)*100)/100;
       const con=Math.round((todosMesVal[m]||0)*100)/100;
-      cuadTotCant+=cant;cuadTotSin+=sin;cuadTotCon+=con;
-      cuadreRows.push([mesLbl[i],cant,sin,con]);
+      const cot=Math.round(((cotMes[m]&&cotMes[m].sinIva)||0)*100)/100;
+      const dup=Math.round(((dupMesM[m]&&dupMesM[m].sinIva)||0)*100)/100;
+      cuadTotCant+=cant;cuadTotSin+=sin;cuadTotCon+=con;cuadTotCot+=cot;cuadTotDup+=dup;
+      cuadreRows.push([mesLbl[i],cant,sin,con,cot,dup,Math.round((sin-dup)*100)/100]);
     });
-    cuadreRows.push(['TOTAL',Math.round(cuadTotCant*100)/100,Math.round(cuadTotSin*100)/100,Math.round(cuadTotCon*100)/100]);
+    cuadreRows.push(['TOTAL',Math.round(cuadTotCant*100)/100,Math.round(cuadTotSin*100)/100,Math.round(cuadTotCon*100)/100,Math.round(cuadTotCot*100)/100,Math.round(cuadTotDup*100)/100,Math.round((cuadTotSin-cuadTotDup)*100)/100]);
     const wsCuadre=XLSX.utils.aoa_to_sheet(cuadreRows);
-    wsCuadre['!cols']=[{wch:14},{wch:18},{wch:20},{wch:20}];
-    fmtRange(wsCuadre,10,1,10+meses.length,1,FMT_QTY);
-    fmtRange(wsCuadre,10,2,10+meses.length,3,FMT_MONEY);
+    wsCuadre['!cols']=[{wch:14},{wch:18},{wch:20},{wch:20},{wch:22},{wch:22},{wch:24}];
+    fmtRange(wsCuadre,16,1,16+meses.length,1,FMT_QTY);
+    fmtRange(wsCuadre,16,2,16+meses.length,6,FMT_MONEY);
 
     // 6) Detalle sin IVA por producto, TODOS los productos (no solo 04MAS) — para ubicar en qué
     //    producto está la diferencia si el resumen de arriba no cuadra contra Odoo.
@@ -2811,6 +2864,33 @@ function descargarExcelPorMes(){
     wsTodosDet['!cols']=[{wch:56},...meses.map(()=>({wch:13})),{wch:15}];
     fmtRange(wsTodosDet,3,1,3+prodsTodos.length-1,meses.length+1,FMT_MONEY);
 
+    // 7) Hoja "Posibles duplicados": la misma venta cargada con dos fechas. El renglón "fantasma"
+    //    (sin Cant. facturada) trae el MISMO importe al centavo que el renglón real que sí tiene
+    //    sacos, con pocos días de diferencia — es dinero que se suma dos veces en el mes sin que se
+    //    muevan los sacos. Es exactamente el caso que hay que ir a revisar a Odoo.
+    const dupL=DATA.dupList||[];
+    const _fmx=(t)=>{const d=new Date(t);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();};
+    const dupRows=[
+      ['Posibles duplicados — la misma venta con dos fechas (dinero contado doble, sacos no)'],
+      [],
+      ['Cada renglón de aquí es un caso donde el MISMO cliente, el MISMO producto y el MISMO importe'],
+      ['(al centavo, sin IVA y con IVA) aparecen en dos fechas a 10 días o menos: en una de ellas con'],
+      ['los sacos facturados y en la otra sin Cant. facturada. Ese segundo renglón infla el mes sin'],
+      ['venta real detrás. Revisa en Odoo la cotización/pedido de la columna "fecha duplicada".'],
+      [],
+      ['Mes','Cliente','Producto','Fecha duplicada','Fecha real','Días','Sacos en el renglón real','Subtotal duplicado','Total duplicado'],
+    ];
+    dupL.forEach(d=>{
+      dupRows.push([MES_NOM[d.mes]||('Mes '+d.mes),d.cli,d.prod,_fmx(d.fFantasma),_fmx(d.fReal),d.dias,d.cantReal,
+        Math.round((d.sub||0)*100)/100,Math.round((d.tot||0)*100)/100]);
+    });
+    if(!dupL.length)dupRows.push(['—','No se detectaron duplicados en este reporte','','','','','','','']);
+    else dupRows.push(['TOTAL','','','','','','',Math.round(dupL.reduce((a,d)=>a+(d.sub||0),0)*100)/100,Math.round(dupL.reduce((a,d)=>a+(d.tot||0),0)*100)/100]);
+    const wsDup=XLSX.utils.aoa_to_sheet(dupRows);
+    wsDup['!cols']=[{wch:8},{wch:38},{wch:44},{wch:16},{wch:14},{wch:7},{wch:22},{wch:20},{wch:20}];
+    fmtRange(wsDup,8,5,8+dupL.length,6,FMT_QTY);
+    fmtRange(wsDup,8,7,8+dupL.length,8,FMT_MONEY);
+
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,wsResumen,'Resumen');
     XLSX.utils.book_append_sheet(wb,wsSacos,'Sacos por mes');
@@ -2819,6 +2899,7 @@ function descargarExcelPorMes(){
     XLSX.utils.book_append_sheet(wb,wsExcl,'Cotizaciones excluidas');
     XLSX.utils.book_append_sheet(wb,wsCuadre,'Todos-Resumen (cuadre)');
     XLSX.utils.book_append_sheet(wb,wsTodosDet,'Todos-Sin IVA por prod');
+    XLSX.utils.book_append_sheet(wb,wsDup,'Posibles duplicados');
     const nombreArch='Ventas_por_mes_'+(DATA.dataYear||hoy.getFullYear())+'_'+hoy.toISOString().slice(0,10)+'.xlsx';
     XLSX.writeFile(wb,nombreArch);
   }catch(err){
