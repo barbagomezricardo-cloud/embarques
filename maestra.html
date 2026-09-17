@@ -375,14 +375,24 @@ function paintMon(){
   arr.slice(0,1000).forEach(function(c){
     var t=tierOf(c.avg);
     var _e=espApp(c);
+    var na=tieneArranque(c);
+    var nv=esNuevoCand(c);
+    var dz=dormido(c);
     var d=_e
       ? ('<s>'+Number(_e.base!=null?_e.base:(c.desc||0)).toFixed(2)+'%</s> <b style="color:#c99bff">'+Number(_e.pct).toFixed(2)+'% ⚡</b>')
       : ((c.desc!=null)?(Number(c.desc).toFixed(2)+'%'):'—');
     h+='<div class="li" onclick="showCard(\''+String(c.nombre).replace(/'/g,"\\'")+'\')">'
       +'<div style="min-width:0"><b>'+c.nombre+'</b>'
       +'<div style="font-size:11px;color:#9fb0cc">'+fmt(c.avg)+' sacos/mes'+(c.estado?(' · '+c.estado):' · <span style="color:#f87171">sin estado</span>')+'</div>'
-      +'<div style="font-size:11px;color:#7f92b0">'+(c.vend||'(sin vendedor)')+' · desc '+d+'</div></div>'
-      +'<span class="lv" style="background:'+NIVCOL[t[0]]+';color:#fff">'+nivLab(t[0])+'</span></div>';
+      +'<div style="font-size:11px;color:#7f92b0">'+(c.vend||'(sin vendedor)')+' · desc '+d+'</div>'
+      // Mismos avisos de Arranque (verde) y Especial (morado) que ya se ven en la pestaña Clientes —
+      // en Monitoreo antes NO aparecían, así que administración/gerencia no veía ahí quién tenía
+      // un descuento especial vigente ni de cuánto era, solo el nivel normal del cliente.
+      +(na?'<div style="font-size:11px;color:#4ade80;font-weight:700;margin-top:2px">✅ Arranque '+c.nvAuth.pct+'% autorizado</div>':'')
+      +(_e?'<div style="font-size:11px;color:#c99bff;font-weight:700;margin-top:2px">⚡ Especial '+Number(_e.pct).toFixed(2)+'% · hasta '+_fMX(_e.hasta)+'</div>':'')
+      +(nv?'<div style="font-size:11px;color:#E8A020;font-weight:700;margin-top:2px">⭐ Nuevo · pide autorización de '+c.nvPct+'%</div>':'')
+      +'</div>'
+      +'<span class="lv" style="background:'+(_e?'#6b21a8':(nv?'#8a6114':(na?'#166534':(dz?'#7c5a2b':NIVCOL[t[0]]))))+';color:#fff">'+(_e?'ESPECIAL':(nv?'NUEVO':(dz?'DORMIDO':nivLab(t[0]))))+'</span></div>';
   });
   h+='</div>';
   if(!arr.length)h+='<div class="hint">Sin resultados con esos filtros.</div>';

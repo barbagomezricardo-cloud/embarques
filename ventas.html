@@ -2184,6 +2184,13 @@ function renderEquilibrio(){
   var nM=comp?comp.length:(DATA.meses?DATA.meses.length:1); if(!nM)nM=1;
   var MDESC_EQ=getMesDesc();
   var CM_EQ=costMap();
+  // Si el reporte SÍ trae $ real (Subtotal o Total de Odoo), hay que confiar en ese $ real SIEMPRE,
+  // incluso cuando es $0 en una celda puntual (una muestra gratis o un ajuste de precio capturado
+  // como producto normal, con sacos>0 pero $0 real ESE mes) — antes, si esa celda salía en $0, se
+  // sustituía por sacos×precio de lista, inventando ingreso que Odoo nunca facturó. El precio de
+  // lista solo debe usarse cuando el reporte, en general, no trae NINGÚN $ real (reportes viejos
+  // sin columna Total/Subtotal), no como relleno celda por celda de un reporte que sí lo trae.
+  var _tieneRealEQ=!!(DATA&&(DATA.tieneSubtotalSinIva||DATA.tieneMontoReal));
   var rev=0,cogs=0,promo=0,unmatched=0;
   // Costo real del programa, mes por mes — igual criterio que en Rentabilidad: antes de que
   // arrancara el esquema de descuento % (MDESC_EQ), el costo real fueron los SACOS REGALADOS a
@@ -2199,7 +2206,7 @@ function renderEquilibrio(){
         var qty=months[m]||0; var realV=monthsV[m]||0; if(qty<=0&&realV<=0)continue;
         if(!mm){ if(qty>0)unmatched+=qty; continue; }
         var cost=mm[1],price=mm[2];
-        var prev=realV>0?realV:qty*price;
+        var prev=_tieneRealEQ?realV:qty*price;
         rev+=prev; cogs+=qty*cost;
         revPorMes[m]=(revPorMes[m]||0)+prev;
       }
@@ -2330,6 +2337,12 @@ function renderRentabilidad(){
   // por mes). Ahora todo sale de la misma fuente y los números cuadran entre secciones y pestañas.
   let TR=0,TC=0,TCL=0; const byV={}; const cli=[]; const sinCosto={}; const byProd={}; const byProdPromo={};
   const MM={}; const _ens=(m)=>MM[m]||(MM[m]={rev:0,cost:0,psac:0,pcost:0,disc:0,descW:0});
+  // Igual que en Equilibrio: si el reporte trae $ real, se confía en él SIEMPRE (aunque sea $0 en
+  // una celda puntual — una muestra gratis o un ajuste capturado como producto normal, con
+  // sacos>0 pero $0 real ese mes) — antes esa celda cambiaba a sacos×precio de lista y el Ingreso
+  // total de este tablero salía un poco más alto que el $ que de verdad se facturó (el mismo $
+  // que ya descarga el Excel de este tablero), aunque fuera solo por un puñado de celdas.
+  const _tieneRealRENT=!!(DATA&&(DATA.tieneSubtotalSinIva||DATA.tieneMontoReal));
   for(const c of DATA.clients){
     if(RENT_VF&&(c.vendedor||'(sin asignar)')!==RENT_VF)continue;
     if(RENT_EST&&(c.estado||'(sin estado)')!==RENT_EST)continue;
@@ -2346,7 +2359,7 @@ function renderRentabilidad(){
         // meses con Cant. facturada>0, así que en la práctica coinciden).
         const _allK=new Set([...Object.keys(mo||{}),...Object.keys(mov||{})]);
         _allK.forEach(k=>{ const sac=mo[k]||0; const realV=mov[k]||0; if(sac<=0&&realV<=0)return;
-          const pv=realV>0?realV:sac*cc.precio;
+          const pv=_tieneRealRENT?realV:sac*cc.precio;
           revM[k]=(revM[k]||0)+pv; costM[k]=(costM[k]||0)+sac*cc.costo;
           byProd[p].sac+=sac; byProd[p].rev+=pv; byProd[p].cost+=sac*cc.costo; }); }
       else { sinCosto[p]=(sinCosto[p]||0)+sacTot; } }
@@ -2521,7 +2534,7 @@ function renderRentabilidad(){
           if(sac<=0)continue;
           totalSacTodos+=sac;
           const esP=isPremiumPlus(p), cc=CM[_famKey(p)];
-          const rev=real>0?real:(cc?sac*cc.precio:0), cost=cc?sac*cc.costo:0;
+          const rev=_tieneRealRENT?real:(cc?sac*cc.precio:0), cost=cc?sac*cc.costo:0;
           if(esP){ premSac+=sac; if(cc){premRev+=rev;premCost+=cost;} }
           else { noSac+=sac; if(cc){noRev+=rev;noCost+=cost;} }
         }
@@ -2565,7 +2578,7 @@ function renderRentabilidad(){
         const pm=c.prodMes||{}, pmv=pmvOf(c);
         recMs.forEach(m=>{
           let rev=0;
-          for(const p in pm){ const mo=pm[p]; if(!mo||!mo[m])continue; const sac=mo[m]; const real=(pmv[p]&&pmv[p][m])||0; const cc=CM[_famKey(p)]; rev+=real>0?real:(cc?sac*cc.precio:0); }
+          for(const p in pm){ const mo=pm[p]; if(!mo||!mo[m])continue; const sac=mo[m]; const real=(pmv[p]&&pmv[p][m])||0; const cc=CM[_famKey(p)]; rev+=_tieneRealRENT?real:(cc?sac*cc.precio:0); }
           if(rev<=0)return;
           discCostoReciente+=rev*descMesCliente(c,m)/100;
         });
