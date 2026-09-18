@@ -288,6 +288,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
         <span id="tbl-count" style="font-size:.75rem;color:#64748b"></span>
       </div>
       <div id="esp-panel" style="display:none"></div>
+      <div id="bloq-panel" style="display:none"></div>
       <div id="odoo-diff-panel" style="display:none"></div>
       <div class="tbl-wrap">
         <table class="dt" id="cliente-tbl">
@@ -737,6 +738,7 @@ function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
 // ANTES de m, que es la meta que se le anunció al cliente el día 1 de ese mes.
 function descMesCliente(c,m){
   if(!c||!m)return 0;
+  if((typeof estaBloqueadoDesc==='function')&&estaBloqueadoDesc(c.nombre))return 0;   // bloqueado en Odoo: no se le costea % de descuento
   const comp=((DATA&&DATA.completos)||[]).filter(x=>x<m).sort((a,b)=>a-b);
   if(!comp.length)return 0;
   const w6=comp.slice(-6);
@@ -1336,6 +1338,7 @@ function renderClienteTable(){
   const segC={VIP:'var(--gold)',Recurrente:'var(--green)',Esporadico:'var(--gray)',EnRiesgo:'var(--red)'};
   const segL={VIP:'VIP',Recurrente:'Recurrente',Esporadico:'Esporádico',EnRiesgo:'En Riesgo'};
   try{renderEspPanel();}catch(e){}
+  try{renderBloqueadosPanel();}catch(e){}
   try{renderOdooDiff();}catch(e){}
   document.getElementById('cliente-body').innerHTML=rows.map(c=>{
     const dk=c.tier||TIER_KEY[c.nivel]||c.nivel;
@@ -1347,13 +1350,16 @@ function renderClienteTable(){
     // % de arranque autorizado en la pestaña Nuevos (cuando el cliente aún no gana nivel real,
     // c.desc=0) también aparece aquí. Es el mismo % que ya usan Rentabilidad/Equilibrio (descEfec).
     const _deArranque=(_pol>0 && c.desc<=0);
-    const descTxt=_e
+    const _bloq=(typeof estaBloqueadoDesc==='function')&&estaBloqueadoDesc(c.nombre);
+    const descTxt=(_e
       ? `<span style="color:#64748b"><s>${_pol.toFixed(1)}%</s></span> <b style="color:#c99bff">${Number(_e.pct).toFixed(2)}%</b><div style="font-size:.62rem;color:#a78bfa">⚡ hasta ${_fechaMX(_e.hasta)}</div>`
-      : `${_pol.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'')+(_deArranque?' <span style="color:#7dd3fc" title="% de arranque autorizado en la pestaña Nuevos">🚀</span>':'');
+      : `${_pol.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'')+(_deArranque?' <span style="color:#7dd3fc" title="% de arranque autorizado en la pestaña Nuevos">🚀</span>':''))
+      +(_bloq?`<div style="font-size:.6rem;color:#f87171" title="No se le cuenta este % en el costeo de Rentabilidad: está bloqueado, como en Odoo">🚫 bloqueado (no se costea)</div>`:'');
     const _puedeEsp=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
     // El botón se ve SIEMPRE, aunque estés en modo visor: si no, parece que la función no
     // existe. En visor sale con candado y, al tocarlo, autorizarDescEsp pide la contraseña.
-    const descBtn=`<div style="margin-top:2px"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?'Autorizar un descuento especial por dirección':'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?'#4c1d95':'#2a2438'};color:${_puedeEsp?'#ddd6fe':'#8b7fa6'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?'⚡ especial':'🔒 especial'}</button></div>`;
+    const descBtn=`<div style="margin-top:2px;display:flex;gap:3px;flex-wrap:wrap"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?'Autorizar un descuento especial por dirección':'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?'#4c1d95':'#2a2438'};color:${_puedeEsp?'#ddd6fe':'#8b7fa6'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?'⚡ especial':'🔒 especial'}</button>`
+      +`<button onclick="toggleBloqueoDesc('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?(_bloq?'Quitar el bloqueo: volver a costearle el % de descuento':'Bloquearlo para el % de descuento (igual que en Odoo): recibe promoción/bonificación en vez de %'):'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?(_bloq?'#7f1d1d':'#2a2438'):'#2a2438'};color:${_puedeEsp?(_bloq?'#fecaca':'#8b7fa6'):'#8b7fa6'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?(_bloq?'🚫 bloqueado':'🔓 bloquear'):'🔒 bloquear'}</button></div>`;
     return `<tr>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${c.nombre}">${c.nombre}</td>
       <td style="text-align:right;font-weight:700;color:var(--gold)">${fmt(c.promMes)}</td>
@@ -2470,7 +2476,7 @@ function renderRentabilidad(){
     TR+=rev;TC+=cost;TCL++;
     const v=c.vendedor||'(sin asignar)'; if(!byV[v])byV[v]={rev:0,gm:0,promo:0,disc:0,cl:0}; const b=byV[v];
     b.rev+=rev;b.gm+=gm;b.promo+=promoCost;b.disc+=discReciente;b.cl++;
-    cli.push({n:c.nombre,v:v,e:c.estado||'',rev:rev,gm:gm,promo:promoCost,disc:discReciente,netPromoPct:netPromoPct,netDiscPct:netDiscPct,desc:c.desc||0,psac:psacTotal});
+    cli.push({n:c.nombre,v:v,e:c.estado||'',rev:rev,gm:gm,promo:promoCost,disc:discReciente,netPromoPct:netPromoPct,netDiscPct:netDiscPct,desc:c.desc||0,nivel:c.nivel||'',psac:psacTotal});
   }
   const TGM=TR-TC;
   const _mk=Object.keys(MM).map(Number).sort((a,b)=>a-b);
@@ -2488,6 +2494,8 @@ function renderRentabilidad(){
   let h='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:3px"><div style="font-size:1.05rem;font-weight:800;color:var(--gold)">💵 Rentabilidad del programa 04MAS</div>'
      +'<button onclick="descargarExcelPorMes()" title="Descarga, por producto y por mes, los sacos y el $ facturado (sin y con IVA), más lo que quedó excluido por ser cotización aún no facturada" style="background:var(--gold);color:var(--navy);border:none;border-radius:7px;padding:5px 13px;font-size:.76rem;font-weight:800;cursor:pointer">⬇ Descargar Excel (ventas por mes)</button></div>';
   h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">'+rangoA+'</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">'+rangoN+'</b> es el <b>descuento %</b> (nota de crédito), con la tasa que estuvo vigente cada mes. Cada uno se mide sobre SU propia venta — no se mezcla la tasa de hoy con ventas de otros meses. Los costos viven <b>solo en este tablero</b>.</div>';
+  {const _nBloq=Object.keys((typeof getBloqueadosDesc==='function')?getBloqueadosDesc():{}).length;
+   if(_nBloq)h+='<div style="font-size:.72rem;color:#fca5a5;margin-bottom:6px">🚫 <b>'+_nBloq+' cliente'+(_nBloq>1?'s':'')+' bloqueado'+(_nBloq>1?'s':'')+'</b> para % de descuento (igual que en Odoo): no están sumando en el costo del descuento de abajo, aunque su nivel les diera derecho a %. Lista y motivo en la pestaña Clientes.</div>';}
   h+=DATA.tieneSubtotalSinIva
      ?'<div style="font-size:.72rem;color:#4ade80;margin-bottom:6px">✅ El ingreso de este reporte usa el <b>monto facturado real SIN IVA</b> de Odoo (columna Subtotal) — la base correcta para el margen.</div>'
      :DATA.tieneMontoReal
@@ -2574,6 +2582,35 @@ function renderRentabilidad(){
       +'<td style="text-align:right">-'+_money(tDado)+' · '+(tRev>0?(tDado/tRev*100).toFixed(2):'0')+'%</td>'
       +'<td style="text-align:right">'+_money(tNeto)+' · '+(tRev>0?(tNeto/tRev*100).toFixed(1):'0')+'%</td><td></td></tr>';
     h+='</tbody></table></div>';
+  }
+
+  // ══ CLIENTES QUE ESTÁN COSTANDO DESCUENTO % ESTE PERIODO ════════════════════
+  // Aquí es donde se ve, cliente por cliente, cuánto le está costando el % de descuento
+  // (lo que arma el KPI "💳 Descuento %" y TDISC arriba). Si alguno de estos NO recibe
+  // realmente el %, porque está bloqueado en Odoo (recibe promoción/bonificación en vez
+  // de %, no siempre), se bloquea aquí mismo: deja de costar en este tablero al instante,
+  // sin tocar su venta, su nivel ni sus sacos de promoción/bonificación.
+  {
+    const conDesc=cli.filter(x=>x.disc>0).sort((a,b)=>b.disc-a.disc);
+    const totDesc=conDesc.reduce((a,x)=>a+x.disc,0);
+    h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">💳 Clientes con costo de descuento % este periodo ('+rangoN+') <span style="font-weight:400;color:#64748b">— '+conDesc.length+' clientes, -'+_money(totDesc)+' en total</span></div>';
+    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Si alguno de estos NO recibe realmente el % — está bloqueado en Odoo y en su lugar le das promoción/bonificación, no siempre — bloquéalo aquí: sale de esta lista y del costeo de arriba al instante.</div>';
+    if(!conDesc.length){
+      h+='<div style="font-size:.75rem;color:#4ade80">Ningún cliente tiene costo de descuento % '+rangoN+'.</div>';
+    }else{
+      const _puedeBloq=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
+      h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Cliente</th><th style="text-align:left">Vendedor</th><th style="text-align:left">Nivel</th><th style="text-align:right">%</th><th style="text-align:right">Costo este periodo</th><th style="text-align:center">Acción</th></tr></thead><tbody>';
+      conDesc.slice(0,60).forEach(x=>{
+        h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;max-width:200px;overflow:hidden;text-overflow:ellipsis">'+x.n+'</td>'
+          +'<td style="color:#94a3b8">'+(x.v||'—')+'</td>'
+          +'<td style="color:#94a3b8">'+(x.nivel||'—')+'</td>'
+          +'<td style="text-align:right;color:#7dd3fc;font-weight:700">'+Number(x.desc||0).toFixed(2)+'%</td>'
+          +'<td style="text-align:right;color:#fbbf24;font-weight:700">-'+_money(x.disc)+'</td>'
+          +'<td style="text-align:center"><button onclick="toggleBloqueoDesc(\''+x.n.replace(/'/g,"\\'")+'\')" title="'+(_puedeBloq?'Bloquearlo para el % (igual que en Odoo): en vez de % recibe promoción/bonificación':'Modo visor: toca para iniciar sesión de super-usuario')+'" style="background:'+(_puedeBloq?'#7f1d1d':'#2a2438')+';color:'+(_puedeBloq?'#fecaca':'#8b7fa6')+';border:none;border-radius:6px;padding:3px 10px;font-size:.68rem;cursor:pointer;font-weight:700">'+(_puedeBloq?'🚫 bloquear':'🔒 bloquear')+'</button></td></tr>';
+      });
+      h+='</tbody></table></div>';
+      if(conDesc.length>60)h+='<div style="font-size:.68rem;color:#64748b;margin-top:4px">Mostrando los 60 con mayor costo. El resto está en la pestaña Clientes.</div>';
+    }
   }
 
   // ══ IMPACTO DEL MIX PREMIUM (Premium 25/20 + Silver Cat 15) ═════════════════
@@ -3511,7 +3548,7 @@ const BASELINE_TON={2024:50913.0,2025:56578.3};   // toneladas reales de Odoo, p
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['prodCfg04mas','descEsp04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
@@ -3840,6 +3877,66 @@ function pctArranque(c,mes){
 // sale tachado y a un lado el autorizado, con su fecha límite y el porqué.
 function getDescEsp(){try{return JSON.parse(localStorage.getItem('descEsp04mas')||'{}');}catch(e){return {};}}
 function saveDescEsp(o){try{localStorage.setItem('descEsp04mas',JSON.stringify(o));}catch(e){}}
+
+// ── CLIENTES BLOQUEADOS PARA % DE DESCUENTO (igual que en Odoo) ───────────────
+// Hay clientes a los que, aunque su nivel/promedio les daría derecho a X% de descuento,
+// en Odoo están BLOQUEADOS para que el sistema no se los calcule: en vez de % reciben
+// promoción/bonificación (sacos regalados), y no siempre. Antes de esto, descMesCliente()
+// no sabía nada de ese bloqueo y le seguía costeando el % completo a esos clientes en
+// Rentabilidad (TDISC), inflando el "costo del descuento" con dinero que nunca se les dio
+// ni se les va a dar. Este bloqueo es la contraparte del bloqueo en Odoo: solo apaga el
+// COSTEO del % (descMesCliente/TDISC); NO toca su venta, su nivel mostrado en la tarjeta
+// (sigue siendo informativo: "lo que le tocaría si no estuviera bloqueado"), ni el
+// seguimiento de sacos de promoción/bonificación (recPromo), que sigue igual.
+function getBloqueadosDesc(){try{return JSON.parse(localStorage.getItem('descBloqueados04mas')||'{}');}catch(e){return {};}}
+function saveBloqueadosDesc(o){try{localStorage.setItem('descBloqueados04mas',JSON.stringify(o));}catch(e){}}
+function estaBloqueadoDesc(nombre){if(!nombre)return false;return !!getBloqueadosDesc()[nkey(nombre)];}
+function toggleBloqueoDesc(nombre){
+  if(!reqSuper())return;
+  var a=getBloqueadosDesc(); var k=nkey(nombre);
+  if(a[k]){
+    if(!confirm('¿Quitar el bloqueo de descuento % a '+nombre+'?\n\nVolverá a contar su % de nivel en el costeo del programa (Rentabilidad).'))return;
+    delete a[k]; saveBloqueadosDesc(a);
+  }else{
+    var motivo=prompt('BLOQUEAR "'+nombre+'" PARA EL % DE DESCUENTO\n\nAsí ya no se le cuenta descuento % en el costeo (Rentabilidad), igual que en Odoo.\nSu venta y su nivel se siguen viendo igual; si le das sacos de bono/promoción, sigue contándolos aparte.\n\n¿Motivo? (opcional, ej: solo recibe bono/promoción)','');
+    if(motivo===null)return;   // canceló
+    var now=new Date(),p=function(x){return ('0'+x).slice(-2);};
+    a[k]={n:nombre,motivo:String(motivo||'').trim(),fecha:p(now.getDate())+'/'+p(now.getMonth()+1)+'/'+now.getFullYear()};
+    saveBloqueadosDesc(a);
+  }
+  try{renderClienteTable();}catch(e){} try{renderRentabilidad();}catch(e){} try{renderNuevos();}catch(e){}
+  try{pushConfigCloud(true);}catch(e){} try{autoPublishCloud();}catch(e){}
+}
+function quitarBloqueoDesc(nombre){
+  if(!reqSuper())return;
+  var a=getBloqueadosDesc(); delete a[nkey(nombre)]; saveBloqueadosDesc(a);
+  try{renderClienteTable();}catch(e){} try{renderRentabilidad();}catch(e){}
+  try{pushConfigCloud(true);}catch(e){} try{autoPublishCloud();}catch(e){}
+}
+function renderBloqueadosPanel(){
+  var box=document.getElementById('bloq-panel'); if(!box)return;
+  var A=getBloqueadosDesc(), ks=Object.keys(A);
+  if(!ks.length){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='';
+  var PUEDE=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
+  var list=ks.map(function(k){return A[k];}).sort(function(a,b){return a.n.localeCompare(b.n);});
+  var h='<div style="background:#301818;border:2px solid #ef4444;border-radius:10px;padding:12px 15px;margin:0 0 12px">'
+   +'<div style="font-size:.92rem;font-weight:800;color:#fca5a5">🚫 Clientes bloqueados para % de descuento ('+list.length+')</div>'
+   +'<div style="font-size:.73rem;color:#fecaca;margin-top:3px">Igual que en Odoo: a estos clientes NO se les cuenta % de descuento en el costeo de Rentabilidad, aunque su nivel les diera derecho. Reciben promoción/bonificación (sacos), cuando se les da — no siempre.</div>'
+   +'<div style="overflow-x:auto;margin-top:9px"><table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:560px"><thead><tr style="background:#4a1f1f;color:#fff">'
+   +'<th style="padding:6px 9px;text-align:left">Cliente</th><th style="padding:6px;text-align:left">Motivo</th><th style="padding:6px;text-align:center">Desde</th><th style="padding:6px;text-align:center">Acción</th></tr></thead><tbody>';
+  list.forEach(function(e){
+    h+='<tr style="border-bottom:1px solid #3a2323">'
+      +'<td style="padding:5px 9px;color:#e2e8f0;font-weight:600">'+e.n+'</td>'
+      +'<td style="padding:5px;color:#fecdd3">'+String(e.motivo||'—').replace(/</g,'&lt;')+'</td>'
+      +'<td style="padding:5px;text-align:center;color:#fca5a5">'+(e.fecha||'—')+'</td>'
+      +'<td style="padding:5px;text-align:center">'+(PUEDE
+        ? '<button onclick="quitarBloqueoDesc(\''+e.n.replace(/'/g,"\\'")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer">Quitar bloqueo</button>'
+        : '<span style="color:#94a3b8;font-size:.68rem">🔒 solo super-usuario</span>')+'</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  box.innerHTML=h;
+}
 function _isoHoy(){var d=new Date(),p=function(x){return ('0'+x).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function _finDeMes(){var d=new Date(),f=new Date(d.getFullYear(),d.getMonth()+1,0),p=function(x){return ('0'+x).slice(-2);};
   return f.getFullYear()+'-'+p(f.getMonth()+1)+'-'+p(f.getDate());}
