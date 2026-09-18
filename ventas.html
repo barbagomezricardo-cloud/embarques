@@ -2423,6 +2423,9 @@ function renderRentabilidad(){
   // por mes). Ahora todo sale de la misma fuente y los números cuadran entre secciones y pestañas.
   let TR=0,TC=0,TCL=0; const byV={}; const cli=[]; const sinCosto={}; const byProd={}; const byProdPromo={};
   const MM={}; const _ens=(m)=>MM[m]||(MM[m]={rev:0,cost:0,psac:0,pcost:0,disc:0,descW:0});
+  // psacM: cuántos SACOS (no $) se regalaron cada mes, sin importar el periodo — antes este
+  // dato se quedaba en 0 siempre porque nadie lo sumaba (la columna "Sacos regalados" de la
+  // tabla mes a mes salía vacía todo el tiempo, incluso cuando sí se habían dado).
   // Igual que en Equilibrio: si el reporte trae $ real, se confía en él SIEMPRE (aunque sea $0 en
   // una celda puntual — una muestra gratis o un ajuste capturado como producto normal, con
   // sacos>0 pero $0 real ese mes) — antes esa celda cambiaba a sacos×precio de lista y el Ingreso
@@ -2452,10 +2455,10 @@ function renderRentabilidad(){
     // sacos regalados (promo/bonificación), a su costo, agrupados por el MES real en que se dieron
     const pp=c.promoProd||{}; const ppm=c.promoProdMes||{};
     for(const p in pp)if(!byProdPromo[p])byProdPromo[p]={sac:0,cost:0};
-    const promoM={};
+    const promoM={}; const promoSacM={};
     for(const p in ppm){ const cc=CM[_famKey(p)]; const mo=ppm[p];
       for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; const cst=cc?sac*cc.costo:0;
-        promoM[k]=(promoM[k]||0)+cst;
+        promoM[k]=(promoM[k]||0)+cst; promoSacM[k]=(promoSacM[k]||0)+sac;
         if(byProdPromo[p]){ byProdPromo[p].sac+=sac; byProdPromo[p].cost+=cst; }
         if(!cc) sinCosto[p]=(sinCosto[p]||0)+sac; } }
     const psacTotal=Object.values(pp).reduce((a,b)=>a+b,0);
@@ -2463,9 +2466,13 @@ function renderRentabilidad(){
     if(!allM.size)continue;
     let rev=0,cost=0,promoCost=0,discReciente=0;
     allM.forEach(k=>{
-      const kk=+k, rv=revM[k]||0, cs=costM[k]||0, pc=promoM[k]||0;
+      const kk=+k, rv=revM[k]||0, cs=costM[k]||0, pc=promoM[k]||0, psc=promoSacM[k]||0;
       rev+=rv; cost+=cs; promoCost+=pc;
-      const o=_ens(kk); o.rev+=rv; o.cost+=cs; o.pcost+=pc;
+      const o=_ens(kk); o.rev+=rv; o.cost+=cs; o.pcost+=pc; o.psac+=psc;
+      // El % de descuento se calcula desde MDESC en adelante, pero eso NO significa que ya
+      // nadie reciba sacos de regalo: los clientes bloqueados (pestaña Clientes) siguen sin
+      // % y, cuando se les da algo, es sacos — por eso o.pcost se sigue sumando siempre,
+      // también en estos meses, y el costo total del mes junta los dos (ver "dado" abajo).
       if(kk>=MDESC){ const d=(typeof descMesCliente==='function')?descMesCliente(c,kk):0; const dd=rv*d/100;
         o.disc+=dd; o.descW+=d*rv; discReciente+=dd; }
     });
@@ -2480,12 +2487,19 @@ function renderRentabilidad(){
   }
   const TGM=TR-TC;
   const _mk=Object.keys(MM).map(Number).sort((a,b)=>a-b);
-  let aRev=0,aCost=0,aDado=0,nRev=0,nCost=0,nDado=0,nDescW=0;   // a = periodo de REGALO (antes de MDESC) · n = periodo de DESCUENTO % (desde MDESC)
+  // a = periodo de REGALO (antes de MDESC, solo sacos) · n = periodo de DESCUENTO % (desde MDESC).
+  // OJO: desde MDESC el costo de un mes es sacos regalados + descuento %, LOS DOS SUMADOS — no
+  // uno u otro. Antes esta cuenta solo tomaba o.disc desde MDESC y tiraba o.pcost a la basura,
+  // así que los sacos que se le seguían dando a los clientes bloqueados en Odoo ese mes
+  // desaparecían del costo total (Ricardo lo notó: "también debería calcular los que estamos
+  // dando ahora este mes"). nPromoDado/nDiscDado quedan aparte para poder mostrar cuánto cuesta
+  // cada cosa por separado, y nDado es la suma de ambos (el costo real total del mes).
+  let aRev=0,aCost=0,aDado=0,nRev=0,nCost=0,nDado=0,nDescW=0,nPromoDado=0,nDiscDado=0;
   _mk.forEach(m=>{
-    const o=MM[m], nuevo=(m>=MDESC), dado=nuevo?o.disc:o.pcost;
-    if(nuevo){ nRev+=o.rev; nCost+=o.cost; nDado+=dado; nDescW+=o.descW; } else { aRev+=o.rev; aCost+=o.cost; aDado+=dado; }
+    const o=MM[m], nuevo=(m>=MDESC), dado=o.pcost+o.disc;
+    if(nuevo){ nRev+=o.rev; nCost+=o.cost; nDado+=dado; nDescW+=o.descW; nPromoDado+=o.pcost; nDiscDado+=o.disc; } else { aRev+=o.rev; aCost+=o.cost; aDado+=dado; }
   });
-  const TPROMO=aDado, TDISC=nDado;   // costo REAL del programa, cada uno calculado solo sobre SU propio periodo
+  const TPROMO=aDado, TDISC=nDado;   // costo REAL del programa, cada uno calculado solo sobre SU propio periodo (TDISC ya incluye ambos tipos de costo desde MDESC)
   const mesesA=_mk.filter(m=>m<MDESC), mesesN=_mk.filter(m=>m>=MDESC);
   const rangoA=mesesA.length?(MES_NOM[mesesA[0]]+(mesesA.length>1?'–'+MES_NOM[mesesA[mesesA.length-1]]:'')):('antes de '+MES_NOM[MDESC]);
   const rangoN=mesesN.length?(MES_NOM[mesesN[0]]+(mesesN.length>1?'–'+MES_NOM[mesesN[mesesN.length-1]]:'')):('desde '+MES_NOM[MDESC]);
@@ -2493,7 +2507,7 @@ function renderRentabilidad(){
   const kpi=(n,l,col)=>'<div style="flex:1;min-width:118px;background:#0F1E3C;border:1px solid #1e3a6b;border-radius:10px;padding:10px 12px"><div style="font-size:1.05rem;font-weight:900;color:'+(col||'#e8eef7')+'">'+n+'</div><div style="font-size:.7rem;color:#94a3b8;margin-top:2px">'+l+'</div></div>';
   let h='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:3px"><div style="font-size:1.05rem;font-weight:800;color:var(--gold)">💵 Rentabilidad del programa 04MAS</div>'
      +'<button onclick="descargarExcelPorMes()" title="Descarga, por producto y por mes, los sacos y el $ facturado (sin y con IVA), más lo que quedó excluido por ser cotización aún no facturada" style="background:var(--gold);color:var(--navy);border:none;border-radius:7px;padding:5px 13px;font-size:.76rem;font-weight:800;cursor:pointer">⬇ Descargar Excel (ventas por mes)</button></div>';
-  h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">'+rangoA+'</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">'+rangoN+'</b> es el <b>descuento %</b> (nota de crédito), con la tasa que estuvo vigente cada mes. Cada uno se mide sobre SU propia venta — no se mezcla la tasa de hoy con ventas de otros meses. Los costos viven <b>solo en este tablero</b>.</div>';
+  h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Con tus costos reales. <b style="color:#fca5a5">'+rangoA+'</b> el costo del programa fueron los <b>sacos regalados</b> (promoción/bonificación). <b style="color:#fbbf24">'+rangoN+'</b> en adelante pueden ser <b>las dos cosas a la vez</b>: descuento % (nota de crédito) a los clientes en el esquema, y sacos regalados a los que siguen bloqueados — se suman ambas, cada una con lo que realmente se dio ese mes. Los costos viven <b>solo en este tablero</b>.</div>';
   {const _nBloq=Object.keys((typeof getBloqueadosDesc==='function')?getBloqueadosDesc():{}).length;
    if(_nBloq)h+='<div style="font-size:.72rem;color:#fca5a5;margin-bottom:6px">🚫 <b>'+_nBloq+' cliente'+(_nBloq>1?'s':'')+' bloqueado'+(_nBloq>1?'s':'')+'</b> para % de descuento (igual que en Odoo): no están sumando en el costo del descuento de abajo, aunque su nivel les diera derecho a %. Lista y motivo en la pestaña Clientes.</div>';}
   h+=DATA.tieneSubtotalSinIva
@@ -2516,11 +2530,13 @@ function renderRentabilidad(){
      +kpi(_money(TGM-TPROMO-TDISC)+' · '+(TR>0?(TGM-TPROMO-TDISC)/TR*100:0).toFixed(1)+'%','Margen NETO total, real',_pctCol(TR>0?(TGM-TPROMO-TDISC)/TR*100:0,RENT_THR))+'</div>';
   // KPIs — desglosados por periodo, cada uno sobre SU propia venta (esto es lo que corrige el
   // desfase que se veía antes contra la tabla "mes a mes": ya no se pisan entre sí).
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
      +kpi('-'+_money(TPROMO)+' · '+(aRev>0?TPROMO/aRev*100:0).toFixed(2)+'%','📦 Sacos regalados ('+rangoA+')','#fca5a5')
      +kpi(_money(aRev-aCost-TPROMO)+' · '+(aRev>0?(aRev-aCost-TPROMO)/aRev*100:0).toFixed(1)+'%','Margen NETO · '+rangoA,_pctCol(aRev>0?(aRev-aCost-TPROMO)/aRev*100:0,RENT_THR))
-     +kpi('-'+_money(TDISC)+' · '+(nRev>0?TDISC/nRev*100:0).toFixed(2)+'%','💳 Descuento % ('+rangoN+')','#fbbf24')
+     +kpi('-'+_money(nDiscDado)+' · '+(nRev>0?nDiscDado/nRev*100:0).toFixed(2)+'%','💳 Descuento % ('+rangoN+')','#fbbf24')
+     +kpi('-'+_money(nPromoDado)+' · '+(nRev>0?nPromoDado/nRev*100:0).toFixed(2)+'%','📦 Sacos regalados a bloqueados ('+rangoN+')','#fca5a5')
      +kpi(_money(nRev-nCost-TDISC)+' · '+(nRev>0?(nRev-nCost-TDISC)/nRev*100:0).toFixed(1)+'%','Margen NETO · '+rangoN,_pctCol(nRev>0?(nRev-nCost-TDISC)/nRev*100:0,RENT_THR))+'</div>';
+  h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:16px">El margen NETO de '+rangoN+' ya descuenta los DOS costos de arriba juntos (descuento % + sacos regalados a bloqueados), porque es lo que de verdad sale de la bolsa ese mes.</div>';
 
   // ══ MÁRGENES MES A MES (con lo que se dio de programa) ══════════════════════
   // Hasta el mes anterior al arranque del esquema el costo fueron los SACOS REGALADOS.
@@ -2531,7 +2547,7 @@ function renderRentabilidad(){
     let prevNetoPct=null;
     _mk.forEach(m=>{
       const o=MM[m], nuevo=(m>=MDESC);
-      const dado=nuevo?o.disc:o.pcost;
+      const dado=o.pcost+o.disc;   // costo total del mes: sacos regalados + descuento %, lo que se haya dado de cada uno
       const pctD=o.rev>0?dado/o.rev*100:0;
       const descProm=o.rev>0?o.descW/o.rev:0;
       const bRuta=o.rev-o.cost, bRutaPct=o.rev>0?bRuta/o.rev*100:0;
@@ -2547,7 +2563,9 @@ function renderRentabilidad(){
         +'<td style="text-align:right;color:#cbd5e1">'+_money(o.rev)+'</td>'
         +'<td style="text-align:right;color:#cbd5e1">'+_money(bRuta)+' <span style="color:#64748b">· '+bRutaPct.toFixed(1)+'%</span></td>'
         +'<td style="text-align:right;color:#94a3b8">'+(o.psac>0?fmt(Math.round(o.psac)):'—')+'</td>'
-        +'<td style="text-align:right;color:#7dd3fc;font-weight:700">'+(nuevo?descProm.toFixed(2)+'%':'—')+'</td>'
+        +'<td style="text-align:right;color:'+(o.pcost>0?'#fca5a5':'#475569')+'">'+(o.pcost>0?'-'+_money(o.pcost):'—')+'</td>'
+        +'<td style="text-align:right;color:#7dd3fc;font-weight:700">'+(o.disc>0?descProm.toFixed(2)+'%':'—')+'</td>'
+        +'<td style="text-align:right;color:'+(o.disc>0?'#fbbf24':'#475569')+'">'+(o.disc>0?'-'+_money(o.disc):'—')+'</td>'
         +'<td style="text-align:right;font-weight:700;color:'+col+'">-'+_money(dado)+' <span style="opacity:.75">· '+pctD.toFixed(2)+'%</span></td>'
         +'<td style="text-align:right;font-weight:800;color:'+colNeto+'">'+_money(neto)+' <span style="opacity:.75">· '+netoPct.toFixed(1)+'%</span></td>'
         +'<td style="text-align:right;font-size:.7rem">'+tend+'</td></tr>';
@@ -2555,7 +2573,7 @@ function renderRentabilidad(){
     const pctA=aRev>0?aDado/aRev*100:0, pctN=nRev>0?nDado/nRev*100:0;
     const dif=pctN-pctA;
     h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">📅 Márgenes mes a mes</div>';
-    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Ingreso, margen bruto, costo del programa (regalo o descuento %, el que aplicaba ese mes) y margen NETO real, mes por mes. La última columna compara el margen neto % contra el mes anterior. '
+    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Ingreso, margen bruto, costo de sacos regalados Y costo de descuento % por separado (un mes puede tener los dos, si hay clientes bloqueados que siguen recibiendo sacos), costo total del programa y margen NETO real, mes por mes. La última columna compara el margen neto % contra el mes anterior. '
       +'<label style="margin-left:8px">El esquema arrancó en: <select onchange="setMesDesc(this.value)" style="background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:2px 6px;font-size:.72rem">'
       +[1,2,3,4,5,6,7,8,9,10,11,12].map(function(x){return '<option value="'+x+'"'+(x===MDESC?' selected':'')+'>'+MES_NOM[x]+'</option>';}).join('')+'</select></label></div>';
     if(nRev>0){
@@ -2566,19 +2584,22 @@ function renderRentabilidad(){
         +'contra <b>'+pctA.toFixed(2)+'%</b> del periodo de regalos ('+rangoA+'). '
         +'Diferencia: <b>'+(dif>=0?'+':'')+dif.toFixed(2)+' puntos</b>. '
         +'Al ritmo del periodo anterior habrías dado '+_money(nRev*pctA/100)+', así que vas '+(dif<=0?'ahorrando':'gastando')+' <b>'+_money(Math.abs(nRev*pctA/100-nDado))+'</b>.'
-        +'<div style="font-size:.72rem;margin-top:4px;opacity:.85">Descuento promedio ponderado de todos los clientes '+rangoN+': <b>'+(nRev>0?(nDescW/nRev).toFixed(2):'0')+'%</b>.</div></div>';
+        +'<div style="font-size:.72rem;margin-top:4px;opacity:.85">Ese '+_money(nDado)+' ya junta las dos cosas: <b>'+_money(nDiscDado)+'</b> de descuento % + <b>'+_money(nPromoDado)+'</b> de sacos regalados a los que siguen bloqueados. Descuento promedio ponderado de todos los clientes '+rangoN+': <b>'+(nRev>0?(nDescW/nRev).toFixed(2):'0')+'%</b>.</div></div>';
     } else {
       h+='<div style="background:#111c34;border:1px solid #334155;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.78rem;color:#cbd5e1">Todavía no hay ventas cargadas '+rangoN+', así que aún no hay nada que comparar con el periodo de regalos ('+pctA.toFixed(2)+'% de la venta).</div>';
     }
-    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:820px"><thead><tr style="color:#9fb0cc">'
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:980px"><thead><tr style="color:#9fb0cc">'
       +'<th style="text-align:left;padding:6px 8px">Mes</th><th style="text-align:center">Esquema</th><th style="text-align:right">Venta ('+(DATA.tieneSubtotalSinIva?'real facturada, sin IVA':DATA.tieneMontoReal?'real facturada, con IVA':'precio lista')+')</th>'
-      +'<th style="text-align:right">Margen bruto</th><th style="text-align:right">Sacos regalados</th><th style="text-align:right">Desc. promedio</th>'
-      +'<th style="text-align:right">Costo programa</th><th style="text-align:right">Margen NETO</th><th style="text-align:right">vs mes ant.</th></tr></thead><tbody>'+filas;
+      +'<th style="text-align:right">Margen bruto</th><th style="text-align:right">Sacos regalados</th><th style="text-align:right">Costo regalados</th><th style="text-align:right">Desc. promedio</th><th style="text-align:right">Costo descuento %</th>'
+      +'<th style="text-align:right">Costo total</th><th style="text-align:right">Margen NETO</th><th style="text-align:right">vs mes ant.</th></tr></thead><tbody>'+filas;
     const tRev=aRev+nRev, tDado=aDado+nDado, tCost=aCost+nCost, tBruta=tRev-tCost, tNeto=tBruta-tDado;
+    const tPcost=aDado+nPromoDado, tDisc=nDiscDado;   // aDado en el periodo viejo es puro sacos (disc=0 ahí)
     h+='<tr style="background:#14243f;font-weight:800;color:#fff"><td style="padding:6px 8px">TOTAL</td><td></td>'
       +'<td style="text-align:right">'+_money(tRev)+'</td>'
       +'<td style="text-align:right">'+_money(tBruta)+' · '+(tRev>0?(tBruta/tRev*100).toFixed(1):'0')+'%</td>'
-      +'<td></td><td></td>'
+      +'<td></td>'
+      +'<td style="text-align:right">-'+_money(tPcost)+'</td><td></td>'
+      +'<td style="text-align:right">-'+_money(tDisc)+'</td>'
       +'<td style="text-align:right">-'+_money(tDado)+' · '+(tRev>0?(tDado/tRev*100).toFixed(2):'0')+'%</td>'
       +'<td style="text-align:right">'+_money(tNeto)+' · '+(tRev>0?(tNeto/tRev*100).toFixed(1):'0')+'%</td><td></td></tr>';
     h+='</tbody></table></div>';
