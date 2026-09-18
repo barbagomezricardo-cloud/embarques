@@ -2544,6 +2544,30 @@ function renderRentabilidad(){
      +kpi(_money(nRev-nCost-TDISC)+' · '+(nRev>0?(nRev-nCost-TDISC)/nRev*100:0).toFixed(1)+'%','Margen NETO · '+rangoN,_pctCol(nRev>0?(nRev-nCost-TDISC)/nRev*100:0,RENT_THR))+'</div>';
   h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:16px">El margen NETO de '+rangoN+' ya descuenta los DOS costos de arriba juntos (descuento % + sacos regalados a bloqueados), porque es lo que de verdad sale de la bolsa ese mes.</div>';
 
+  // ══ REFERENCIA: el descuento real que Odoo ya aplicó, según tu mismo reporte ════════════════
+  // El pivote que subes trae, renglón por renglón, un movimiento "Descuento s/ venta" (negativo)
+  // por documento — es el $ que Odoo YA aplicó de verdad en la factura/nota de crédito, y por eso
+  // contempla todo lo que ese renglón contempla (ajustes, redondeos, lo que se haya capturado ahí).
+  // nDiscDado de arriba es un cálculo aparte y más simple: % vigente de cada cliente × su venta,
+  // mes por mes — puede no coincidir peso por peso con lo que Odoo aplicó. Se usa solo como
+  // referencia/cruce aquí abajo, nunca entra en ningún cálculo del tablero. Ese renglón de Odoo
+  // no viene separado por cliente, así que es el total DEL REPORTE COMPLETO — con un filtro de
+  // Vendedor/Estado activo arriba, la comparación deja de ser exacta (se avisa en ese caso).
+  {
+    const _tmd=DATA.todosMesDesc||{};
+    const _basis=DATA.tieneSubtotalSinIva?'sinIva':'conIva';
+    let _odooDisc=0,_tieneOdooDisc=false;
+    mesesN.forEach(m=>{const d=_tmd[m];if(d&&d[_basis]){_odooDisc+=Math.abs(d[_basis]);_tieneOdooDisc=true;}});
+    if(_tieneOdooDisc){
+      const _dif=nDiscDado-_odooDisc,_difPct=_odooDisc>0?(_dif/_odooDisc*100):0,_cerca=Math.abs(_difPct)<=5;
+      h+='<div style="background:#0F1E3C;border:1px solid #2563EB;border-radius:10px;padding:11px 14px;margin-bottom:4px;font-size:.78rem;color:#cbd5e1">'
+        +'🧾 <b>Referencia — descuento real aplicado según Odoo</b> ('+rangoN+'): tu reporte ya trae, renglón por renglón, cuánto se aplicó de verdad de descuento — Odoo aplicó <b style="color:#7dd3fc">'+_money(_odooDisc)+'</b>'+(DATA.tieneSubtotalSinIva?' (sin IVA)':' (con IVA)')+'. '
+        +'Tu costo calculado arriba (💳 Descuento %) es <b>'+_money(nDiscDado)+'</b>, una diferencia de <b style="color:'+(_cerca?'#4ade80':'#f87171')+'">'+(_dif>=0?'+':'')+_money(_dif)+' ('+(_difPct>=0?'+':'')+_difPct.toFixed(1)+'%)</b>'+(_cerca?' — están cerca.':' — vale la pena revisar por qué difieren tanto.')+'</div>';
+      if(RENT_VF||RENT_EST)h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:16px">⚠ Este total de Odoo es del reporte COMPLETO (ese renglón no viene separado por cliente), así que no respeta los filtros de Vendedor/Estado de arriba — la comparación es menos exacta con un filtro activo.</div>';
+      else h+='<div style="margin-bottom:16px"></div>';
+    }
+  }
+
   // ══ MÁRGENES MES A MES (con lo que se dio de programa) ══════════════════════
   // Hasta el mes anterior al arranque del esquema el costo fueron los SACOS REGALADOS.
   // Desde el arranque es el DESCUENTO %, valuado con el % que estuvo vigente cada mes
