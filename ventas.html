@@ -636,6 +636,12 @@ const ST_LBL = {
 // ── ESTADO GLOBAL ─────────────────────────────────────────────────────────────
 let DATA=null, LAST_DATA_YEAR=0, LAST_DIAMES=null, LAST_ESDIARIO=false, selState=null, sortCol='promMes', sortAsc=false, dayFilter=0, tendSortCol='promMes', tendSortAsc=false;
 let ODOO_DESC_ROWS=null, ODOO_DESC_FNAME='', ODOO_DIFF_ONLY=true;   // comparación del descuento vs el reporte de Odoo
+// Paneles plegables (esp/bloq/odoo en Clientes, y el de costo-descuento en Rentabilidad): cerrados
+// por omisión para que no empujen la tabla de clientes fuera de la vista cuando tienen muchos
+// renglones (con varias docenas de bloqueados, el panel abierto tapaba el scroll de la tabla).
+// Guardan su propio estado en window para que sobreviva cada re-render (si no, el <details> se
+// volvía a cerrar solo cada vez que se repintaba, por ejemplo al escribir en el buscador).
+let PANEL_OPEN={esp:false,bloq:false,odoo:false,rentDesc:false};
 var LAST_PROMO_PROD={};   // {cliente:{producto:sacos}} — sacos regalados como promo/bonificación por producto (para costearlos en Rentabilidad)
 const TODAY=new Date();
 
@@ -2614,13 +2620,15 @@ function renderRentabilidad(){
   {
     const conDesc=cli.filter(x=>x.disc>0).sort((a,b)=>b.disc-a.disc);
     const totDesc=conDesc.reduce((a,x)=>a+x.disc,0);
-    h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">💳 Clientes con costo de descuento % este periodo ('+rangoN+') <span style="font-weight:400;color:#64748b">— '+conDesc.length+' clientes, -'+_money(totDesc)+' en total</span></div>';
+    h+='<details '+(PANEL_OPEN.rentDesc?'open':'')+' ontoggle="PANEL_OPEN.rentDesc=this.open" style="margin:18px 0 6px">';
+    h+='<summary style="cursor:pointer;font-weight:800;color:#cbd5e1">💳 Clientes con costo de descuento % este periodo ('+rangoN+') <span style="font-weight:400;color:#64748b">— '+conDesc.length+' clientes, -'+_money(totDesc)+' en total — toca para '+(PANEL_OPEN.rentDesc?'ocultar':'ver la lista')+'</span></summary>';
+    h+='<div style="padding-top:6px">';
     h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Si alguno de estos NO recibe realmente el % — está bloqueado en Odoo y en su lugar le das promoción/bonificación, no siempre — bloquéalo aquí: sale de esta lista y del costeo de arriba al instante.</div>';
     if(!conDesc.length){
       h+='<div style="font-size:.75rem;color:#4ade80">Ningún cliente tiene costo de descuento % '+rangoN+'.</div>';
     }else{
       const _puedeBloq=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
-      h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Cliente</th><th style="text-align:left">Vendedor</th><th style="text-align:left">Nivel</th><th style="text-align:right">%</th><th style="text-align:right">Costo este periodo</th><th style="text-align:center">Acción</th></tr></thead><tbody>';
+      h+='<div style="overflow:auto;max-height:420px"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:640px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:6px 8px">Cliente</th><th style="text-align:left">Vendedor</th><th style="text-align:left">Nivel</th><th style="text-align:right">%</th><th style="text-align:right">Costo este periodo</th><th style="text-align:center">Acción</th></tr></thead><tbody>';
       conDesc.slice(0,60).forEach(x=>{
         h+='<tr style="border-top:1px solid #16233f"><td style="padding:6px 8px;color:#e8eef7;max-width:200px;overflow:hidden;text-overflow:ellipsis">'+x.n+'</td>'
           +'<td style="color:#94a3b8">'+(x.v||'—')+'</td>'
@@ -2632,6 +2640,7 @@ function renderRentabilidad(){
       h+='</tbody></table></div>';
       if(conDesc.length>60)h+='<div style="font-size:.68rem;color:#64748b;margin-top:4px">Mostrando los 60 con mayor costo. El resto está en la pestaña Clientes.</div>';
     }
+    h+='</div></details>';
   }
 
   // ══ IMPACTO DEL MIX PREMIUM (Premium 25/20 + Silver Cat 15) ═════════════════
@@ -3941,10 +3950,11 @@ function renderBloqueadosPanel(){
   box.style.display='';
   var PUEDE=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
   var list=ks.map(function(k){return A[k];}).sort(function(a,b){return a.n.localeCompare(b.n);});
-  var h='<div style="background:#301818;border:2px solid #ef4444;border-radius:10px;padding:12px 15px;margin:0 0 12px">'
-   +'<div style="font-size:.92rem;font-weight:800;color:#fca5a5">🚫 Clientes bloqueados para % de descuento ('+list.length+')</div>'
+  var h='<details '+(PANEL_OPEN.bloq?'open':'')+' ontoggle="PANEL_OPEN.bloq=this.open" style="background:#301818;border:2px solid #ef4444;border-radius:10px;margin:0 0 12px">'
+   +'<summary style="cursor:pointer;padding:10px 15px;font-size:.92rem;font-weight:800;color:#fca5a5">🚫 Clientes bloqueados para % de descuento ('+list.length+') <span style="font-size:.68rem;font-weight:400;color:#fecaca">— toca para '+(PANEL_OPEN.bloq?'ocultar':'ver la lista')+'</span></summary>'
+   +'<div style="padding:0 15px 12px">'
    +'<div style="font-size:.73rem;color:#fecaca;margin-top:3px">Igual que en Odoo: a estos clientes NO se les cuenta % de descuento en el costeo de Rentabilidad, aunque su nivel les diera derecho. Reciben promoción/bonificación (sacos), cuando se les da — no siempre.</div>'
-   +'<div style="overflow-x:auto;margin-top:9px"><table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:560px"><thead><tr style="background:#4a1f1f;color:#fff">'
+   +'<div style="overflow:auto;margin-top:9px;max-height:320px"><table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:560px"><thead><tr style="background:#4a1f1f;color:#fff">'
    +'<th style="padding:6px 9px;text-align:left">Cliente</th><th style="padding:6px;text-align:left">Motivo</th><th style="padding:6px;text-align:center">Desde</th><th style="padding:6px;text-align:center">Acción</th></tr></thead><tbody>';
   list.forEach(function(e){
     h+='<tr style="border-bottom:1px solid #3a2323">'
@@ -3955,7 +3965,7 @@ function renderBloqueadosPanel(){
         ? '<button onclick="quitarBloqueoDesc(\''+e.n.replace(/'/g,"\\'")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer">Quitar bloqueo</button>'
         : '<span style="color:#94a3b8;font-size:.68rem">🔒 solo super-usuario</span>')+'</td></tr>';
   });
-  h+='</tbody></table></div></div>';
+  h+='</tbody></table></div></div></details>';
   box.innerHTML=h;
 }
 function _isoHoy(){var d=new Date(),p=function(x){return ('0'+x).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
@@ -4007,10 +4017,11 @@ function renderEspPanel(){
   ks.forEach(function(k){var e=A[k];(espVencido(e.n)?ven:viv).push(e);});
   viv.sort(function(a,b){return (b.pct||0)-(a.pct||0);});
   var PUEDE=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
-  var h='<div style="background:#241a33;border:2px solid #a855f7;border-radius:10px;padding:12px 15px;margin:0 0 12px">'
-   +'<div style="font-size:.92rem;font-weight:800;color:#c99bff">⚡ Descuentos especiales autorizados por dirección ('+viv.length+' vigentes'+(ven.length?(' · '+ven.length+' vencidos'):'')+')</div>'
+  var h='<details '+(PANEL_OPEN.esp?'open':'')+' ontoggle="PANEL_OPEN.esp=this.open" style="background:#241a33;border:2px solid #a855f7;border-radius:10px;margin:0 0 12px">'
+   +'<summary style="cursor:pointer;padding:10px 15px;font-size:.92rem;font-weight:800;color:#c99bff">⚡ Descuentos especiales autorizados por dirección ('+viv.length+' vigentes'+(ven.length?(' · '+ven.length+' vencidos'):'')+') <span style="font-size:.68rem;font-weight:400;color:#d9c9ee">— toca para '+(PANEL_OPEN.esp?'ocultar':'ver la lista')+'</span></summary>'
+   +'<div style="padding:0 15px 12px">'
    +'<div style="font-size:.73rem;color:#d9c9ee;margin-top:3px">Estos % pasan por encima de la política mientras dure su vigencia. El vendedor los ve en la tarjeta del cliente con el motivo y la fecha límite.</div>'
-   +'<div style="overflow-x:auto;margin-top:9px"><table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:640px"><thead><tr style="background:#3b2a56;color:#fff">'
+   +'<div style="overflow:auto;margin-top:9px;max-height:320px"><table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:640px"><thead><tr style="background:#3b2a56;color:#fff">'
    +'<th style="padding:6px 9px;text-align:left">Cliente</th><th style="padding:6px;text-align:right">Política</th><th style="padding:6px;text-align:right">Autorizado</th>'
    +'<th style="padding:6px;text-align:center">Vigente hasta</th><th style="padding:6px;text-align:left">Motivo</th><th style="padding:6px;text-align:center">Acción</th></tr></thead><tbody>';
   viv.concat(ven).forEach(function(e){
@@ -4026,7 +4037,7 @@ function renderEspPanel(){
           +'<button onclick="quitarDescEsp(\''+e.n.replace(/'/g,"\\'")+'\')" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;padding:3px 9px;font-size:.68rem;cursor:pointer">Quitar</button>'
         : '<span style="color:#94a3b8;font-size:.68rem">🔒 solo super-usuario</span>')+'</td></tr>';
   });
-  h+='</tbody></table></div></div>';
+  h+='</tbody></table></div></div></details>';
   box.innerHTML=h;
 }
 
@@ -4111,18 +4122,18 @@ function renderOdooDiff(){
     if(oa!==ob)return oa-ob;
     return Math.abs(b.dif||0)-Math.abs(a.dif||0);
   });
-  let h='<div style="background:#0F1E3C;border:2px solid #2563EB;border-radius:10px;padding:12px 15px;margin:0 0 12px">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">';
-  h+='<div><div style="font-size:.92rem;font-weight:800;color:#7dd3fc">📊 Comparación contra el reporte de Odoo ('+_h(ODOO_DESC_FNAME)+')</div>';
-  h+='<div style="font-size:.73rem;color:#94a3b8;margin-top:2px">'+rows.length+' clientes en el reporte · <b style="color:#4ade80">'+nOk+' iguales</b> · <b style="color:#fbbf24">'+nDif+' con diferencia</b>'+(nNf?' · <b style="color:#f87171">'+nNf+' no encontrados en tu programa</b>':'')+'</div></div>';
-  h+='<div style="display:flex;gap:6px;flex-shrink:0">';
+  let h='<details '+(PANEL_OPEN.odoo?'open':'')+' ontoggle="PANEL_OPEN.odoo=this.open" style="background:#0F1E3C;border:2px solid #2563EB;border-radius:10px;margin:0 0 12px">';
+  h+='<summary style="cursor:pointer;padding:10px 15px;font-size:.92rem;font-weight:800;color:#7dd3fc">📊 Comparación contra el reporte de Odoo ('+_h(ODOO_DESC_FNAME)+')'
+    +' <span style="font-size:.68rem;font-weight:400;color:#94a3b8">— '+rows.length+' clientes · <b style="color:#4ade80">'+nOk+' iguales</b> · <b style="color:#fbbf24">'+nDif+' con diferencia</b>'+(nNf?' · <b style="color:#f87171">'+nNf+' no encontrados</b>':'')+' — toca para '+(PANEL_OPEN.odoo?'ocultar':'ver')+'</span></summary>';
+  h+='<div style="padding:0 15px 12px">';
+  h+='<div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;margin-bottom:6px">';
   h+='<button onclick="toggleOdooDiffOnly()" style="background:#1e3258;color:#cbd5e1;border:1px solid #2563EB;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer">'+(ODOO_DIFF_ONLY?'Ver todos':'Ver solo diferencias')+'</button>';
   h+='<button onclick="clearOdooDiff()" style="background:#3a1414;color:#fecaca;border:1px solid #7f1d1d;border-radius:6px;padding:5px 10px;font-size:.7rem;cursor:pointer">✖ Quitar</button>';
-  h+='</div></div>';
+  h+='</div>';
   if(!shown.length){
     h+='<div style="padding:14px 4px;color:#4ade80;font-size:.8rem">✅ Sin diferencias: tu programa calcula igual que Odoo en los clientes de este reporte.</div>';
   }else{
-    h+='<div style="overflow-x:auto;margin-top:9px"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:700px"><thead><tr style="background:#14243f;color:#9fb0cc">'
+    h+='<div style="overflow:auto;margin-top:9px;max-height:320px"><table style="width:100%;border-collapse:collapse;font-size:.73rem;min-width:700px"><thead><tr style="background:#14243f;color:#9fb0cc">'
       +'<th style="padding:6px 9px;text-align:left">Cliente</th><th style="padding:6px;text-align:left">Vendedor (Odoo)</th><th style="padding:6px;text-align:left">Nivel (Odoo)</th>'
       +'<th style="padding:6px;text-align:right">Odoo sugerido</th><th style="padding:6px;text-align:right">Odoo válido</th>'
       +'<th style="padding:6px;text-align:right">Tu programa</th><th style="padding:6px;text-align:right">Diferencia</th><th style="padding:6px;text-align:center">Estado</th></tr></thead><tbody>';
@@ -4141,7 +4152,7 @@ function renderOdooDiff(){
     });
     h+='</tbody></table></div>';
   }
-  h+='</div>';
+  h+='</div></details>';
   box.innerHTML=h;
 }
 
