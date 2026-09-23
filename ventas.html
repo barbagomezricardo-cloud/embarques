@@ -3749,8 +3749,9 @@ function computeYoY(){
     // arreglos mes a mes (1–12): permiten recortar el periodo por mes/día en el Tablero sin recalcular todo
     const curM=Array(12).fill(0); for(const m in c.mesData) curM[m-1]=c.mesData[m]||0;
     const priorM=Array(12).fill(0); if(b&&b.m) for(let i=0;i<12;i++) priorM[i]=b.m[i]||0;
+    const priorFullT=b&&b.tm?b.tm.reduce((x,y)=>x+y,0):0;   // toneladas del año anterior (año completo) — para comparar objetivos en toneladas
     return{nombre:c.nombre,estado:c.estado||'SIN DATOS',vend:c.vendedor||'SIN DATOS',
-      cur,curFull,prior,priorFull,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
+      cur,curFull,prior,priorFull,priorFullT,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
       // "nuevo" se juzga con curFull (TODO 2026, incluyendo el mes en curso todavía incompleto):
       // un cliente cuya única compra cae justo en el mes en curso ya es nuevo de verdad, aunque
       // ese mes se excluya de "complete" para no ensuciar promedios/comparativas contra el año anterior.
@@ -3761,12 +3762,13 @@ function computeYoY(){
   const map=getMapping(); const mNorm=new Map(); for(const k in map) if(map[k]&&(map[k].e||map[k].v)) mNorm.set(nkey(k),k);
   for(const k in B){ if(usados.has(k))continue;
     const b=B[k]; const priorFull=b&&b.m?b.m.reduce((x,y)=>x+y,0):0;
+    const priorFullT=b&&b.tm?b.tm.reduce((x,y)=>x+y,0):0;
     const prior=b&&b.m?complete.reduce((a,m)=>a+(b.m[m-1]||0),0):0;
     const rk=resolveKey(k,mNorm); const info=rk?map[rk]:null;
     const tg=metaTier(priorFull);
     const priorM0=Array(12).fill(0); if(b&&b.m) for(let i=0;i<12;i++) priorM0[i]=b.m[i]||0;
     rows.push({nombre:k,estado:(info&&info.e)||'SIN DATOS',vend:(info&&info.v)||'SIN DATOS',
-      cur:0,curFull:0,prior,priorFull,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
+      cur:0,curFull:0,prior,priorFull,priorFullT,tier:tg[0],g:tg[1],meta:Math.round(priorFull*(1+tg[1])),
       nuevo:false,firstMes:0,tonsCur:0,curM:Array(12).fill(0),priorM:priorM0,perdido:true});
   }
   const tbm={};
@@ -4460,9 +4462,11 @@ function renderGrafica(){
       // --- auxiliares: cómo va el vendedor (o el total) vs su objetivo ---
       const gap=obj-realTot;
       const pace=comp.length?realTot/comp.length:0, projA=pace*12;
-      let priorFullSel=0, nuevosSel=0, tonsSel=0, activosSel=0;
-      for(const r of Y.rows){ if(vf&&r.vend!==vf)continue; priorFullSel+=r.priorFull||0; if(r.nuevo)nuevosSel++; tonsSel+=r.tonsCur||0; if((r.curFull||0)>0)activosSel++; }
-      const objA=priorFullSel*(1+P.gTarget);
+      let priorFullSel=0, priorFullSelT=0, nuevosSel=0, tonsSel=0, activosSel=0;
+      for(const r of Y.rows){ if(vf&&r.vend!==vf)continue; priorFullSel+=r.priorFull||0; priorFullSelT+=r.priorFullT||0; if(r.nuevo)nuevosSel++; tonsSel+=r.tonsCur||0; if((r.curFull||0)>0)activosSel++; }
+      // El objetivo anual se compara en la MISMA unidad que se está viendo (UNIT), si no, en toneladas
+      // se comparaba una proyección en toneladas contra un objetivo que seguía en sacos.
+      const objA=(UNIT==='ton'?priorFullSelT:priorFullSel)*(1+P.gTarget);
       const agg={}; for(const r of Y.rows){const vv=r.vend||'SIN DATOS'; if(vv==='SIN DATOS')continue; if(!agg[vv])agg[vv]={c:0,p:0}; agg[vv].c+=r.cur||0; agg[vv].p+=r.prior||0;}
       const rank=Object.entries(agg).map(([vv,o])=>({v:vv,av:o.p?o.c/(o.p*(1+P.gTarget)):(o.c>0?99:0)})).sort((a,b)=>b.av-a.av);
       const pos=vf?(rank.findIndex(x=>x.v===vf)+1):0;
