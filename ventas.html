@@ -448,7 +448,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
   <!-- NUEVAS PESTAÑAS -->
   <div class="pane" id="pane-objetivos"><div id="obj-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-nuevos"><div id="nue-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
-  <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Corte al día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span></div><div id="graf-content"></div></div></div>
+  <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Corte al día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span></div><div id="graf-content"></div></div></div>
   <div class="pane" id="pane-metas">
     <div style="display:flex;flex-direction:column;width:100%;flex:1;min-height:0">
       <div style="font-size:1.05rem;font-weight:800;color:var(--gold);padding:12px 16px 2px">📋 Metas por cliente 2026</div>
@@ -4357,6 +4357,17 @@ function renderGrafica(){
   if(vendEl&&vendEl.options.length<=1){const vs=[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort();vs.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;vendEl.appendChild(o);});}
   if(monthEl&&monthEl.options.length===0){DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];monthEl.appendChild(o);});monthEl.value=DATA.meses[DATA.meses.length-1];}
   const mw=document.getElementById('graf-month-wrap'); if(mw)mw.style.display=(mode==='dia')?'':'none';
+  // ── Periodo (Desde/Hasta) para la comparación "a la fecha" de la vista Por mes ──
+  // Por defecto el programa detecta solo los meses "completos" (>=40% del mes pico) y excluye
+  // el resto como parcial — pero esa detección se puede equivocar: un mes a la mitad puede ya
+  // acumular más del 40% del pico y colarse como "completo", bajando el crecimiento real sin que
+  // en verdad haya cerrado (el caso de Ricardo: sept. a medias ya pesaba más del 40% de abril).
+  // Estos dos selects dejan elegir el periodo a mano — "Automático" en Hasta conserva el
+  // comportamiento de siempre; elegir un mes fijo (p.ej. Ago) recorta la comparación ahí.
+  const rangeWrap=document.getElementById('graf-range-wrap'); if(rangeWrap)rangeWrap.style.display=(mode==='mes')?'':'none';
+  const fromEl=document.getElementById('graf-from'), toEl=document.getElementById('graf-to');
+  if(fromEl&&fromEl.options.length===0){DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];fromEl.appendChild(o);});fromEl.value=DATA.meses[0];}
+  if(toEl&&toEl.options.length===1){DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];toEl.appendChild(o);});toEl.value='auto';}
   // ── Unidad: sacos o toneladas ───────────────────────────────────────────────
   // La vista por día se queda en sacos: el reporte de Odoo trae el detalle diario
   // por cliente, no por producto, así que no hay forma de convertirlo a toneladas.
@@ -4433,13 +4444,18 @@ function renderGrafica(){
     } else {
       const _vm=_vendMonthly(vf);
       cur=(UNIT==='ton')?_vm.curT:_vm.cur; prior=(UNIT==='ton')?_vm.priorT:_vm.prior;
-      // a la fecha = meses completos
-      const comp=Y.complete;
+      // a la fecha = el periodo elegido en Desde/Hasta ("Automático" en Hasta = meses completos,
+      // igual que siempre). Elegir un mes fijo saca el mes en curso (u otros) del promedio.
+      const rFrom=fromEl&&fromEl.value?+fromEl.value:DATA.meses[0];
+      const rToAuto=(toEl&&toEl.value==='auto');
+      const rTo=(!rToAuto&&toEl&&toEl.value)?+toEl.value:(Y.complete.length?Y.complete[Y.complete.length-1]:DATA.meses[DATA.meses.length-1]);
+      const comp=DATA.meses.filter(m=>m>=rFrom&&m<=rTo).sort((a,b)=>a-b);
+      const periodoManual=!(rToAuto&&rFrom===DATA.meses[0]);
       const realTot=comp.reduce((a,m)=>a+(cur[m-1]||0),0), baseFecha=comp.reduce((a,m)=>a+(prior[m-1]||0),0);
       const obj=baseFecha*(1+P.gTarget), av=obj?realTot/obj:0, crec=baseFecha?realTot/baseFecha-1:0;
       labels=Array.from({length:12},(_,i)=>MES_NOM[i+1]); n=12;
       titulo=`📈 Venta mensual en ${UL}: ${Y.py} vs ${Y.cy}`;
-      sub=`Objetivo a la fecha = ${Y.py} (${mesesTxt(comp)}) × (1+${(P.gTarget*100).toFixed(0)}%). Cifras en <b>${UL}</b>. ${vf?('Vendedor: '+vf):''}`;
+      sub=`Objetivo a la fecha = ${Y.py} (${mesesTxt(comp)}) × (1+${(P.gTarget*100).toFixed(0)}%). Cifras en <b>${UL}</b>. ${periodoManual?'<span style="color:#7dd3fc">Periodo elegido a mano — no el que detecta el programa.</span> ':''}${vf?('Vendedor: '+vf):''}`;
       const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' a la fecha ('+UL+')',fu(realTot),mesesTxt(comp),'#22c55e')}${card(Y.py+' mismo periodo',fu(baseFecha),'para comparar','#94a3b8')}${card('Objetivo a la fecha',fu(obj),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
       // --- auxiliares: cómo va el vendedor (o el total) vs su objetivo ---
       const gap=obj-realTot;
