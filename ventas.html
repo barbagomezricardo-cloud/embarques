@@ -4514,10 +4514,13 @@ function renderGrafica(){
       const periodoManual=!(rToAuto&&rFrom===DATA.meses[0]);
       const realTot=comp.reduce((a,m)=>a+(cur[m-1]||0),0), baseFecha=comp.reduce((a,m)=>a+(prior[m-1]||0),0);
       const obj=baseFecha*(1+P.gTarget), av=obj?realTot/obj:0, crec=baseFecha?realTot/baseFecha-1:0;
+      // "Venta a la fecha" SIEMPRE muestra lo que de verdad se vendió (con regalo incluido, si lo hubo) —
+      // el kilo de regalo solo se quita para el % de crecimiento/avance, nunca para decir cuánto vendiste.
+      const realTotFull=NETO?comp.reduce((a,m)=>a+((_vm.curT[m-1])||0),0):realTot;
       labels=Array.from({length:12},(_,i)=>MES_NOM[i+1]); n=12;
-      titulo=`📈 Venta mensual en ${UL}${NETO?' (sin kilo de regalo)':''}: ${Y.py} vs ${Y.cy}`;
-      sub=`Objetivo a la fecha = ${Y.py} (${mesesTxt(comp)}) × (1+${(P.gTarget*100).toFixed(0)}%). Cifras en <b>${UL}</b>. ${periodoManual?'<span style="color:#7dd3fc">Periodo elegido a mano — no el que detecta el programa.</span> ':''}${NETO?'<span style="color:#7dd3fc">Se le quitó el kilo de regalo a ambos años para comparar solo lo que de verdad se vendió.</span> ':''}${(NETO&&vf&&!_vm.priorTBaseOK)?'<span style="color:#fbbf24">⚠ Con un vendedor filtrado, el '+Y.py+' no se puede ajustar (el dato de regalo de '+Y.py+' es solo del total de la empresa) — se compara contra el '+Y.py+' completo, sin ajustar.</span> ':''}${vf?('Vendedor: '+vf):''}`;
-      const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' a la fecha ('+UL+')',fu(realTot),mesesTxt(comp),'#22c55e')}${card(Y.py+' mismo periodo',fu(baseFecha),'para comparar','#94a3b8')}${card('Objetivo a la fecha',fu(obj),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
+      titulo=`📈 Venta mensual en ${UL}${NETO?' (crecimiento sin kilo de regalo)':''}: ${Y.py} vs ${Y.cy}`;
+      sub=`Objetivo a la fecha = ${Y.py} (${mesesTxt(comp)}) × (1+${(P.gTarget*100).toFixed(0)}%). Cifras en <b>${UL}</b>. ${periodoManual?'<span style="color:#7dd3fc">Periodo elegido a mano — no el que detecta el programa.</span> ':''}${NETO?'<span style="color:#7dd3fc">El % de crecimiento le quita el kilo de regalo a ambos años para comparar solo lo que de verdad se vendió — pero "Venta a la fecha" sigue mostrando el total real, con regalo incluido.</span> ':''}${(NETO&&vf&&!_vm.priorTBaseOK)?'<span style="color:#fbbf24">⚠ Con un vendedor filtrado, el '+Y.py+' no se puede ajustar (el dato de regalo de '+Y.py+' es solo del total de la empresa) — se compara contra el '+Y.py+' completo, sin ajustar.</span> ':''}${vf?('Vendedor: '+vf):''}`;
+      const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' a la fecha ('+UL+')',fu(realTotFull),mesesTxt(comp),'#22c55e')}${card(Y.py+' mismo periodo'+(NETO?' (sin regalo)':''),fu(baseFecha),'para comparar','#94a3b8')}${card('Objetivo a la fecha',fu(obj),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real'+(NETO?' (sin regalo)':''),(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
       // ── Transparencia: cuánto se quitó por "kilo de regalo" en el periodo elegido ──
       const regaloBox=(NETO&&UNIT==='ton')?(()=>{
         const regCur=comp.reduce((a,m)=>a+((_vm.curT[m-1]||0)-(_vm.curTBase[m-1]||0)),0);
@@ -4526,7 +4529,10 @@ function renderGrafica(){
       })():'';
       // --- auxiliares: cómo va el vendedor (o el total) vs su objetivo ---
       const gap=obj-realTot;
-      const pace=comp.length?realTot/comp.length:0, projA=pace*12;
+      // La proyección al cierre es "cuánto vas a vender de verdad" -> usa el total real (con regalo
+      // si lo hay), no el ajustado, para no comparar una proyección "limpia" contra un objetivo anual
+      // (objA, abajo) que nunca se ajusta por regalo.
+      const pace=comp.length?realTotFull/comp.length:0, projA=pace*12;
       let priorFullSel=0, priorFullSelT=0, nuevosSel=0, tonsSel=0, activosSel=0;
       for(const r of Y.rows){ if(vf&&r.vend!==vf)continue; priorFullSel+=r.priorFull||0; priorFullSelT+=r.priorFullT||0; if(r.nuevo)nuevosSel++; tonsSel+=r.tonsCur||0; if((r.curFull||0)>0)activosSel++; }
       // El objetivo anual se compara en la MISMA unidad que se está viendo (UNIT), si no, en toneladas
