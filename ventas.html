@@ -448,7 +448,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
   <!-- NUEVAS PESTAÑAS -->
   <div class="pane" id="pane-objetivos"><div id="obj-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-nuevos"><div id="nue-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
-  <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Corte al día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span></div><div id="graf-content"></div></div></div>
+  <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-neto-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px"><input type="checkbox" id="graf-neto" onchange="renderGrafica()" style="vertical-align:middle"> Sin kilo de regalo</label></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Corte al día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span></div><div id="graf-content"></div></div></div>
   <div class="pane" id="pane-metas">
     <div style="display:flex;flex-direction:column;width:100%;flex:1;min-height:0">
       <div style="font-size:1.05rem;font-weight:800;color:var(--gold);padding:12px 16px 2px">📋 Metas por cliente 2026</div>
@@ -3669,7 +3669,8 @@ function prodKg(name){
   while((m2=re.exec(limpio))!==null){ const v=parseFloat(m2[0]); if(v>=5){ base=v; pos=m2.index+m2[0].length; break; } }
   if(!base) return 25;
   // el kilo extra solo cuenta si viene DESPUÉS de la presentación base y es un extra creíble (≤5 kg)
-  const ex=limpio.slice(pos).match(/\+\s*(\d+(?:\.\d+)?)\s*(KG|KILO)/);
+  // acepta "+1 KG", "+1 KILO(S)" y también "+1 EXTRA(S)" sin unidad explícita (ej. "25 KG +1 EXTRAS")
+  const ex=limpio.slice(pos).match(/\+\s*(\d+(?:\.\d+)?)\s*(KG|KILO|EXTRA)/);
   const add=ex?parseFloat(ex[1]):0;
   return base+((add>0&&add<=5)?add:0);
 }
@@ -3679,6 +3680,52 @@ function clientTons(c){let t=0;for(const[p,s] of Object.entries(c.prods||{}))t+=
 function clientTonsMes(c){const t=new Array(12).fill(0);const pm=c.prodMes||{};
   for(const p in pm){const kg=prodKg(p)/1000;const mm=pm[p];for(const k in mm)t[k-1]+=(mm[k]||0)*kg;}
   return t;}
+// ── Kilo de regalo (presentaciones "+N extra") ───────────────────────────────
+// El kilo extra que se regala en algunas presentaciones no es venta — es costo de fabricación
+// que se da gratis. Para comparar el tonelaje REAL vendido de un año a otro de forma justa
+// (sin que un año con más regalo se vea artificialmente más grande), prodKgBase() da SOLO el
+// peso de la presentación base, sin sumar el "+N" de regalo. Mismos nombres que PROD_KG_FIX,
+// pero con el peso base (sin el extra) para cada uno.
+const PROD_KG_FIX_BASE={
+  'MI BOOB 20 + 1KG EXTRA':20,
+  'KAN KAN 25+1 KILO EXTRA':25,
+  'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILO EXTRA':25,
+  'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILO':25,
+  'SILVER KAN CACHORRO 20 KG +1 EXTRA':20,
+  'SILVER KAT 15 KG + I KILO EXTRA':15,
+  'SILVER KAT 15 KG + 1 KILO EXTRA':15
+};
+function prodKgBase(name){
+  const n=_pkNorm(name);
+  for(const k in PROD_KG_FIX_BASE){ if(n.indexOf(_pkNorm(k))>=0) return PROD_KG_FIX_BASE[k]; }
+  const limpio=n.replace(/(\d+(?:\.\d+)?)\s*%/g,' ');
+  let base=0, m2, re=/\d+(?:\.\d+)?/g;
+  while((m2=re.exec(limpio))!==null){ const v=parseFloat(m2[0]); if(v>=5){ base=v; break; } }
+  return base||25;
+}
+function clientTonsMesBase(c){const t=new Array(12).fill(0);const pm=c.prodMes||{};
+  for(const p in pm){const kg=prodKgBase(p)/1000;const mm=pm[p];for(const k in mm)t[k-1]+=(mm[k]||0)*kg;}
+  return t;}
+// Estimación de cuánto del tonelaje del AÑO ANTERIOR (2025) fue kilo de regalo. La base 2025
+// solo guarda toneladas ya sumadas por cliente-mes (no por producto), así que no se puede recalcular
+// producto por producto como en el año actual. Lo que SÍ sabemos (de los reportes de Odoo que Ricardo
+// compartió) es el total ANUAL del KILO EXTRA (no el bulto completo, solo el +1/+2 kg que se regalaba)
+// en 2025: 159.904 ton —KAN KAN 25+1 KILO EXTRA (16,982 sacos×1kg), MI BOOB 20+1KG EXTRA
+// (114,739×1kg), SILVER KAN CACHORRO 20KG+1 EXTRA (6,141×1kg), SILVER KAN PREMIUM+22%+2 KILOS
+// EXTRAS (7,904×2kg) y SILVER KAT 15KG+1 KILO EXTRA (6,234×1kg)— sobre 56,581.37 ton totales del
+// año, o sea apenas 0.28% del tonelaje. Ese total anual se reparte aquí mes a mes en proporción a
+// la venta de cada mes (no hay forma de saber el mes exacto sin el detalle producto-por-mes de
+// 2025), así que es un ESTIMADO, no un cálculo exacto como el del año en curso.
+const BASELINE_2025_BONUS_TON=159.904;
+function bonusAjuste2025(){
+  const PB=getPriorBaseline(); if(PB.py!==2025||!PB.data) return {ok:false,monthly:Array(12).fill(0)};
+  const monthlyTotal=Array(12).fill(0);
+  for(const k in PB.data){ const tm=PB.data[k].tm; if(!tm)continue; for(let i=0;i<12;i++) monthlyTotal[i]+=tm[i]||0; }
+  const grand=monthlyTotal.reduce((a,b)=>a+b,0);
+  if(!grand) return {ok:false,monthly:Array(12).fill(0)};
+  const monthly=monthlyTotal.map(v=>BASELINE_2025_BONUS_TON*v/grand);
+  return {ok:true,monthly,total:BASELINE_2025_BONUS_TON};
+}
 function metaTier(s){if(s<2000)return['Micro',0.25];if(s<10000)return['Pequeño',0.18];if(s<30000)return['Mediano',0.12];if(s<80000)return['Grande',0.08];return['Muy grande',0.05];}
 const pct=(x)=>(x>=0?'+':'')+(x*100).toFixed(1)+'%';
 const semColor=(x)=>x>=1?'#22c55e':x>=0.85?'#eab308':'#ef4444';
@@ -4330,6 +4377,7 @@ function _vendMonthly(vf){
   //              crecimiento, y se muestra por separado para que el vendedor no lea un % inflado.
   const cur=Array(12).fill(0),prior=Array(12).fill(0),priorVivo=Array(12).fill(0),priorPerd=Array(12).fill(0);
   const curT=Array(12).fill(0),priorT=Array(12).fill(0);   // lo mismo pero en toneladas
+  const curTBase=Array(12).fill(0);   // toneladas SIN kilo de regalo (exacto, viene del detalle producto-mes de este año)
   const B=getPriorBaseline().data; const bN=new Map(); for(const k in B)bN.set(nkey(k),k);
   const seen=new Set();
   for(const c of DATA.clients){ const rk0=resolveKey(c.nombre,bN); if(rk0)seen.add(rk0); }   // TODOS los clientes actuales (de cualquier vendedor)
@@ -4338,6 +4386,7 @@ function _vendMonthly(vf){
     const rk=resolveKey(c.nombre,bN),arr=(rk&&B[rk]&&B[rk].m)||[];
     for(let i=0;i<12;i++){prior[i]+=arr[i]||0;priorVivo[i]+=arr[i]||0;}
     const _tt=clientTonsMes(c); for(let i=0;i<12;i++)curT[i]+=_tt[i]||0;
+    const _ttb=clientTonsMesBase(c); for(let i=0;i<12;i++)curTBase[i]+=_ttb[i]||0;
     const arrT=(rk&&B[rk]&&B[rk].tm)||[]; for(let i=0;i<12;i++)priorT[i]+=arrT[i]||0;
   }
   // Año-anterior de clientes que YA NO están en el reporte de este año (se fueron): también cuenta para el objetivo total.
@@ -4349,7 +4398,12 @@ function _vendMonthly(vf){
     const arr=B[k].m||[]; for(let i=0;i<12;i++){prior[i]+=arr[i]||0;priorPerd[i]+=arr[i]||0;}
     const arrT=B[k].tm||[]; for(let i=0;i<12;i++)priorT[i]+=arrT[i]||0;
   }
-  return {cur,prior,priorVivo,priorPerd,curT,priorT};
+  // priorTBase: estimado, y SOLO es válido para "todos los vendedores" (el ajuste de kilo regalado
+  // de 2025 es un total global, no se puede repartir por vendedor con los datos que tenemos).
+  const _badj=bonusAjuste2025();
+  const priorTBaseOK=_badj.ok&&!vf;
+  const priorTBase=priorTBaseOK?priorT.map((v,i)=>Math.max(0,v-_badj.monthly[i])):priorT.slice();
+  return {cur,prior,priorVivo,priorPerd,curT,priorT,curTBase,priorTBase,priorTBaseOK};
 }
 function renderGrafica(){
   const box=document.getElementById('graf-content'); if(!box||!DATA)return;
@@ -4376,6 +4430,10 @@ function renderGrafica(){
   const unitEl=document.getElementById('graf-unit');
   const UNIT=(unitEl&&mode!=='dia')?unitEl.value:'sac';
   const uw=document.getElementById('graf-unit-wrap'); if(uw)uw.style.display=(mode==='dia')?'none':'';
+  // "Sin kilo de regalo": solo aplica en Por mes + Toneladas (es donde se compara crecimiento).
+  const netoWrap=document.getElementById('graf-neto-wrap'); if(netoWrap)netoWrap.style.display=(mode==='mes'&&UNIT==='ton')?'':'none';
+  const netoEl=document.getElementById('graf-neto');
+  const NETO=!!(netoEl&&mode==='mes'&&UNIT==='ton'&&netoEl.checked);
   const UL=(UNIT==='ton')?'toneladas':'sacos';
   const fu=(v)=>(UNIT==='ton')?(Math.round((v||0)*10)/10).toLocaleString('es-MX',{minimumFractionDigits:1,maximumFractionDigits:1}):fmt(Math.round(v||0));
   const vw=document.getElementById('graf-vend-wrap'); if(vw)vw.style.display=(mode==='mes'||mode==='dia')?'':'none';
@@ -4445,7 +4503,8 @@ function renderGrafica(){
       }
     } else {
       const _vm=_vendMonthly(vf);
-      cur=(UNIT==='ton')?_vm.curT:_vm.cur; prior=(UNIT==='ton')?_vm.priorT:_vm.prior;
+      cur=(UNIT==='ton')?(NETO?_vm.curTBase:_vm.curT):_vm.cur;
+      prior=(UNIT==='ton')?(NETO?_vm.priorTBase:_vm.priorT):_vm.prior;
       // a la fecha = el periodo elegido en Desde/Hasta ("Automático" en Hasta = meses completos,
       // igual que siempre). Elegir un mes fijo saca el mes en curso (u otros) del promedio.
       const rFrom=fromEl&&fromEl.value?+fromEl.value:DATA.meses[0];
@@ -4456,9 +4515,15 @@ function renderGrafica(){
       const realTot=comp.reduce((a,m)=>a+(cur[m-1]||0),0), baseFecha=comp.reduce((a,m)=>a+(prior[m-1]||0),0);
       const obj=baseFecha*(1+P.gTarget), av=obj?realTot/obj:0, crec=baseFecha?realTot/baseFecha-1:0;
       labels=Array.from({length:12},(_,i)=>MES_NOM[i+1]); n=12;
-      titulo=`📈 Venta mensual en ${UL}: ${Y.py} vs ${Y.cy}`;
-      sub=`Objetivo a la fecha = ${Y.py} (${mesesTxt(comp)}) × (1+${(P.gTarget*100).toFixed(0)}%). Cifras en <b>${UL}</b>. ${periodoManual?'<span style="color:#7dd3fc">Periodo elegido a mano — no el que detecta el programa.</span> ':''}${vf?('Vendedor: '+vf):''}`;
+      titulo=`📈 Venta mensual en ${UL}${NETO?' (sin kilo de regalo)':''}: ${Y.py} vs ${Y.cy}`;
+      sub=`Objetivo a la fecha = ${Y.py} (${mesesTxt(comp)}) × (1+${(P.gTarget*100).toFixed(0)}%). Cifras en <b>${UL}</b>. ${periodoManual?'<span style="color:#7dd3fc">Periodo elegido a mano — no el que detecta el programa.</span> ':''}${NETO?'<span style="color:#7dd3fc">Se le quitó el kilo de regalo a ambos años para comparar solo lo que de verdad se vendió.</span> ':''}${(NETO&&vf&&!_vm.priorTBaseOK)?'<span style="color:#fbbf24">⚠ Con un vendedor filtrado, el '+Y.py+' no se puede ajustar (el dato de regalo de '+Y.py+' es solo del total de la empresa) — se compara contra el '+Y.py+' completo, sin ajustar.</span> ':''}${vf?('Vendedor: '+vf):''}`;
       const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' a la fecha ('+UL+')',fu(realTot),mesesTxt(comp),'#22c55e')}${card(Y.py+' mismo periodo',fu(baseFecha),'para comparar','#94a3b8')}${card('Objetivo a la fecha',fu(obj),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
+      // ── Transparencia: cuánto se quitó por "kilo de regalo" en el periodo elegido ──
+      const regaloBox=(NETO&&UNIT==='ton')?(()=>{
+        const regCur=comp.reduce((a,m)=>a+((_vm.curT[m-1]||0)-(_vm.curTBase[m-1]||0)),0);
+        const regPrior=(_vm.priorTBaseOK)?comp.reduce((a,m)=>a+((_vm.priorT[m-1]||0)-(_vm.priorTBase[m-1]||0)),0):0;
+        return `<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid #a78bfa;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:.72rem;color:#cbd5e1">🎁 <b>Kilo de regalo que se excluyó de esta comparación</b> — ${Y.cy}: <b style="color:#e2e8f0">${regCur.toFixed(1)} ton</b> (exacto, calculado producto por producto de tu carga actual). ${Y.py}: <b style="color:#e2e8f0">${_vm.priorTBaseOK?regPrior.toFixed(1)+' ton (estimado — se repartió el total anual de '+Y.py+' proporcional a la venta de cada mes, porque la base de '+Y.py+' no guarda el detalle por producto)':'sin ajustar (ver nota de arriba)'}</b>.</div>`;
+      })():'';
       // --- auxiliares: cómo va el vendedor (o el total) vs su objetivo ---
       const gap=obj-realTot;
       const pace=comp.length?realTot/comp.length:0, projA=pace*12;
@@ -4541,7 +4606,7 @@ function renderGrafica(){
       const projTxt='Proyección al cierre: <b>'+fu(projA)+'</b> '+UL+(objA?(' vs objetivo anual '+fu(objA)):'')+'.';
       const headline=`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:5px solid ${hcol};border-radius:8px;padding:11px 14px;margin-bottom:10px"><div style="font-size:.95rem;font-weight:800;color:${hcol}">${who}: ${estTxt} — avance ${(av*100).toFixed(2)}%</div><div style="font-size:.76rem;color:#cbd5e1;margin-top:3px">${gapTxt} Creciste <b style="color:${crecCol}">${(crec>=0?'+':'')+(crec*100).toFixed(2)}%</b> vs ${Y.py}. ${projTxt}</div>
       <div style="font-size:.72rem;color:#94a3b8;margin-top:5px;line-height:1.45">El <b>avance</b> y el <b>crecimiento</b> son dos cosas distintas y las dos están bien: creciste ${(crec*100).toFixed(2)}% y la meta pedía ${(P.gTarget*100).toFixed(0)}%, así que vas al ${(av*100).toFixed(2)}% de la meta — (1${crec>=0?'+':''}${(crec*100).toFixed(2)}%) ÷ (1+${(P.gTarget*100).toFixed(0)}%).</div></div>`;
-      cards=headline+baseCards+auxCards;
+      cards=headline+regaloBox+baseCards+auxCards;
     }
     const maxV=Math.max(...cur,...prior,...(objSerie||[]),1);
     const X=i=>ml+iw*(i/(n-1||1)),Yv=v=>mt+ih*(1-v/maxV);
