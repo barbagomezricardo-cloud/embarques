@@ -580,10 +580,11 @@ let isMaster = false;
 let AUDIT = [];
 let sortK='fechaProg', sortDir=1;
 let curView='tabla';
-const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', AUDIT_KEY='progEmbarques_audit_v1', FLOTA_KEY='progEmbarques_flota_v1', PROY_KEY='progEmbarques_proyeccion_v1';
-let fb=null, fbData=null, fbCfg=null, fbAudit=null, fbFlota=null, fbProy=null;
+const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', AUDIT_KEY='progEmbarques_audit_v1', FLOTA_KEY='progEmbarques_flota_v1', PROY_KEY='progEmbarques_proyeccion_v1', PROYEDIT_KEY='progEmbarques_proyedit_v1';
+let fb=null, fbData=null, fbCfg=null, fbAudit=null, fbFlota=null, fbProy=null, fbProyEdit=null;
 let PROY=null;   // último payload de proyección publicado desde ventas.html ({ts,updatedStr,families:[...]})
-function loadProyLocal(){ try{ const p=localStorage.getItem(PROY_KEY); if(p!=null)PROY=JSON.parse(p); }catch(e){} }
+let PROY_EDIT={};   // stock mínimo / inventario real editados a mano — COMPARTIDO con ventas.html (/skan/_proyedit)
+function loadProyLocal(){ try{ const p=localStorage.getItem(PROY_KEY); if(p!=null)PROY=JSON.parse(p); }catch(e){} try{ const pe=localStorage.getItem(PROYEDIT_KEY); if(pe!=null)PROY_EDIT=JSON.parse(pe)||{}; }catch(e){} }
 const AUDIT_FIELDS = ['colocacion','inicioCarga','finCarga','kilos','sacos','motivo','despachado','tipo','peso','horaSalida','horaSalidaProg','horaProg','libSAP'];
 const AUDIT_LABELS = {colocacion:'Colocación',inicioCarga:'Inicio carga',finCarga:'Fin carga',kilos:'Kg cargados',sacos:'Sacos',motivo:'Motivo',despachado:'Despachado',tipo:'Tipo unidad',peso:'Peso prog',horaSalida:'Hora salida',horaSalidaProg:'Salida programada',horaProg:'Hora de cita',libSAP:'Lib. SAP'};
 
@@ -775,6 +776,28 @@ function renderKPIs(rowsAll){
 
 /* ================= PROYECCIÓN (pace de venta / stock / a fabricar, publicado desde ventas.html) ================= */
 function escProy(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Las claves de Firebase no admiten ".", así que si algún día hay una presentación con
+// kilaje decimal (p.ej. "20.5"), famKey traería un punto — se sanea igual que en ventas.html
+// para que la ruta/llave de la nube sea siempre válida y coincida en ambos lados.
+function proyEditKey(k){ return String(k||'').replace(/\./g,'_'); }
+// Edición compartida de Stock mínimo / Inventario real (ver misma lógica en ventas.html).
+// Optimista: actualiza local+pantalla de inmediato y, si hay nube conectada, sincroniza
+// también para que ventas.html (y cualquier otro navegador de aquí) lo vea igual.
+function setProyEdit(famKey,field,val){
+  const pk=proyEditKey(famKey);
+  const v=parseFloat(val); const now=Date.now();
+  if(!PROY_EDIT[pk])PROY_EDIT[pk]={};
+  const patch={};
+  if(isFinite(v)&&v>=0){ PROY_EDIT[pk][field]=v; PROY_EDIT[pk][field+'Ts']=now; patch[field]=v; patch[field+'Ts']=now; }
+  else { delete PROY_EDIT[pk][field]; delete PROY_EDIT[pk][field+'Ts']; patch[field]=null; patch[field+'Ts']=null; }
+  try{ localStorage.setItem(PROYEDIT_KEY,JSON.stringify(PROY_EDIT)); }catch(e){}
+  renderProyeccion();
+  if(fbProyEdit){ fbProyEdit.child(pk).update(patch).catch(e=>console.error('proyedit write:',e&&e.message)); }
+}
+function setProyMinStock(famKey,val){ setProyEdit(famKey,'minStock',val); }
+function setProyStockActual(famKey,val){ setProyEdit(famKey,'stockActual',val); }
+function resetProyMinStock(famKey){ setProyEdit(famKey,'minStock',''); }
+function resetProyStockActual(famKey){ setProyEdit(famKey,'stockActual',''); }
 function renderProyeccion(){
   const kpisEl=document.getElementById('proyKpis'), theadEl=document.getElementById('theadProy'), tbodyEl=document.getElementById('tbodyProy'), footEl=document.getElementById('proyFoot');
   if(!kpisEl||!theadEl||!tbodyEl)return;
@@ -783,24 +806,43 @@ function renderProyeccion(){
     footEl.innerHTML='<span class="muted">Todavía no se ha publicado ninguna proyección desde el programa de ventas. En cuanto Ricardo le dé a "☁️ Publicar a la nube" en ventas.html (con el reporte de Odoo cargado), aparece aquí sola — no hay nada que hacer de este lado.</span>';
     return;
   }
-  const F=PROY.families;
+  // Stock mínimo/inventario real: se recalculan aquí con el pace ya publicado + lo que haya
+  // editado a mano CUALQUIERA de las dos apps (PROY_EDIT, en vivo vía Firebase) — así se ve y
+  // se puede seguir ajustando igual desde ventas.html o desde aquí, gane siempre lo más reciente.
+  const gTarget=PROY.gTarget||0;
+  const F=PROY.families.map(f=>{
+    const e=PROY_EDIT[proyEditKey(f.famKey)]||{};
+    const isMinOverride=(e.minStock!=null);
+    const minStock=isMinOverride?e.minStock:(f.suggestedMin!=null?f.suggestedMin:(f.minStock||0));
+    const isStockOverride=(e.stockActual!=null);
+    const stockActual=isStockOverride?e.stockActual:(f.stockActual!=null?f.stockActual:null);
+    const avgDailyAdj=(f.paceDiario||0)*(1+gTarget);
+    const cobertura=(stockActual!=null&&avgDailyAdj>0)?stockActual/avgDailyAdj:null;
+    const aFabricar=(stockActual!=null)?Math.max(0,minStock-stockActual):minStock;
+    return {...f,minStock,isMinOverride,stockActual,isStockOverride,cobertura,aFabricar};
+  });
   const totalFabricar=F.reduce((s,f)=>s+(f.aFabricar||0),0);
-  const totalPace=F.reduce((s,f)=>s+(f.paceMensual||0),0);
-  const bajo=F.filter(f=>f.diasCobertura!=null&&f.diasCobertura<7).length;
+  const totalMin=F.reduce((s,f)=>s+(f.minStock||0),0);
+  const bajo=F.filter(f=>f.cobertura!=null&&f.cobertura<7).length;
   const K=[
-    {lbl:'Familias con proyección',val:F.length,foot:(PROY.hasStock?'con stock cargado':'sin reporte de existencia'),cls:'blue'},
-    {lbl:'Sacos a fabricar',val:totalFabricar.toLocaleString('es-MX'),foot:(PROY.modo==='dias'?('próximos '+(PROY.dias||30)+' días'):'próximo mes'),cls:(totalFabricar>0?'warn':'ok')},
-    {lbl:'Venta proyectada',val:totalPace.toLocaleString('es-MX')+' sac',foot:(PROY.nMesesUsados||0)+' mes(es) de historia',cls:''},
-    {lbl:'Familias bajo 7 días de cobertura',val:bajo,foot:'revisar primero',cls:(bajo>0?'late':'ok')},
+    {lbl:'Familias con proyección',val:F.length,foot:'sin promoción/bonificación',cls:'blue'},
+    {lbl:'Sacos a fabricar',val:Math.round(totalFabricar).toLocaleString('es-MX'),foot:'para llegar al stock mínimo de todos',cls:(totalFabricar>0?'warn':'ok')},
+    {lbl:'Stock mínimo total',val:Math.round(totalMin).toLocaleString('es-MX')+' sac',foot:'venta real +'+(gTarget*100).toFixed(0)+'% crecimiento',cls:''},
+    {lbl:'Familias bajo 7 días de alcance',val:bajo,foot:'revisar primero',cls:(bajo>0?'late':'ok')},
   ];
   kpisEl.innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot||''}</div></div>`).join('');
-  theadEl.innerHTML='<th>Familia</th><th>Pace diario</th><th>Pace mensual</th><th>Stock</th><th>Días cobertura</th><th>A fabricar</th>';
+  theadEl.innerHTML='<th>Familia</th><th>Venta real/mes</th><th>Stock mínimo</th><th>Inventario real</th><th>Días de alcance</th><th>A fabricar</th>';
+  const inStyle=(over)=>`width:78px;background:var(--bg);border:1px solid ${over?'var(--warn)':'var(--line)'};border-radius:6px;color:var(--txt);padding:4px;text-align:right`;
   tbodyEl.innerHTML=F.map(f=>{
-    const cob=f.diasCobertura;
+    const cob=f.cobertura;
     const cobStyle=(cob==null)?'':('style="color:'+(cob<7?'var(--late)':(cob<14?'var(--warn)':'var(--ok)'))+'"');
-    return `<tr><td>${escProy(f.familia)}</td><td>${(f.paceDiario||0).toLocaleString('es-MX')}</td><td>${(f.paceMensual||0).toLocaleString('es-MX')}</td><td>${f.stock!=null?f.stock.toLocaleString('es-MX'):'—'}</td><td ${cobStyle}>${cob!=null?cob.toLocaleString('es-MX'):'—'}</td><td>${(f.aFabricar||0).toLocaleString('es-MX')}</td></tr>`;
+    const fkEsc=escProy(f.famKey).replace(/'/g,"\\'");
+    return `<tr><td>${escProy(f.familia)}</td><td>${(f.paceMensual||0).toLocaleString('es-MX')}</td>`
+      +`<td><input type="number" min="0" value="${Math.round(f.minStock)}" onchange="setProyMinStock('${fkEsc}',this.value)" style="${inStyle(f.isMinOverride)}">${f.isMinOverride?` <a href="#" onclick="resetProyMinStock('${fkEsc}');return false" title="Restaurar al sugerido" style="color:var(--muted)">↺</a>`:''}</td>`
+      +`<td><input type="number" min="0" value="${f.stockActual!=null?Math.round(f.stockActual):''}" placeholder="—" onchange="setProyStockActual('${fkEsc}',this.value)" style="${inStyle(f.isStockOverride)}">${f.isStockOverride?` <a href="#" onclick="resetProyStockActual('${fkEsc}');return false" title="Quitar captura a mano" style="color:var(--muted)">↺</a>`:''}</td>`
+      +`<td ${cobStyle}>${cob!=null?Math.round(cob).toLocaleString('es-MX')+' días':'—'}</td><td>${Math.round(f.aFabricar||0).toLocaleString('es-MX')}</td></tr>`;
   }).join('');
-  footEl.innerHTML='<span class="muted">Última actualización: '+escProy(PROY.updatedStr||'—')+' · publicado desde el programa de ventas (solo lectura aquí).</span>';
+  footEl.innerHTML='<span class="muted">Pace de venta actualizado: '+escProy(PROY.updatedStr||'—')+' · Stock mínimo e Inventario real se editan aquí o en ventas.html — se sincronizan solos.</span>';
 }
 
 /* ================= CHARTS (SVG propio) ================= */
@@ -1277,7 +1319,7 @@ function initFirebase(){
     try{
       if(!fb){ fb = firebase.initializeApp(CFG.firebase, 'prog'+Date.now()); }
       const db = firebase.database(fb);
-      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('skan/_proyeccion');
+      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('skan/_proyeccion'); fbProyEdit = db.ref('skan/_proyedit');
       setConn('online','Conectando…');
       // sembrar datos de ejemplo SOLO la primera vez (marca "seeded" en la nube).
       // Tras vaciar todo, la marca queda puesta y ya no se vuelve a sembrar.
@@ -1299,10 +1341,14 @@ function initFirebase(){
       fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster) renderAudit(); } });
       fbFlota.on('value', snap=>{ const v=snap.val(); if(v){ FLOTA=normalize(Object.values(v)); try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} } renderFlota(); },
         err=>{ console.error('flota:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "flota" en las reglas de Firebase'); });
-      // Proyección de producción: la publica ventas.html (solo lectura aquí). Se guarda en caché local
-      // para que la pestaña muestre el último dato aunque se abra sin internet.
+      // Proyección de producción: la publica ventas.html (solo lectura aquí, el pace/venta real).
+      // Se guarda en caché local para que la pestaña muestre el último dato aunque se abra sin internet.
       fbProy.on('value', snap=>{ const v=snap.val(); if(v){ PROY=v; try{ localStorage.setItem(PROY_KEY,JSON.stringify(PROY)); }catch(e){} if(curView==='proyeccion') renderProyeccion(); } },
         err=>{ console.error('proyeccion:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "skan" en las reglas de Firebase'); });
+      // Stock mínimo / Inventario real: EDITABLE de este lado y del lado de ventas.html — el que
+      // los capture, se ve y se puede seguir ajustando en cualquiera de las dos apps (en tiempo real aquí).
+      fbProyEdit.on('value', snap=>{ const v=snap.val()||{}; PROY_EDIT=v; try{ localStorage.setItem(PROYEDIT_KEY,JSON.stringify(PROY_EDIT)); }catch(e){} if(curView==='proyeccion') renderProyeccion(); },
+        err=>{ console.error('proyedit:',err&&err.message); });
     }catch(e){ console.error(e); setConn('local','Local (error nube)'); toast('No se pudo conectar a Firebase'); }
   });
 }

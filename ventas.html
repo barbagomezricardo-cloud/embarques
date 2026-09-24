@@ -3503,7 +3503,12 @@ function showTab(name){
   if(name==='ruta'&&typeof renderRuta==='function')renderRuta();
   if(name==='equilibrio'&&typeof renderEquilibrio==='function')renderEquilibrio();
   if(name==='rentabilidad'&&typeof renderRentabilidad==='function')renderRentabilidad();
-  if(name==='proyeccion'&&typeof renderProyeccion==='function')renderProyeccion();
+  if(name==='proyeccion'&&typeof renderProyeccion==='function'){
+    renderProyeccion();
+    // Jala el stock mínimo/inventario real editado desde el programador de producción
+    // (o desde otro navegador) cada vez que se abre la pestaña, y vuelve a pintar si cambió algo.
+    if(typeof pullProyEditsCloud==='function')pullProyEditsCloud(function(){renderProyeccion();});
+  }
 }
 
 // ── TENDENCIA (mes a mes) ──────────────────────────────────────────────────────
@@ -5428,25 +5433,55 @@ function resetDash(){DATA=null;selState=null;document.getElementById('dashboard'
 function getProyCfg(){try{return JSON.parse(localStorage.getItem('proyCfg04mas')||'{}');}catch(e){return {};}}
 function saveProyCfg(cfg){try{localStorage.setItem('proyCfg04mas',JSON.stringify(cfg));}catch(e){}}
 function setProyCfgField(field,val){var cfg=getProyCfg();cfg[field]=val;saveProyCfg(cfg);renderProyeccion();}
-function setProyOverride(code,val){
-  var cfg=getProyCfg(); if(!cfg.overrides)cfg.overrides={};
-  var v=parseFloat(val);
-  if(isFinite(v)&&v>=0)cfg.overrides[code]=v; else delete cfg.overrides[code];
-  saveProyCfg(cfg); renderProyeccion();
-}
-function resetProyOverride(code){var cfg=getProyCfg();if(cfg.overrides)delete cfg.overrides[code];saveProyCfg(cfg);renderProyeccion();}
-function resetProyOverrideAll(){if(!confirm('¿Restaurar todas las proyecciones al promedio calculado?'))return;var cfg=getProyCfg();cfg.overrides={};saveProyCfg(cfg);renderProyeccion();}
-function setStockOverride(code,val){
-  var cfg=getProyCfg(); if(!cfg.stockOverride)cfg.stockOverride={};
-  var v=parseFloat(val);
-  if(isFinite(v))cfg.stockOverride[code]=v; else delete cfg.stockOverride[code];
-  saveProyCfg(cfg); renderProyeccion();
-}
 function getStockData(){try{return JSON.parse(localStorage.getItem('stockProd04mas')||'null');}catch(e){return null;}}
 function saveStockData(o){try{localStorage.setItem('stockProd04mas',JSON.stringify(o));}catch(e){}}
 function clearStockData(){if(!confirm('¿Quitar el reporte de existencia cargado?'))return;localStorage.removeItem('stockProd04mas');renderProyeccion();}
 function stripProdCode(name){return String(name||'').replace(/^\s*\[[^\]]*\]\s*/,'');}
 function escProy(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── Stock mínimo / Inventario real: edición COMPARTIDA entre esta app y el programador
+// de producción (programador.html) — para que sirva igual si lo captura Ricardo o la
+// programadora, desde cualquiera de las dos. Vive en /skan/_proyedit/<familia>.json
+// (dentro de /skan porque es la única raíz que permiten las reglas de Firebase — ver
+// nota de publishCloud). Cada campo se guarda con su propio timestamp (minStockTs /
+// stockActualTs) para que, al jalar de la nube, gane el cambio más reciente campo por
+// campo — así editar el stock mínimo en una app no borra el inventario real capturado
+// en la otra, y viceversa.
+// Las claves de Firebase no admiten ".", así que si algún día hay una presentación con
+// kilaje decimal (p.ej. "20.5"), famKey traería un punto — se sanea aquí, igual en
+// programador.html, para que la ruta/llave de la nube sea siempre válida en ambos lados.
+function proyEditKey(famKey){return String(famKey||'').replace(/\./g,'_');}
+function getProyEdits(){try{return JSON.parse(localStorage.getItem('proyEdits04mas')||'{}');}catch(e){return {};}}
+function saveProyEdits(o){try{localStorage.setItem('proyEdits04mas',JSON.stringify(o));}catch(e){}}
+function pullProyEditsCloud(cb){
+  try{
+    fetch(_dbUrl()+'/skan/_proyedit.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(cloud){
+      if(cloud&&typeof cloud==='object'){
+        var loc=getProyEdits();
+        for(var fk in cloud){
+          var c=cloud[fk]||{}; if(!loc[fk])loc[fk]={};
+          if((c.minStockTs||0)>(loc[fk].minStockTs||0)){loc[fk].minStock=c.minStock; loc[fk].minStockTs=c.minStockTs;}
+          if((c.stockActualTs||0)>(loc[fk].stockActualTs||0)){loc[fk].stockActual=c.stockActual; loc[fk].stockActualTs=c.stockActualTs;}
+        }
+        saveProyEdits(loc);
+      }
+      if(cb)cb();
+    }).catch(function(){if(cb)cb();});
+  }catch(e){if(cb)cb();}
+}
+function setProyEditField(famKey,field,val){
+  var pk=proyEditKey(famKey);
+  var loc=getProyEdits(); if(!loc[pk])loc[pk]={};
+  var v=parseFloat(val); var now=Date.now(); var patch={};
+  if(isFinite(v)&&v>=0){ loc[pk][field]=v; loc[pk][field+'Ts']=now; patch[field]=v; patch[field+'Ts']=now; }
+  else { delete loc[pk][field]; delete loc[pk][field+'Ts']; patch[field]=null; patch[field+'Ts']=null; }
+  saveProyEdits(loc); renderProyeccion();
+  try{fetch(_dbUrl()+'/skan/_proyedit/'+encodeURIComponent(pk)+'.json',{method:'PATCH',body:JSON.stringify(patch)}).catch(function(){});}catch(e){}
+}
+function setProyMinStock(famKey,val){setProyEditField(famKey,'minStock',val);}
+function setProyStockActual(famKey,val){setProyEditField(famKey,'stockActual',val);}
+function resetProyMinStock(famKey){setProyEditField(famKey,'minStock','');}
+function resetProyStockActual(famKey){setProyEditField(famKey,'stockActual','');}
 
 function handleStockFile(file){
   if(!file)return;
@@ -5497,9 +5532,11 @@ function proyProductCatalog(){
     return {code:p.code||p.name,name:p.name,famKey:k,kg:kg};
   });
 }
-// Suma la venta REAL (sacos regulares + promoción/bonificación — todo lo que sale del
-// almacén) por familia de producto, mes por mes, usando solo meses "completos" del
-// reporte cargado (igual criterio que Equilibrio/Rentabilidad).
+// Suma la venta REAL (solo sacos regulares — SIN promoción/bonificación, esos son
+// regalo, no venta) por familia de producto, mes por mes, usando solo meses "completos"
+// del reporte cargado (igual criterio que Equilibrio/Rentabilidad). Esta es la base para
+// planear producción: se fabrica con base en lo que de verdad se vendió, no en lo que
+// se regaló encima.
 function proySalesAgg(nMeses){
   var out={};
   if(typeof DATA==='undefined'||!DATA)return {byFam:out,nMeses:0,mesesUsados:null};
@@ -5514,12 +5551,19 @@ function proySalesAgg(nMeses){
   DATA.clients.forEach(function(c){
     var pm=c.prodMes||{};
     for(var pn in pm){var k=_famKey(pn);var mo=pm[pn];for(var m in mo){addTo(k,m,mo[m]||0);}}
-    var ppm=c.promoProdMes||{};
-    for(var pn2 in ppm){var k2=_famKey(pn2);var mo2=ppm[pn2];for(var m2 in mo2){addTo(k2,m2,mo2[m2]||0);}}
   });
   var nM=usados?usados.length:(comp?comp.length:0);
   for(var k in out){var t=0;for(var mm in out[k].meses)t+=out[k].meses[mm];out[k].total=t;out[k].avg=nM>0?t/nM:0;}
   return {byFam:out,nMeses:nM,mesesUsados:usados};
+}
+// Sugerencia de stock mínimo por familia: ritmo diario real (sin promo) AJUSTADO al
+// crecimiento objetivo vigente (P.gTarget, el mismo +% de Objetivos/Gráfica), por un
+// colchón de días de seguridad. Es solo el PUNTO DE PARTIDA — siempre editable a mano,
+// por familia, y ese valor editado es el que manda (aquí y en el programador de producción).
+var PROY_MIN_DIAS=20; // colchón de seguridad: ritmo diario ajustado × 20 días
+function proySuggestedMin(avgDaily,gTarget){
+  var avgDailyAdj=(avgDaily||0)*(1+(gTarget||0));
+  return avgDailyAdj*PROY_MIN_DIAS;
 }
 
 // ── Publica la proyección de producción para programador.html (pestaña Proyección) ──
@@ -5530,11 +5574,9 @@ function buildProyeccionPayload(){
   if(typeof DATA==='undefined'||!DATA)return null;
   var cfg=getProyCfg();
   var nMesesSel=cfg.nMeses||'todos';
-  var modo=cfg.modo||'mes';
-  var dias=cfg.dias||30;
-  var overrides=cfg.overrides||{};
-  var stockOverride=cfg.stockOverride||{};
+  var P=(typeof getVParams==='function')?getVParams():{gTarget:0.07};
   var stockData=getStockData();
+  var edits=getProyEdits();
   var agg=proySalesAgg(nMesesSel==='todos'?null:parseInt(nMesesSel,10));
   var catalog=proyProductCatalog();
   var seenFam={},families=[];
@@ -5543,13 +5585,18 @@ function buildProyeccionPayload(){
     var a=agg.byFam[p.famKey]||{total:0,avg:0};
     var avgMonthly=a.avg||0;
     var avgDaily=avgMonthly/30.4;
-    var proyeccion=(overrides[p.code]!=null)?overrides[p.code]:(modo==='dias'?avgDaily*dias:avgMonthly);
+    var suggestedMin=proySuggestedMin(avgDaily,P.gTarget);
+    var e=edits[proyEditKey(p.famKey)]||{};
+    var minStock=(e.minStock!=null)?e.minStock:suggestedMin;
     var stockInfo=(stockData&&stockData.byFam&&stockData.byFam[p.famKey])?stockData.byFam[p.famKey]:null;
-    var stock=(stockOverride[p.code]!=null)?stockOverride[p.code]:(stockInfo?stockInfo.disponible:null);
-    var cobertura=(stock!=null&&avgDaily>0)?stock/avgDaily:null;
-    var aFabricar=(stock!=null)?Math.max(0,proyeccion-stock):proyeccion;
-    families.push({familia:stripProdCode(p.name),paceDiario:Math.round(avgDaily*100)/100,paceMensual:Math.round(avgMonthly),
-      stock:(stock!=null?Math.round(stock):null),diasCobertura:(cobertura!=null?Math.round(cobertura*10)/10:null),aFabricar:Math.round(aFabricar)});
+    var stockActual=(e.stockActual!=null)?e.stockActual:(stockInfo?stockInfo.disponible:null);
+    var avgDailyAdj=avgDaily*(1+(P.gTarget||0));
+    var cobertura=(stockActual!=null&&avgDailyAdj>0)?stockActual/avgDailyAdj:null;
+    var aFabricar=(stockActual!=null)?Math.max(0,minStock-stockActual):minStock;
+    families.push({famKey:p.famKey,familia:stripProdCode(p.name),paceDiario:Math.round(avgDaily*100)/100,paceMensual:Math.round(avgMonthly),
+      suggestedMin:Math.round(suggestedMin),minStock:Math.round(minStock),minOverride:(e.minStock!=null),
+      stockActual:(stockActual!=null?Math.round(stockActual):null),stockOverride:(e.stockActual!=null),
+      diasCobertura:(cobertura!=null?Math.round(cobertura*10)/10:null),aFabricar:Math.round(aFabricar)});
   });
   families.sort(function(x,y){
     if(x.diasCobertura==null&&y.diasCobertura==null)return y.paceMensual-x.paceMensual;
@@ -5558,32 +5605,37 @@ function buildProyeccionPayload(){
   });
   var now=new Date(); var pad=function(n){return ('0'+n).slice(-2);};
   var updatedStr=pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad(now.getHours())+':'+pad(now.getMinutes());
-  return {ts:now.getTime(),updatedStr:updatedStr,modo:modo,dias:dias,nMesesUsados:agg.nMeses||0,hasStock:!!stockData,families:families};
+  return {ts:now.getTime(),updatedStr:updatedStr,gTarget:P.gTarget,minDias:PROY_MIN_DIAS,nMesesUsados:agg.nMeses||0,hasStock:!!stockData,families:families};
 }
 function renderProyeccion(){
   var box=document.getElementById('proy-content'); if(!box)return;
   if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la proyección de venta y planeación de producción.</div>';return;}
   var cfg=getProyCfg();
   var nMesesSel=cfg.nMeses||'todos';
-  var modo=cfg.modo||'mes';
-  var dias=cfg.dias||30;
-  var overrides=cfg.overrides||{};
-  var stockOverride=cfg.stockOverride||{};
+  var P=(typeof getVParams==='function')?getVParams():{gTarget:0.07};
   var stockData=getStockData();
+  var edits=getProyEdits();
 
   var agg=proySalesAgg(nMesesSel==='todos'?null:parseInt(nMesesSel,10));
   var catalog=proyProductCatalog();
 
-  var rows=catalog.map(function(p){
+  var seenFam={},rows=[];
+  catalog.forEach(function(p){
+    if(seenFam[p.famKey])return; seenFam[p.famKey]=true;
     var a=agg.byFam[p.famKey]||{total:0,avg:0};
     var avgMonthly=a.avg||0;
     var avgDaily=avgMonthly/30.4;
-    var proyeccion=(overrides[p.code]!=null)?overrides[p.code]:(modo==='dias'?avgDaily*dias:avgMonthly);
+    var suggestedMin=proySuggestedMin(avgDaily,P.gTarget);
+    var e=edits[proyEditKey(p.famKey)]||{};
+    var minStock=(e.minStock!=null)?e.minStock:suggestedMin;
     var stockInfo=(stockData&&stockData.byFam&&stockData.byFam[p.famKey])?stockData.byFam[p.famKey]:null;
-    var stock=(stockOverride[p.code]!=null)?stockOverride[p.code]:(stockInfo?stockInfo.disponible:null);
-    var cobertura=(stock!=null&&avgDaily>0)?stock/avgDaily:null;
-    var aFabricar=(stock!=null)?Math.max(0,proyeccion-stock):proyeccion;
-    return {p:p,avgMonthly:avgMonthly,proyeccion:proyeccion,stock:stock,cobertura:cobertura,aFabricar:aFabricar,isOverride:(overrides[p.code]!=null),hasStock:(stock!=null)};
+    var stockActual=(e.stockActual!=null)?e.stockActual:(stockInfo?stockInfo.disponible:null);
+    var avgDailyAdj=avgDaily*(1+(P.gTarget||0));
+    var cobertura=(stockActual!=null&&avgDailyAdj>0)?stockActual/avgDailyAdj:null;
+    var aFabricar=(stockActual!=null)?Math.max(0,minStock-stockActual):minStock;
+    rows.push({famKey:p.famKey,name:stripProdCode(p.name),avgMonthly:avgMonthly,minStock:minStock,isMinOverride:(e.minStock!=null),
+      stockActual:stockActual,isStockOverride:(e.stockActual!=null),stockFromOdoo:(e.stockActual==null&&stockInfo!=null),
+      cobertura:cobertura,aFabricar:aFabricar});
   });
 
   rows.sort(function(a,b){
@@ -5594,61 +5646,59 @@ function renderProyeccion(){
   });
 
   var totalFabricar=rows.reduce(function(s,r){return s+r.aFabricar;},0);
-  var totalProy=rows.reduce(function(s,r){return s+r.proyeccion;},0);
+  var totalMin=rows.reduce(function(s,r){return s+r.minStock;},0);
   var nMesesUsados=agg.nMeses||0;
 
   function card(lbl,val,sub,col){return '<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+(col||'#3b82f6')+';border-radius:10px;padding:12px 14px;min-width:170px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:'+(col||'#fff')+'">'+val+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+lbl+'</div>'+(sub?'<div style="font-size:.7rem;color:#cbd5e1;margin-top:2px">'+sub+'</div>':'')+'</div>';}
 
   var h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">🏭 Proyección de venta y planeación de producción</div>';
-  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:14px">Promedia tu venta real (sacos regulares + promoción/bonificación — todo lo que sale del almacén) de los meses completos que ya tienes cargados, para estimar cuánto vas a necesitar de cada producto. Si subes tu reporte de existencia de producto terminado de Odoo, te dice también cuánto fabricar de cada uno y en qué orden.</div>';
+  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:14px">Solo cuenta tu venta REAL (sacos regulares — <b>sin promoción ni bonificación</b>, eso es regalo, no venta) de los meses completos que ya tienes cargados. <b>Stock mínimo</b> sale sugerido con ese ritmo real, ajustado al crecimiento objetivo actual (+'+((P.gTarget||0)*100).toFixed(0)+'%) más un colchón de '+PROY_MIN_DIAS+' días — pero lo puedes cambiar a mano por producto. <b>Inventario real</b> se llena solo al cargar tu reporte de existencia de Odoo, o lo puedes capturar a mano. Los dos campos se guardan en la nube y se ven/editan igual aquí y en el programador de producción, para que lo ajuste quien lo tenga a mano.</div>';
 
   h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;background:#0b1628;border:1px solid #1e3a6b;border-radius:10px;padding:12px 14px">';
-  h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Promediar</label><select onchange="setProyCfgField(\'nMeses\',this.value)" style="background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px">'
+  h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Promediar venta real con</label><select onchange="setProyCfgField(\'nMeses\',this.value)" style="background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px">'
    +['3','6','12','todos'].map(function(v){var lbl=v==='todos'?'Todos los meses completos':'Últimos '+v+' meses';return '<option value="'+v+'" '+(String(nMesesSel)===v?'selected':'')+'>'+lbl+'</option>';}).join('')
    +'</select></div>';
-  h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Planear para</label><select onchange="setProyCfgField(\'modo\',this.value)" style="background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px"><option value="mes" '+(modo==='mes'?'selected':'')+'>El próximo mes completo</option><option value="dias" '+(modo==='dias'?'selected':'')+'>Un número de días</option></select></div>';
-  if(modo==='dias'){h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Días</label><input type="number" min="1" value="'+dias+'" onchange="setProyCfgField(\'dias\',parseInt(this.value,10)||30)" style="width:90px;background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px"></div>';}
   h+='<div style="flex:1"></div>';
   h+='<div style="text-align:right">'
    +'<input type="file" id="stock-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleStockFile(this.files[0])">'
    +'<button onclick="document.getElementById(\'stock-file-input\').click()" style="background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer">📦 Cargar existencia de Odoo</button>'
-   +(stockData?('<div style="font-size:.68rem;color:#4ade80;margin-top:5px">✅ '+escProy(stockData.fname)+' · '+new Date(stockData.ts).toLocaleDateString('es-MX')+' · <a href="#" onclick="clearStockData();return false" style="color:#fca5a5">quitar</a></div>'):'<div style="font-size:.68rem;color:#94a3b8;margin-top:5px">Sin reporte de existencia — de momento solo ves la proyección de venta.</div>')
+   +(stockData?('<div style="font-size:.68rem;color:#4ade80;margin-top:5px">✅ '+escProy(stockData.fname)+' · '+new Date(stockData.ts).toLocaleDateString('es-MX')+' · <a href="#" onclick="clearStockData();return false" style="color:#fca5a5">quitar</a></div>'):'<div style="font-size:.68rem;color:#94a3b8;margin-top:5px">Sin reporte de existencia — captura el inventario real a mano en la tabla, o cárgalo aquí.</div>')
    +'</div>';
   h+='</div>';
 
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
-   +card('Sacos a fabricar',fmt(totalFabricar),(modo==='dias'?('próximos '+dias+' días'):'próximo mes'),(totalFabricar>0?'#f59e0b':'#22c55e'))
-   +card('Venta proyectada',fmt(totalProy)+' sacos',(modo==='dias'?('próximos '+dias+' días'):'próximo mes'),'#3b82f6')
-   +card('Promedio calculado con',nMesesUsados+' mes(es)','meses completos del reporte de ventas cargado','#7ee2a8')
+   +card('Sacos a fabricar',fmt(totalFabricar),'para llegar al stock mínimo de todos',(totalFabricar>0?'#f59e0b':'#22c55e'))
+   +card('Stock mínimo total (sugerido/editado)',fmt(totalMin)+' sacos','venta real + '+((P.gTarget||0)*100).toFixed(0)+'% crecimiento + colchón','#3b82f6')
+   +card('Promedio calculado con',nMesesUsados+' mes(es)','meses completos, sin promo/bonificación','#7ee2a8')
    +'</div>';
 
-  if(!stockData){
-    h+='<div style="font-size:.7rem;color:#94a3b8;margin-bottom:8px">⚠ Sin reporte de existencia cargado: "a fabricar" muestra la proyección completa (no se resta ningún stock). Carga el reporte de Odoo arriba, o captura el stock a mano en la columna de la derecha.</div>';
+  if(!stockData && !rows.some(function(r){return r.isStockOverride;})){
+    h+='<div style="font-size:.7rem;color:#94a3b8;margin-bottom:8px">⚠ Sin inventario real cargado ni capturado: "a fabricar" muestra el stock mínimo completo (no se resta nada). Carga el reporte de Odoo arriba, o captura el inventario real a mano en la tabla.</div>';
   }
 
   h+='<table style="width:100%;font-size:.78rem;border-collapse:collapse">';
-  h+='<tr style="color:#94a3b8;text-align:right"><td style="text-align:left;padding:6px 8px">Producto</td><td style="padding:6px 8px">Prom./mes ('+nMesesUsados+'m)</td><td style="padding:6px 8px">Proyección'+(modo==='dias'?(' ('+dias+'d)'):' (mes)')+'</td><td style="padding:6px 8px">Stock disponible</td><td style="padding:6px 8px">Cobertura</td><td style="padding:6px 8px">A fabricar</td></tr>';
+  h+='<tr style="color:#94a3b8;text-align:right"><td style="text-align:left;padding:6px 8px">Producto</td><td style="padding:6px 8px">Venta real/mes ('+nMesesUsados+'m)</td><td style="padding:6px 8px">Stock mínimo</td><td style="padding:6px 8px">Inventario real</td><td style="padding:6px 8px">Días de alcance</td><td style="padding:6px 8px">A fabricar</td></tr>';
   rows.forEach(function(r,i){
     var covColor=r.cobertura==null?'#64748b':(r.cobertura<15?'#ef4444':(r.cobertura<30?'#f59e0b':'#22c55e'));
     var covTxt=r.cobertura==null?'sin dato':(Math.round(r.cobertura)+' días');
     var rowBg=i%2===0?'transparent':'#0b1628';
     h+='<tr style="border-top:1px solid #16233f;background:'+rowBg+'">'
-     +'<td style="padding:6px 8px;color:#e8eef7">'+escProy(r.p.name)+'</td>'
+     +'<td style="padding:6px 8px;color:#e8eef7">'+escProy(r.name)+'</td>'
      +'<td style="padding:6px 8px;text-align:right;color:#cbd5e1">'+fmt(r.avgMonthly)+'</td>'
      +'<td style="padding:6px 8px;text-align:right">'
-       +'<input type="number" min="0" value="'+Math.round(r.proyeccion)+'" onchange="setProyOverride(\''+escProy(r.p.code)+'\',this.value)" style="width:80px;background:#0b1628;border:1px solid '+(r.isOverride?'#f59e0b':'#3b82f6')+';border-radius:6px;color:#fff;padding:5px;text-align:right">'
-       +(r.isOverride?' <a href="#" onclick="resetProyOverride(\''+escProy(r.p.code)+'\');return false" title="Restaurar al promedio" style="color:#94a3b8">↺</a>':'')
+       +'<input type="number" min="0" value="'+Math.round(r.minStock)+'" onchange="setProyMinStock(\''+escProy(r.famKey)+'\',this.value)" style="width:80px;background:#0b1628;border:1px solid '+(r.isMinOverride?'#f59e0b':'#3b82f6')+';border-radius:6px;color:#fff;padding:5px;text-align:right">'
+       +(r.isMinOverride?' <a href="#" onclick="resetProyMinStock(\''+escProy(r.famKey)+'\');return false" title="Restaurar al sugerido" style="color:#94a3b8">↺</a>':'')
      +'</td>'
      +'<td style="padding:6px 8px;text-align:right">'
-       +'<input type="number" value="'+(r.stock!=null?Math.round(r.stock):'')+'" placeholder="—" onchange="setStockOverride(\''+escProy(r.p.code)+'\',this.value)" style="width:80px;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#fff;padding:5px;text-align:right">'
+       +'<input type="number" value="'+(r.stockActual!=null?Math.round(r.stockActual):'')+'" placeholder="—" onchange="setProyStockActual(\''+escProy(r.famKey)+'\',this.value)" style="width:80px;background:#0b1628;border:1px solid '+(r.isStockOverride?'#f59e0b':'#24304f')+';border-radius:6px;color:#fff;padding:5px;text-align:right">'
+       +(r.isStockOverride?' <a href="#" onclick="resetProyStockActual(\''+escProy(r.famKey)+'\');return false" title="Quitar captura a mano" style="color:#94a3b8">↺</a>':(r.stockFromOdoo?' <span title="Del reporte de Odoo" style="color:#4ade80;font-size:.62rem">Odoo</span>':''))
      +'</td>'
      +'<td style="padding:6px 8px;text-align:right;color:'+covColor+';font-weight:700">'+covTxt+'</td>'
-     +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:'+(r.aFabricar>0?'#facc15':'#4ade80')+'">'+fmt(r.aFabricar)+'</td>'
+     +'<td style="padding:6px 8px;text-align:right;font-weight:800;color:'+(r.aFabricar>0?'#facc15':'#4ade80')+'">'+fmt(Math.round(r.aFabricar))+'</td>'
      +'</tr>';
   });
   h+='</table>';
-  h+='<div style="margin-top:10px"><a href="#" onclick="resetProyOverrideAll();return false" style="font-size:.72rem;color:#94a3b8">↺ Restaurar todas las proyecciones al promedio</a></div>';
-  h+='<div style="font-size:.68rem;color:#64748b;margin-top:10px">Orden de la tabla: menor cobertura primero (lo más urgente de fabricar arriba). Puedes editar a mano la proyección o el stock de cualquier producto — el cambio se guarda en este navegador.</div>';
+  h+='<div style="font-size:.68rem;color:#64748b;margin-top:10px">Orden de la tabla: menor "días de alcance" primero (lo más urgente de fabricar arriba). Solo se muestran productos regulares (sin promoción/bonificación). Stock mínimo e inventario real se editan a mano por producto — el ↺ regresa la celda al valor sugerido/del reporte de Odoo. El cambio se sincroniza con el programador de producción.</div>';
 
   box.innerHTML=h;
 }
