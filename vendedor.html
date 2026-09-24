@@ -119,6 +119,8 @@ var MESEVAL=0, MESANT=0, MESCURSO=0, MESVIT=0, CORTE=null;
 var VITLAB='';
 var VMODE='obj';   // vista de la pestaña Ventas: 'obj' = contra objetivo · 'yoy' = crecimiento vs año pasado · 'range' = rango de fechas libre
 var RANGE_FROM=0, RANGE_TO=0, RANGE_UNIT='sac';   // rango Desde/Hasta libre (como Gráfica en ventas.html) · unidad sacos/toneladas
+var RANGE_GRAN='mes';   // granularidad del rango libre: 'mes' (Desde/Hasta mes) · 'dia' (Desde día/Hasta día dentro de un mes, como Gráfica en ventas.html)
+var RANGE_DIA_MES=0, RANGE_DAY_FROM=0, RANGE_DAY_TO=0;   // mes elegido y Desde día/Hasta día dentro de ese mes
 // Mes/periodo QUE CORRE hoy (lo manda el calendario vía MESVIT) y sus etiquetas.
 function mesVitApp(){ return MESVIT || MESCURSO || (MESEVAL?((MESEVAL%12)+1):0); }
 function mesPrevApp(){ var m=mesVitApp(); return m?(((m-2+12)%12)+1):0; }
@@ -639,6 +641,10 @@ function setVMode(m){ VMODE=m; renderVentas(); }
 function setRangeFrom(v){ RANGE_FROM=Number(v)||0; renderVentas(); }
 function setRangeTo(v){ RANGE_TO=Number(v)||0; renderVentas(); }
 function setRangeUnit(v){ RANGE_UNIT=v; renderVentas(); }
+function setRangeGran(v){ RANGE_GRAN=v; renderVentas(); }
+function setRangeDiaMes(v){ RANGE_DIA_MES=Number(v)||0; RANGE_DAY_FROM=0; RANGE_DAY_TO=0; renderVentas(); }
+function setRangeDayFrom(v){ RANGE_DAY_FROM=Number(v)||0; renderVentas(); }
+function setRangeDayTo(v){ RANGE_DAY_TO=Number(v)||0; renderVentas(); }
 function renderVentas(){
   var app=document.getElementById('app');app.style.display='block';
   var h=syncBar()+viewTabs();
@@ -668,6 +674,65 @@ function renderVentas(){
     // rango del año pasado. Usa los mismos arreglos mensuales que ya trae V
     // (V.cur/V.prior en sacos; V.curT/V.priorT en toneladas si el publicador
     // ya los manda — si no, el selector de Toneladas se oculta).
+    // Además, "Por día" deja elegir Desde día/Hasta día dentro de un mes —
+    // igual que la pestaña Gráfica de ventas.html — usando V.dia/V.priorDaily
+    // que ya vienen publicados (detalle diario, en sacos).
+    function gbtn(k,txt){ var on=(RANGE_GRAN===k);
+      return '<button onclick="setRangeGran(\''+k+'\')" style="flex:1;padding:7px 6px;border-radius:8px;border:1px solid '+(on?'#0EA5E9':'#22304d')+';background:'+(on?'#0EA5E9':'#162340')+';color:'+(on?'#0b1628':'#9fb0cc')+';font-weight:800;font-size:11.5px;cursor:pointer">'+txt+'</button>'; }
+    h+='<div style="display:flex;gap:6px;margin-bottom:10px">'+gbtn('mes','Por mes')+gbtn('dia','Por día')+'</div>';
+    if(RANGE_GRAN==='dia'){
+      var hasDiario=!!V.esDiario;
+      if(!hasDiario){
+        h+='<div class="hint">⚠ El reporte publicado es mensual, no trae detalle día a día. Pide a tu gerente que publique con el reporte diario de Odoo para ver esta vista.</div>';
+        h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · solo tuyas · datos del último reporte publicado.</div>';
+        app.innerHTML=h; return;
+      }
+      if(!RANGE_DIA_MES || meses.indexOf(RANGE_DIA_MES)<0) RANGE_DIA_MES=lm;
+      var dm=RANGE_DIA_MES;
+      var curD=((V.dia&&V.dia[dm])||[]).slice(0,31); while(curD.length<31)curD.push(0);
+      var pgD=((V.priorDaily&&V.priorDaily[dm])||[]).slice(0,31); while(pgD.length<31)pgD.push(0);
+      var pgSum=pgD.reduce(function(a,b){return a+(b||0);},0);
+      var priorMonthTot=(V.prior&&V.prior[dm-1])||0;
+      var scaleD=pgSum?(priorMonthTot/pgSum):0;
+      var priorD=pgD.map(function(x){return (x||0)*scaleD;});
+      var lastCurD=0; for(var di=0;di<31;di++)if(curD[di]>0)lastCurD=di+1;
+      var topDay=Math.max(lastCurD,1);
+      if(!RANGE_DAY_FROM||RANGE_DAY_FROM<1||RANGE_DAY_FROM>topDay)RANGE_DAY_FROM=1;
+      if(!RANGE_DAY_TO||RANGE_DAY_TO<1||RANGE_DAY_TO>topDay)RANGE_DAY_TO=lastCurD||1;
+      var selStD='width:100%;background:#162340;border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px';
+      h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+        +'<div style="flex:1;min-width:110px"><label style="font-size:11px;color:#9fb0cc">Mes</label><select style="'+selStD+'" onchange="setRangeDiaMes(this.value)">'+meses.map(function(m){return '<option value="'+m+'"'+(m===dm?' selected':'')+'>'+MESN[m]+'</option>';}).join('')+'</select></div>'
+        +'<div style="flex:1;min-width:100px"><label style="font-size:11px;color:#9fb0cc">Desde día</label><select style="'+selStD+'" onchange="setRangeDayFrom(this.value)">'+Array.from({length:topDay},function(_,i){return i+1;}).map(function(dd){return '<option value="'+dd+'"'+(dd===RANGE_DAY_FROM?' selected':'')+'>Día '+dd+'</option>';}).join('')+'</select></div>'
+        +'<div style="flex:1;min-width:100px"><label style="font-size:11px;color:#9fb0cc">Hasta día</label><select style="'+selStD+'" onchange="setRangeDayTo(this.value)">'+Array.from({length:topDay},function(_,i){return i+1;}).map(function(dd){return '<option value="'+dd+'"'+(dd===RANGE_DAY_TO?' selected':'')+'>Día '+dd+'</option>';}).join('')+'</select></div>'
+        +'</div>';
+      var dFrom=Math.min(RANGE_DAY_FROM,RANGE_DAY_TO), dTo=Math.max(RANGE_DAY_FROM,RANGE_DAY_TO);
+      var dC=0,dP=0; for(var dd2=dFrom;dd2<=dTo;dd2++){dC+=curD[dd2-1]||0;dP+=priorD[dd2-1]||0;}
+      var dCrec=dP>0?(dC/dP-1)*100:(dC>0?100:0), dCol=dCrec>=0?'#22c55e':'#ef4444';
+      var dDif=dC-dP;
+      var dRangoTxt=MESN[dm]+' '+(dFrom===1?('al día '+dTo):('días '+dFrom+'–'+dTo));
+      h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +kcard(fmt(Math.round(dC)),'Vendido '+dRangoTxt+' (sacos)','#E8A020')
+        +kcard(fmt(Math.round(dP)),'Mismo periodo año pasado (estimado)','#9fb0cc')
+        +kcard((dCrec>=0?'+':'')+dCrec.toFixed(1)+'%','Creciste en ese periodo',dCol)+'</div>';
+      h+='<div style="background:#162340;border:1px solid #22304d;border-left:4px solid '+dCol+';border-radius:12px;padding:12px;margin-top:10px">'
+        +'<div style="font-size:12px;color:#9fb0cc;font-weight:800;text-transform:uppercase;letter-spacing:.3px">'+dRangoTxt+' contra el año pasado</div>'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d"><span>Vendiste (sacos)</span><b>'+fmt(Math.round(dC))+'</b></div>'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d"><span>Mismo periodo del año pasado (estimado)</span><b style="color:#9fb0cc">'+fmt(Math.round(dP))+'</b></div>'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#fff;font-weight:900;padding:6px 0 0"><span>Diferencia</span><b style="color:'+dCol+'">'+(dDif>=0?'+':'')+fmt(Math.round(Math.abs(dDif)))+' sacos ('+(dCrec>=0?'+':'')+dCrec.toFixed(1)+'%)</b></div>'
+        +'</div>';
+      h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:14px 0 8px">Día a día en el periodo elegido</div>';
+      var maxD=1; for(var dd3=dFrom;dd3<=dTo;dd3++)maxD=Math.max(maxD,curD[dd3-1]||0,priorD[dd3-1]||0);
+      for(var dd4=dFrom;dd4<=dTo;dd4++){
+        var cu4=curD[dd4-1]||0, pr4=priorD[dd4-1]||0;
+        var cr4=pr4>0?(cu4/pr4-1)*100:(cu4>0?100:0), col4=cr4>=0?'#22c55e':'#ef4444';
+        h+='<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1"><span style="font-weight:800;color:#e8eef7">Día '+dd4+'</span><span>'+fmt(Math.round(cu4))+' vs '+fmt(Math.round(pr4))+' · <b style="color:'+col4+'">'+(cr4>=0?'+':'')+cr4.toFixed(0)+'%</b></span></div>'
+         +'<div style="height:9px;background:#0b1628;border-radius:6px;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.min(100,cu4/maxD*100)+'%;background:'+col4+'"></i></div>'
+         +'<div style="height:5px;background:#0b1628;border-radius:6px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.min(100,pr4/maxD*100)+'%;background:#64748b"></i></div></div>';
+      }
+      h+='<div style="font-size:11px;color:#7c8aa5;margin-top:6px">Elige mes y Desde día/Hasta día para comparar cualquier rango de días contra el mismo rango del año pasado (estimado con la forma diaria global escalada a tu tamaño). Barra de color = tu venta. Barra gris = el año pasado. Solo en sacos.</div>';
+      h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · solo tuyas · datos del último reporte publicado.</div>';
+      app.innerHTML=h; return;
+    }
     if(!RANGE_FROM || meses.indexOf(RANGE_FROM)<0) RANGE_FROM=meses[0];
     if(!RANGE_TO || meses.indexOf(RANGE_TO)<0) RANGE_TO=lm;
     var hasTon=!!(V.curT&&V.priorT);
