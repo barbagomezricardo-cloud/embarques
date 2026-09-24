@@ -107,7 +107,8 @@ const NIVCOL={DIAMANTE_PLUS:'#7c3aed',DIAMANTE:'#0e7490',PLATINO:'#475569',ORO:'
 const NIVBG={DIAMANTE_PLUS:'linear-gradient(135deg,#6d28d9,#c4b5fd)',DIAMANTE:'linear-gradient(135deg,#0891b2,#22d3ee)',PLATINO:'linear-gradient(135deg,#475569,#94a3b8)',ORO:'linear-gradient(135deg,#a16207,#f5c842)',PLATA:'linear-gradient(135deg,#64748b,#cbd5e1)',BRONCE:'linear-gradient(135deg,#b45309,#f0a868)',COBRE:'linear-gradient(135deg,#8a5a2b,#d4915d)',INICIAL:'linear-gradient(135deg,#4b5563,#9ca3af)'};
 var MESEVAL=0, MESANT=0, MESCURSO=0, MESVIT=0, CORTE=null;
 var VITLAB='';
-var VMODE='obj';   // vista de la pestaña Ventas: 'obj' = contra objetivo · 'yoy' = crecimiento vs año pasado
+var VMODE='obj';   // vista de la pestaña Ventas: 'obj' = contra objetivo · 'yoy' = crecimiento vs año pasado · 'range' = rango de fechas libre
+var RANGE_FROM=0, RANGE_TO=0, RANGE_UNIT='sac';   // rango Desde/Hasta libre (como Gráfica en ventas.html) · unidad sacos/toneladas
 // Mes/periodo QUE CORRE hoy (lo manda el calendario vía MESVIT) y sus etiquetas.
 function mesVitApp(){ return MESVIT || MESCURSO || (MESEVAL?((MESEVAL%12)+1):0); }
 function mesPrevApp(){ var m=mesVitApp(); return m?(((m-2+12)%12)+1):0; }
@@ -549,8 +550,8 @@ function selectVendor(v){
 }
 function buildAgg(){
   var rows=[],prospects=[];
-  var cur=[],prior=[],priorVivo=[],priorPerd=[],dia={},promoSac=0,newDisc=0;
-  for(var z=0;z<12;z++){cur.push(0);prior.push(0);priorVivo.push(0);priorPerd.push(0);}
+  var cur=[],prior=[],priorVivo=[],priorPerd=[],curT=[],priorT=[],dia={},promoSac=0,newDisc=0,hayT=false;
+  for(var z=0;z<12;z++){cur.push(0);prior.push(0);priorVivo.push(0);priorPerd.push(0);curT.push(0);priorT.push(0);}
   var sinCompra=[],fuga=[],focos=[],nuevosCount=0,nuevosMeta=0,nuevosLista=[],regMap={};
   var meses=[],gTarget=0,lastMonth=0,esDiario=false,priorDaily={},prem=null,cobre=null,evalPeriod='TRIM',evalLabel='',updatedStr=MUP;
   var mesEval=0,mesAnt=0,mesCurso=0,mesVitrina=0,corte=null;   // mes evaluado / en vitrina / corte confirmado (vienen igual en todos los vendedores)
@@ -563,6 +564,7 @@ function buildAgg(){
     mesEval=mesEval||p.mesEval||0;mesAnt=mesAnt||p.mesAnt||0;mesCurso=mesCurso||p.mesCurso||0;mesVitrina=mesVitrina||p.mesVitrina||0;corte=corte||p.corte||null;
     var V=p.ventas;if(V){meses=(V.meses&&V.meses.length)?V.meses:meses;gTarget=V.gTarget||gTarget;lastMonth=V.lastMonth||lastMonth;esDiario=esDiario||V.esDiario;priorDaily=(V.priorDaily&&Object.keys(V.priorDaily).length)?V.priorDaily:priorDaily;
       for(var i=0;i<12;i++){cur[i]+=(V.cur&&V.cur[i])||0;prior[i]+=(V.prior&&V.prior[i])||0;priorVivo[i]+=(V.priorVivo&&V.priorVivo[i])||0;priorPerd[i]+=(V.priorPerd&&V.priorPerd[i])||0;}
+      if(V.curT&&V.priorT){hayT=true;for(var iT=0;iT<12;iT++){curT[iT]+=V.curT[iT]||0;priorT[iT]+=V.priorT[iT]||0;}}
       promoSac+=V.promoSac||0;newDisc+=V.newDisc||0;
       if(V.dia)for(var mm in V.dia){var arr=V.dia[mm]||[];if(!dia[mm])dia[mm]=[];for(var d=0;d<arr.length;d++)dia[mm][d]=(dia[mm][d]||0)+(arr[d]||0);}
     }
@@ -585,7 +587,7 @@ function buildAgg(){
   fuga.sort(function(a,b){return (b.perd||0)-(a.perd||0);});
   var regiones=Object.keys(regMap).map(function(e){var o=regMap[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:o.cur,prior:o.prior,crec:crec};}).sort(function(a,b){return a.crec-b.crec;});
   return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,mesEval:mesEval,mesAnt:mesAnt,mesCurso:mesCurso,mesVitrina:mesVitrina,corte:corte,prem:prem,cobre:cobre,prospects:prospects,rows:rows,res:(hayRes?R:null),
-    ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,priorVivo:priorVivo,priorPerd:priorPerd,dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario},
+    ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,priorVivo:priorVivo,priorPerd:priorPerd,curT:(hayT?curT:null),priorT:(hayT?priorT:null),dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario},
     alertas:{sinCompra:sinCompra,fuga:fuga,focos:focos.slice(0,12),nuevos:{count:nuevosCount,meta:nuevosMeta,lista:nuevosLista},regiones:regiones,gTarget:gTarget}};
 }
 function masterLoad(){
@@ -863,6 +865,9 @@ function resumenPDF(){
 }
 
 function setVMode(m){ VMODE=m; renderVentas(); }
+function setRangeFrom(v){ RANGE_FROM=Number(v)||0; renderVentas(); }
+function setRangeTo(v){ RANGE_TO=Number(v)||0; renderVentas(); }
+function setRangeUnit(v){ RANGE_UNIT=v; renderVentas(); }
 function renderVentas(){
   var app=document.getElementById('app');app.style.display='block';
   var h=syncBar()+viewTabs();
@@ -883,7 +888,56 @@ function renderVentas(){
   // real: puede haber crecido bien y aun así quedar debajo del objetivo, y eso no se veía.
   function vbtn(k,txt){ var on=(VMODE===k);
     return '<button onclick="setVMode(\''+k+'\')" style="flex:1;padding:9px 6px;border-radius:10px;border:1px solid '+(on?'#E8A020':'#22304d')+';background:'+(on?'#E8A020':'#162340')+';color:'+(on?'#151b26':'#9fb0cc')+';font-weight:800;font-size:12px;cursor:pointer">'+txt+'</button>'; }
-  h+='<div style="display:flex;gap:8px;margin-bottom:10px">'+vbtn('obj','🎯 Contra objetivo (+'+(g*100).toFixed(0)+'%)')+vbtn('yoy','📈 Crecimiento vs año pasado')+'</div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+vbtn('obj','🎯 Contra objetivo (+'+(g*100).toFixed(0)+'%)')+vbtn('yoy','📈 Crecimiento vs año pasado')+vbtn('range','📅 Elegir periodo')+'</div>';
+
+  if(VMODE==='range'){
+    // ── VISTA RANGO LIBRE (Desde/Hasta) ─────────────────────────────────────
+    // Igual que la pestaña Gráfica de ventas.html: se elige cualquier rango de
+    // meses publicados y se compara ese rango completo contra el mismo rango
+    // del año pasado, para el vendedor seleccionado o para "Todos los vendedores"
+    // (buildAgg ya suma curT/priorT elementwise entre vendedores).
+    if(!RANGE_FROM || meses.indexOf(RANGE_FROM)<0) RANGE_FROM=meses[0];
+    if(!RANGE_TO || meses.indexOf(RANGE_TO)<0) RANGE_TO=lm;
+    var hasTon=!!(V.curT&&V.priorT);
+    if(!hasTon)RANGE_UNIT='sac';
+    var selSt='width:100%;background:#162340;border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+      +'<div style="flex:1;min-width:110px"><label style="font-size:11px;color:#9fb0cc">Desde</label><select style="'+selSt+'" onchange="setRangeFrom(this.value)">'+meses.map(function(m){return '<option value="'+m+'"'+(m===RANGE_FROM?' selected':'')+'>'+MESN[m]+'</option>';}).join('')+'</select></div>'
+      +'<div style="flex:1;min-width:110px"><label style="font-size:11px;color:#9fb0cc">Hasta</label><select style="'+selSt+'" onchange="setRangeTo(this.value)">'+meses.map(function(m){return '<option value="'+m+'"'+(m===RANGE_TO?' selected':'')+'>'+MESN[m]+'</option>';}).join('')+'</select></div>'
+      +(hasTon?('<div style="flex:1;min-width:110px"><label style="font-size:11px;color:#9fb0cc">Unidad</label><select style="'+selSt+'" onchange="setRangeUnit(this.value)"><option value="sac"'+(RANGE_UNIT==='sac'?' selected':'')+'>Sacos</option><option value="ton"'+(RANGE_UNIT==='ton'?' selected':'')+'>Toneladas</option></select></div>'):'')
+      +'</div>';
+    var rFrom=Math.min(RANGE_FROM,RANGE_TO), rTo=Math.max(RANGE_FROM,RANGE_TO);
+    var isTon=(RANGE_UNIT==='ton'&&hasTon);
+    var srcC=isTon?V.curT:V.cur, srcP=isTon?V.priorT:V.prior;
+    var UL=isTon?'toneladas':'sacos';
+    var rfmt=function(v){return isTon?(Math.round((v||0)*10)/10).toLocaleString('es-MX',{minimumFractionDigits:1,maximumFractionDigits:1}):fmt(Math.round(v||0));};
+    var rC=0,rP=0; for(var rm=rFrom;rm<=rTo;rm++){rC+=(srcC&&srcC[rm-1])||0;rP+=(srcP&&srcP[rm-1])||0;}
+    var rCrec=rP>0?(rC/rP-1)*100:(rC>0?100:0), rCol=rCrec>=0?'#22c55e':'#ef4444';
+    var rDif=rC-rP;
+    var rangoTxt=(rFrom===rTo)?MESN[rFrom]:(MESN[rFrom]+'–'+MESN[rTo]);
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +kcard(rfmt(rC),'Vendido '+rangoTxt+' ('+UL+')','#E8A020')
+      +kcard(rfmt(rP),'Mismo periodo año pasado','#9fb0cc')
+      +kcard((rCrec>=0?'+':'')+rCrec.toFixed(1)+'%','Creció en ese periodo',rCol)+'</div>';
+    h+='<div style="background:#162340;border:1px solid #22304d;border-left:4px solid '+rCol+';border-radius:12px;padding:12px;margin-top:10px">'
+      +'<div style="font-size:12px;color:#9fb0cc;font-weight:800;text-transform:uppercase;letter-spacing:.3px">'+rangoTxt+' contra el año pasado</div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d"><span>Vendió ('+UL+')</span><b>'+rfmt(rC)+'</b></div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:5px 0;border-bottom:1px solid #22304d"><span>Mismo periodo del año pasado</span><b style="color:#9fb0cc">'+rfmt(rP)+'</b></div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#fff;font-weight:900;padding:6px 0 0"><span>Diferencia</span><b style="color:'+rCol+'">'+(rDif>=0?'+':'')+rfmt(Math.abs(rDif))+' '+UL+' ('+(rCrec>=0?'+':'')+rCrec.toFixed(1)+'%)</b></div>'
+      +'</div>';
+    h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:14px 0 8px">Mes a mes en el periodo elegido</div>';
+    var maxR=1; for(var rm2=rFrom;rm2<=rTo;rm2++)maxR=Math.max(maxR,(srcC&&srcC[rm2-1])||0,(srcP&&srcP[rm2-1])||0);
+    for(var rm3=rFrom;rm3<=rTo;rm3++){
+      var cu3=(srcC&&srcC[rm3-1])||0, pr3=(srcP&&srcP[rm3-1])||0;
+      var cr3=pr3>0?(cu3/pr3-1)*100:(cu3>0?100:0), col3=cr3>=0?'#22c55e':'#ef4444';
+      h+='<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1"><span style="font-weight:800;color:#e8eef7">'+MESN[rm3]+'</span><span>'+rfmt(cu3)+' vs '+rfmt(pr3)+' · <b style="color:'+col3+'">'+(cr3>=0?'+':'')+cr3.toFixed(0)+'%</b></span></div>'
+       +'<div style="height:9px;background:#0b1628;border-radius:6px;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.min(100,cu3/maxR*100)+'%;background:'+col3+'"></i></div>'
+       +'<div style="height:5px;background:#0b1628;border-radius:6px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.min(100,pr3/maxR*100)+'%;background:#64748b"></i></div></div>';
+    }
+    h+='<div style="font-size:11px;color:#7c8aa5;margin-top:6px">Elige Desde/Hasta para comparar cualquier periodo contra el mismo periodo del año pasado. Barra de color = venta actual. Barra gris = el año pasado.'+(!hasTon?' (Toneladas aún no disponible: publica de nuevo desde ventas.html para activarla.)':'')+'</div>';
+    h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · datos del último reporte publicado.</div>';
+    app.innerHTML=h; return;
+  }
 
   if(VMODE==='yoy'){
     // ── VISTA CRECIMIENTO ────────────────────────────────────────────────────
