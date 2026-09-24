@@ -448,7 +448,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
   <!-- NUEVAS PESTAÑAS -->
   <div class="pane" id="pane-objetivos"><div id="obj-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-nuevos"><div id="nue-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
-  <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-neto-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px"><input type="checkbox" id="graf-neto" onchange="renderGrafica()" style="vertical-align:middle"> Sin kilo de regalo</label></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Corte al día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span></div><div id="graf-content"></div></div></div>
+  <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-neto-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px"><input type="checkbox" id="graf-neto" onchange="renderGrafica()" style="vertical-align:middle"> Sin kilo de regalo</label></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde día:</label><select id="graf-dayfrom" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span></div><div id="graf-content"></div></div></div>
   <div class="pane" id="pane-metas">
     <div style="display:flex;flex-direction:column;width:100%;flex:1;min-height:0">
       <div style="font-size:1.05rem;font-weight:800;color:var(--gold);padding:12px 16px 2px">📋 Metas por cliente 2026</div>
@@ -4475,30 +4475,38 @@ function renderGrafica(){
       if(vf){ const sc=pgSum?priorVendMonth/pgSum:0; prior=pg.map(x=>(x||0)*sc); }
       else { prior=pg.slice(); }
       let lastCur=0;for(let i=0;i<31;i++)if(cur[i]>0)lastCur=i+1;
-      // selector de día de corte (elige tú hasta dónde ya facturaste)
+      // selectores Desde día / Hasta día (mismo espíritu que el Desde/Hasta de "Por mes",
+      // pero a nivel día dentro del mes elegido): antes solo dejaba correr desde el día 1.
+      const dayFromEl=document.getElementById('graf-dayfrom');
       const cutEl=document.getElementById('graf-cutday');
-      if(cutEl){const want=cutEl.value?+cutEl.value:lastCur;cutEl.innerHTML='';for(let dd=1;dd<=Math.max(lastCur,1);dd++){const o=document.createElement('option');o.value=dd;o.textContent='Día '+dd;cutEl.appendChild(o);}cutEl.value=(want>=1&&want<=lastCur)?want:lastCur;}
-      const cut=(cutEl&&cutEl.value)?+cutEl.value:lastCur; cutDay=cut;
-      const realTot=cur.slice(0,cut).reduce((a,b)=>a+(b||0),0);
-      const baseFecha=DATA.esDiario?prior.slice(0,cut).reduce((a,b)=>a+(b||0),0):0;
+      const topDay=Math.max(lastCur,1);
+      if(dayFromEl){const want=dayFromEl.value?+dayFromEl.value:1;dayFromEl.innerHTML='';for(let dd=1;dd<=topDay;dd++){const o=document.createElement('option');o.value=dd;o.textContent='Día '+dd;dayFromEl.appendChild(o);}dayFromEl.value=(want>=1&&want<=topDay)?want:1;}
+      if(cutEl){const want=cutEl.value?+cutEl.value:lastCur;cutEl.innerHTML='';for(let dd=1;dd<=topDay;dd++){const o=document.createElement('option');o.value=dd;o.textContent='Día '+dd;cutEl.appendChild(o);}cutEl.value=(want>=1&&want<=topDay)?want:lastCur;}
+      const dayFromRaw=(dayFromEl&&dayFromEl.value)?+dayFromEl.value:1;
+      const cutRaw=(cutEl&&cutEl.value)?+cutEl.value:lastCur;
+      const dayFrom=Math.min(dayFromRaw,cutRaw), cut=Math.max(dayFromRaw,cutRaw); cutDay=cut;   // por si eligen Desde > Hasta, se corrige solo
+      const nDias=cut-dayFrom+1;
+      const rangoTxt=(dayFrom===1)?('al día '+cut):('días '+dayFrom+'–'+cut);
+      const realTot=cur.slice(dayFrom-1,cut).reduce((a,b)=>a+(b||0),0);
+      const baseFecha=DATA.esDiario?prior.slice(dayFrom-1,cut).reduce((a,b)=>a+(b||0),0):0;
       const obj=baseFecha*(1+P.gTarget), av=obj?realTot/obj:0, crec=baseFecha?realTot/baseFecha-1:0;
       labels=Array.from({length:31},(_,i)=>i+1); n=31;
       const diasMes=new Date(Y.cy,m,0).getDate()||30;
       // Proyección con la MISMA estacionalidad del año anterior (consistente con el avance):
       const fracPrior=(priorVendMonth&&baseFecha)?(baseFecha/priorVendMonth):0;
-      const projMes=fracPrior>0?realTot/fracPrior:(cut?realTot/cut*diasMes:0);
+      const projMes=fracPrior>0?realTot/fracPrior:(nDias?realTot/nDias*diasMes:0);
       const objMes=priorVendMonth*(1+P.gTarget);
       const gapMes=objMes-projMes;
       titulo=`📈 Día a día — ${MES_NOM[m]}: ${Y.py} vs ${Y.cy}${vf?(' · '+vf):''}`;
-      sub=DATA.esDiario?`Corte al día ${cut} (elígelo según lo que ya tengas facturado). Objetivo al día = ${vf?'ventas '+Y.py+' del vendedor (estimado)':Y.py} × (1+${(P.gTarget*100).toFixed(0)}%).${vf?' La curva '+Y.py+' del vendedor es estimada (forma diaria global escalada a su tamaño).':''}`:`⚠ El archivo ${Y.cy} es mensual. Sube el diario de Odoo para ver ${Y.cy} día a día.`;
+      sub=DATA.esDiario?`Elige Desde día / Hasta día dentro de ${MES_NOM[m]} (por defecto, desde el día 1 hasta lo que ya llevas facturado). Objetivo del periodo = ${vf?'ventas '+Y.py+' del vendedor (estimado)':Y.py} × (1+${(P.gTarget*100).toFixed(0)}%).${vf?' La curva '+Y.py+' del vendedor es estimada (forma diaria global escalada a su tamaño).':''}`:`⚠ El archivo ${Y.cy} es mensual. Sube el diario de Odoo para ver ${Y.cy} día a día.`;
       if(DATA.esDiario){
         const estTxt=av>=1?'vas ARRIBA de tu objetivo':av>=0.9?'vas CERCA de tu objetivo':'vas ABAJO de tu objetivo';
         const hcol=av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444';
         const who=vf?vf:'Todos los vendedores';
         const gapTxt=gapMes>0?('A este ritmo cerrarías <b>'+fmt(Math.round(gapMes))+'</b> sacos por DEBAJO del objetivo del mes.'):('A este ritmo cerrarías <b>'+fmt(Math.round(-gapMes))+'</b> sacos por ENCIMA del objetivo del mes.');
-        const headline=`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:5px solid ${hcol};border-radius:8px;padding:11px 14px;margin-bottom:10px"><div style="font-size:.95rem;font-weight:800;color:${hcol}">${who} — ${MES_NOM[m]} al día ${cut}: ${estTxt} — avance ${(av*100).toFixed(2)}%</div><div style="font-size:.76rem;color:#cbd5e1;margin-top:3px">Llevas <b>${fmt(realTot)}</b> sacos vs objetivo <b>${fmt(Math.round(obj))}</b> al día ${cut}. ${gapTxt} Proyección al cierre del mes: <b>${fmt(Math.round(projMes))}</b> vs objetivo <b>${fmt(Math.round(objMes))}</b>.</div></div>`;
-        const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' al día '+cut,fmt(realTot),MES_NOM[m]+(vf?' · '+vf:''),'#22c55e')}${card(Y.py+' días 1–'+cut,fmt(Math.round(baseFecha)),vf?'estimado':'para comparar','#94a3b8')}${card('Objetivo al día '+cut,fmt(Math.round(obj)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
-        const auxCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Ritmo diario',fmt(Math.round(cut?realTot/cut:0)),'sacos/día (prom. al día '+cut+')','#38bdf8')}${card('Proyección cierre '+MES_NOM[m],fmt(Math.round(projMes)),objMes?((projMes/objMes*100).toFixed(2)+'% del objetivo del mes'):'','#a78bfa')}${card('Objetivo del mes',fmt(Math.round(objMes)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card(gapMes>0?'Falta para cerrar en meta':'Excedente proyectado',fmt(Math.round(Math.abs(gapMes)))+' sacos',gapMes>0?'a este ritmo':'por encima',gapMes>0?'#eab308':'#22c55e')}</div>`;
+        const headline=`<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:5px solid ${hcol};border-radius:8px;padding:11px 14px;margin-bottom:10px"><div style="font-size:.95rem;font-weight:800;color:${hcol}">${who} — ${MES_NOM[m]} ${rangoTxt}: ${estTxt} — avance ${(av*100).toFixed(2)}%</div><div style="font-size:.76rem;color:#cbd5e1;margin-top:3px">Llevas <b>${fmt(realTot)}</b> sacos vs objetivo <b>${fmt(Math.round(obj))}</b> en ${rangoTxt}. ${gapTxt} Proyección al cierre del mes: <b>${fmt(Math.round(projMes))}</b> vs objetivo <b>${fmt(Math.round(objMes))}</b>.</div></div>`;
+        const baseCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Venta '+Y.cy+' '+rangoTxt,fmt(realTot),MES_NOM[m]+(vf?' · '+vf:''),'#22c55e')}${card(Y.py+' mismos días',fmt(Math.round(baseFecha)),vf?'estimado':'para comparar','#94a3b8')}${card('Objetivo del periodo',fmt(Math.round(obj)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card('Avance vs objetivo',(av*100).toFixed(2)+'%',av>=1?'✓ vas arriba':'vas abajo',av>=1?'#22c55e':av>=0.9?'#eab308':'#ef4444')}${card('Crecimiento real',(crec>=0?'+':'')+(crec*100).toFixed(2)+'%','vs '+Y.py,crec>=0?'#22c55e':'#ef4444')}</div>`;
+        const auxCards=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${card('Ritmo diario',fmt(Math.round(nDias?realTot/nDias:0)),'sacos/día (prom. en '+rangoTxt+')','#38bdf8')}${card('Proyección cierre '+MES_NOM[m],fmt(Math.round(projMes)),objMes?((projMes/objMes*100).toFixed(2)+'% del objetivo del mes'):'','#a78bfa')}${card('Objetivo del mes',fmt(Math.round(objMes)),'+'+(P.gTarget*100).toFixed(0)+'% vs '+Y.py,'#0EA5E9')}${card(gapMes>0?'Falta para cerrar en meta':'Excedente proyectado',fmt(Math.round(Math.abs(gapMes)))+' sacos',gapMes>0?'a este ritmo':'por encima',gapMes>0?'#eab308':'#22c55e')}</div>`;
         cards=headline+baseCards+auxCards;
       }
     } else {
@@ -5332,9 +5340,11 @@ function publishCloud(){
     const idx={updatedStr:pj.updatedStr,vendors:keys.filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
     return fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
   }).then(()=>{
-    // Proyección de producción (pestaña Proyección → programador.html), misma base de Firebase.
+    // Proyección de producción (pestaña Proyección → programador.html). Va DENTRO de /skan
+    // (no en una ruta nueva) porque las reglas de Firebase solo permiten leer/escribir ahí;
+    // una ruta nueva a nivel raíz queda bloqueada en silencio (fetch no marca error igual).
     const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
-    if(proy)return fetch(db+'/proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
+    if(proy)return fetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
   }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa tu licencia/internet)'):'')+'.\nCada vendedor verá su info actualizada solo.'); });
 }
 function autoPublishCloud(){
@@ -5345,7 +5355,7 @@ function autoPublishCloud(){
   const idx={updatedStr:pj.updatedStr,vendors:Object.keys(pj.byVendor).filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
   fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
   const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
-  if(proy)fetch(db+'/proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
+  if(proy)fetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
 }
 function cpv(btn){const el=btn.parentElement.querySelector('input,textarea');if(!el)return;el.select();try{navigator.clipboard&&navigator.clipboard.writeText(el.value);}catch(e){}const o=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=o,1200);}
 
