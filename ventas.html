@@ -5101,7 +5101,11 @@ function buildVendorPayloads(){
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
     byV[v].forEach(function(c){promoSac+=(c.promoSacos||0);var pm=c.prodMes||{};var rnp=0;for(var pp in pm){var mmp=(typeof EQ_find==='function')?EQ_find(pp):null;if(mmp){var qq=0;for(var kk in pm[pp])qq+=pm[pp][kk]||0;rnp+=qq*mmp[2];}}newDisc+=rnp*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;});
-    var ventas={meses:DATA.meses,gTarget:PVEN.gTarget,cur:vm.cur,prior:vm.prior,priorVivo:vm.priorVivo||null,priorPerd:vm.priorPerd||null,dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario};
+    var ventas={meses:DATA.meses,gTarget:PVEN.gTarget,cur:vm.cur,prior:vm.prior,priorVivo:vm.priorVivo||null,priorPerd:vm.priorPerd||null,
+      // curT/priorT: toneladas mensuales TOTALES (con kilo de regalo incluido, igual que "Venta a la fecha" en Gráfica) —
+      // para que vendedor.html y maestra.html puedan ofrecer el mismo rango Desde/Hasta en toneladas, no solo en sacos.
+      curT:vm.curT||null,priorT:vm.priorT||null,
+      dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario};
     // ── Alertas por vendedor ──
     var cliAll=DATA.clients.filter(function(c){return (c.vendedor||'(sin asignar)')===v;});
     var sinCompra=cliAll.filter(function(c){return c.seg==='EnRiesgo';}).sort(function(a,b){return b.dias-a.dias;}).slice(0,40).map(function(c){return {n:c.nombre,dias:(c.dias>=999?null:c.dias),prom:Math.round(c.promMes||0),est:c.estado||'',ult:(c.lastDate?c.lastDate.toLocaleDateString('es-MX',{day:'2-digit',month:'short'}):'')};});
@@ -5327,6 +5331,10 @@ function publishCloud(){
   })).then(()=>{
     const idx={updatedStr:pj.updatedStr,vendors:keys.filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
     return fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
+  }).then(()=>{
+    // Proyección de producción (pestaña Proyección → programador.html), misma base de Firebase.
+    const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
+    if(proy)return fetch(db+'/proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
   }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa tu licencia/internet)'):'')+'.\nCada vendedor verá su info actualizada solo.'); });
 }
 function autoPublishCloud(){
@@ -5336,6 +5344,8 @@ function autoPublishCloud(){
   Object.keys(pj.byVendor).forEach(v=>{const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).catch(()=>{});});
   const idx={updatedStr:pj.updatedStr,vendors:Object.keys(pj.byVendor).filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
   fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
+  const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
+  if(proy)fetch(db+'/proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
 }
 function cpv(btn){const el=btn.parentElement.querySelector('input,textarea');if(!el)return;el.select();try{navigator.clipboard&&navigator.clipboard.writeText(el.value);}catch(e){}const o=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=o,1200);}
 
@@ -5502,6 +5512,44 @@ function proySalesAgg(nMeses){
   return {byFam:out,nMeses:nM,mesesUsados:usados};
 }
 
+// ── Publica la proyección de producción para programador.html (pestaña Proyección) ──
+// Reutiliza exactamente el mismo cálculo que pinta esta pestaña (proySalesAgg/proyProductCatalog/
+// getStockData/getProyCfg), pero agrupado por FAMILIA (una fila por famKey, no por código de producto)
+// porque es lo que la programadora de producción necesita: pace, stock, días de cobertura y a fabricar.
+function buildProyeccionPayload(){
+  if(typeof DATA==='undefined'||!DATA)return null;
+  var cfg=getProyCfg();
+  var nMesesSel=cfg.nMeses||'todos';
+  var modo=cfg.modo||'mes';
+  var dias=cfg.dias||30;
+  var overrides=cfg.overrides||{};
+  var stockOverride=cfg.stockOverride||{};
+  var stockData=getStockData();
+  var agg=proySalesAgg(nMesesSel==='todos'?null:parseInt(nMesesSel,10));
+  var catalog=proyProductCatalog();
+  var seenFam={},families=[];
+  catalog.forEach(function(p){
+    if(seenFam[p.famKey])return; seenFam[p.famKey]=true;
+    var a=agg.byFam[p.famKey]||{total:0,avg:0};
+    var avgMonthly=a.avg||0;
+    var avgDaily=avgMonthly/30.4;
+    var proyeccion=(overrides[p.code]!=null)?overrides[p.code]:(modo==='dias'?avgDaily*dias:avgMonthly);
+    var stockInfo=(stockData&&stockData.byFam&&stockData.byFam[p.famKey])?stockData.byFam[p.famKey]:null;
+    var stock=(stockOverride[p.code]!=null)?stockOverride[p.code]:(stockInfo?stockInfo.disponible:null);
+    var cobertura=(stock!=null&&avgDaily>0)?stock/avgDaily:null;
+    var aFabricar=(stock!=null)?Math.max(0,proyeccion-stock):proyeccion;
+    families.push({familia:stripProdCode(p.name),paceDiario:Math.round(avgDaily*100)/100,paceMensual:Math.round(avgMonthly),
+      stock:(stock!=null?Math.round(stock):null),diasCobertura:(cobertura!=null?Math.round(cobertura*10)/10:null),aFabricar:Math.round(aFabricar)});
+  });
+  families.sort(function(x,y){
+    if(x.diasCobertura==null&&y.diasCobertura==null)return y.paceMensual-x.paceMensual;
+    if(x.diasCobertura==null)return 1; if(y.diasCobertura==null)return -1;
+    return x.diasCobertura-y.diasCobertura;
+  });
+  var now=new Date(); var pad=function(n){return ('0'+n).slice(-2);};
+  var updatedStr=pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad(now.getHours())+':'+pad(now.getMinutes());
+  return {ts:now.getTime(),updatedStr:updatedStr,modo:modo,dias:dias,nMesesUsados:agg.nMeses||0,hasStock:!!stockData,families:families};
+}
 function renderProyeccion(){
   var box=document.getElementById('proy-content'); if(!box)return;
   if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la proyección de venta y planeación de producción.</div>';return;}
