@@ -5471,6 +5471,7 @@ function pullProyEditsCloud(cb){
 }
 function setProyEditField(famKey,field,val){
   var pk=proyEditKey(famKey);
+  if(!pk){renderProyeccion();return;}   // fila sin familia (dato viejo/incompleto): no hay dónde guardar
   var loc=getProyEdits(); if(!loc[pk])loc[pk]={};
   var v=parseFloat(val); var now=Date.now(); var patch={};
   if(isFinite(v)&&v>=0){ loc[pk][field]=v; loc[pk][field+'Ts']=now; patch[field]=v; patch[field+'Ts']=now; }
