@@ -5558,13 +5558,30 @@ function proySalesAgg(nMeses){
   return {byFam:out,nMeses:nM,mesesUsados:usados};
 }
 // Sugerencia de stock mínimo por familia: ritmo diario real (sin promo) AJUSTADO al
-// crecimiento objetivo vigente (P.gTarget, el mismo +% de Objetivos/Gráfica), por un
-// colchón de días de seguridad. Es solo el PUNTO DE PARTIDA — siempre editable a mano,
-// por familia, y ese valor editado es el que manda (aquí y en el programador de producción).
+// % de crecimiento a usar (ver proyGrowthRate), por un colchón de días de seguridad.
+// Es solo el PUNTO DE PARTIDA — siempre editable a mano, por familia, y ese valor
+// editado es el que manda (aquí y en el programador de producción).
 var PROY_MIN_DIAS=20; // colchón de seguridad: ritmo diario ajustado × 20 días
 function proySuggestedMin(avgDaily,gTarget){
   var avgDailyAdj=(avgDaily||0)*(1+(gTarget||0));
   return avgDailyAdj*PROY_MIN_DIAS;
+}
+// % de crecimiento a usar para la sugerencia: el MAYOR entre el objetivo de la empresa
+// (P.gTarget, el mismo de Objetivos/Gráfica) y el crecimiento REAL ya logrado este año
+// en los meses completos/cerrados cargados (mismo cálculo que "Crecimiento ventas vs
+// [año pasado]" en Objetivos: DATA.yoy.curTot/DATA.yoy.priorTot-1, solo producto
+// terminado, sin promoción). Así nunca sugiere de menos: si ya vas por encima del
+// objetivo, usa lo real; si vas por debajo, usa el objetivo como piso.
+function proyGrowthRate(){
+  var P=(typeof getVParams==='function')?getVParams():{gTarget:0.07};
+  var real=0;
+  try{
+    if(typeof DATA!=='undefined'&&DATA){
+      if(!DATA.yoy&&typeof computeYoY==='function')computeYoY();
+      if(DATA.yoy&&DATA.yoy.priorTot)real=(DATA.yoy.curTot/DATA.yoy.priorTot)-1;
+    }
+  }catch(e){}
+  return Math.max(P.gTarget||0,real||0);
 }
 
 // ── Publica la proyección de producción para programador.html (pestaña Proyección) ──
@@ -5575,7 +5592,7 @@ function buildProyeccionPayload(){
   if(typeof DATA==='undefined'||!DATA)return null;
   var cfg=getProyCfg();
   var nMesesSel=cfg.nMeses||'todos';
-  var P=(typeof getVParams==='function')?getVParams():{gTarget:0.07};
+  var gUsed=proyGrowthRate();
   var stockData=getStockData();
   var edits=getProyEdits();
   var agg=proySalesAgg(nMesesSel==='todos'?null:parseInt(nMesesSel,10));
@@ -5586,12 +5603,12 @@ function buildProyeccionPayload(){
     var a=agg.byFam[p.famKey]||{total:0,avg:0};
     var avgMonthly=a.avg||0;
     var avgDaily=avgMonthly/30.4;
-    var suggestedMin=proySuggestedMin(avgDaily,P.gTarget);
+    var suggestedMin=proySuggestedMin(avgDaily,gUsed);
     var e=edits[proyEditKey(p.famKey)]||{};
     var minStock=(e.minStock!=null)?e.minStock:suggestedMin;
     var stockInfo=(stockData&&stockData.byFam&&stockData.byFam[p.famKey])?stockData.byFam[p.famKey]:null;
     var stockActual=(e.stockActual!=null)?e.stockActual:(stockInfo?stockInfo.disponible:null);
-    var avgDailyAdj=avgDaily*(1+(P.gTarget||0));
+    var avgDailyAdj=avgDaily*(1+(gUsed||0));
     var cobertura=(stockActual!=null&&avgDailyAdj>0)?stockActual/avgDailyAdj:null;
     var aFabricar=(stockActual!=null)?Math.max(0,minStock-stockActual):minStock;
     families.push({famKey:p.famKey,familia:stripProdCode(p.name),paceDiario:Math.round(avgDaily*100)/100,paceMensual:Math.round(avgMonthly),
@@ -5606,14 +5623,16 @@ function buildProyeccionPayload(){
   });
   var now=new Date(); var pad=function(n){return ('0'+n).slice(-2);};
   var updatedStr=pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad(now.getHours())+':'+pad(now.getMinutes());
-  return {ts:now.getTime(),updatedStr:updatedStr,gTarget:P.gTarget,minDias:PROY_MIN_DIAS,nMesesUsados:agg.nMeses||0,hasStock:!!stockData,families:families};
+  return {ts:now.getTime(),updatedStr:updatedStr,gTarget:gUsed,minDias:PROY_MIN_DIAS,nMesesUsados:agg.nMeses||0,hasStock:!!stockData,families:families};
 }
 function renderProyeccion(){
   var box=document.getElementById('proy-content'); if(!box)return;
   if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la proyección de venta y planeación de producción.</div>';return;}
   var cfg=getProyCfg();
   var nMesesSel=cfg.nMeses||'todos';
+  var gUsed=proyGrowthRate();
   var P=(typeof getVParams==='function')?getVParams():{gTarget:0.07};
+  var realG=(typeof DATA!=='undefined'&&DATA&&DATA.yoy&&DATA.yoy.priorTot)?((DATA.yoy.curTot/DATA.yoy.priorTot)-1):0;
   var stockData=getStockData();
   var edits=getProyEdits();
 
@@ -5626,12 +5645,12 @@ function renderProyeccion(){
     var a=agg.byFam[p.famKey]||{total:0,avg:0};
     var avgMonthly=a.avg||0;
     var avgDaily=avgMonthly/30.4;
-    var suggestedMin=proySuggestedMin(avgDaily,P.gTarget);
+    var suggestedMin=proySuggestedMin(avgDaily,gUsed);
     var e=edits[proyEditKey(p.famKey)]||{};
     var minStock=(e.minStock!=null)?e.minStock:suggestedMin;
     var stockInfo=(stockData&&stockData.byFam&&stockData.byFam[p.famKey])?stockData.byFam[p.famKey]:null;
     var stockActual=(e.stockActual!=null)?e.stockActual:(stockInfo?stockInfo.disponible:null);
-    var avgDailyAdj=avgDaily*(1+(P.gTarget||0));
+    var avgDailyAdj=avgDaily*(1+(gUsed||0));
     var cobertura=(stockActual!=null&&avgDailyAdj>0)?stockActual/avgDailyAdj:null;
     var aFabricar=(stockActual!=null)?Math.max(0,minStock-stockActual):minStock;
     rows.push({famKey:p.famKey,name:stripProdCode(p.name),avgMonthly:avgMonthly,minStock:minStock,isMinOverride:(e.minStock!=null),
@@ -5653,7 +5672,7 @@ function renderProyeccion(){
   function card(lbl,val,sub,col){return '<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+(col||'#3b82f6')+';border-radius:10px;padding:12px 14px;min-width:170px;flex:1"><div style="font-size:1.5rem;font-weight:800;color:'+(col||'#fff')+'">'+val+'</div><div style="font-size:.72rem;color:#94a3b8;margin-top:2px">'+lbl+'</div>'+(sub?'<div style="font-size:.7rem;color:#cbd5e1;margin-top:2px">'+sub+'</div>':'')+'</div>';}
 
   var h='<div style="font-size:1.05rem;font-weight:800;color:var(--gold);margin-bottom:4px">🏭 Proyección de venta y planeación de producción</div>';
-  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:14px">Solo cuenta tu venta REAL (sacos regulares — <b>sin promoción ni bonificación</b>, eso es regalo, no venta) de los meses completos que ya tienes cargados. <b>Stock mínimo</b> sale sugerido con ese ritmo real, ajustado al crecimiento objetivo actual (+'+((P.gTarget||0)*100).toFixed(0)+'%) más un colchón de '+PROY_MIN_DIAS+' días — pero lo puedes cambiar a mano por producto. <b>Inventario real</b> se llena solo al cargar tu reporte de existencia de Odoo, o lo puedes capturar a mano. Los dos campos se guardan en la nube y se ven/editan igual aquí y en el programador de producción, para que lo ajuste quien lo tenga a mano.</div>';
+  h+='<div style="font-size:.78rem;color:#94a3b8;margin-bottom:14px">Solo cuenta tu venta REAL (sacos regulares — <b>sin promoción ni bonificación</b>, eso es regalo, no venta) de los meses completos que ya tienes cargados. <b>Stock mínimo</b> sale sugerido con ese ritmo real, ajustado al <b>mayor</b> entre tu objetivo de crecimiento (Objetivos: +'+((P.gTarget||0)*100).toFixed(0)+'%) y el crecimiento REAL que ya llevas este año en meses cerrados (+'+(realG*100).toFixed(1)+'%) — hoy se está usando <b>+'+((gUsed||0)*100).toFixed(1)+'%</b> — más un colchón de '+PROY_MIN_DIAS+' días. Es solo el punto de partida: lo puedes cambiar a mano por producto. <b>Inventario real</b> se llena solo al cargar tu reporte de existencia de Odoo, o lo puedes capturar a mano. Los dos campos se guardan en la nube y se ven/editan igual aquí y en el programador de producción, para que lo ajuste quien lo tenga a mano.</div>';
 
   h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;background:#0b1628;border:1px solid #1e3a6b;border-radius:10px;padding:12px 14px">';
   h+='<div><label style="font-size:.7rem;color:#94a3b8;display:block;margin-bottom:3px">Promediar venta real con</label><select onchange="setProyCfgField(\'nMeses\',this.value)" style="background:#0F1E3C;border:1px solid #3b82f6;border-radius:8px;color:#fff;padding:8px">'
@@ -5669,7 +5688,7 @@ function renderProyeccion(){
 
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
    +card('Sacos a fabricar',fmt(totalFabricar),'para llegar al stock mínimo de todos',(totalFabricar>0?'#f59e0b':'#22c55e'))
-   +card('Stock mínimo total (sugerido/editado)',fmt(totalMin)+' sacos','venta real + '+((P.gTarget||0)*100).toFixed(0)+'% crecimiento + colchón','#3b82f6')
+   +card('Stock mínimo total (sugerido/editado)',fmt(totalMin)+' sacos','venta real +'+((gUsed||0)*100).toFixed(1)+'% crecimiento + colchón','#3b82f6')
    +card('Promedio calculado con',nMesesUsados+' mes(es)','meses completos, sin promo/bonificación','#7ee2a8')
    +'</div>';
 
