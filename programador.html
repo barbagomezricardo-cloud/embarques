@@ -181,6 +181,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="dash" onclick="setView('dash')">📊 Tablero</button>
     <button data-v="arrastre" onclick="setView('arrastre')">⚠️ Arrastres y pendientes <span id="arrCount" class="pill p-warn" style="margin-left:4px"></span></button>
     <button data-v="flota" onclick="setView('flota')">🚚 Flota y mantenimiento <span id="flotaCount" class="pill p-late" style="margin-left:4px"></span></button>
+    <button data-v="proyeccion" onclick="setView('proyeccion')">🏭 Proyección</button>
     <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
   </div>
 
@@ -250,6 +251,14 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <div class="legend" style="padding:0 16px"><span class="muted">Clic en una fila para editar. El estatus de servicio usa el último kilometraje registrado de cada unidad.</span></div>
       <div class="tablewrap" style="border:none;max-height:52vh"><table style="min-width:980px"><thead><tr id="theadFl"></tr></thead><tbody id="tbodyFl"></tbody></table></div>
     </div>
+  </div>
+
+  <!-- PROYECCIÓN VIEW (pace de venta, stock y a fabricar por familia — publicado desde ventas.html) -->
+  <div class="view" id="v-proyeccion">
+    <div class="legend"><span class="muted">Cuánto se está vendiendo de cada familia de producto (pace diario/mensual), cuánto stock hay, para cuántos días alcanza y cuánto falta fabricar. Se publica desde el programa de ventas — no se edita aquí.</span></div>
+    <div class="kpis" id="proyKpis"></div>
+    <div class="tablewrap"><table><thead><tr id="theadProy"></tr></thead><tbody id="tbodyProy"></tbody></table></div>
+    <div id="proyFoot" class="legend" style="margin-top:10px"></div>
   </div>
 
 </main>
@@ -571,8 +580,10 @@ let isMaster = false;
 let AUDIT = [];
 let sortK='fechaProg', sortDir=1;
 let curView='tabla';
-const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', AUDIT_KEY='progEmbarques_audit_v1', FLOTA_KEY='progEmbarques_flota_v1';
-let fb=null, fbData=null, fbCfg=null, fbAudit=null, fbFlota=null;
+const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', AUDIT_KEY='progEmbarques_audit_v1', FLOTA_KEY='progEmbarques_flota_v1', PROY_KEY='progEmbarques_proyeccion_v1';
+let fb=null, fbData=null, fbCfg=null, fbAudit=null, fbFlota=null, fbProy=null;
+let PROY=null;   // último payload de proyección publicado desde ventas.html ({ts,updatedStr,families:[...]})
+function loadProyLocal(){ try{ const p=localStorage.getItem(PROY_KEY); if(p!=null)PROY=JSON.parse(p); }catch(e){} }
 const AUDIT_FIELDS = ['colocacion','inicioCarga','finCarga','kilos','sacos','motivo','despachado','tipo','peso','horaSalida','horaSalidaProg','horaProg','libSAP'];
 const AUDIT_LABELS = {colocacion:'Colocación',inicioCarga:'Inicio carga',finCarga:'Fin carga',kilos:'Kg cargados',sacos:'Sacos',motivo:'Motivo',despachado:'Despachado',tipo:'Tipo unidad',peso:'Peso prog',horaSalida:'Hora salida',horaSalidaProg:'Salida programada',horaProg:'Hora de cita',libSAP:'Lib. SAP'};
 
@@ -760,6 +771,36 @@ function renderKPIs(rowsAll){
     {lbl:'Productividad',val:avgKgm.toLocaleString('es-MX'),foot:'kg por minuto (prom.)',cls:'ok'},
   ];
   document.getElementById('kpis').innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot||''}</div>${k.bar!=null?`<div class="bar"><i style="width:${k.bar}%"></i></div>`:''}</div>`).join('');
+}
+
+/* ================= PROYECCIÓN (pace de venta / stock / a fabricar, publicado desde ventas.html) ================= */
+function escProy(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function renderProyeccion(){
+  const kpisEl=document.getElementById('proyKpis'), theadEl=document.getElementById('theadProy'), tbodyEl=document.getElementById('tbodyProy'), footEl=document.getElementById('proyFoot');
+  if(!kpisEl||!theadEl||!tbodyEl)return;
+  if(!PROY || !PROY.families || !PROY.families.length){
+    kpisEl.innerHTML=''; theadEl.innerHTML=''; tbodyEl.innerHTML='';
+    footEl.innerHTML='<span class="muted">Todavía no se ha publicado ninguna proyección desde el programa de ventas. En cuanto Ricardo publique desde la pestaña Proyección de ventas.html, aparece aquí sola.</span>';
+    return;
+  }
+  const F=PROY.families;
+  const totalFabricar=F.reduce((s,f)=>s+(f.aFabricar||0),0);
+  const totalPace=F.reduce((s,f)=>s+(f.paceMensual||0),0);
+  const bajo=F.filter(f=>f.diasCobertura!=null&&f.diasCobertura<7).length;
+  const K=[
+    {lbl:'Familias con proyección',val:F.length,foot:(PROY.hasStock?'con stock cargado':'sin reporte de existencia'),cls:'blue'},
+    {lbl:'Sacos a fabricar',val:totalFabricar.toLocaleString('es-MX'),foot:(PROY.modo==='dias'?('próximos '+(PROY.dias||30)+' días'):'próximo mes'),cls:(totalFabricar>0?'warn':'ok')},
+    {lbl:'Venta proyectada',val:totalPace.toLocaleString('es-MX')+' sac',foot:(PROY.nMesesUsados||0)+' mes(es) de historia',cls:''},
+    {lbl:'Familias bajo 7 días de cobertura',val:bajo,foot:'revisar primero',cls:(bajo>0?'late':'ok')},
+  ];
+  kpisEl.innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot||''}</div></div>`).join('');
+  theadEl.innerHTML='<th>Familia</th><th>Pace diario</th><th>Pace mensual</th><th>Stock</th><th>Días cobertura</th><th>A fabricar</th>';
+  tbodyEl.innerHTML=F.map(f=>{
+    const cob=f.diasCobertura;
+    const cobStyle=(cob==null)?'':('style="color:'+(cob<7?'var(--late)':(cob<14?'var(--warn)':'var(--ok)'))+'"');
+    return `<tr><td>${escProy(f.familia)}</td><td>${(f.paceDiario||0).toLocaleString('es-MX')}</td><td>${(f.paceMensual||0).toLocaleString('es-MX')}</td><td>${f.stock!=null?f.stock.toLocaleString('es-MX'):'—'}</td><td ${cobStyle}>${cob!=null?cob.toLocaleString('es-MX'):'—'}</td><td>${(f.aFabricar||0).toLocaleString('es-MX')}</td></tr>`;
+  }).join('');
+  footEl.innerHTML='<span class="muted">Última actualización: '+escProy(PROY.updatedStr||'—')+' · publicado desde el programa de ventas (solo lectura aquí).</span>';
 }
 
 /* ================= CHARTS (SVG propio) ================= */
@@ -1215,6 +1256,7 @@ function loadLocal(){
   rebuildMotivoMap();
   try{ const a=localStorage.getItem(AUDIT_KEY); if(a) AUDIT=JSON.parse(a); }catch(e){}
   loadFlotaLocal();
+  loadProyLocal();
   try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=normalize(JSON.parse(d)); return; } }catch(e){}
   DATA=normalize(JSON.parse(JSON.stringify(SEED)));
   try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}
@@ -1235,7 +1277,7 @@ function initFirebase(){
     try{
       if(!fb){ fb = firebase.initializeApp(CFG.firebase, 'prog'+Date.now()); }
       const db = firebase.database(fb);
-      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota');
+      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('proyeccion');
       setConn('online','Conectando…');
       // sembrar datos de ejemplo SOLO la primera vez (marca "seeded" en la nube).
       // Tras vaciar todo, la marca queda puesta y ya no se vuelve a sembrar.
@@ -1257,6 +1299,10 @@ function initFirebase(){
       fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster) renderAudit(); } });
       fbFlota.on('value', snap=>{ const v=snap.val(); if(v){ FLOTA=normalize(Object.values(v)); try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} } renderFlota(); },
         err=>{ console.error('flota:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "flota" en las reglas de Firebase'); });
+      // Proyección de producción: la publica ventas.html (solo lectura aquí). Se guarda en caché local
+      // para que la pestaña muestre el último dato aunque se abra sin internet.
+      fbProy.on('value', snap=>{ const v=snap.val(); if(v){ PROY=v; try{ localStorage.setItem(PROY_KEY,JSON.stringify(PROY)); }catch(e){} if(curView==='proyeccion') renderProyeccion(); } },
+        err=>{ console.error('proyeccion:',err&&err.message); });
     }catch(e){ console.error(e); setConn('local','Local (error nube)'); toast('No se pudo conectar a Firebase'); }
   });
 }
@@ -1285,7 +1331,7 @@ function fill(id,arr){ const el=document.getElementById(id); if(!el)return; cons
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
 
 /* ================= VISTAS ================= */
-function setView(v){ if(v==='audit'&&!isMaster)return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); }
+function setView(v){ if(v==='audit'&&!isMaster)return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); }
 
 /* ================================================================
    ================= FLOTA / MANTENIMIENTO ========================
