@@ -780,7 +780,7 @@ function renderProyeccion(){
   if(!kpisEl||!theadEl||!tbodyEl)return;
   if(!PROY || !PROY.families || !PROY.families.length){
     kpisEl.innerHTML=''; theadEl.innerHTML=''; tbodyEl.innerHTML='';
-    footEl.innerHTML='<span class="muted">Todavía no se ha publicado ninguna proyección desde el programa de ventas. En cuanto Ricardo publique desde la pestaña Proyección de ventas.html, aparece aquí sola.</span>';
+    footEl.innerHTML='<span class="muted">Todavía no se ha publicado ninguna proyección desde el programa de ventas. En cuanto Ricardo le dé a "☁️ Publicar a la nube" en ventas.html (con el reporte de Odoo cargado), aparece aquí sola — no hay nada que hacer de este lado.</span>';
     return;
   }
   const F=PROY.families;
@@ -1277,7 +1277,7 @@ function initFirebase(){
     try{
       if(!fb){ fb = firebase.initializeApp(CFG.firebase, 'prog'+Date.now()); }
       const db = firebase.database(fb);
-      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('proyeccion');
+      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('skan/_proyeccion');
       setConn('online','Conectando…');
       // sembrar datos de ejemplo SOLO la primera vez (marca "seeded" en la nube).
       // Tras vaciar todo, la marca queda puesta y ya no se vuelve a sembrar.
@@ -1302,7 +1302,7 @@ function initFirebase(){
       // Proyección de producción: la publica ventas.html (solo lectura aquí). Se guarda en caché local
       // para que la pestaña muestre el último dato aunque se abra sin internet.
       fbProy.on('value', snap=>{ const v=snap.val(); if(v){ PROY=v; try{ localStorage.setItem(PROY_KEY,JSON.stringify(PROY)); }catch(e){} if(curView==='proyeccion') renderProyeccion(); } },
-        err=>{ console.error('proyeccion:',err&&err.message); });
+        err=>{ console.error('proyeccion:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "skan" en las reglas de Firebase'); });
     }catch(e){ console.error(e); setConn('local','Local (error nube)'); toast('No se pudo conectar a Firebase'); }
   });
 }
