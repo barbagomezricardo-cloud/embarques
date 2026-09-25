@@ -241,7 +241,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
     <div class="kpi"><div class="kpi-val" id="k-peak">—</div><div class="kpi-lbl">Mes pico</div><div class="kpi-sub" id="k-peak-sub"></div></div>
   </div>
   <div class="tabs">
-<div class="tabgrp"><div class="glbl">Dirección</div><div class="gtabs"><div class="tab" data-tab="tablero" onclick="showTab('tablero')">📊 Tablero</div></div></div><div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp"><div class="glbl">Producción</div><div class="gtabs"><div class="tab" data-tab="proyeccion" onclick="showTab('proyeccion')">🏭 Proyección</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
+<div class="tabgrp"><div class="glbl">Dirección</div><div class="gtabs"><div class="tab" data-tab="tablero" onclick="showTab('tablero')">📊 Tablero</div></div></div><div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="productos" onclick="showTab('productos')">📦 Productos</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp"><div class="glbl">Producción</div><div class="gtabs"><div class="tab" data-tab="proyeccion" onclick="showTab('proyeccion')">🏭 Proyección</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
   </div>
 
   <!-- MAPA -->
@@ -451,6 +451,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
   <div class="pane" id="pane-objetivos"><div id="obj-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-nuevos"><div id="nue-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-neto-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px"><input type="checkbox" id="graf-neto" onchange="renderGrafica()" style="vertical-align:middle"> Sin kilo de regalo</label></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde día:</label><select id="graf-dayfrom" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span><button id="wa-export-btn" onclick="exportWhatsappReport()" style="margin-left:10px;background:var(--wa);color:#04150a;border:none;border-radius:6px;padding:7px 12px;font-size:.78rem;font-weight:800;cursor:pointer">📲 Generar reporte para WhatsApp</button><span id="wa-status" style="font-size:.72rem;color:#94a3b8;margin-left:8px"></span></div><div id="graf-content"></div></div></div>
+  <div class="pane" id="pane-productos"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:#94a3b8">Vendedor:</label><select id="prod-vend" onchange="renderProductos()"><option value="">Todos los vendedores</option></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Desde:</label><select id="prod-from" onchange="renderProductos()"></select><label style="font-size:.78rem;color:#94a3b8;margin-left:8px">Hasta:</label><select id="prod-to" onchange="renderProductos()"></select></div><div id="prod-content"></div></div></div>
   <div class="pane" id="pane-metas">
     <div style="display:flex;flex-direction:column;width:100%;flex:1;min-height:0">
       <div style="font-size:1.05rem;font-weight:800;color:var(--gold);padding:12px 16px 2px">📋 Metas por cliente 2026</div>
@@ -3505,6 +3506,7 @@ function showTab(name){
   if(name==='ruta'&&typeof renderRuta==='function')renderRuta();
   if(name==='equilibrio'&&typeof renderEquilibrio==='function')renderEquilibrio();
   if(name==='rentabilidad'&&typeof renderRentabilidad==='function')renderRentabilidad();
+  if(name==='productos'&&typeof renderProductos==='function')renderProductos();
   if(name==='proyeccion'&&typeof renderProyeccion==='function'){
     renderProyeccion();
     // Jala el stock mínimo/inventario real editado desde el programador de producción
@@ -3606,6 +3608,142 @@ const BASELINE_2025 = {"JESUS FLORES VAZQUEZ":{"m":[259,176,341,156,246,303,271,
 const BASELINE_2024 = {"ARTURO CARDENAS JIMENEZ":20563,"SEMILLAS Y CEREALES EL CAMPECINO":18803,"JULIAN MIRELES CERDA":6386,"VENTA PLANTA DE CROQUETAS":1000,"RODRIGO ROMO":55537,"OSCAR FLORES OLVERA":12917,"ISRAEL MONTES LOPEZ":10377,"YESENIA MARLENE MERCADO REGINO":15214,"EXPRESS 19 HERMANOS":3684,"SUPER TOTOTLAN 19 HNOS":1097,"SUPER ATOTONILCO EL ALTO 19 HNOS":1783,"TARSICIO LARA ARIAS":2064,"CRISTOBAL CRUZ VALDIVIA":240,"ABARROTES 19 HERMANOS":96290,"VICTOR HUGO VALDES ALDAPE":28625,"DAVID LEDON CONTRERAS":4375,"SUPER JAMAY 2 19 HNOS":209,"CEREALES Y FRUTAS BRAMBILA":152333,"SUPER 19HNOS CUITZEO":182,"FORRAJES HERMANOS VERDIN":11243,"J. REFUGIO INFANTE GAMINO":18501,"ALFREDO ROJO OROZCO":111857,"ALFREDO VELAZQUEZ GONZALEZ":92662,"COMERCIAL PRODUMEX":12742,"FORRAJERA 19 HERMANOS":69632,"FORRAJES JAIME":14172,"MARTIN GARCIA LEOCADIO":51860,"SUPER JAMAY 1 19 HNOS":87,"JOSE FELIPE JIMENEZ MARTINEZ":238,"LUCIO VELAZCO GONZALEZ":1041,"OSCAR RAFAEL HERNANDEZ PENA":9499,"CID 002":33511,"ADAN GARCIA MARTINEZ":1446,"OSCAR CANALES FLORES":34013,"BEATRIZ ADRIANA VILLALOBOS DURAN":5362,"JUAN GERARDO GONZALEZ MENDEZ":15991,"CARLOS RASCON AISPURO":49931,"DISTRIBUIDORA FEEDCO Y CIA":19542,"GERARDO NUNO RUIZ":13996,"AGROVETERINARIA MARROQUIN":12530,"JESUS FLORES VAZQUEZ":2955,"RIGOBERTO CORTES TOVAR":6886,"LUIS FERNANDO MORA TORRES":10013,"MARIA DE LOURDES PRECIADO ARCE":1973,"JUAN ADRIAN MEDINA VAZQUEZ":15116,"FORRAJES EL DOLLAR":56804,"OLGA OLIVIA SALCIDO SOTO":21414,"MANUEL LEDESMA MORA":4958,"GRUPO VIGALAMO":7988,"SUPER OFERTAS BRAVO":16178,"RICARDO MORENO PADILLA":95465,"ANACLETO SALAZAR RODRIGUEZ":49747,"SEMILLAS Y CEREALES DE LA REGION":8350,"JORGE ANTONIO PARRA GONZALEZ":16495,"JAVIER CUATEPOTZO MELENDEZ":41526,"ARSENIA GALEANO MENDOZA":61202,"JOSE SANTIAGO RIVERA FLORES":13777,"SERGIO SALAZAR LOPEZ":4654,"JAIME DANIEL PEREZ CAVAZOS":26635,"KARINA SANCHEZ CARDONA":36848,"LUIS FERNANDO MARIN ESTRADA":18043,"NOE CARRANZA BECERRA":9822,"ALIMENTOS JUDA":41400,"JOSE LUIS ACEVEDO GARCIA":23535,"GRUPO AGROINSUMOS CAMPO FUERTE DE MEXICO":6755,"ELIUD COVARRUBIAS ROBLEDO":15557,"LUIS ALBERTO VILLANUEVA OCHOA":1576,"JOSE ASCENCION MENDOZA GARCIA":5967,"JOSE MANUEL ALVAREZ AGUIRRE":6971,"GENOVEVO ACOSTA RIVERA":63113,"NOE MEDINA CARRILLO":18633,"GILBERTO CAMPOS MUNOZ":7696,"GERARDO GARCIA VIDAURRI":15974,"RUBEN ALONSO SAUCEDO CHAVARRIA":3348,"CARLOS PADILLA ALVAREZ":49369,"ROBERTO FLORES LOPEZ":17948,"BRENDA GOMEZ FRANCO":17896,"PABLO ROJAS VILLALON":5299,"HACIENDA CORTAZAR":3382,"URIEL CENTENO SANCHEZ":3444,"ABARROTERA SANTANA":11100,"MOISES LOPEZ DOMIGUEZ":33935,"JULIO CESAR GARCIA ZAVALA":6189,"MARIA CONSUELO ARGOTE DEANDA":5871,"ALEXIS MARTINEZ LEON":8712,"JONATHAN GONZALES AMEZOLA":7215,"MIGUEL ANGEL ROJAS QUIJADA":2925,"ENRIQUE HERNANDEZ VEGA":1276,"SUPER PONCITLAN 19 HNOS":1108,"SUPER OCOTLAN 1 19 HNOS":1258,"SUPER OCOTLAN 2 19 HNOS":342,"ERIC RAFEL CISNEROS GONZALES":5643,"ARMANDO DIAS GARCIA":12408,"GRUPO ESPINO":22713,"LEOBARDO MARTINEZ COELLO":6788,"SERGIO HERNANDEZ BAUTISTA":7390,"LUIS CORREA MANDUJANO":6702,"GONZALO HERNANDEZ NIETO":2624,"MA ELVIA RUIZ RUIZ":14560,"DANIEL MIGUEL LEAL MENDOZA":2587,"SUPER CUACO":174,"MA JOAQUINA CARRIZALES VEGA":8221,"GRACE ANAHI GUILLEN RUIZ":2182,"VICTOR ENRIQUE PADILLA HERNANDEZ":10757,"JAVIER CHOLULA SOLANO":7045,"VALENTINA RANGEL BANDA":4457,"OSCAR ARMANDO CABRERA ZAMORA":6757,"JESUS CARLOS PINTO MIRAMONTES":6130,"FRANCISCO JAVIER VALDIVIA AGUILAR":2484,"JESUS ALEJANDRO PARRA SALCEDO":5915,"VICTOR JAVIER TENTLE TOXQUI":13300,"VANESA YAQUELIN RODRIGUEZ LUNA":6101,"TERESITA DE JESUS ARIAS MORAN":2337,"CLAUDIA JUDITH GASTELUM BANUELOS":1038,"GRANOS Y SEMILLAS JUAN PABLO":5280,"MA INES MERCADO RAMIREZ":5219,"KARLA DEVORA":1323,"BIANEY CATALINA NAVARRO VAZQUEZ":4288,"RIGOBERTO CASILLAS GARCIA":5323,"SERGIO GOMEZ GONZALEZ":5106,"SOCIEDAD COOPERATIVA DE GANADEROS ORGANIZADOS DE COAHUILA":6602,"JUAN ANTONIO RODRIGUEZ SANCHEZ":3283,"NORMA IRENE SANCHEZ MARTINEZ":3296,"ASUNCION ARELLANO PLAZA":3353,"ADRIAN GONZALEZ CASILLAS":2243,"HECTOR HUERTA ALVAREZ":1426,"AGA WEBER":225,"MARIA GUADALUPE CORONA AVALOS":454,"YESENIA LIZETH DIAZ VILLEGAS":3695,"SERGIO GUSTAVO LUGO ZARAZUA":9404,"JESUS MORALES ACEVEZ":1396,"SALOMON DE JESUS GARCIA MOLINA":4341,"ARTURO GARCIA HERNANDEZ":17485,"EDGAR GUADALUPE LOPEZ DURAN":4403,"DESPACHO SAN FRANSISCO DE ASIS":65,"DESPACHO ATOTONILCO":20,"DESPACHO LA CENTRAL":700,"DESPACHO OJO DE AGUA DE LATILLAS":95,"MA. DEL CARMEN FLORES BARBOSA":279,"JESUS GONZALES ROBLES":386,"CENTRAL DE SEMILLAS Y CEREALES BARBOSA":4828,"CRISTIAN ALONSO MAURO ROBLES":7312,"ALEJANDRO VAZQUEZ GALARZA":10131,"PROBA HD PROCESADORA DE BARREDURAS HD":7625,"SILVERIO SANCHEZ GALLEGOS":1088,"LUCILA LOPEZ GAETA":2122,"JOSE LUIS DE LIRA PALACIOS":1432,"ARMANDO BRISENO SERRANO":6036,"MIGUEL ANGEL BIURQUEZ HERNANDEZ":1464,"WILFRIDO CAZARES GONZALES":1258,"JOSE DE JESUS GONZALEZ MENDEZ":722,"JOSE ALFREDO GUTIERREZ GARCIA":646,"NUTRIENTES BASICOS DE MONTERREY":1889,"TRUCK PARTS AND SERVICE CHAVEZ HERMOSILLO":1684,"ALFONSO GOMEZ CORONADO":50,"ELSA GUADALUPE REA MERIN":5148,"ERIK BARRAGAN":5186,"ROBLEDO SOLDADORES INDUSTRIALES (RSI)":16,"ALICIA ZAVALA BARRIGA":2003,"GUILLERMO CORONADO NAVARRO":2505,"EL CAMPESINO \" JOEL\"":7637,"ROBERTO TEJADA HERNANDEZ":1007,"CREMERIA DE OCCIDENTE":1840,"EL CAMPESINO HORACIO":13654,"FORRAJES EL TUNAL SA DE CV":750,"ALMA ROSA SILVIA ALVAREZ":1079,"LUIS ANTONIO GUERRA TORRES":1360,"JULISSA OVALLE ARELLANO":799,"IVAN ISRAEL GALLARDO ORTEGA":175,"ARMANDO RUBIO AVALOS":30,"MARIA DEL REFUGIO MERCADO NAVARRO":205,"AGRICOLA COMERCIAL AGCEMA":515,"PROVEEDORA DE ABARROTES Y GRANOS PUTZ":8508,"ROYS ABARROTERA":1885,"JUAN DIEGO MANZANO TORRES":3820,"FORRAJES ESCOBEDO":2231,"FRANCISCO JAVIER CABALLERO ONTIVEROS":798,"EL CAMPESINO CRISTIAN":2776,"JORGE ALVAREZ CANO":2567,"FRANCISCO JAVIER GUTIERREZ GARCIA":3090,"DESPACHO SAN JOSE DE GRACIA":45,"ISRAEL GARCIA SOTELO":780,"SUPER ABARROTES LUPITAS":7390,"OSCAR GIBRAN ESPINOZA VILLASENOR":1248,"SUPER CEREALES EL BETO":1838,"ZYSA ABARROTERA DE OCCIDENTGE":1238,"SUPER MAY MARKET":619,"NUEVA ABORROTERA SANTA PAULA-CALLE DELICIAS":2457,"ABARROTES SILVIA HERRERA DIAZ":619,"LUIS ENRIQUE CANALES TORRES":2144,"CEDIS GRUPO AZTECAS":3714,"GRUPO ABARROTERO LOPEZ VILLANUEVA":1238,"ORGANIZACION CIR":1858,"ABARROTES LA VIOLETA":2568,"NUESTRA SENORA DE LOS ALTOS":117,"CLAUDIA EDITH GALVEZ GALLARDO":1244,"ERNETH SANTOS ALVARADO":959,"COMERCIALIZADORA Y DISTRIBUIDORA MAF":612,"COMERCIAL TACAMBA":620,"DIEGO ABRAHAM HERRERA LOBATO":710,"FORRAJERA ELIZONDO":3287,"CARLOS ALVERTO LUJANO AGUILAR (CONSIGNACION)":45};
 const BASELINE_2025_DAYM = {"1":[0,8284,4868,5367,0,5628,8797,6616,16652,8637,8572,0,8991,6222,9162,7159,10893,1903,0,3385,7437,7466,8397,11289,8182,0,11301,15338,8854,10987,11605],"2":[8871,0,4219,5934,4258,9244,6940,5334,0,6938,4850,12860,7092,7982,10794,0,6926,7108,8359,7916,12384,4137,0,6412,8266,8634,11741,15798,0,0,0],"3":[5096,0,2601,10761,5184,8412,10417,7197,0,4452,10735,6781,7174,9036,6662,0,11873,4787,7874,6620,11256,8408,0,7709,8765,8784,15024,9364,7121,0,9952],"4":[3789,3041,9456,4667,2761,0,4254,10033,7415,10656,8197,2813,0,8947,6388,8164,7798,0,0,0,10143,7509,12450,5474,10138,9452,0,14151,7500,9385,0],"5":[11300,14505,0,0,6455,11650,8714,5630,9116,4592,0,7165,8264,11902,7787,7860,5421,0,11266,8229,11588,10799,7929,8559,0,6310,8935,10673,11876,0,12426],"6":[0,3785,11047,6160,5546,7702,6875,0,4731,10619,9342,3125,8883,5026,0,8024,9897,5345,9461,8468,2107,0,7112,13049,6483,12112,13816,17053,0,8847,0],"7":[6094,4401,8054,7265,5024,0,11387,10864,8097,6172,6329,2549,0,7416,8162,14351,5588,5752,5861,0,8526,13107,8788,12102,8624,6208,0,10474,11753,13078,12810],"8":[6667,5212,0,8467,6211,9041,10443,4393,6064,0,6534,13487,13517,3545,7815,7168,0,9313,7319,12992,9211,5496,4687,0,11397,5746,12049,7793,12842,8649,0],"9":[7457,9662,6871,6120,4489,4961,0,7697,8258,10054,6452,8394,7788,0,4628,5924,11734,10892,7249,10345,0,4560,8392,10944,13207,11092,8725,0,7255,15523,0],"10":[5364,5322,8932,4237,0,9556,5284,9421,6183,7375,7375,0,10842,7211,6305,9696,8528,8148,0,10816,12720,6438,7516,12017,12840,0,8971,13402,14871,10404,16808],"11":[9371,0,9916,9820,12631,6389,4426,7952,0,12871,8063,13528,4087,5816,5200,0,10673,7450,10294,10632,3482,7955,0,5716,6569,15195,9245,8370,8906,0,0],"12":[5002,18103,8826,9601,7416,0,0,11958,8167,10878,3561,3980,2645,0,13074,8926,14114,14908,5681,11919,0,9305,10950,8051,0,10069,8118,0,13728,18852,9694]};
 const BASELINE_TON={2024:50913.0,2025:56578.3};   // toneladas reales de Odoo, para la vista por año
+// Venta REAL por familia de producto (sin promo/bonificación), histórico 2024-2025, de
+// "ANALISIS VENTAS 2024-2025 POR CLIENTE" (hoja BD NUEVA 24-25). Vendedores del archivo mapeados
+// a los nombres actuales — confirmado con Ricardo 25-sep-2026: ROBERTO->ARMANDO (se quedó con su
+// cartera), TAZ->JOSE MANUEL AVILA, FORRAJERA y AUTOCONSUMO->ADMINISTRACION.
+// Estructura: BASELINE_PROD[año][vendedor]['FAMILIA|KG'] = [ene..dic] en sacos.
+const BASELINE_PROD = {"2024":{"VICTOR MANUEL":{"SILVERKAN|25":[8370,6311,5430,5114,4404,5717,5381,4986,5006,5817,5299,4412],"MIBOOB|20":[42955,36759,31456,37640,30297,30516,40818,29884,43590,33623,42803,23313],"KANKAN|25":[2435,960,2320,2155,1030,1800,1839,1754,1167,1290,1816,1412],"CACHORRO|20":[3423,4200,3373,5077,641,4293,4182,2866,2827,2348,3747,1903],"CAT|15":[1193,854,853,1045,575,1455,1061,926,1001,893,1420,572],"PETFOOD|20":[839,1817,2468,2188,2473,1653,2894,2858,2425,2807,4584,1367],"KANKAN|20":[50,40,0,100,0,150,0,0,102,0,0,150],"SILVERKAN|5":[0,91,400,100,0,60,300,200,0,0,300,0],"CACHORRO|5":[0,0,0,0,0,0,0,100,0,0,50,0],"CAT|5":[0,0,0,0,0,0,0,100,0,0,50,0],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,0,3]},"ARMANDO":{"SILVERKAN|25":[56590,48321,41046,50954,46522,45006,43470,43175,42375,50482,48814,42271],"CACHORRO|20":[11325,12905,8002,8376,2917,9591,9645,7731,8237,8833,9036,7199],"CAT|15":[1785,2689,2303,2567,1662,2050,3061,2720,2604,2961,2721,2737],"MIBOOB|20":[55228,61670,49865,55007,41521,47115,55179,46051,47781,52608,55293,53584],"KANKAN|25":[15394,11480,9456,15581,8485,11611,12630,11841,9137,14241,12675,9570],"KANKAN|20":[1146,515,830,910,365,450,516,417,427,632,632,342],"SILVERKAN|5":[770,70,402,300,100,330,685,230,440,692,610,210],"PETFOOD|20":[3285,3547,4028,4797,4881,3131,3736,4651,4131,4541,5918,7331],"CACHORRO|5":[0,0,100,0,100,0,100,100,10,10,0,170],"CAT|5":[0,0,30,0,50,0,29,80,0,40,0,30],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,0,5]},"ADMINISTRACION":{"SILVERKAN|25":[14708,19224,11082,14104,11900,12675,12549,12543,9763,4678,3545,2587],"SILVERKAN|5":[10,339,174,288,352,134,338,210,401,171,333,318],"CACHORRO|20":[1129,1493,1209,1025,248,748,1681,349,790,202,554,697],"CAT|15":[274,392,559,63,465,464,385,362,433,368,381,478],"MIBOOB|20":[2456,2668,1903,3273,2119,2316,2154,2473,2116,1863,2906,2128],"KANKAN|20":[35,44,50,33,38,29,39,37,17,17,21,5],"KANKAN|25":[1088,1126,540,1014,957,961,970,636,741,711,1164,484],"PETFOOD|20":[0,0,0,0,1,0,0,1,1,1,0,1],"CACHORRO|5":[0,0,0,0,30,10,55,107,93,75,75,62],"CAT|5":[0,0,0,0,0,0,0,15,0,20,0,22],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,2,7,2]},"JOSE MANUEL AVILA":{"SILVERKAN|25":[0,0,0,0,0,0,0,0,0,11043,8313,6238],"CACHORRO|20":[0,0,0,0,0,0,0,0,0,119,438,500]}},"2025":{"ADMINISTRACION":{"SILVERKAN|5":[231,291,266,160,285,593,505,470,607,468,679,729],"SILVERKAN|25":[4708,2895,3496,2788,3535,3544,2941,3885,3157,3413,4392,3679],"CAT|15":[261,377,472,484,464,298,611,461,674,561,683,554],"CAT|5":[64,30,43,35,100,146,86,141,88,121,128,128],"MIBOOB|20":[2605,2928,2665,2243,3696,2546,2936,2733,3196,3850,3591,3447],"PETFOOD|20":[2,0,0,0,0,0,0,9,0,1,0,1],"KANKAN|25":[1544,430,971,585,1119,684,909,924,523,1036,735,1051],"CACHORRO|20":[392,587,729,667,988,658,475,773,898,515,902,811],"KANKAN|20":[26,19,15,31,27,23,23,25,19,26,73,24],"CACHORRO|5":[0,0,62,80,157,142,156,118,186,157,158,216],"PREMIUM|25":[0,0,0,66,5,201,3,4,0,67,5,68]},"ARMANDO":{"SILVERKAN|25":[52467,43984,44319,46988,43759,44349,46675,42590,45999,63057,38188,42504],"CACHORRO|20":[9446,7623,8812,9555,11083,8882,10350,9310,8945,11321,9219,9930],"CAT|15":[2645,2380,3447,3218,3393,2921,3914,3824,3436,4765,3352,4467],"MIBOOB|20":[56408,54591,56692,44176,64071,50947,63167,53079,52557,56733,54961,67995],"KANKAN|25":[13387,9256,9272,10129,11937,10205,6612,9882,8947,10942,9265,10224],"PETFOOD|20":[6018,9035,0,8681,13867,13133,14924,14905,17892,16613,17752,24866],"SILVERKAN|5":[725,659,571,221,942,496,900,594,805,347,680,590],"KANKAN|20":[765,415,450,390,540,355,405,443,380,510,555,230],"CAT|5":[25,0,139,0,0,0,50,0,52,0,20,50],"PREMIUM|25":[200,61,280,377,80,315,268,208,565,259,263,365],"RAFIA|20":[0,0,9678,0,0,0,0,0,0,0,0,0],"CACHORRO|5":[0,0,286,100,80,100,50,33,150,0,150,100]},"VICTOR MANUEL":{"SILVERKAN|25":[7775,3705,5875,4403,4755,5388,5454,5254,5085,8732,2341,3821],"CACHORRO|20":[3710,2200,3430,3570,3535,4550,3872,3499,3295,4829,2051,3779],"MIBOOB|20":[42619,35198,40025,30820,38896,34895,39891,34298,36138,35724,36147,37930],"PETFOOD|20":[2375,6125,0,3727,4451,5672,7630,7435,5198,6911,5530,6199],"KANKAN|25":[1820,880,1340,1020,1355,1280,1588,1125,1170,780,1250,1359],"CAT|15":[1084,588,914,1240,2031,1079,1403,1124,857,1535,890,1107],"KANKAN|20":[100,100,150,0,100,50,0,50,0,50,0,200],"PREMIUM|25":[370,0,50,694,1530,1420,209,1421,730,1049,660,605],"RAFIA|20":[0,0,6094,0,0,0,0,0,0,0,0,0],"CACHORRO|5":[0,0,10,0,0,0,0,0,0,0,0,0],"CAT|5":[0,0,50,0,0,0,0,0,0,0,0,0]},"JOSE MANUEL AVILA":{"SILVERKAN|25":[10120,8490,11092,7120,9800,6317,9820,8222,9930,7800,9490,7656],"CACHORRO|20":[100,150,360,110,625,355,330,250,600,250,260,180],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,300,0],"KANKAN|25":[0,0,0,0,0,0,0,0,0,0,200,0]},"DAGOVIET":{"SILVERKAN|25":[0,0,0,40,160,140,120,720,360,0,560,80],"CACHORRO|20":[0,0,0,50,80,0,119,475,470,0,445,260],"CAT|15":[0,0,0,67,200,0,66,402,30,0,331,201],"MIBOOB|20":[0,0,0,682,1150,1977,1884,4120,4500,3610,6429,10050],"PETFOOD|20":[0,0,0,64,100,554,450,2862,1224,250,1792,1900],"PREMIUM|25":[0,0,0,0,5,400,40,250,10,300,90,170],"KANKAN|20":[0,0,0,0,50,0,0,0,0,0,0,0],"KANKAN|25":[0,0,0,0,0,0,0,140,0,0,40,0]}}};
+const PROD_FAM_LABELS = {
+  'SILVERKAN|25':'Silver Kan 25 kg','SILVERKAN|5':'Silver Kan 5 kg',
+  'CACHORRO|20':'Silver Kan Cachorro 20 kg','CACHORRO|5':'Silver Kan Cachorro 5 kg',
+  'CAT|15':'Silver Kat 15 kg','CAT|5':'Silver Kat 5 kg',
+  'KANKAN|25':'Kan Kan 25 kg','KANKAN|20':'Kan Kan 20 kg',
+  'MIBOOB|20':'Mi Boob 20 kg',
+  'PETFOOD|20':'Pet Food 20 kg',
+  'RAFIA|20':'Rafia 20 kg',
+  'PREMIUM|25':'Silver Kan Premium 25 kg'
+};
+function prodFamLabel(fk){ return PROD_FAM_LABELS[fk] || fk.replace('|',' · ').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase())+' kg'; }
+// Suma BASELINE_PROD[year][vendor|TODOS]['fam'] en el rango de meses mFrom..mTo (1-12) -> {fam:sacos}
+function baselineProdSum(year, vf, mFrom, mTo){
+  const byVend = (BASELINE_PROD && BASELINE_PROD[String(year)]) || {};
+  const vendors = vf ? [vf] : Object.keys(byVend);
+  const out = {};
+  vendors.forEach(v=>{
+    const fams = byVend[v]; if(!fams)return;
+    for(const fk in fams){
+      const arr = fams[fk]; let s=0;
+      for(let m=mFrom;m<=mTo;m++) s += arr[m-1]||0;
+      if(s>0) out[fk]=(out[fk]||0)+s;
+    }
+  });
+  return out;
+}
+// Suma la venta REAL de este año (DATA.clients, sin promo/bonificación) por familia, filtrada por
+// vendedor y rango de meses. Misma lógica/insumo que proySalesAgg, pero con filtro de vendedor.
+function curProdSum(vf, mFrom, mTo){
+  const out = {};
+  if(typeof DATA==='undefined'||!DATA||!DATA.clients)return out;
+  DATA.clients.forEach(c=>{
+    if(vf && c.vendedor!==vf)return;
+    const pm=c.prodMes||{};
+    for(const pn in pm){
+      const fk=_famKey(pn), mo=pm[pn]||{};
+      let s=0;
+      for(let m=mFrom;m<=mTo;m++) s += mo[m]||0;
+      if(s>0) out[fk]=(out[fk]||0)+s;
+    }
+  });
+  return out;
+}
+// Arma las filas del reporte: {fk,label,cur,prior,diff,growth} para un vendedor y rango de meses.
+function productReportRows(vf, mFrom, mTo){
+  if(!DATA.yoy)computeYoY();
+  const py = DATA.yoy ? DATA.yoy.py : null;
+  const cur = curProdSum(vf, mFrom, mTo);
+  const prior = py!=null ? baselineProdSum(py, vf, mFrom, mTo) : {};
+  const keys = new Set([...Object.keys(cur), ...Object.keys(prior)]);
+  const rows = [];
+  keys.forEach(fk=>{
+    const c = cur[fk]||0, p = prior[fk]||0;
+    const diff = c-p;
+    const growth = p>0 ? (c/p-1) : (c>0?null:0); // null = "nuevo" (sin base el año pasado)
+    rows.push({fk, label:prodFamLabel(fk), cur:c, prior:p, diff, growth});
+  });
+  return rows;
+}
+let prodSortCol='diff', prodSortAsc=true;
+function sortProductos(col){ if(prodSortCol===col)prodSortAsc=!prodSortAsc; else{prodSortCol=col;prodSortAsc=(col==='label');} renderProductos(); }
+function renderProductos(){
+  const box=document.getElementById('prod-content'); if(!box)return;
+  if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la venta por producto.</div>';return;}
+  if(!DATA.yoy)computeYoY(); const Y=DATA.yoy;
+  const vendEl=document.getElementById('prod-vend'), fromEl=document.getElementById('prod-from'), toEl=document.getElementById('prod-to');
+  if(vendEl&&vendEl.options.length<=1){ const vs=[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort(); vs.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;vendEl.appendChild(o);}); }
+  if(fromEl&&fromEl.options.length===0){ DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];fromEl.appendChild(o);}); fromEl.value=DATA.meses[0]; }
+  if(toEl&&toEl.options.length===0){ DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];toEl.appendChild(o);}); toEl.value=DATA.meses[DATA.meses.length-1]; }
+  const vf=vendEl?vendEl.value:'';
+  const mFromRaw=fromEl&&fromEl.value?+fromEl.value:DATA.meses[0], mToRaw=toEl&&toEl.value?+toEl.value:DATA.meses[DATA.meses.length-1];
+  const mFrom=Math.min(mFromRaw,mToRaw), mTo=Math.max(mFromRaw,mToRaw);
+  const periodoTxt=(mFrom===mTo)?MES_NOM[mFrom]:(MES_NOM[mFrom]+'–'+MES_NOM[mTo]);
+  let rows=productReportRows(vf, mFrom, mTo);
+  rows=rows.filter(r=>r.cur>0||r.prior>0);
+  rows.sort((a,b)=>{
+    let va,vb;
+    switch(prodSortCol){
+      case 'label': va=a.label; vb=b.label; break;
+      case 'cur': va=a.cur; vb=b.cur; break;
+      case 'prior': va=a.prior; vb=b.prior; break;
+      case 'growth': va=(a.growth==null?-2:a.growth); vb=(b.growth==null?-2:b.growth); break;
+      default: va=a.diff; vb=b.diff;
+    }
+    if(typeof va==='string')return prodSortAsc?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0);
+    return prodSortAsc?va-vb:vb-va;
+  });
+  const totCur=rows.reduce((a,r)=>a+r.cur,0), totPrior=rows.reduce((a,r)=>a+r.prior,0);
+  const totGrowth=totPrior>0?(totCur/totPrior-1):(totCur>0?null:0);
+  const nSube=rows.filter(r=>r.growth!=null&&r.growth>0.001).length, nBaja=rows.filter(r=>r.growth!=null&&r.growth<-0.001).length, nNuevo=rows.filter(r=>r.growth==null).length;
+  const card=(val,lbl,sub,col)=>`<div style="flex:1;min-width:158px;background:var(--mid);border:1px solid #1e3258;border-left:4px solid ${col};border-radius:9px;padding:9px 13px">
+    <div style="font-size:1.35rem;font-weight:800;color:${col};line-height:1.15">${val}</div>
+    <div style="font-size:.66rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${lbl}</div>
+    ${sub?`<div style="font-size:.68rem;color:#64748b;margin-top:2px">${sub}</div>`:''}</div>`;
+  let h=`<div style="font-size:1.1rem;font-weight:800;color:var(--gold)">📦 Venta por producto — ${periodoTxt}${vf?' · '+_pe(vf):''}</div>
+    <div style="font-size:.72rem;color:#94a3b8;margin:2px 0 10px">Sacos reales (sin promoción/bonificación) por familia de producto, ${Y?Y.cy:''} vs mismo periodo ${Y?Y.py:''}. Junta variantes del mismo producto (kilo extra, presentaciones) bajo una sola fila.</div>
+    <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px">
+    ${card(fmt(totCur),'Sacos '+(Y?Y.cy:''),periodoTxt,'var(--gold)')}
+    ${card(fmt(totPrior),(Y?Y.py:'')+' mismo periodo','base de comparación','#94a3b8')}
+    ${card(totGrowth==null?'nuevo':(pct(totGrowth)),'Crecimiento total','vs '+(Y?Y.py:''),totGrowth==null?'#94a3b8':(totGrowth>=0?'var(--green)':'var(--red)'))}
+    ${card(nSube+' / '+nBaja,'Productos que suben / bajan',nNuevo?nNuevo+' sin venta el año pasado':'','var(--green)')}
+    </div>`;
+  if(!rows.length){ h+='<div style="padding:20px;color:#94a3b8">No hay venta en este periodo/filtro.</div>'; box.innerHTML=h; return; }
+  const arw=c=>prodSortCol===c?(prodSortAsc?' ▲':' ▼'):' ↕';
+  const maxAbs=Math.max(...rows.map(r=>Math.max(r.cur,r.prior)),1);
+  h+=`<table class="dt"><thead><tr>
+    <th onclick="sortProductos('label')">Producto${arw('label')}</th>
+    <th style="text-align:right" onclick="sortProductos('cur')">Sacos ${Y?Y.cy:''}${arw('cur')}</th>
+    <th style="text-align:right" onclick="sortProductos('prior')">Sacos ${Y?Y.py:''}${arw('prior')}</th>
+    <th style="text-align:right" onclick="sortProductos('diff')">Diferencia${arw('diff')}</th>
+    <th style="text-align:right" onclick="sortProductos('growth')">Crecimiento${arw('growth')}</th>
+    <th>Mezcla</th>
+  </tr></thead><tbody>`;
+  rows.forEach(r=>{
+    const col=r.growth==null?'#94a3b8':(r.growth>=0?'var(--green)':'var(--red)');
+    const growTxt=r.growth==null?'nuevo':(r.growth>=0?'+':'')+(r.growth*100).toFixed(1)+'%';
+    const wCur=Math.max(2,Math.round(r.cur/maxAbs*100)), wPrior=Math.max(2,Math.round(r.prior/maxAbs*100));
+    h+=`<tr>
+      <td style="font-weight:600">${_pe(r.label)}</td>
+      <td style="text-align:right;color:#cbd5e1">${fmt(r.cur)}</td>
+      <td style="text-align:right;color:#94a3b8">${fmt(r.prior)}</td>
+      <td style="text-align:right;color:${r.diff>=0?'var(--green)':'var(--red)'};font-weight:700">${r.diff>=0?'+':''}${fmt(r.diff)}</td>
+      <td style="text-align:right;color:${col};font-weight:700">${growTxt}</td>
+      <td style="min-width:110px"><div style="height:6px;background:#0b1628;border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${wCur}%;background:var(--gold)"></i></div><div style="height:4px;background:#0b1628;border-radius:4px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:${wPrior}%;background:#64748b"></i></div></td>
+    </tr>`;
+  });
+  h+='</tbody></table>';
+  box.innerHTML=h;
+}
+
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
@@ -5273,11 +5411,19 @@ function buildVendorPayloads(){
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
     byV[v].forEach(function(c){promoSac+=(c.promoSacos||0);var pm=c.prodMes||{};var rnp=0;for(var pp in pm){var mmp=(typeof EQ_find==='function')?EQ_find(pp):null;if(mmp){var qq=0;for(var kk in pm[pp])qq+=pm[pp][kk]||0;rnp+=qq*mmp[2];}}newDisc+=rnp*((typeof descEfec==='function')?descEfec(c):(c.desc||0))/100;});
+    // Venta por familia de producto (sin promo/bonificación), este año y su base del año anterior —
+    // arreglos de 12 meses igual que cur/prior, para que vendedor.html/maestra.html filtren su propio
+    // Desde/Hasta sin tener que volver a pedirle nada a ventas.html.
+    var prodCur={};
+    byV[v].forEach(function(c){ var pm=c.prodMes||{}; for(var pn in pm){ var fk=(typeof _famKey==='function')?_famKey(pn):pn; if(!prodCur[fk])prodCur[fk]=[0,0,0,0,0,0,0,0,0,0,0,0]; for(var mmk in pm[pn]){ var mi=(+mmk)-1; if(mi>=0&&mi<12) prodCur[fk][mi]+=pm[pn][mmk]||0; } } });
+    Object.keys(prodCur).forEach(function(fk){ prodCur[fk]=prodCur[fk].map(function(x){return Math.round(x);}); });
+    var prodPrior=(typeof BASELINE_PROD!=='undefined'&&BASELINE_PROD[String(Yv.py||0)]&&BASELINE_PROD[String(Yv.py||0)][v])||{};
     var ventas={meses:DATA.meses,gTarget:PVEN.gTarget,cur:vm.cur,prior:vm.prior,priorVivo:vm.priorVivo||null,priorPerd:vm.priorPerd||null,
       // curT/priorT: toneladas mensuales TOTALES (con kilo de regalo incluido, igual que "Venta a la fecha" en Gráfica) —
       // para que vendedor.html y maestra.html puedan ofrecer el mismo rango Desde/Hasta en toneladas, no solo en sacos.
       curT:vm.curT||null,priorT:vm.priorT||null,
-      dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario};
+      dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario,
+      prodCur:prodCur,prodPrior:prodPrior};
     // ── Alertas por vendedor ──
     var cliAll=DATA.clients.filter(function(c){return (c.vendedor||'(sin asignar)')===v;});
     var sinCompra=cliAll.filter(function(c){return c.seg==='EnRiesgo';}).sort(function(a,b){return b.dias-a.dias;}).slice(0,40).map(function(c){return {n:c.nombre,dias:(c.dias>=999?null:c.dias),prom:Math.round(c.promMes||0),est:c.estado||'',ult:(c.lastDate?c.lastDate.toLocaleDateString('es-MX',{day:'2-digit',month:'short'}):'')};});
