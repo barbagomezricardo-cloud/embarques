@@ -2393,8 +2393,7 @@ function _famKey(name){
   let kg=0; const mm=limpio.match(/\d+(?:\.\d+)?/g)||[];
   for(const v of mm){ const x=parseFloat(v); if(x>=5){kg=x;break;} }
   let fam;
-  if(/PET\s*FOOD/.test(n))fam='PETFOOD';
-  else if(/RAFIA/.test(n))fam='RAFIA';
+  if(/PET\s*FOOD/.test(n)||/RAFIA/.test(n))fam='PETFOOD';   // Rafia es el mismo producto que Pet Food (nombre viejo/alterno en Odoo)
   else if(/MI\s*BOOB/.test(n))fam='MIBOOB';
   else if(/KAN\s*KAN/.test(n))fam='KANKAN';
   else if(/CACHORRO/.test(n))fam='CACHORRO';
@@ -3613,18 +3612,48 @@ const BASELINE_TON={2024:50913.0,2025:56578.3};   // toneladas reales de Odoo, p
 // a los nombres actuales — confirmado con Ricardo 25-sep-2026: ROBERTO->ARMANDO (se quedó con su
 // cartera), TAZ->JOSE MANUEL AVILA, FORRAJERA y AUTOCONSUMO->ADMINISTRACION.
 // Estructura: BASELINE_PROD[año][vendedor]['FAMILIA|KG'] = [ene..dic] en sacos.
-const BASELINE_PROD = {"2024":{"VICTOR MANUEL":{"SILVERKAN|25":[8370,6311,5430,5114,4404,5717,5381,4986,5006,5817,5299,4412],"MIBOOB|20":[42955,36759,31456,37640,30297,30516,40818,29884,43590,33623,42803,23313],"KANKAN|25":[2435,960,2320,2155,1030,1800,1839,1754,1167,1290,1816,1412],"CACHORRO|20":[3423,4200,3373,5077,641,4293,4182,2866,2827,2348,3747,1903],"CAT|15":[1193,854,853,1045,575,1455,1061,926,1001,893,1420,572],"PETFOOD|20":[839,1817,2468,2188,2473,1653,2894,2858,2425,2807,4584,1367],"KANKAN|20":[50,40,0,100,0,150,0,0,102,0,0,150],"SILVERKAN|5":[0,91,400,100,0,60,300,200,0,0,300,0],"CACHORRO|5":[0,0,0,0,0,0,0,100,0,0,50,0],"CAT|5":[0,0,0,0,0,0,0,100,0,0,50,0],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,0,3]},"ARMANDO":{"SILVERKAN|25":[56590,48321,41046,50954,46522,45006,43470,43175,42375,50482,48814,42271],"CACHORRO|20":[11325,12905,8002,8376,2917,9591,9645,7731,8237,8833,9036,7199],"CAT|15":[1785,2689,2303,2567,1662,2050,3061,2720,2604,2961,2721,2737],"MIBOOB|20":[55228,61670,49865,55007,41521,47115,55179,46051,47781,52608,55293,53584],"KANKAN|25":[15394,11480,9456,15581,8485,11611,12630,11841,9137,14241,12675,9570],"KANKAN|20":[1146,515,830,910,365,450,516,417,427,632,632,342],"SILVERKAN|5":[770,70,402,300,100,330,685,230,440,692,610,210],"PETFOOD|20":[3285,3547,4028,4797,4881,3131,3736,4651,4131,4541,5918,7331],"CACHORRO|5":[0,0,100,0,100,0,100,100,10,10,0,170],"CAT|5":[0,0,30,0,50,0,29,80,0,40,0,30],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,0,5]},"ADMINISTRACION":{"SILVERKAN|25":[14708,19224,11082,14104,11900,12675,12549,12543,9763,4678,3545,2587],"SILVERKAN|5":[10,339,174,288,352,134,338,210,401,171,333,318],"CACHORRO|20":[1129,1493,1209,1025,248,748,1681,349,790,202,554,697],"CAT|15":[274,392,559,63,465,464,385,362,433,368,381,478],"MIBOOB|20":[2456,2668,1903,3273,2119,2316,2154,2473,2116,1863,2906,2128],"KANKAN|20":[35,44,50,33,38,29,39,37,17,17,21,5],"KANKAN|25":[1088,1126,540,1014,957,961,970,636,741,711,1164,484],"PETFOOD|20":[0,0,0,0,1,0,0,1,1,1,0,1],"CACHORRO|5":[0,0,0,0,30,10,55,107,93,75,75,62],"CAT|5":[0,0,0,0,0,0,0,15,0,20,0,22],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,2,7,2]},"JOSE MANUEL AVILA":{"SILVERKAN|25":[0,0,0,0,0,0,0,0,0,11043,8313,6238],"CACHORRO|20":[0,0,0,0,0,0,0,0,0,119,438,500]}},"2025":{"ADMINISTRACION":{"SILVERKAN|5":[231,291,266,160,285,593,505,470,607,468,679,729],"SILVERKAN|25":[4708,2895,3496,2788,3535,3544,2941,3885,3157,3413,4392,3679],"CAT|15":[261,377,472,484,464,298,611,461,674,561,683,554],"CAT|5":[64,30,43,35,100,146,86,141,88,121,128,128],"MIBOOB|20":[2605,2928,2665,2243,3696,2546,2936,2733,3196,3850,3591,3447],"PETFOOD|20":[2,0,0,0,0,0,0,9,0,1,0,1],"KANKAN|25":[1544,430,971,585,1119,684,909,924,523,1036,735,1051],"CACHORRO|20":[392,587,729,667,988,658,475,773,898,515,902,811],"KANKAN|20":[26,19,15,31,27,23,23,25,19,26,73,24],"CACHORRO|5":[0,0,62,80,157,142,156,118,186,157,158,216],"PREMIUM|25":[0,0,0,66,5,201,3,4,0,67,5,68]},"ARMANDO":{"SILVERKAN|25":[52467,43984,44319,46988,43759,44349,46675,42590,45999,63057,38188,42504],"CACHORRO|20":[9446,7623,8812,9555,11083,8882,10350,9310,8945,11321,9219,9930],"CAT|15":[2645,2380,3447,3218,3393,2921,3914,3824,3436,4765,3352,4467],"MIBOOB|20":[56408,54591,56692,44176,64071,50947,63167,53079,52557,56733,54961,67995],"KANKAN|25":[13387,9256,9272,10129,11937,10205,6612,9882,8947,10942,9265,10224],"PETFOOD|20":[6018,9035,0,8681,13867,13133,14924,14905,17892,16613,17752,24866],"SILVERKAN|5":[725,659,571,221,942,496,900,594,805,347,680,590],"KANKAN|20":[765,415,450,390,540,355,405,443,380,510,555,230],"CAT|5":[25,0,139,0,0,0,50,0,52,0,20,50],"PREMIUM|25":[200,61,280,377,80,315,268,208,565,259,263,365],"RAFIA|20":[0,0,9678,0,0,0,0,0,0,0,0,0],"CACHORRO|5":[0,0,286,100,80,100,50,33,150,0,150,100]},"VICTOR MANUEL":{"SILVERKAN|25":[7775,3705,5875,4403,4755,5388,5454,5254,5085,8732,2341,3821],"CACHORRO|20":[3710,2200,3430,3570,3535,4550,3872,3499,3295,4829,2051,3779],"MIBOOB|20":[42619,35198,40025,30820,38896,34895,39891,34298,36138,35724,36147,37930],"PETFOOD|20":[2375,6125,0,3727,4451,5672,7630,7435,5198,6911,5530,6199],"KANKAN|25":[1820,880,1340,1020,1355,1280,1588,1125,1170,780,1250,1359],"CAT|15":[1084,588,914,1240,2031,1079,1403,1124,857,1535,890,1107],"KANKAN|20":[100,100,150,0,100,50,0,50,0,50,0,200],"PREMIUM|25":[370,0,50,694,1530,1420,209,1421,730,1049,660,605],"RAFIA|20":[0,0,6094,0,0,0,0,0,0,0,0,0],"CACHORRO|5":[0,0,10,0,0,0,0,0,0,0,0,0],"CAT|5":[0,0,50,0,0,0,0,0,0,0,0,0]},"JOSE MANUEL AVILA":{"SILVERKAN|25":[10120,8490,11092,7120,9800,6317,9820,8222,9930,7800,9490,7656],"CACHORRO|20":[100,150,360,110,625,355,330,250,600,250,260,180],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,300,0],"KANKAN|25":[0,0,0,0,0,0,0,0,0,0,200,0]},"DAGOVIET":{"SILVERKAN|25":[0,0,0,40,160,140,120,720,360,0,560,80],"CACHORRO|20":[0,0,0,50,80,0,119,475,470,0,445,260],"CAT|15":[0,0,0,67,200,0,66,402,30,0,331,201],"MIBOOB|20":[0,0,0,682,1150,1977,1884,4120,4500,3610,6429,10050],"PETFOOD|20":[0,0,0,64,100,554,450,2862,1224,250,1792,1900],"PREMIUM|25":[0,0,0,0,5,400,40,250,10,300,90,170],"KANKAN|20":[0,0,0,0,50,0,0,0,0,0,0,0],"KANKAN|25":[0,0,0,0,0,0,0,140,0,0,40,0]}}};
+const BASELINE_PROD = {"2024":{"VICTOR MANUEL":{"SILVERKAN|25":[8370,6311,5430,5114,4404,5717,5381,4986,5006,5817,5299,4412],"MIBOOB|20":[42955,36759,31456,37640,30297,30516,40818,29884,43590,33623,42803,23313],"KANKAN|25":[2435,960,2320,2155,1030,1800,1839,1754,1167,1290,1816,1412],"CACHORRO|20":[3423,4200,3373,5077,641,4293,4182,2866,2827,2348,3747,1903],"CAT|15":[1193,854,853,1045,575,1455,1061,926,1001,893,1420,572],"PETFOOD|20":[839,1817,2468,2188,2473,1653,2894,2858,2425,2807,4584,1367],"KANKAN|20":[50,40,0,100,0,150,0,0,102,0,0,150],"SILVERKAN|5":[0,91,400,100,0,60,300,200,0,0,300,0],"CACHORRO|5":[0,0,0,0,0,0,0,100,0,0,50,0],"CAT|5":[0,0,0,0,0,0,0,100,0,0,50,0],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,0,3]},"ARMANDO":{"SILVERKAN|25":[56590,48321,41046,50954,46522,45006,43470,43175,42375,50482,48814,42271],"CACHORRO|20":[11325,12905,8002,8376,2917,9591,9645,7731,8237,8833,9036,7199],"CAT|15":[1785,2689,2303,2567,1662,2050,3061,2720,2604,2961,2721,2737],"MIBOOB|20":[55228,61670,49865,55007,41521,47115,55179,46051,47781,52608,55293,53584],"KANKAN|25":[15394,11480,9456,15581,8485,11611,12630,11841,9137,14241,12675,9570],"KANKAN|20":[1146,515,830,910,365,450,516,417,427,632,632,342],"SILVERKAN|5":[770,70,402,300,100,330,685,230,440,692,610,210],"PETFOOD|20":[3285,3547,4028,4797,4881,3131,3736,4651,4131,4541,5918,7331],"CACHORRO|5":[0,0,100,0,100,0,100,100,10,10,0,170],"CAT|5":[0,0,30,0,50,0,29,80,0,40,0,30],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,0,5]},"ADMINISTRACION":{"SILVERKAN|25":[14708,19224,11082,14104,11900,12675,12549,12543,9763,4678,3545,2587],"SILVERKAN|5":[10,339,174,288,352,134,338,210,401,171,333,318],"CACHORRO|20":[1129,1493,1209,1025,248,748,1681,349,790,202,554,697],"CAT|15":[274,392,559,63,465,464,385,362,433,368,381,478],"MIBOOB|20":[2456,2668,1903,3273,2119,2316,2154,2473,2116,1863,2906,2128],"KANKAN|20":[35,44,50,33,38,29,39,37,17,17,21,5],"KANKAN|25":[1088,1126,540,1014,957,961,970,636,741,711,1164,484],"PETFOOD|20":[0,0,0,0,1,0,0,1,1,1,0,1],"CACHORRO|5":[0,0,0,0,30,10,55,107,93,75,75,62],"CAT|5":[0,0,0,0,0,0,0,15,0,20,0,22],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,2,7,2]},"JOSE MANUEL AVILA":{"SILVERKAN|25":[0,0,0,0,0,0,0,0,0,11043,8313,6238],"CACHORRO|20":[0,0,0,0,0,0,0,0,0,119,438,500]}},"2025":{"ADMINISTRACION":{"SILVERKAN|5":[231,291,266,160,285,593,505,470,607,468,679,729],"SILVERKAN|25":[4708,2895,3496,2788,3535,3544,2941,3885,3157,3413,4392,3679],"CAT|15":[261,377,472,484,464,298,611,461,674,561,683,554],"CAT|5":[64,30,43,35,100,146,86,141,88,121,128,128],"MIBOOB|20":[2605,2928,2665,2243,3696,2546,2936,2733,3196,3850,3591,3447],"PETFOOD|20":[2,0,0,0,0,0,0,9,0,1,0,1],"KANKAN|25":[1544,430,971,585,1119,684,909,924,523,1036,735,1051],"CACHORRO|20":[392,587,729,667,988,658,475,773,898,515,902,811],"KANKAN|20":[26,19,15,31,27,23,23,25,19,26,73,24],"CACHORRO|5":[0,0,62,80,157,142,156,118,186,157,158,216],"PREMIUM|25":[0,0,0,66,5,201,3,4,0,67,5,68]},"ARMANDO":{"SILVERKAN|25":[52467,43984,44319,46988,43759,44349,46675,42590,45999,63057,38188,42504],"CACHORRO|20":[9446,7623,8812,9555,11083,8882,10350,9310,8945,11321,9219,9930],"CAT|15":[2645,2380,3447,3218,3393,2921,3914,3824,3436,4765,3352,4467],"MIBOOB|20":[56408,54591,56692,44176,64071,50947,63167,53079,52557,56733,54961,67995],"KANKAN|25":[13387,9256,9272,10129,11937,10205,6612,9882,8947,10942,9265,10224],"PETFOOD|20":[6018,9035,9678,8681,13867,13133,14924,14905,17892,16613,17752,24866],"SILVERKAN|5":[725,659,571,221,942,496,900,594,805,347,680,590],"KANKAN|20":[765,415,450,390,540,355,405,443,380,510,555,230],"CAT|5":[25,0,139,0,0,0,50,0,52,0,20,50],"PREMIUM|25":[200,61,280,377,80,315,268,208,565,259,263,365],"CACHORRO|5":[0,0,286,100,80,100,50,33,150,0,150,100]},"VICTOR MANUEL":{"SILVERKAN|25":[7775,3705,5875,4403,4755,5388,5454,5254,5085,8732,2341,3821],"CACHORRO|20":[3710,2200,3430,3570,3535,4550,3872,3499,3295,4829,2051,3779],"MIBOOB|20":[42619,35198,40025,30820,38896,34895,39891,34298,36138,35724,36147,37930],"PETFOOD|20":[2375,6125,6094,3727,4451,5672,7630,7435,5198,6911,5530,6199],"KANKAN|25":[1820,880,1340,1020,1355,1280,1588,1125,1170,780,1250,1359],"CAT|15":[1084,588,914,1240,2031,1079,1403,1124,857,1535,890,1107],"KANKAN|20":[100,100,150,0,100,50,0,50,0,50,0,200],"PREMIUM|25":[370,0,50,694,1530,1420,209,1421,730,1049,660,605],"CACHORRO|5":[0,0,10,0,0,0,0,0,0,0,0,0],"CAT|5":[0,0,50,0,0,0,0,0,0,0,0,0]},"JOSE MANUEL AVILA":{"SILVERKAN|25":[10120,8490,11092,7120,9800,6317,9820,8222,9930,7800,9490,7656],"CACHORRO|20":[100,150,360,110,625,355,330,250,600,250,260,180],"PREMIUM|25":[0,0,0,0,0,0,0,0,0,0,300,0],"KANKAN|25":[0,0,0,0,0,0,0,0,0,0,200,0]},"DAGOVIET":{"SILVERKAN|25":[0,0,0,40,160,140,120,720,360,0,560,80],"CACHORRO|20":[0,0,0,50,80,0,119,475,470,0,445,260],"CAT|15":[0,0,0,67,200,0,66,402,30,0,331,201],"MIBOOB|20":[0,0,0,682,1150,1977,1884,4120,4500,3610,6429,10050],"PETFOOD|20":[0,0,0,64,100,554,450,2862,1224,250,1792,1900],"PREMIUM|25":[0,0,0,0,5,400,40,250,10,300,90,170],"KANKAN|20":[0,0,0,0,50,0,0,0,0,0,0,0],"KANKAN|25":[0,0,0,0,0,0,0,140,0,0,40,0]}}};
+// Nombres tal como los escribe Odoo (fallback cuando el producto no tiene venta este año).
+// PETFOOD incluye "Rafia", que es el mismo producto con nombre viejo/alterno en Odoo.
 const PROD_FAM_LABELS = {
-  'SILVERKAN|25':'Silver Kan 25 kg','SILVERKAN|5':'Silver Kan 5 kg',
-  'CACHORRO|20':'Silver Kan Cachorro 20 kg','CACHORRO|5':'Silver Kan Cachorro 5 kg',
-  'CAT|15':'Silver Kat 15 kg','CAT|5':'Silver Kat 5 kg',
-  'KANKAN|25':'Kan Kan 25 kg','KANKAN|20':'Kan Kan 20 kg',
-  'MIBOOB|20':'Mi Boob 20 kg',
-  'PETFOOD|20':'Pet Food 20 kg',
-  'RAFIA|20':'Rafia 20 kg',
-  'PREMIUM|25':'Silver Kan Premium 25 kg'
+  'SILVERKAN|25':'SILVER KAN 18% 25 KGS','SILVERKAN|5':'SILVER KAN 18% 5 KGS',
+  'CACHORRO|20':'SILVER KAN CACHORRO 20 KGS','CACHORRO|5':'SILVER KAN CACHORRO 5 KGS',
+  'CAT|15':'SILVER KAT 15 KGS','CAT|5':'SILVER KAT 5 KGS',
+  'KANKAN|25':'KAN KAN 25KG','KANKAN|20':'KAN KAN 20 KGS',
+  'MIBOOB|20':'MI BOOB 20 KGS',
+  'PETFOOD|20':'PET FOOD 20 KG (R)',
+  'PREMIUM|25':'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILOS EXTRAS'
 };
-function prodFamLabel(fk){ return PROD_FAM_LABELS[fk] || fk.replace('|',' · ').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase())+' kg'; }
+// Prioriza el nombre real tal como lo trae el archivo de Odoo de ESTE año (liveNames, ver
+// prodRawNames()); si el producto no tuvo venta este año usa el nombre histórico conocido.
+function prodFamLabel(fk, liveNames){
+  const live=liveNames&&liveNames[fk];
+  if(live)return String(live).replace(/\s+/g,' ').trim();
+  return PROD_FAM_LABELS[fk] || fk.replace('|',' · ').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase())+' kg';
+}
+// Para cada familia, el nombre de producto (literal, tal como Odoo) con más sacos vendidos este
+// año — así el reporte muestra la descripción real y vigente, no un nombre inventado.
+function prodRawNames(){
+  const tot={};
+  if(typeof DATA==='undefined'||!DATA||!DATA.clients)return {};
+  DATA.clients.forEach(c=>{
+    const pm=c.prodMes||{};
+    for(const pn in pm){
+      const fk=_famKey(pn), mo=pm[pn]||{};
+      let s=0; for(const mk in mo)s+=mo[mk]||0;
+      if(s<=0)continue;
+      if(!tot[fk])tot[fk]={};
+      tot[fk][pn]=(tot[fk][pn]||0)+s;
+    }
+  });
+  const out={};
+  Object.keys(tot).forEach(fk=>{
+    let best=null,bestN=-1;
+    for(const n in tot[fk]){ if(tot[fk][n]>bestN){bestN=tot[fk][n];best=n;} }
+    if(best)out[fk]=best;
+  });
+  return out;
+}
 // Suma BASELINE_PROD[year][vendor|TODOS]['fam'] en el rango de meses mFrom..mTo (1-12) -> {fam:sacos}
 function baselineProdSum(year, vf, mFrom, mTo){
   const byVend = (BASELINE_PROD && BASELINE_PROD[String(year)]) || {};
@@ -3663,13 +3692,14 @@ function productReportRows(vf, mFrom, mTo){
   const py = DATA.yoy ? DATA.yoy.py : null;
   const cur = curProdSum(vf, mFrom, mTo);
   const prior = py!=null ? baselineProdSum(py, vf, mFrom, mTo) : {};
+  const liveNames = prodRawNames();
   const keys = new Set([...Object.keys(cur), ...Object.keys(prior)]);
   const rows = [];
   keys.forEach(fk=>{
     const c = cur[fk]||0, p = prior[fk]||0;
     const diff = c-p;
     const growth = p>0 ? (c/p-1) : (c>0?null:0); // null = "nuevo" (sin base el año pasado)
-    rows.push({fk, label:prodFamLabel(fk), cur:c, prior:p, diff, growth});
+    rows.push({fk, label:prodFamLabel(fk, liveNames), cur:c, prior:p, diff, growth});
   });
   return rows;
 }
@@ -5370,6 +5400,9 @@ function buildVendorPayloads(){
   const prospAll=(typeof prospecAll==='function')?prospecAll().filter(p=>p.kind==='prosp'):[];
   try{if(typeof computeYoY==='function'&&!DATA.yoy)computeYoY();}catch(e){}
   var Yv=(DATA.yoy||{}); var PVEN=(typeof getVParams==='function')?getVParams():{gTarget:0.07};
+  // Nombre real (tal como Odoo) por familia de producto, calculado UNA vez con todos los clientes —
+  // se publica igual en cada vendedor para que vendedor.html/maestra.html muestren la descripción vigente.
+  var _PROD_NAMES_G=(typeof prodRawNames==='function')?prodRawNames():{};
   Object.keys(byV).forEach(v=>{
     const vprosp=prospAll.filter(p=>(p.v||'')===v).map(p=>({n:p.n,c:p.c||'',e:p.e||'',tel:p.p||'',la:p.la||0,lo:p.lo||0,src:p.src||''}));
     const rows=byV[v].map(c=>{
@@ -5423,7 +5456,7 @@ function buildVendorPayloads(){
       // para que vendedor.html y maestra.html puedan ofrecer el mismo rango Desde/Hasta en toneladas, no solo en sacos.
       curT:vm.curT||null,priorT:vm.priorT||null,
       dia:(DATA.diaMesVend&&DATA.diaMesVend[v])||{},priorDaily:(typeof getPriorDaily==='function')?getPriorDaily(Yv.py||2025):{},py:Yv.py||0,cy:Yv.cy||0,lastMonth:lastMonth,promoSac:Math.round(promoSac),newDisc:Math.round(newDisc),esDiario:!!DATA.esDiario,
-      prodCur:prodCur,prodPrior:prodPrior};
+      prodCur:prodCur,prodPrior:prodPrior,prodNames:_PROD_NAMES_G};
     // ── Alertas por vendedor ──
     var cliAll=DATA.clients.filter(function(c){return (c.vendedor||'(sin asignar)')===v;});
     var sinCompra=cliAll.filter(function(c){return c.seg==='EnRiesgo';}).sort(function(a,b){return b.dias-a.dias;}).slice(0,40).map(function(c){return {n:c.nombre,dias:(c.dias>=999?null:c.dias),prom:Math.round(c.promMes||0),est:c.estado||'',ult:(c.lastDate?c.lastDate.toLocaleDateString('es-MX',{day:'2-digit',month:'short'}):'')};});
