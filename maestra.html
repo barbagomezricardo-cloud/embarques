@@ -1370,5 +1370,312 @@ function skPoll(){ if(VIEW!=='clientes'||CARDOPEN)return;
 window.addEventListener('hashchange',function(){skGate(masterLoad);});
 applyZoom();
 skGate(function(){ masterLoad(); setInterval(skPoll,60000); });
+
+/* ================================================================
+   VZ — Asistente de voz (gratis, basado en reglas; sin IA por ahora)
+   ----------------------------------------------------------------
+   Reutiliza los mismos datos y cálculos que YA se muestran en esta
+   app (CLIENTS, ALERTAS, VENTAS, PREM, TIERS, tierOf, nextTier, etc.)
+   para que la respuesta hablada SIEMPRE sea igual a lo que se ve en
+   pantalla — nada se inventa ni se calcula distinto aquí.
+   Pensado para "toca y habla" (una sola frase, no escucha continua)
+   porque en iPhone TODOS los navegadores (incluido Chrome) usan por
+   dentro el motor de Safari — cambiar de navegador no mejora el
+   dictado por voz ahí. La respuesta hablada (texto a voz) sí funciona
+   igual de bien en iPhone que en Android.
+   Si algún día se agrega IA real: VZ_AI_URL debe apuntar a una función
+   seguraen un servidor propio (p.ej. Firebase Cloud Function) que
+   guarde la API key del proveedor de IA ahí — nunca en esta página
+   estática. Mientras VZ_AI_URL sea null, se usa el modo gratis.
+   ================================================================ */
+var VZ_AI_URL = null; // ej: 'https://us-central1-tuproyecto.cloudfunctions.net/vzAsk' · null = modo gratis basado en reglas
+
+(function(){
+
+  // ---------- utilidades de texto ----------
+  function vzNorm(s){
+    return String(s||'').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function vzLevenshtein(a,b){
+    a=a||'';b=b||''; var m=a.length,n=b.length;
+    if(!m)return n; if(!n)return m;
+    var d=[],i,j; for(i=0;i<=m;i++)d[i]=[i];
+    for(j=0;j<=n;j++)d[0][j]=j;
+    for(i=1;i<=m;i++)for(j=1;j<=n;j++){
+      var cost=a.charAt(i-1)===b.charAt(j-1)?0:1;
+      d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+cost);
+    }
+    return d[m][n];
+  }
+  function vzTokScore(qTokens,name){
+    var nTokens=vzNorm(name).split(' ').filter(Boolean);
+    var hit=0;
+    qTokens.forEach(function(qt){
+      if(nTokens.indexOf(qt)>=0){hit+=2;return;}
+      var best=99;
+      nTokens.forEach(function(nt){ var dd=vzLevenshtein(qt,nt); if(dd<best)best=dd; });
+      if(best<=1 && qt.length>=4)hit+=1.4;
+      else if(best<=2 && qt.length>=6)hit+=0.8;
+    });
+    return hit;
+  }
+  var VZ_STOP=['el','la','los','las','de','del','al','que','le','les','cuanto','cuanta','cuantos','cuantas','falta','faltan','para','descuento','descuentos','maximo','maxima','nivel','siguiente','proximo','proxima','mes','este','esta','estan','esta','como','va','van','tiene','tienen','compro','comprado','comprando','ha','han','cliente','clientes','sacos','vendedor','vendedora','vendedores','con','en','su','sus','y','o','un','una','me','puedes','podrias','decir','dime','quiero','quisiera','saber','porfavor','favor','gracias','hola','oye','oyeme','pregunta','porque','sobre','mi','mis','lo','se','es','ya','no','si','del','a','del'];
+  function vzTokens(raw){
+    return vzNorm(raw).split(' ').filter(function(t){return t.length>=3 && VZ_STOP.indexOf(t)<0;});
+  }
+
+  // ---------- convierte un row crudo (tal como llega de Firebase) al mismo objeto que usa applyPayload ----------
+  function vzRowToClient(r, vendLabel){
+    if(!r)return null;
+    return {nombre:r.n,vend:vendLabel||'',avg:r.avg||0,mix:r.mix||0,mixp:(r.mixp!=null?r.mixp:r.mix)||0,cur:r.cur||0,
+      qtd:r.qtd!=null?r.qtd:(r.cur||0),qp:r.qp||0,qpb:(r.qpb!=null?r.qpb:r.qp)||0,estado:r.e||'',desc:(r.desc!=null?r.desc:null),
+      crecio:!!r.crecio,premOk:!!r.premOk,boost:r.boost||0,evalSac:r.evalSac||0,antSac:r.antSac||0,premEval:r.premEval||0,
+      vitSac:(r.vitSac!=null?r.vitSac:null),baseCrec:(r.baseCrec!=null?r.baseCrec:null),vitPB:(r.vitPB!=null?r.vitPB:null),vitPM:(r.vitPM!=null?r.vitPM:null),
+      ult:r.ult||0,tot:r.tot||0};
+  }
+
+  // ---------- buscar cliente por nombre hablado/escrito ----------
+  // En maestra.html (existe VDATA con TODOS los vendedores) siempre busca en todos,
+  // sin importar qué vendedor esté seleccionado en la pantalla. En vendedor.html
+  // (no existe VDATA) busca solo en la cartera propia (CLIENTS).
+  function vzFindCliente(qTokens){
+    if(!qTokens.length)return null;
+    var best=null,bestScore=0;
+    if(typeof VDATA!=='undefined' && typeof VKEYS!=='undefined' && VKEYS.length){
+      VKEYS.forEach(function(k){
+        var p=VDATA[k]; if(!p||!p.rows)return;
+        p.rows.forEach(function(r){
+          var sc=vzTokScore(qTokens,r.n);
+          if(sc>bestScore){bestScore=sc;best={client:vzRowToClient(r,VNAMES[k]||k),vendorLabel:VNAMES[k]||k};}
+        });
+      });
+    }else if(typeof CLIENTS!=='undefined'){
+      Object.keys(CLIENTS).forEach(function(name){
+        var sc=vzTokScore(qTokens,name);
+        if(sc>bestScore){bestScore=sc;best={client:CLIENTS[name],vendorLabel:null};}
+      });
+    }
+    return (bestScore>=1.2)?best:null;
+  }
+  // maestra.html sólo: buscar vendedor por nombre hablado
+  function vzFindVendedor(qTokens){
+    if(typeof VKEYS==='undefined'||!VKEYS.length||!qTokens.length)return null;
+    var best=null,bestScore=0;
+    VKEYS.forEach(function(k){
+      var sc=vzTokScore(qTokens,VNAMES[k]||k);
+      if(sc>bestScore){bestScore=sc;best=k;}
+    });
+    return (bestScore>=1.2)?best:null;
+  }
+
+  // ---------- respuestas (reusan exactamente los mismos cálculos que ya se ven en la app) ----------
+  function vzRespDescuento(hit){
+    var c=hit.client, t=tierOf(c.avg||0);
+    var quien=c.nombre+(hit.vendorLabel?(' — vendedor '+hit.vendorLabel):'');
+    if(t[0]==='INICIAL'){
+      var ritmo=200*PMULT();
+      return quien+' todavía está en nivel Inicial, sin descuento. Necesita comprar '+fmt(ritmo)+' sacos en el '+perWord()+' para entrar a Cobre y empezar a ganar descuento.';
+    }
+    var fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
+    var nx=nextTier(t[0]);
+    var refVol=Math.round(c.avg||0);
+    var pbNow=premBaseNow(c), pmNow=premMixNow(c);
+    var pctBase=refVol>0?(pbNow/refVol*100):0, pctMix=refVol>0?(pmNow/refVol*100):0;
+    var okPrem=pctBase>=PREM.base;
+    var base=baseCrecApp(c), hoy=vaEnCurso(c);
+    var okCrec=(base>0&&hoy>0&&((hoy-base)/base*100)>=uc);
+    var m1=Math.round(PREM.u1/100*refVol), m2=Math.round(PREM.u2/100*refVol), mBase=Math.round(PREM.base/100*refVol);
+    var ok1=pctMix>=PREM.u1, ok2=pctMix>=PREM.u2;
+    var descMax=(fijo+kc+kp+PREM.e2);
+    var faltas=[];
+    if(!okCrec && base>0){
+      var metaCrec=Math.round(base*(1+uc/100));
+      faltas.push('crecer a '+fmt(metaCrec)+' sacos este '+perWord()+' (lleva '+fmt(hoy)+', compró '+fmt(base)+' en '+prevLabelApp()+') para ganar +'+kc.toFixed(2)+'%');
+    }
+    if(!okPrem)faltas.push('comprar '+fmt(Math.max(0,mBase-pbNow))+' sacos más de premium base para ganar +'+kp.toFixed(2)+'%');
+    if(!ok2){
+      if(!ok1)faltas.push('comprar '+fmt(Math.max(0,m1-pmNow))+' sacos más de premium o gato para el primer escalón extra (+'+PREM.e1.toFixed(2)+'%)');
+      else faltas.push('comprar '+fmt(Math.max(0,m2-pmNow))+' sacos más de premium o gato para subir al segundo escalón extra (+'+PREM.e2.toFixed(2)+'%)');
+    }
+    var msg=quien+' está en nivel '+nivLab(t[0])+'. Para llegar al descuento máximo de su nivel ('+descMax.toFixed(2)+'%) le falta: ';
+    msg+=faltas.length? faltas.join('; ')+'.' : 'nada — ya tiene el máximo de su nivel.';
+    if(nx)msg+=' Si sube a '+nivLab(nx[0])+' (comprando '+fmt(nx[1]*PMULT())+' sacos en el '+perWord()+') el tope de descuento sube todavía más.';
+    return msg;
+  }
+  function vzRespEstado(hit){
+    var c=hit.client, t=tierOf(c.avg||0);
+    var quien=c.nombre+(hit.vendorLabel?(' — vendedor '+hit.vendorLabel):'');
+    var vig=(c.desc!=null)?c.desc.toFixed(2)+'%':'sin descuento calculado todavía';
+    var hoy=vaEnCurso(c);
+    return quien+' está en nivel '+nivLab(t[0])+', con '+fmt(c.avg||0)+' sacos de promedio mensual. Su descuento vigente es '+vig+'. Lleva '+fmt(hoy)+' sacos comprados en '+(typeof vitLabelApp==='function'&&vitLabelApp()||'el periodo actual')+'.';
+  }
+  function vzRespCompraMes(hit){
+    var c=hit.client;
+    var quien=c.nombre+(hit.vendorLabel?(' — vendedor '+hit.vendorLabel):'');
+    var hoy=vaEnCurso(c), base=baseCrecApp(c);
+    var txt=quien+' lleva '+fmt(hoy)+' sacos comprados en '+(typeof vitLabelApp==='function'&&vitLabelApp()||'el periodo actual')+'.';
+    if(base>0){ var pct=((hoy-base)/base*100); txt+=' En '+prevLabelApp()+' compró '+fmt(base)+' sacos, un cambio de '+(pct>=0?'+':'')+pct.toFixed(0)+'%.'; }
+    return txt;
+  }
+  function vzRespFuga(){
+    if(!ALERTAS||!ALERTAS.fuga||!ALERTAS.fuga.length)return 'No hay clientes en fuga lenta por ahora. ✓';
+    var top=ALERTAS.fuga.slice(0,5);
+    return 'Clientes en riesgo de fuga ('+ALERTAS.fuga.length+' en total): '+top.map(function(f){return f.n+' (pierde cerca de '+fmt(f.perd)+' sacos al mes)';}).join(', ')+(ALERTAS.fuga.length>5?', entre otros.':'.');
+  }
+  function vzRespSinCompra(){
+    if(!ALERTAS||!ALERTAS.sinCompra||!ALERTAS.sinCompra.length)return 'No hay clientes sin compra pendientes. ✓';
+    var top=ALERTAS.sinCompra.slice(0,5);
+    return 'Clientes que no compran ('+ALERTAS.sinCompra.length+' en total): '+top.map(function(c){return c.n+' ('+(c.dias!=null?c.dias+' días sin comprar':'sin fecha')+')';}).join(', ')+(ALERTAS.sinCompra.length>5?', entre otros.':'.');
+  }
+  function vzRespFocos(){
+    if(!ALERTAS||!ALERTAS.focos||!ALERTAS.focos.length)return 'No tienes focos marcados por atender ahora mismo.';
+    return 'Tus focos para atender primero: '+ALERTAS.focos.slice(0,6).map(function(f){return f.n+' ('+f.tipo+')';}).join(', ')+'.';
+  }
+  function vzRespConteo(){
+    var n=(typeof CLIENTS!=='undefined')?Object.keys(CLIENTS).length:0;
+    return 'Tienes '+n+(n===1?' cliente':' clientes')+' en cartera'+(typeof APPVEND!=='undefined'&&APPVEND?(' como '+APPVEND):'')+'.';
+  }
+  function vzRespVentaPropia(){
+    if(!VENTAS||!VENTAS.meses||!VENTAS.meses.length)return 'Todavía no hay datos de ventas publicados.';
+    var V=VENTAS, lm=V.lastMonth||V.meses[V.meses.length-1];
+    var cur=(V.cur&&V.cur[lm-1])||0, prior=(V.prior&&V.prior[lm-1])||0;
+    var g=V.gTarget||0, obj=prior*(1+g);
+    var txt='Este mes'+(typeof APPVEND!=='undefined'&&APPVEND?(' ('+APPVEND+')'):'')+' llevas '+fmt(cur)+' sacos vendidos.';
+    if(obj>0)txt+=' Tu objetivo es '+fmt(Math.round(obj))+' sacos, vas al '+(cur/obj*100).toFixed(0)+'%.';
+    if(prior>0){ var crec=(cur/prior-1)*100; txt+=' Contra el mismo mes del año pasado ('+fmt(prior)+' sacos) es '+(crec>=0?'+':'')+crec.toFixed(0)+'%.'; }
+    return txt;
+  }
+  // maestra.html sólo
+  function vzRespVendedor(k){
+    var p=VDATA[k]; if(!p)return 'No encuentro datos de ese vendedor.';
+    var label=VNAMES[k]||k, txt='';
+    var V=p.ventas;
+    if(V&&V.meses&&V.meses.length){
+      var lm=V.lastMonth||V.meses[V.meses.length-1];
+      var cur=(V.cur&&V.cur[lm-1])||0, prior=(V.prior&&V.prior[lm-1])||0;
+      var g=V.gTarget||0, obj=prior*(1+g);
+      txt=label+' lleva '+fmt(cur)+' sacos este mes.';
+      if(obj>0)txt+=' Va al '+(cur/obj*100).toFixed(0)+'% de su objetivo.';
+    }else txt=label+' todavía no tiene datos de ventas publicados.';
+    var A=p.alertas;
+    if(A)txt+=' Tiene '+((A.sinCompra||[]).length)+' clientes sin comprar y '+((A.fuga||[]).length)+' en fuga lenta.';
+    return txt;
+  }
+
+  // ---------- router de intención ----------
+  function vzHandle(raw){
+    var qn=vzNorm(raw);
+    if(!qn)return 'No entendí la pregunta. Intenta de nuevo.';
+    if(/\bfuga\b|riesgo|dejando de comprar|comprando menos/.test(qn))return vzRespFuga();
+    if(/sin comprar|no ha comprado|no compran|no han comprado/.test(qn))return vzRespSinCompra();
+    if(/\bfocos?\b/.test(qn))return vzRespFocos();
+    if(/cuantos clientes/.test(qn))return vzRespConteo();
+    var qTokens=vzTokens(raw);
+    if(typeof VKEYS!=='undefined' && VKEYS.length && /vendedor|equipo/.test(qn)){
+      var vk=vzFindVendedor(qTokens);
+      if(vk)return vzRespVendedor(vk);
+    }
+    var hit=vzFindCliente(qTokens);
+    if(hit){
+      if(/maxim|siguiente nivel|proximo nivel|le falta|falta para|para subir/.test(qn))return vzRespDescuento(hit);
+      if(/cuanto lleva|cuantos sacos|ha comprado|compro este mes/.test(qn))return vzRespCompraMes(hit);
+      return vzRespEstado(hit);
+    }
+    if(/como voy|cuanto llevo|mi venta|venta del mes|mis ventas/.test(qn))return vzRespVentaPropia();
+    return 'No encontré a ese cliente, o no entendí bien la pregunta. Puedes preguntar, por ejemplo: "¿qué le falta a [cliente] para el descuento máximo?", "¿cómo está [cliente]?", "¿qué clientes no han comprado?", "¿quién está en riesgo de fuga?", o "¿cómo voy este mes?".';
+  }
+  window.vzHandle=vzHandle;
+
+  // ---------- interfaz: botón flotante + panel ----------
+  function vzBuildUI(){
+    if(document.getElementById('vzFab'))return;
+    var css=document.createElement('style');
+    css.textContent=
+      '#vzFab{position:fixed;right:16px;bottom:18px;width:58px;height:58px;border-radius:50%;background:var(--gold);color:var(--navy);border:none;box-shadow:0 6px 18px rgba(0,0,0,.4);font-size:26px;cursor:pointer;z-index:9998;display:flex;align-items:center;justify-content:center}'+
+      '#vzSheet{position:fixed;left:0;right:0;bottom:0;max-height:82vh;overflow-y:auto;background:#0F1E3C;border-top:3px solid var(--gold);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.5);z-index:9999;display:none;flex-direction:column;padding:14px 16px calc(14px + env(safe-area-inset-bottom));position:fixed}'+
+      '#vzSheet.open{display:flex}'+
+      '#vzSheet h3{color:#e8eef7;font-size:15px;font-weight:900;margin-bottom:2px;padding-right:26px}'+
+      '#vzClose{position:absolute;right:14px;top:12px;background:none;border:none;color:#9fb0cc;font-size:20px;cursor:pointer}'+
+      '#vzStatus{font-size:12px;color:#9fb0cc;margin:4px 0 10px}'+
+      '#vzMic{width:64px;height:64px;border-radius:50%;border:none;background:var(--gold);color:var(--navy);font-size:28px;cursor:pointer;align-self:center;margin:4px 0 10px}'+
+      '#vzMic.listening{background:var(--red);color:#fff}'+
+      '#vzTextRow{display:flex;gap:8px;margin-bottom:10px}'+
+      '#vzText{flex:1;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px}'+
+      '#vzAsk{background:var(--gold);color:var(--navy);border:none;border-radius:10px;padding:0 16px;font-weight:800;cursor:pointer}'+
+      '#vzAnswer{background:#162340;border:1px solid #22304d;border-radius:12px;padding:13px 14px;font-size:16px;line-height:1.5;color:#e8eef7;min-height:40px;margin-bottom:6px}'+
+      '#vzEcho{font-size:12px;color:#7c8aa5;margin-bottom:4px;font-style:italic;min-height:14px}';
+    document.head.appendChild(css);
+
+    var fab=document.createElement('button');
+    fab.id='vzFab'; fab.title='Pregúntame'; fab.innerHTML='🎙️';
+    fab.onclick=vzOpen;
+    document.body.appendChild(fab);
+
+    var sheet=document.createElement('div');
+    sheet.id='vzSheet';
+    sheet.innerHTML=
+      '<button id="vzClose" onclick="vzClose()">✕</button>'+
+      '<h3>🎙️ Pregúntame</h3>'+
+      '<div id="vzStatus">Toca el micrófono y haz tu pregunta, o escríbela abajo.</div>'+
+      '<button id="vzMic" onclick="vzListen()">🎙️</button>'+
+      '<div id="vzEcho"></div>'+
+      '<div id="vzAnswer">Ejemplos: "¿Qué le falta a [cliente] para el descuento máximo?" · "¿Cómo está [cliente]?" · "¿Quién está en riesgo de fuga?" · "¿Qué clientes no han comprado?" · "¿Cómo voy este mes?"</div>'+
+      '<div id="vzTextRow"><input id="vzText" placeholder="…o escribe tu pregunta aquí"><button id="vzAsk" onclick="vzAskTyped()">Preguntar</button></div>';
+    document.body.appendChild(sheet);
+    document.getElementById('vzText').addEventListener('keydown',function(e){ if(e.key==='Enter')vzAskTyped(); });
+  }
+  window.vzOpen=function(){ vzBuildUI(); document.getElementById('vzSheet').classList.add('open'); };
+  window.vzClose=function(){ var s=document.getElementById('vzSheet'); if(s)s.classList.remove('open'); };
+  window.vzAskTyped=function(){
+    var inp=document.getElementById('vzText'); var q=(inp&&inp.value||'').trim();
+    if(!q)return; vzAnswer(q); if(inp)inp.value='';
+  };
+  function vzAnswer(q){
+    var echo=document.getElementById('vzEcho'); if(echo)echo.textContent='Preguntaste: "'+q+'"';
+    var ans;
+    try{ ans=vzHandle(q); }catch(e){ ans='Tuve un problema calculando la respuesta. Intenta de nuevo o revísalo directo en la app.'; }
+    var box=document.getElementById('vzAnswer'); if(box)box.textContent=ans;
+    vzSpeak(ans);
+  }
+  var vzRecog=null;
+  window.vzListen=function(){
+    var Rec=window.SpeechRecognition||window.webkitSpeechRecognition;
+    var btn=document.getElementById('vzMic'), st=document.getElementById('vzStatus');
+    if(!Rec){
+      if(st)st.textContent='Tu navegador no permite dictado por voz aquí. Escribe tu pregunta abajo — la respuesta también te la puedo leer en voz alta.';
+      return;
+    }
+    try{
+      if(!vzRecog){
+        vzRecog=new Rec();
+        vzRecog.lang='es-MX'; vzRecog.continuous=false; vzRecog.interimResults=false; vzRecog.maxAlternatives=1;
+        vzRecog.onresult=function(e){ var txt=(e.results&&e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||''; if(txt)vzAnswer(txt); };
+        vzRecog.onerror=function(){ var b=document.getElementById('vzMic'); if(b)b.classList.remove('listening'); var s2=document.getElementById('vzStatus'); if(s2)s2.textContent='No se entendió, intenta de nuevo o escribe tu pregunta.'; };
+        vzRecog.onend=function(){ var b=document.getElementById('vzMic'); if(b)b.classList.remove('listening'); };
+      }
+      if(btn)btn.classList.add('listening');
+      if(st)st.textContent='Escuchando…';
+      vzRecog.start();
+    }catch(e){ if(btn)btn.classList.remove('listening'); }
+  };
+  function vzSpeak(text){
+    try{
+      if(!('speechSynthesis' in window))return;
+      window.speechSynthesis.cancel();
+      var u=new SpeechSynthesisUtterance(text);
+      u.lang='es-MX'; u.rate=1;
+      var voices=window.speechSynthesis.getVoices()||[];
+      var v=null; for(var i=0;i<voices.length;i++){ if(/es/i.test(voices[i].lang)){v=voices[i];break;} }
+      if(v)u.voice=v;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',vzBuildUI);
+  else vzBuildUI();
+})();
+
 </script>
 </body></html>
