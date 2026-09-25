@@ -161,7 +161,7 @@ function fmt(n){return Math.round(n).toLocaleString('es-MX');}
 // Nombres tal como los escribe Odoo, para las familias de producto publicadas por ventas.html
 // (V.prodCur/V.prodPrior). PETFOOD incluye "Rafia", que es el mismo producto con nombre viejo/
 // alterno en Odoo. Fallback si el producto no tuvo venta este año (sin nombre vigente publicado).
-var PROD_FAM_LABELS={'SILVERKAN|25':'SILVER KAN 18% 25 KGS','SILVERKAN|5':'SILVER KAN 18% 5 KGS','CACHORRO|20':'SILVER KAN CACHORRO 20 KGS','CACHORRO|5':'SILVER KAN CACHORRO 5 KGS','CAT|15':'SILVER KAT 15 KGS','CAT|5':'SILVER KAT 5 KGS','KANKAN|25':'KAN KAN 25KG','KANKAN|20':'KAN KAN 20 KGS','MIBOOB|20':'MI BOOB 20 KGS','PETFOOD|20':'PET FOOD 20 KG (R)','PREMIUM|25':'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILOS EXTRAS'};
+var PROD_FAM_LABELS={'SILVERKAN|25':'SILVER KAN 18% 25 KGS','SILVERKAN|5':'SILVER KAN 18% 5 KGS','CACHORRO|20':'SILVER KAN CACHORRO 20 KGS','CACHORRO|5':'SILVER KAN CACHORRO 5 KGS','CAT|15':'SILVER KAT 15 KGS','CAT|5':'SILVER KAT 5 KGS','KANKAN|25':'KAN KAN 25KG','KANKAN|20':'KAN KAN 20 KGS','MIBOOB|20':'MI BOOB 20 KGS','PETFOOD|20':'PET FOOD 20 KG (R)','PREMIUM|25':'SILVER KAN PREMIUM + 22% 25 KG'};
 // Prioriza el nombre real que ventas.html publicó este año (liveNames = V.prodNames); si el
 // producto no tuvo venta este año usa el nombre histórico conocido.
 function prodFamLabel(fk, liveNames){
