@@ -158,6 +158,9 @@ function PMULT(){return APPEVAL==='MES'?1:3;}               // metas: mensuales 
 function perWord(){return APPEVAL==='MES'?'mes':'trimestre';}
 function perLabel(){return APPEVALLABEL||(APPEVAL==='MES'?(MES_NOM[APPMONTH]||'mes'):(APPQ?APPQ.label:'trimestre'));}
 function fmt(n){return Math.round(n).toLocaleString('es-MX');}
+// Nombres bonitos para las familias de producto publicadas por ventas.html (V.prodCur/V.prodPrior).
+var PROD_FAM_LABELS={'SILVERKAN|25':'Silver Kan 25 kg','SILVERKAN|5':'Silver Kan 5 kg','CACHORRO|20':'Silver Kan Cachorro 20 kg','CACHORRO|5':'Silver Kan Cachorro 5 kg','CAT|15':'Silver Kat 15 kg','CAT|5':'Silver Kat 5 kg','KANKAN|25':'Kan Kan 25 kg','KANKAN|20':'Kan Kan 20 kg','MIBOOB|20':'Mi Boob 20 kg','PETFOOD|20':'Pet Food 20 kg','RAFIA|20':'Rafia 20 kg','PREMIUM|25':'Silver Kan Premium 25 kg'};
+function prodFamLabel(fk){ return PROD_FAM_LABELS[fk] || String(fk).replace('|',' · ').toLowerCase().replace(/\b\w/g,function(c){return c.toUpperCase();})+' kg'; }
 // ── Tamaño de la app (ayuda a teléfonos con display grande / "mucho zoom") ──
 function applyZoom(){try{var z=parseFloat(localStorage.getItem('appZoom04mas'))||1;document.body.style.zoom=z;var el=document.getElementById('zlvl');if(el)el.textContent=Math.round(z*100)+'%';}catch(e){}}
 function setZoom(d){try{var z=parseFloat(localStorage.getItem('appZoom04mas'))||1;z=Math.min(1.4,Math.max(0.6,Math.round((z+d)*100)/100));localStorage.setItem('appZoom04mas',String(z));applyZoom();}catch(e){}}
@@ -556,6 +559,7 @@ function buildAgg(){
   for(var z=0;z<12;z++){cur.push(0);prior.push(0);priorVivo.push(0);priorPerd.push(0);curT.push(0);priorT.push(0);}
   var sinCompra=[],fuga=[],focos=[],nuevosCount=0,nuevosMeta=0,nuevosLista=[],regMap={};
   var meses=[],gTarget=0,lastMonth=0,esDiario=false,priorDaily={},prem=null,cobre=null,evalPeriod='TRIM',evalLabel='',updatedStr=MUP;
+  var prodCur={},prodPrior={};
   var mesEval=0,mesAnt=0,mesCurso=0,mesVitrina=0,corte=null;   // mes evaluado / en vitrina / corte confirmado (vienen igual en todos los vendedores)
   // acumuladores del resumen ejecutivo (contadores crudos: se suman entre vendedores sin distorsionarse)
   var R={cartera:0,clientes:0,activos:0,riesgoN:0,riesgoSac:0,fugaN:0,fugaSac:0,retBase:0,retKeep:0,lostN:0,lostSac:0,premSac:0,totSac:0,curTot:0,priorTot:0,cy:0,py:0},hayRes=false,lostTop=[];
@@ -569,6 +573,8 @@ function buildAgg(){
       if(V.curT&&V.priorT){hayT=true;for(var iT=0;iT<12;iT++){curT[iT]+=V.curT[iT]||0;priorT[iT]+=V.priorT[iT]||0;}}
       promoSac+=V.promoSac||0;newDisc+=V.newDisc||0;
       if(V.dia)for(var mm in V.dia){var arr=V.dia[mm]||[];if(!dia[mm])dia[mm]=[];for(var d=0;d<arr.length;d++)dia[mm][d]=(dia[mm][d]||0)+(arr[d]||0);}
+      if(V.prodCur)for(var fkc in V.prodCur){ if(!prodCur[fkc])prodCur[fkc]=[0,0,0,0,0,0,0,0,0,0,0,0]; var arrc=V.prodCur[fkc]; for(var ic=0;ic<12;ic++)prodCur[fkc][ic]+=(arrc&&arrc[ic])||0; }
+      if(V.prodPrior)for(var fkp in V.prodPrior){ if(!prodPrior[fkp])prodPrior[fkp]=[0,0,0,0,0,0,0,0,0,0,0,0]; var arrp=V.prodPrior[fkp]; for(var ip=0;ip<12;ip++)prodPrior[fkp][ip]+=(arrp&&arrp[ip])||0; }
     }
     var A=p.alertas;if(A){gTarget=A.gTarget||gTarget;
       if(A.sinCompra)sinCompra=sinCompra.concat(A.sinCompra);
@@ -589,7 +595,7 @@ function buildAgg(){
   fuga.sort(function(a,b){return (b.perd||0)-(a.perd||0);});
   var regiones=Object.keys(regMap).map(function(e){var o=regMap[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:o.cur,prior:o.prior,crec:crec};}).sort(function(a,b){return a.crec-b.crec;});
   return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,mesEval:mesEval,mesAnt:mesAnt,mesCurso:mesCurso,mesVitrina:mesVitrina,corte:corte,prem:prem,cobre:cobre,prospects:prospects,rows:rows,res:(hayRes?R:null),
-    ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,priorVivo:priorVivo,priorPerd:priorPerd,curT:(hayT?curT:null),priorT:(hayT?priorT:null),dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario},
+    ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,priorVivo:priorVivo,priorPerd:priorPerd,curT:(hayT?curT:null),priorT:(hayT?priorT:null),dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario,prodCur:prodCur,prodPrior:prodPrior},
     alertas:{sinCompra:sinCompra,fuga:fuga,focos:focos.slice(0,12),nuevos:{count:nuevosCount,meta:nuevosMeta,lista:nuevosLista},regiones:regiones,gTarget:gTarget}};
 }
 function masterLoad(){
@@ -894,7 +900,7 @@ function renderVentas(){
   // real: puede haber crecido bien y aun así quedar debajo del objetivo, y eso no se veía.
   function vbtn(k,txt){ var on=(VMODE===k);
     return '<button onclick="setVMode(\''+k+'\')" style="flex:1;padding:9px 6px;border-radius:10px;border:1px solid '+(on?'#E8A020':'#22304d')+';background:'+(on?'#E8A020':'#162340')+';color:'+(on?'#151b26':'#9fb0cc')+';font-weight:800;font-size:12px;cursor:pointer">'+txt+'</button>'; }
-  h+='<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+vbtn('obj','🎯 Contra objetivo (+'+(g*100).toFixed(0)+'%)')+vbtn('yoy','📈 Crecimiento vs año pasado')+vbtn('range','📅 Elegir periodo')+'</div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+vbtn('obj','🎯 Contra objetivo (+'+(g*100).toFixed(0)+'%)')+vbtn('yoy','📈 Crecimiento vs año pasado')+vbtn('range','📅 Elegir periodo')+vbtn('prod','📦 Por producto')+'</div>';
 
   if(VMODE==='range'){
     // ── VISTA RANGO LIBRE (Desde/Hasta) ─────────────────────────────────────
@@ -1000,6 +1006,60 @@ function renderVentas(){
        +'<div style="height:5px;background:#0b1628;border-radius:6px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.min(100,pr3/maxR*100)+'%;background:#64748b"></i></div></div>';
     }
     h+='<div style="font-size:11px;color:#7c8aa5;margin-top:6px">Elige Desde/Hasta para comparar cualquier periodo contra el mismo periodo del año pasado. Barra de color = venta actual. Barra gris = el año pasado.'+(!hasTon?' (Toneladas aún no disponible: publica de nuevo desde ventas.html para activarla.)':'')+'</div>';
+    h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · datos del último reporte publicado.</div>';
+    app.innerHTML=h; return;
+  }
+
+  if(VMODE==='prod'){
+    // ── VISTA POR PRODUCTO ───────────────────────────────────────────────────
+    // Qué producto está creciendo y cuál está cayendo, sacos reales (sin promo/bonificación).
+    // V.prodCur/V.prodPrior ya vienen filtrados al vendedor elegido arriba (o sumados entre todos
+    // si está en "Todos los vendedores", vía buildAgg()).
+    if(!RANGE_FROM || meses.indexOf(RANGE_FROM)<0) RANGE_FROM=meses[0];
+    if(!RANGE_TO || meses.indexOf(RANGE_TO)<0) RANGE_TO=lm;
+    var selSt2='width:100%;background:#162340;border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+      +'<div style="flex:1;min-width:110px"><label style="font-size:11px;color:#9fb0cc">Desde</label><select style="'+selSt2+'" onchange="setRangeFrom(this.value)">'+meses.map(function(m){return '<option value="'+m+'"'+(m===RANGE_FROM?' selected':'')+'>'+MESN[m]+'</option>';}).join('')+'</select></div>'
+      +'<div style="flex:1;min-width:110px"><label style="font-size:11px;color:#9fb0cc">Hasta</label><select style="'+selSt2+'" onchange="setRangeTo(this.value)">'+meses.map(function(m){return '<option value="'+m+'"'+(m===RANGE_TO?' selected':'')+'>'+MESN[m]+'</option>';}).join('')+'</select></div>'
+      +'</div>';
+    if(!V.prodCur || !Object.keys(V.prodCur).length){
+      h+='<div class="hint">⚠ Esta vista todavía no se ha publicado (hace falta subir de nuevo el reporte desde ventas.html).</div>';
+      h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · datos del último reporte publicado.</div>';
+      app.innerHTML=h; return;
+    }
+    var pFrom=Math.min(RANGE_FROM,RANGE_TO), pTo=Math.max(RANGE_FROM,RANGE_TO);
+    var pCur=V.prodCur||{}, pPrior=V.prodPrior||{};
+    var fams={}; Object.keys(pCur).forEach(function(k){fams[k]=1;}); Object.keys(pPrior).forEach(function(k){fams[k]=1;});
+    var prows=[];
+    Object.keys(fams).forEach(function(fk){
+      var c=0,p=0; var ca=pCur[fk]||[], pa=pPrior[fk]||[];
+      for(var mi=pFrom;mi<=pTo;mi++){ c+=ca[mi-1]||0; p+=pa[mi-1]||0; }
+      if(c<=0 && p<=0) return;
+      var diff=c-p, growth=p>0?(c/p-1):(c>0?null:0);
+      prows.push({fk:fk,label:prodFamLabel(fk),cur:c,prior:p,diff:diff,growth:growth});
+    });
+    prows.sort(function(a,b){return a.diff-b.diff;});
+    var totC=prows.reduce(function(a,r){return a+r.cur;},0), totP=prows.reduce(function(a,r){return a+r.prior;},0);
+    var totG=totP>0?(totC/totP-1):(totC>0?null:0);
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+      +kcard(fmt(totC),'Sacos este año (sin promo)','#E8A020')
+      +kcard(fmt(totP),'mismo periodo año pasado','#9fb0cc')
+      +kcard(totG==null?'nuevo':((totG>=0?'+':'')+(totG*100).toFixed(1)+'%'),'Crecimiento en el periodo',totG==null?'#9fb0cc':(totG>=0?'#22c55e':'#ef4444'))
+      +'</div>';
+    if(!prows.length){
+      h+='<div class="hint">Sin venta de producto en este periodo.</div>';
+    } else {
+      var maxAbs=Math.max.apply(null,prows.map(function(r){return Math.max(r.cur,r.prior);}).concat([1]));
+      prows.forEach(function(r){
+        var col=r.growth==null?'#9fb0cc':(r.growth>=0?'#22c55e':'#ef4444');
+        var growTxt=r.growth==null?'nuevo':((r.growth>=0?'+':'')+(r.growth*100).toFixed(1)+'%');
+        var wC=Math.max(2,Math.round(r.cur/maxAbs*100)), wP=Math.max(2,Math.round(r.prior/maxAbs*100));
+        h+='<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1"><span style="font-weight:800;color:#e8eef7">'+r.label+'</span><span>'+fmt(r.cur)+' vs '+fmt(r.prior)+' · <b style="color:'+col+'">'+growTxt+'</b></span></div>'
+          +'<div style="height:9px;background:#0b1628;border-radius:6px;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;width:'+wC+'%;background:'+col+'"></i></div>'
+          +'<div style="height:5px;background:#0b1628;border-radius:6px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:'+wP+'%;background:#64748b"></i></div></div>';
+      });
+    }
+    h+='<div style="font-size:11px;color:#7c8aa5;margin-top:6px">Sacos reales por producto (sin promoción/bonificación). Barra de color = este año. Barra gris = mismo periodo del año pasado.</div>';
     h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · datos del último reporte publicado.</div>';
     app.innerHTML=h; return;
   }
