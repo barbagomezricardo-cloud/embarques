@@ -143,6 +143,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <span class="conn local" id="conn"><span class="d"></span><span id="connTxt">Local</span></span>
     <button class="primary" onclick="openForm()">＋ Programar embarque</button>
     <button onclick="exportCSV()">⬇ CSV</button>
+    <button class="ghost" onclick="copyPuntualidad()" title="Genera un mensaje con el % de entregas a tiempo, listo para compartir">📣 Puntualidad</button>
     <button class="ghost protected" data-prot onclick="exportJSON()">💾 Respaldo</button>
     <button class="ghost protected" data-prot data-master onclick="document.getElementById('impF').click()">📂 Cargar</button>
     <input type="file" id="impF" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -151,6 +152,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   </div>
 </header>
 
+<div id="alertBanners"></div>
 <main>
   <!-- PERIOD BAR -->
   <div class="periodbar">
@@ -730,7 +732,39 @@ function render(){
   renderCharts(rows);
   renderCarry();
   renderFlota();
+  renderBanners();
   refreshOptions();
+}
+
+/* ================= AVISOS PROACTIVOS (banner fijo, visible sin entrar a la pestaña) ================= */
+function renderBanners(){
+  const box=document.getElementById('alertBanners'); if(!box)return;
+  let html='';
+  // Flota: vencidos/urgentes — visible para cualquiera que abra el programador.
+  try{
+    const units=flotaUnits();
+    let nVenc=0,nUrg=0;
+    units.forEach(u=>{ const w=flotaUnitData(u).worst; if(w===FLOTA_ST.VENCIDO)nVenc++; else if(w===FLOTA_ST.URGENTE)nUrg++; });
+    if(nVenc+nUrg>0){
+      const peor=nVenc>0;
+      html+=`<div onclick="setView('flota')" style="cursor:pointer;background:${peor?'#3a1414':'#3a2610'};border:1px solid ${peor?'var(--late)':'var(--warn)'};color:${peor?'var(--late)':'var(--warn)'};border-radius:10px;padding:10px 14px;margin:0 0 10px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px">
+        🚚 ${nVenc? nVenc+' unidad(es) con trámite VENCIDO':''}${nVenc&&nUrg?' · ':''}${nUrg? nUrg+' unidad(es) URGENTE(S)':''} — toca para revisar Flota y mantenimiento
+      </div>`;
+    }
+  }catch(e){}
+  // Auditoría: posibles maquillajes recientes — solo si el usuario ya es master (la pestaña es confidencial).
+  try{
+    if(typeof isMaster!=='undefined' && isMaster && Array.isArray(AUDIT)){
+      const haceDias=(iso,n)=>{ try{ return (Date.now()-new Date(iso).getTime()) <= n*86400000; }catch(e){ return false; } };
+      const recientes=AUDIT.filter(a=>a.maquillaje && haceDias(a.ts,14));
+      if(recientes.length>0){
+        html+=`<div onclick="setView('audit')" style="cursor:pointer;background:#3a1414;border:1px solid var(--late);color:var(--late);border-radius:10px;padding:10px 14px;margin:0 0 10px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px">
+          🕵️ ${recientes.length} posible(s) maquillaje(s) detectado(s) en los últimos 14 días — toca para revisar Auditoría
+        </div>`;
+      }
+    }
+  }catch(e){}
+  box.innerHTML=html;
 }
 
 /* ================= KPIs ================= */
@@ -772,6 +806,29 @@ function renderKPIs(rowsAll){
     {lbl:'Productividad',val:avgKgm.toLocaleString('es-MX'),foot:'kg por minuto (prom.)',cls:'ok'},
   ];
   document.getElementById('kpis').innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot||''}</div>${k.bar!=null?`<div class="bar"><i style="width:${k.bar}%"></i></div>`:''}</div>`).join('');
+}
+
+/* ================= PUNTUALIDAD COMO DATO DE MARKETING ================= */
+// % de salidas a tiempo de los últimos 90 días (independiente del filtro de periodo que se esté
+// viendo en pantalla), para tener un número estable y defendible que se pueda compartir con clientes.
+function puntualidad90(){
+  const hoy=new Date(TODAY+'T00:00:00');
+  const desde=new Date(hoy); desde.setDate(hoy.getDate()-90);
+  const desdeISO=iso(desde);
+  const rows=DATA.filter(r=>{ const d=r.fechaCarga||r.fechaProg; return d && d>=desdeISO && d<=TODAY; })
+    .map(r=>({r,cv:calc(r)})).filter(({cv})=>!cv.cancelado);
+  const finS=rows.filter(({cv})=>cv.estatusSalida==='A TIEMPO'||cv.estatusSalida==='TARDE');
+  const okS=finS.filter(({cv})=>cv.estatusSalida==='A TIEMPO').length;
+  const pct=finS.length?Math.round(okS/finS.length*100):null;
+  return {pct, n:finS.length, desdeISO, hastaISO:TODAY};
+}
+function copyPuntualidad(){
+  const p=puntualidad90();
+  if(p.pct==null || p.n<5){ toast('Aún no hay suficientes embarques con salida registrada en los últimos 90 días.'); return; }
+  const f=s=>s.split('-').reverse().join('/');
+  const txt=`🚚 Entregamos a tiempo el ${p.pct}% de nuestros embarques (últimos 90 días, ${f(p.desdeISO)} al ${f(p.hastaISO)}, ${p.n} embarques).`;
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(()=>toast('Mensaje copiado ✓ Pégalo donde quieras usarlo')).catch(()=>alert(txt)); }
+  else alert(txt);
 }
 
 /* ================= PROYECCIÓN (pace de venta / stock / a fabricar, publicado desde ventas.html) ================= */
@@ -1215,6 +1272,7 @@ function applyLock(){
   const pm=document.getElementById('masterCfg'); if(pm) pm.style.display=isMaster?'block':'none';
   if(!isMaster && curView==='audit') setView('tabla');
   if(isMaster) renderAudit();
+  try{renderBanners();}catch(e){}
 }
 function requireUnlock(){ if(!unlocked){ toast('Requiere superusuario'); toggleLock(); return false; } return true; }
 
@@ -1339,7 +1397,7 @@ function initFirebase(){
         if(!v.motivos || !v.motivos.length){ CFG.motivos=MOTIVOS_DEFAULT.map(m=>({...m})); persistCfg(); }
         rebuildMotivoMap();
         try{render();}catch(e){} } });
-      fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster) renderAudit(); } });
+      fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster){ renderAudit(); renderBanners(); } } });
       fbFlota.on('value', snap=>{ const v=snap.val(); if(v){ FLOTA=normalize(Object.values(v)); try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} } renderFlota(); },
         err=>{ console.error('flota:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "flota" en las reglas de Firebase'); });
       // Proyección de producción: la publica ventas.html (solo lectura aquí, el pace/venta real).

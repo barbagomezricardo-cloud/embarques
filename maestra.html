@@ -91,11 +91,55 @@ let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo
 let AI_CFG={enabled:false,model:'haiku',endpoint:''}; // asistente de IA (lo activa el gerente desde ventas.html)
 let PROSPECTS=[], VENTAS=null, ALERTAS=null, RES=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else if(v==='accesos')renderAccesos();else if(v==='resumen')renderResumen();else if(v==='monitoreo')abrirMonitoreo();else renderList('');}
+function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas'){fetchMFugaNota();fetchIncidenciasEntrega();renderAlertas();}else if(v==='accesos')renderAccesos();else if(v==='resumen')renderResumen();else if(v==='monitoreo')abrirMonitoreo();else if(v==='marketing'){renderMarketing();}else renderList('');}
 // Monitoreo trabaja siempre sobre la cartera COMPLETA, sin importar qué vendedor esté elegido arriba.
 function abrirMonitoreo(){ if(CURVEND!=='__all__'){CURVEND='__all__';applyPayload(buildAgg());} VIEW='monitoreo'; renderMonitoreo(); }
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
-function viewTabs(){return masterBar()+'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+vtBtn('resumen','\uD83D\uDCCA Resumen')+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+vtBtn('monitoreo','\uD83D\uDD0E Monitoreo')+vtBtn('accesos','\uD83D\uDD13 Accesos')+'</div>';}
+function viewTabs(){return masterBar()+'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+vtBtn('resumen','\uD83D\uDCCA Resumen')+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('marketing','\uD83D\uDCE3 Marketing')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+vtBtn('monitoreo','\uD83D\uDD0E Monitoreo')+vtBtn('accesos','\uD83D\uDD13 Accesos')+'</div>';}
+// \u2500\u2500 MARKETING: listas de segmentaci\u00F3n listas para copiar/exportar a campa\u00F1as \u2500\u2500
+function copyList(title, items, fmtLine){
+  if(!items.length){alert('No hay clientes en esta lista.');return;}
+  var txt='*'+title+'*\n\n'+items.map(function(it,i){return (i+1)+'. '+fmtLine(it);}).join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){alert('Lista copiada \u2713 ('+items.length+' clientes). P\u00E9gala donde la necesites.');}).catch(function(){alert(txt);});}
+  else alert(txt);
+}
+function exportListCSV(title, items, cols){
+  var H=cols.map(function(c){return c[0];});
+  var L=[H.join(',')];
+  items.forEach(function(it){ var row=cols.map(function(c){var v=c[1](it);v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}); L.push(row.join(',')); });
+  var blob=new Blob(['\uFEFF'+L.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=title.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'.csv'; a.click();
+}
+var _MKT_FUGA=[], _MKT_SUBIO=[];
+function _mktCopyFuga(){ copyList('Clientes en riesgo de fuga', _MKT_FUGA, function(it){return it.n+' \u2014 baja '+Math.round(it.drop)+'%, pierde '+Math.round(it.perd)+' sac/mes'+(it.est?(' \u00B7 '+it.est):'');}); }
+function _mktCsvFuga(){ exportListCSV('clientes_riesgo_fuga', _MKT_FUGA, [['Cliente',function(it){return it.n;}],['Estado',function(it){return it.est||'';}],['Caida_pct',function(it){return Math.round(it.drop);}],['Sacos_mes_perdidos',function(it){return Math.round(it.perd);}]]); }
+function _mktCopySubio(){ copyList('Clientes que subieron de nivel', _MKT_SUBIO, function(it){return it.n+' \u2014 '+(it.de||'')+' \u2192 '+(it.a||'');}); }
+function _mktCsvSubio(){ exportListCSV('clientes_subieron_nivel', _MKT_SUBIO, [['Cliente',function(it){return it.n;}],['Nivel_antes',function(it){return it.de||'';}],['Nivel_ahora',function(it){return it.a||'';}]]); }
+function renderMarketing(){
+  var app=document.getElementById('app');app.style.display='block';
+  var h=syncBar()+viewTabs();
+  h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:2px 0 4px">\uD83D\uDCE3 Segmentaci\u00F3n para campa\u00F1as \u2014 '+(CURVEND==='__all__'?'todos los vendedores':(APPVEND||''))+'</div>';
+  h+='<div style="font-size:11.5px;color:#9fb0cc;margin-bottom:12px">Listas listas para usar en una promoci\u00F3n dirigida o un mensaje de reconocimiento. Se arman solas con los datos ya publicados \u2014 cambia el vendedor arriba para filtrar.</div>';
+  var A=ALERTAS||{};
+  _MKT_FUGA=(A.fuga||[]).slice().sort(function(a,b){return (b.perd||0)-(a.perd||0);});
+  _MKT_SUBIO=A.subioNivel||[];
+  h+='<div style="background:#162340;border:1px solid #22304d;border-left:4px solid #f97316;border-radius:12px;padding:14px;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:800;color:#e8eef7">\uD83D\uDCC9 Clientes en riesgo de fuga ('+_MKT_FUGA.length+')</div>'
+    +'<div style="font-size:11.5px;color:#9fb0cc;margin:2px 0 10px">Compran cada vez menos \u2014 buenos candidatos para una promoci\u00F3n dirigida antes de perderlos.</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button onclick="_mktCopyFuga()" style="background:#f97316;color:#1a1206;border:none;border-radius:8px;padding:9px 14px;font-weight:800;cursor:pointer">\uD83D\uDCCB Copiar lista</button>'
+    +'<button onclick="_mktCsvFuga()" style="background:#22304d;color:#dbeafe;border:none;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer">\u2B07 CSV</button>'
+    +'</div></div>';
+  h+='<div style="background:#162340;border:1px solid #22304d;border-left:4px solid #22c55e;border-radius:12px;padding:14px;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:800;color:#e8eef7">\uD83C\uDD99 Subieron de nivel este mes ('+_MKT_SUBIO.length+')</div>'
+    +'<div style="font-size:11.5px;color:#9fb0cc;margin:2px 0 10px">Buenos candidatos para un mensaje de reconocimiento, o para empujarlos al siguiente escal\u00F3n de descuento.</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button onclick="_mktCopySubio()" style="background:#22c55e;color:#062b12;border:none;border-radius:8px;padding:9px 14px;font-weight:800;cursor:pointer">\uD83D\uDCCB Copiar lista</button>'
+    +'<button onclick="_mktCsvSubio()" style="background:#22304d;color:#dbeafe;border:none;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer">\u2B07 CSV</button>'
+    +'</div></div>';
+  h+='<div class="foot">Estas listas se arman con lo \u00FAltimo que ventas.html public\u00F3. Si acabas de subir un reporte nuevo, actualiza esta pantalla.</div>';
+  app.innerHTML=h;
+}
 function premBoost(mix){return mix>=PREM.u2?PREM.e2:(mix>=PREM.u1?PREM.e1:0);}
 const NIVLAB={DIAMANTE_PLUS:'DIAMANTE PLUS'};
 const MES_NOM={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
@@ -453,6 +497,14 @@ function keyp(s){return (s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpper
 function applyMFix(){var fx=window._mFix||{};if(!fx||!PROSPECTS)return;PROSPECTS.forEach(function(p){var f=fx[keyp(p.n)];if(f){if(f.e)p.e=f.e;if(f.c)p.c=f.c;}});}
 function fetchMObs(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/skan/_obs.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mObs=st;if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
 function fetchMFix(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/skan/_prospfix.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._mFix=o||{};applyMFix();if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
+// Motivos de fuga que capturan los vendedores en su app (solo lectura aquí, mismo patrón que _obs)
+function fetchMFugaNota(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/skan/_fugaNota.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mFugaNota=st;if(VIEW==='alertas')renderAlertas();}).catch(function(){});}
+// Incidencias de entrega que los vendedores confirmaron en su app (cierre del ciclo con logística).
+function fetchIncidenciasEntrega(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/embarques.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){o=o||{};var list=[];for(var id in o){var r2=o[id]||{};if(r2.entregaEstado==='incidencia')list.push({cliente:r2.cliente||'',pedido:r2.pedido||'',nota:r2.entregaNota||'',por:r2.entregaPor||'',ts:r2.entregaTs||'',fecha:r2.fechaCarga||r2.fechaProg||''});}
+  list.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+  window._mIncidencias=list.slice(0,50);
+  if(VIEW==='alertas')renderAlertas();
+}).catch(function(){});}
 function visKey(){return 'visitas04mas_'+(APPVEND||'v');}
 function getVisitas(){try{return JSON.parse(localStorage.getItem(visKey())||'{}');}catch(e){return {};}}
 function saveVisitas(o){try{localStorage.setItem(visKey(),JSON.stringify(o));}catch(e){}}
@@ -528,6 +580,13 @@ function renderAlertas(){
     A.focos.forEach(function(f){h+='<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#e8eef7;padding:3px 0"><span>'+f.n+'</span><span style="color:#fca5a5">'+f.tipo+'</span></div>';});
     h+='</div>';
   }
+  (function(){
+    var inc=window._mIncidencias||[];
+    if(!inc.length)return;
+    h+='<div style="background:#2a1414;border:1px solid #862a2a;border-radius:12px;padding:12px;margin-bottom:10px"><div style="font-size:12px;color:#fca5a5;text-transform:uppercase;font-weight:800">📦 Incidencias de entrega reportadas ('+inc.length+')</div>';
+    inc.slice(0,10).forEach(function(x){h+='<div style="border-top:1px solid #4a2323;padding:5px 0;font-size:12px;color:#e8eef7"><b>'+x.cliente+'</b> · pedido '+(x.pedido||'—')+'<div style="color:#f0b0b0;font-size:11px">'+(x.nota||'(sin detalle)').replace(/</g,'&lt;')+' — '+(x.por||'')+' · '+(x.ts||'')+'</div></div>';});
+    h+='</div>';
+  })();
   function sect(title,items,render){
     var hh='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:12px 0 6px">'+title+' ('+items.length+')</div>';
     if(!items.length)return hh+'<div style="font-size:12px;color:#7ee2a8;padding:2px 2px 6px">✓ Sin pendientes aquí.</div>';
@@ -539,8 +598,21 @@ function renderAlertas(){
   });
   h+=sect('📉 Fuga lenta (compran menos)',A.fuga||[],function(f){
     var col=f.sev==='critica'?'#ef4444':(f.sev==='alta'?'#f97316':'#f59e0b');
-    return '<div class="li"><div><b>'+f.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(f.est||'')+' · pierde ~'+fmt(f.perd)+' sac/mes</div></div><span style="font-weight:900;color:'+col+'">'+f.drop+'%</span></div>';
+    var nota=(window._mFugaNota||{})[f.n];
+    return '<div class="li" style="flex-direction:column;align-items:stretch;gap:4px"><div style="display:flex;justify-content:space-between;gap:8px"><div><b>'+f.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(f.est||'')+' · pierde ~'+fmt(f.perd)+' sac/mes</div></div><span style="font-weight:900;color:'+col+'">'+f.drop+'%</span></div>'
+      +(nota&&nota.txt?('<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:6px 9px;font-size:11.5px;color:#f0d9a0">📝 '+(nota.txt||'').replace(/</g,'&lt;')+' <span style="color:#8a7a52">· '+(nota.ts||'')+'</span></div>'):'<div style="font-size:11px;color:#64748b">Sin motivo capturado todavía.</div>')
+      +'</div>';
   });
+  if(A.subioNivel&&A.subioNivel.length){
+    h+=sect('🆙 Subieron de nivel este mes',A.subioNivel,function(s){
+      return '<div class="li"><div><b>'+s.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(s.de||'')+' → '+(s.a||'')+'</div></div><span style="font-size:16px">🎉</span></div>';
+    });
+  }
+  if(A.sinSegunda&&A.sinSegunda.length){
+    h+=sect('🆕 Nuevos sin segunda compra',A.sinSegunda,function(s){
+      return '<div class="li"><div><b>'+s.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(s.est||'')+' · primera compra hace '+s.meses+' mes(es)</div></div><span style="font-weight:900;color:#f59e0b">⚠</span></div>';
+    });
+  }
   var regBajo=(A.regiones||[]).filter(function(r){return r.crec<g;});
   h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:12px 0 6px">🗺 Regiones abajo del objetivo ('+regBajo.length+')</div>';
   if(!regBajo.length)h+='<div style="font-size:12px;color:#7ee2a8">✓ Todas tus regiones van bien.</div>';
@@ -561,13 +633,13 @@ function selectVendor(v){
   CURVEND=v;
   if(v==='__all__')applyPayload(buildAgg());
   else if(VDATA[v])applyPayload(VDATA[v]);
-  if(VIEW==='prosp')renderProspectos('');else if(VIEW==='ventas')renderVentas();else if(VIEW==='alertas')renderAlertas();else if(VIEW==='accesos')renderAccesos();else if(VIEW==='resumen')renderResumen();else if(VIEW==='monitoreo')renderMonitoreo();else renderList('');
+  if(VIEW==='prosp')renderProspectos('');else if(VIEW==='ventas')renderVentas();else if(VIEW==='alertas')renderAlertas();else if(VIEW==='accesos')renderAccesos();else if(VIEW==='resumen')renderResumen();else if(VIEW==='monitoreo')renderMonitoreo();else if(VIEW==='marketing')renderMarketing();else renderList('');
 }
 function buildAgg(){
   var rows=[],prospects=[];
   var cur=[],prior=[],priorVivo=[],priorPerd=[],curT=[],priorT=[],dia={},promoSac=0,newDisc=0,hayT=false;
   for(var z=0;z<12;z++){cur.push(0);prior.push(0);priorVivo.push(0);priorPerd.push(0);curT.push(0);priorT.push(0);}
-  var sinCompra=[],fuga=[],focos=[],nuevosCount=0,nuevosMeta=0,nuevosLista=[],regMap={};
+  var sinCompra=[],fuga=[],focos=[],nuevosCount=0,nuevosMeta=0,nuevosLista=[],regMap={},subioNivel=[],sinSegunda=[];
   var meses=[],gTarget=0,lastMonth=0,esDiario=false,priorDaily={},prem=null,cobre=null,ai=null,evalPeriod='TRIM',evalLabel='',updatedStr=MUP;
   var prodCur={},prodPrior={},prodNames={};
   var mesEval=0,mesAnt=0,mesCurso=0,mesVitrina=0,corte=null;   // mes evaluado / en vitrina / corte confirmado (vienen igual en todos los vendedores)
@@ -593,6 +665,8 @@ function buildAgg(){
       if(A.focos)focos=focos.concat(A.focos);
       if(A.nuevos){nuevosCount+=A.nuevos.count||0;nuevosMeta+=A.nuevos.meta||0;if(A.nuevos.lista)nuevosLista=nuevosLista.concat(A.nuevos.lista);}
       if(A.regiones)A.regiones.forEach(function(r){if(!regMap[r.est])regMap[r.est]={cur:0,prior:0};regMap[r.est].cur+=r.cur||0;regMap[r.est].prior+=r.prior||0;});
+      if(A.subioNivel)subioNivel=subioNivel.concat(A.subioNivel);
+      if(A.sinSegunda)sinSegunda=sinSegunda.concat(A.sinSegunda);
     }
     var S=p.res;if(S){hayRes=true;
       ['cartera','clientes','activos','riesgoN','riesgoSac','fugaN','fugaSac','retBase','retKeep','lostN','lostSac','premSac','totSac','curTot','priorTot'].forEach(function(k){R[k]+=S[k]||0;});
@@ -607,7 +681,7 @@ function buildAgg(){
   var regiones=Object.keys(regMap).map(function(e){var o=regMap[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:o.cur,prior:o.prior,crec:crec};}).sort(function(a,b){return a.crec-b.crec;});
   return {v:'Todos los vendedores',evalPeriod:evalPeriod,evalLabel:evalLabel,lastMonth:lastMonth,updatedStr:updatedStr,mesEval:mesEval,mesAnt:mesAnt,mesCurso:mesCurso,mesVitrina:mesVitrina,corte:corte,prem:prem,cobre:cobre,ai:ai,prospects:prospects,rows:rows,res:(hayRes?R:null),
     ventas:{meses:meses,gTarget:gTarget,cur:cur,prior:prior,priorVivo:priorVivo,priorPerd:priorPerd,curT:(hayT?curT:null),priorT:(hayT?priorT:null),dia:dia,priorDaily:priorDaily,lastMonth:lastMonth,promoSac:promoSac,newDisc:newDisc,esDiario:esDiario,prodCur:prodCur,prodPrior:prodPrior,prodNames:prodNames},
-    alertas:{sinCompra:sinCompra,fuga:fuga,focos:focos.slice(0,12),nuevos:{count:nuevosCount,meta:nuevosMeta,lista:nuevosLista},regiones:regiones,gTarget:gTarget}};
+    alertas:{sinCompra:sinCompra,fuga:fuga,focos:focos.slice(0,12),nuevos:{count:nuevosCount,meta:nuevosMeta,lista:nuevosLista},regiones:regiones,gTarget:gTarget,subioNivel:subioNivel,sinSegunda:sinSegunda}};
 }
 function masterLoad(){
   var q=parseHash(); MDB=q.db||SK_DB; CLOUD.db=MDB; CLOUD.v='';

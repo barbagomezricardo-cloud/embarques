@@ -1227,6 +1227,25 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,prodMesVal,mesDataVal,prodMesValSinIva,mesDataValSinIva,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
     }).sort((a,b)=>b.promMes-a.promMes);
 
+    // ── Historial de nivel (para detectar "subió de nivel"): se guarda en ESTE navegador,
+    //    comparando el nivel de cada cliente contra el del reporte anterior. Si mejoró de
+    //    escalón (según TIER_ORDER), se marca c.subioNivel={de,a} para publicarlo en alertas.
+    (function(){
+      var HKEY='nivelHist04mas_v1';
+      var hist={}; try{hist=JSON.parse(localStorage.getItem(HKEY)||'{}');}catch(e){hist={};}
+      var newHist={};
+      clients.forEach(function(c){
+        var k=nkey(c.nombre);
+        var prev=hist[k];
+        newHist[k]=c.nivel;
+        if(prev && prev!==c.nivel){
+          var iPrev=TIER_ORDER.indexOf(prev), iNow=TIER_ORDER.indexOf(c.nivel);
+          if(iPrev>=0 && iNow>=0 && iNow<iPrev) c.subioNivel={de:prev,a:c.nivel};
+        }
+      });
+      try{localStorage.setItem(HKEY, JSON.stringify(newHist));}catch(e){}
+    })();
+
     // El vendedor se toma del MAPEO curado (vendedores reales + administración), NO del export de Odoo.
     // El nivel de vendedor del export solo se usa para parsear bien la jerarquía y aportar la venta por día.
     const _diaCli=window.LAST_DIACLI||{};
@@ -1442,6 +1461,48 @@ function fugaInfo(c){
   const sev=drop<=-40?'critica':drop<=-25?'alta':'moderada';
   return{drop,sacosPerd,last:Math.round(last),prevAvg:Math.round(prevAvg),sev};
 }
+// Radar de "primera compra sin segunda compra": clientes que en todo el periodo de datos solo
+// tienen UN mes con compra, y ya pasó al menos un mes completo desde entonces sin que repitan.
+// Se acota a 6 meses desde la primera compra (misma ventana que "cliente nuevo") para que sea
+// una alerta de reacción rápida y no un cajón donde caen clientes ya perdidos hace un año.
+function segundaCompraInfo(c){
+  const comp=_compMonths();
+  const act=Object.keys(c.mesData||{}).map(Number).filter(m=>(c.mesData[m]||0)>0).sort((a,b)=>a-b);
+  if(act.length!==1)return null;
+  const primer=act[0];
+  const mesesDesde=comp.filter(m=>m>primer).length;
+  if(mesesDesde<1||mesesDesde>6)return null;
+  return{primer,mesesDesde};
+}
+// ── Resumen semanal (ventas): junta lo que ya calcula esta pantalla en un mensaje listo para copiar ──
+function buildResumenSemanal(){
+  if(!DATA)return null;
+  let fugaN=0,fugaSac=0;
+  DATA.clients.forEach(c=>{const f=fugaInfo(c);if(f){fugaN++;fugaSac+=f.sacosPerd;}});
+  const subio=[]; DATA.clients.forEach(c=>{if(c.subioNivel)subio.push(c.nombre+' ('+c.subioNivel.de+'→'+c.subioNivel.a+')');});
+  let sinSeg=0; DATA.clients.forEach(c=>{if(segundaCompraInfo(c))sinSeg++;});
+  try{if(typeof computeYoY==='function'&&!DATA.yoy)computeYoY();}catch(e){}
+  const yrows=(DATA.yoy&&DATA.yoy.rows)||[];
+  const nuevosTotal=yrows.filter(r=>r.nuevo).length;
+  return{fugaN,fugaSac:Math.round(fugaSac),subio,sinSeg,nuevosTotal};
+}
+function copyResumenSemanal(){
+  const r=buildResumenSemanal(); if(!r){alert('Carga primero el reporte de Odoo.');return;}
+  const pad=n=>('0'+n).slice(-2); const d=new Date();
+  const fecha=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();
+  const lines=[];
+  lines.push('📊 *Resumen — '+fecha+'*');
+  lines.push('');
+  lines.push('📉 Fuga lenta: '+r.fugaN+' cliente(s), '+fmt(r.fugaSac)+' sac/mes en riesgo.');
+  lines.push('🆙 Subieron de nivel: '+r.subio.length+(r.subio.length?(' — '+r.subio.slice(0,8).join(', ')+(r.subio.length>8?'…':'')):''));
+  lines.push('🆕 Nuevos sin segunda compra: '+r.sinSeg);
+  lines.push('👥 Clientes nuevos (trimestre en curso): '+r.nuevosTotal);
+  lines.push('');
+  lines.push('(Para flota y puntualidad de entrega, revisa el Programador de Embarques.)');
+  const txt=lines.join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>alert('Resumen copiado ✓. Pégalo donde quieras enviarlo.')).catch(()=>alert(txt));}
+  else alert(txt);
+}
 var fugaSortCol='sacosPerd', fugaSortAsc=false, FUGA_ROWS=[];
 // mini-tendencia (sparkline) de los últimos 6 meses completos
 function fugaSpark(c){
@@ -1468,9 +1529,11 @@ function renderFuga(){
       <div style="background:var(--mid);border:1px solid #1e3258;border-left:4px solid #f97316;border-radius:8px;padding:8px 14px"><div style="font-size:1.5rem;font-weight:800;color:#f97316">${FUGA_ROWS.length}</div><div style="font-size:.66rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Clientes en fuga</div></div>
       <div style="background:var(--mid);border:1px solid #1e3258;border-left:4px solid var(--red);border-radius:8px;padding:8px 14px"><div style="font-size:1.5rem;font-weight:800;color:var(--red)">${crit}</div><div style="font-size:.66rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Caída crítica (>40%)</div></div>
       <div style="background:var(--mid);border:1px solid #1e3258;border-left:4px solid var(--gold);border-radius:8px;padding:8px 14px"><div style="font-size:1.5rem;font-weight:800;color:var(--gold)">${fmt(totalPerd)}</div><div style="font-size:.66rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em">Sacos/mes fugándose</div></div>
+      <button onclick="fetchFugaNotaLive()" style="background:#4a3a12;color:#f4d58a;border:none;border-radius:8px;padding:8px 14px;font-weight:800;cursor:pointer">🔄 Actualizar motivos</button>
     </div>`;
   const vsel=document.getElementById('fuga-vend');
   if(vsel){const cur=vsel.value;const vends=[...new Set(FUGA_ROWS.map(r=>r.vendedor).filter(Boolean))].sort();vsel.innerHTML='<option value="">Todos los vendedores</option>'+vends.map(v=>`<option value="${v}">${v}</option>`).join('');if(vends.includes(cur))vsel.value=cur;}
+  if(!window._fugaNotaLive) fetchFugaNotaLive();
   drawFugaTable();
 }
 function sortFuga(col){if(fugaSortCol===col)fugaSortAsc=!fugaSortAsc;else{fugaSortCol=col;fugaSortAsc=(col==='nombre'||col==='vendedor'||col==='drop');}drawFugaTable();}
@@ -1516,10 +1579,13 @@ function drawFugaTable(){
     <th style="text-align:right" onclick="sortFuga('sacosPerd')">Sac/mes perdidos${arw('sacosPerd')}</th>
     <th style="text-align:center" onclick="sortFuga('dias')">Últ compra${arw('dias')}</th>
     <th onclick="sortFuga('sev')">Severidad${arw('sev')}</th>
+    <th>Motivo (vendedor)</th>
   </tr></thead><tbody>`;
+  const _fnl=window._fugaNotaLive||{};
   for(const r of rows){const c=r.c;
     const sevcls=r.sev==='critica'?'ac-critico':r.sev==='alta'?'ac-alerta':'ac-seguim';
     const sevtxt=r.sev==='critica'?'CRÍTICA':r.sev==='alta'?'ALTA':'Moderada';
+    const nota=_fnl[c.nombre];
     html+=`<tr>
       <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis">${c.nombre}</td>
       <td><span class="tier-pill tier-${TIER_KEY[c.nivel]||c.nivel}" style="font-size:.62rem">${c.nivel}</span></td>
@@ -1531,6 +1597,7 @@ function drawFugaTable(){
       <td style="text-align:right;color:var(--gold);font-weight:700">${fmt(r.sacosPerd)}</td>
       <td style="text-align:center;color:#94a3b8">${c.dias>=999?'—':c.dias+'d'}</td>
       <td><span class="accion-pill ${sevcls}">${sevtxt}</span></td>
+      <td style="max-width:220px;font-size:.72rem;color:${nota?'#f0d9a0':'#64748b'}">${nota?(nota.txt||'').replace(/</g,'&lt;'):'—'}</td>
     </tr>`;
   }
   html+='</tbody></table>';
@@ -5107,6 +5174,8 @@ function visitasPanel(){
   h+='</div>'; return h;
 }
 function fetchObsLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_obs.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._obsLive=store;renderProspec();}).catch(function(){}); }
+// Motivos de fuga que capturan los vendedores en su app — mismo patrón que las observaciones de prospectos.
+function fetchFugaNotaLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_fugaNota.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._fugaNotaLive=store;drawFugaTable();}).catch(function(){}); }
 function obsPanel(){
   var st=window._obsLive||{}; var names=Object.keys(st);
   var h='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:12px;margin-bottom:12px">'
@@ -5486,13 +5555,15 @@ function buildVendorPayloads(){
     var cliAll=DATA.clients.filter(function(c){return (c.vendedor||'(sin asignar)')===v;});
     var sinCompra=cliAll.filter(function(c){return c.seg==='EnRiesgo';}).sort(function(a,b){return b.dias-a.dias;}).slice(0,40).map(function(c){return {n:c.nombre,dias:(c.dias>=999?null:c.dias),prom:Math.round(c.promMes||0),est:c.estado||'',ult:(c.lastDate?c.lastDate.toLocaleDateString('es-MX',{day:'2-digit',month:'short'}):'')};});
     var fuga=[]; cliAll.forEach(function(c){var f=(typeof fugaInfo==='function')?fugaInfo(c):null; if(f)fuga.push({n:c.nombre,drop:Math.round(f.drop),perd:f.sacosPerd,sev:f.sev,est:c.estado||''});}); fuga.sort(function(a,b){return b.perd-a.perd;}); fuga=fuga.slice(0,40);
+    var subioNivel=[]; cliAll.forEach(function(c){ if(c.subioNivel) subioNivel.push({n:c.nombre,de:c.subioNivel.de,a:c.subioNivel.a}); });
+    var sinSegunda=[]; cliAll.forEach(function(c){var s=(typeof segundaCompraInfo==='function')?segundaCompraInfo(c):null; if(s)sinSegunda.push({n:c.nombre,est:c.estado||'',meses:s.mesesDesde});}); sinSegunda.sort(function(a,b){return b.meses-a.meses;});
     var focos=cliAll.map(function(c){var f=(typeof fugaInfo==='function')?fugaInfo(c):null;var rs=(c.dias>=30&&c.dias<=365)?(c.promMes||0):0;var fs=f?f.sacosPerd:0;return {c:c,val:rs+fs,tipo:(rs>0?('no compra '+(c.dias>=999?'—':c.dias+'d')):(fs?('baja '+Math.round(f.drop)+'%'):''))};}).filter(function(x){return x.val>0;}).sort(function(a,b){return b.val-a.val;}).slice(0,3).map(function(x){return {n:x.c.nombre,tipo:x.tipo};});
     var yrows=(DATA.yoy&&DATA.yoy.rows)||[];
     var nuevosV=yrows.filter(function(r){return r.nuevo&&r.vend===v;});
     var metaN=Math.round((PVEN.metaNuevos||6)*((DATA.meses&&DATA.meses.length)||1));
     var reg={}; yrows.forEach(function(r){ if(r.vend!==v)return; var e=r.estado||'SIN DATOS'; if(!reg[e])reg[e]={cur:0,prior:0}; reg[e].cur+=r.cur||0; reg[e].prior+=r.prior||0; });
     var regiones=Object.keys(reg).map(function(e){var o=reg[e];var crec=o.prior>0?(o.cur/o.prior-1):(o.cur>0?1:0);return {est:e,cur:Math.round(o.cur),prior:Math.round(o.prior),crec:crec};}).filter(function(x){return x.est!=='SIN DATOS'&&x.cur>0;}).sort(function(a,b){return a.crec-b.crec;});
-    var alertas={sinCompra:sinCompra,fuga:fuga,focos:focos,nuevos:{count:nuevosV.length,meta:metaN,lista:nuevosV.slice(0,20).map(function(r){return {n:r.nombre,cur:Math.round(r.cur)};})},regiones:regiones,gTarget:PVEN.gTarget};
+    var alertas={sinCompra:sinCompra,fuga:fuga,focos:focos,nuevos:{count:nuevosV.length,meta:metaN,lista:nuevosV.slice(0,20).map(function(r){return {n:r.nombre,cur:Math.round(r.cur)};})},regiones:regiones,gTarget:PVEN.gTarget,subioNivel:subioNivel,sinSegunda:sinSegunda};
     // ── Resumen ejecutivo: contadores crudos y sumables, para que la app de gerencia
     //    arme los mismos indicadores del Tablero (retención, sacos en juego, mix premium) ──
     var compW=(Yv.complete&&Yv.complete.length)?Yv.complete:(DATA.meses||[]);
@@ -5771,6 +5842,11 @@ function renderCodesPanel(){
     h+='<button onclick="saveAiCfg()" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">Guardar IA</button>';
     h+='</div>';
   })();
+  h+='<div style="background:#0e2233;border:1px solid #1e4d5c;border-radius:10px;padding:12px;margin-bottom:10px">';
+  h+='<div style="font-weight:800;color:#5eead4;margin-bottom:4px">📆 Resumen semanal</div>';
+  h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Arma un mensaje con lo que cambió esta semana (fuga, niveles, clientes sin segunda compra) usando los datos ya cargados, listo para copiar y enviar por WhatsApp o correo. No usa la IA de pago — es un cálculo directo, así que no consume tus preguntas del mes.</div>';
+  h+='<button onclick="copyResumenSemanal()" style="background:#0d9488;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">📋 Generar y copiar resumen</button>';
+  h+='</div>';
   (function(){
     let mBase=(cfg.master||'').trim().replace(/#.*$/,'');
     if(mBase&&!/^https?:\/\//i.test(mBase))mBase='https://'+mBase;

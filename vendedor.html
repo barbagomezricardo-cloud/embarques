@@ -99,7 +99,7 @@ let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo
 let AI_CFG={enabled:false,model:'haiku',endpoint:''}; // asistente de IA (lo activa el gerente desde ventas.html)
 let PROSPECTS=[], VENTAS=null, ALERTAS=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){CARDOPEN=false;OBSEDIT=-1;VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas')renderAlertas();else if(v==='monitoreo')abrirMonitoreo();else renderList('');}
+function setView(v){CARDOPEN=false;OBSEDIT=-1;VIEW=v;if(v==='prosp')renderProspectos('');else if(v==='ventas')renderVentas();else if(v==='alertas'){renderAlertas();fetchEntregasPendientes();}else if(v==='monitoreo')abrirMonitoreo();else renderList('');}
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
 function viewTabs(){return '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+vtBtn('clientes','\uD83D\uDC65 Clientes')+vtBtn('ventas','\uD83D\uDCC8 Ventas')+vtBtn('alertas','\uD83D\uDD14 Alertas')+vtBtn('prosp','\uD83D\uDCCD Prospectos'+(PROSPECTS.length?(' ('+PROSPECTS.length+')'):''))+(esAdminApp()?vtBtn('monitoreo','\uD83D\uDD0E Monitoreo'):'')+'</div>';}
 // Acceso especial: la pestaña Monitoreo solo existe para la cuenta de ADMINISTRACIÓN.
@@ -540,6 +540,52 @@ function getObs(){try{return JSON.parse(localStorage.getItem(obsKey())||'{}');}c
 function saveObs(o){try{localStorage.setItem(obsKey(),JSON.stringify(o));}catch(e){}}
 function pushObsCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/skan/_obs/'+encodeURIComponent(CLOUD.v)+'.json';fetch(url,{method:'PUT',body:JSON.stringify(getObs())}).catch(function(){});}catch(e){} }
 var OBSEDIT=-1;
+// ── Motivo de fuga (por qué un cliente está comprando menos) — mismo patrón que las observaciones de prospectos ──
+function fugaNotaKey(){return 'fugaNota04mas_'+(APPVEND||'v');}
+function getFugaNota(){try{return JSON.parse(localStorage.getItem(fugaNotaKey())||'{}');}catch(e){return {};}}
+function saveFugaNota(o){try{localStorage.setItem(fugaNotaKey(),JSON.stringify(o));}catch(e){}}
+function pushFugaNotaCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/skan/_fugaNota/'+encodeURIComponent(CLOUD.v)+'.json';fetch(url,{method:'PUT',body:JSON.stringify(getFugaNota())}).catch(function(){});}catch(e){} }
+var FUGAEDIT=-1;
+function openFugaNota(i){FUGAEDIT=i;renderAlertas();setTimeout(function(){var ta=document.getElementById('fugnta');if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}
+function cancelFugaNota(){FUGAEDIT=-1;renderAlertas();}
+function addFugaTag(t){var ta=document.getElementById('fugnta');if(!ta)return;ta.value=(ta.value.trim()?ta.value.replace(/\s*$/,'')+' · ':'')+t;ta.focus();}
+function saveFugaNotaFor(nombre,i){var ta=document.getElementById('fugnta');var txt=ta?ta.value.trim():'';var o=getFugaNota();
+  if(!txt){delete o[nombre];}else{var d=new Date();var pd=function(n){return ('0'+n).slice(-2);};o[nombre]={ts:pd(d.getDate())+'/'+pd(d.getMonth()+1)+' '+pd(d.getHours())+':'+pd(d.getMinutes()),txt:txt};}
+  saveFugaNota(o);pushFugaNotaCloud();FUGAEDIT=-1;renderAlertas();}
+// ── Confirmación de entrega (cierra el ciclo con el Programador de Embarques / App de Cargadores) ──
+// Lee /embarques (misma base de Firebase) y muestra, solo al vendedor dueño de ese cliente, los
+// pedidos ya despachados que aún no tienen confirmación de cómo llegó la entrega.
+var ENTREGAS_PEND=[], ENTREGAEDIT=-1;
+function fetchEntregasPendientes(){
+  if(!CLOUD.db){ENTREGAS_PEND=[];return;}
+  var url=CLOUD.db.replace(/\/$/,'')+'/embarques.json';
+  fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){
+    o=o||{}; var misClientes={}; for(var n in CLIENTS) misClientes[_kp(n)]=n;
+    var list=[];
+    for(var id in o){ var r=o[id]||{};
+      var desp = r.despachado===true||r.despachado==='1'||r.despachado===1;
+      if(!desp || r.entregaEstado || r.cancelado===true) continue;
+      var propio=misClientes[_kp(r.cliente||'')];
+      if(!propio) continue;
+      list.push({id:id, cliente:propio, pedido:r.pedido||'', fecha:r.fechaCarga||r.fechaProg||''});
+    }
+    list.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
+    ENTREGAS_PEND=list.slice(0,30);
+    if(VIEW==='alertas')renderAlertas();
+  }).catch(function(){});
+}
+function abrirEntrega(i){ENTREGAEDIT=i;renderAlertas();}
+function cancelEntrega(){ENTREGAEDIT=-1;renderAlertas();}
+function confirmarEntrega(i,estado){
+  var e=ENTREGAS_PEND[i]; if(!e||!CLOUD.db)return;
+  var nota=''; if(estado==='incidencia'){var ta=document.getElementById('entrgnta');nota=ta?ta.value.trim():'';}
+  var pd=function(n){return ('0'+n).slice(-2);}; var d=new Date();
+  var body={entregaEstado:estado, entregaNota:nota, entregaPor:APPVEND||'', entregaTs:pd(d.getDate())+'/'+pd(d.getMonth()+1)+' '+pd(d.getHours())+':'+pd(d.getMinutes())};
+  var url=CLOUD.db.replace(/\/$/,'')+'/embarques/'+encodeURIComponent(e.id)+'.json';
+  fetch(url,{method:'PATCH',body:JSON.stringify(body)}).then(function(){
+    ENTREGAS_PEND.splice(i,1); ENTREGAEDIT=-1; renderAlertas();
+  }).catch(function(){alert('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.');});
+}
 function openObs(i){OBSEDIT=i;renderProspectos(PROSPQ);setTimeout(function(){var ta=document.getElementById('obsta');if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}
 function cancelObs(){OBSEDIT=-1;renderProspectos(PROSPQ);}
 function addTag(t){var ta=document.getElementById('obsta');if(!ta)return;ta.value=(ta.value.trim()?ta.value.replace(/\s*$/,'')+' · ':'')+t;ta.focus();}
@@ -634,14 +680,65 @@ function renderAlertas(){
     if(!items.length)return hh+'<div style="font-size:12px;color:#7ee2a8;padding:2px 2px 6px">✓ Sin pendientes aquí.</div>';
     hh+='<div class="list">'; items.forEach(function(it){hh+=render(it);}); hh+='</div>'; return hh;
   }
+  (function(){
+    var pend=ENTREGAS_PEND;
+    var hh='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:2px 0 6px">📦 Confirma tus entregas ('+pend.length+')</div>';
+    if(!pend.length){h+=hh+'<div style="font-size:12px;color:#7ee2a8;padding:2px 2px 10px">✓ Sin entregas pendientes de confirmar.</div>';return;}
+    hh+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:6px">Ya salieron de planta — dinos cómo llegaron para llevar el control junto con logística.</div><div class="list">';
+    pend.forEach(function(e,i){
+      hh+='<div class="li" style="flex-direction:column;align-items:stretch;gap:6px">'
+        +'<div><b>'+e.cliente+'</b><div style="font-size:11px;color:#9fb0cc">Pedido '+(e.pedido||'—')+' · cargó '+(e.fecha||'—')+'</div></div>';
+      if(ENTREGAEDIT===i){
+        hh+='<textarea id="entrgnta" placeholder="¿Qué pasó? (ej.: llegó incompleto, con daño, tarde...)" style="width:100%;height:56px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#e8eef7;padding:9px;font-size:14px;resize:none"></textarea>'
+          +'<div style="display:flex;gap:8px"><button onclick="confirmarEntrega('+i+',\'incidencia\')" style="flex:1;background:#c0392b;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar incidencia</button><button onclick="cancelEntrega()" style="background:#334155;color:#cbd5e1;border:none;border-radius:8px;padding:9px 14px;cursor:pointer">Cancelar</button></div>';
+      } else {
+        hh+='<div style="display:flex;gap:8px"><button onclick="confirmarEntrega('+i+',\'ok\')" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">✓ Llegó bien</button><button onclick="abrirEntrega('+i+')" style="background:#c0392b;color:#fff;border:none;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer">⚠ Con incidencia</button></div>';
+      }
+      hh+='</div>';
+    });
+    hh+='</div>';
+    h+=hh;
+  })();
   h+=sect('🚨 Clientes que no compran',A.sinCompra||[],function(c){
     var d=(c.dias==null?'—':c.dias+'d'); var col=(c.dias!=null&&c.dias>=45)?'#ef4444':'#f59e0b';
     return '<div class="li"><div><b>'+c.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(c.est||'')+' · últ. '+(c.ult||'—')+' · '+fmt(c.prom)+' sac/mes</div></div><span style="font-weight:900;color:'+col+'">'+d+'</span></div>';
   });
-  h+=sect('📉 Fuga lenta (compran menos)',A.fuga||[],function(f){
-    var col=f.sev==='critica'?'#ef4444':(f.sev==='alta'?'#f97316':'#f59e0b');
-    return '<div class="li"><div><b>'+f.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(f.est||'')+' · pierde ~'+fmt(f.perd)+' sac/mes</div></div><span style="font-weight:900;color:'+col+'">'+f.drop+'%</span></div>';
-  });
+  (function(){
+    var fuga=A.fuga||[]; var fnotas=getFugaNota();
+    var hh='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:12px 0 6px">📉 Fuga lenta (compran menos) ('+fuga.length+')</div>';
+    if(!fuga.length){h+=hh+'<div style="font-size:12px;color:#7ee2a8;padding:2px 2px 6px">✓ Sin pendientes aquí.</div>';return;}
+    hh+='<div class="list">';
+    fuga.forEach(function(f,i){
+      var col=f.sev==='critica'?'#ef4444':(f.sev==='alta'?'#f97316':'#f59e0b');
+      var nota=fnotas[f.n];
+      hh+='<div class="li" style="flex-direction:column;align-items:stretch;gap:6px">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px"><div><b>'+f.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(f.est||'')+' · pierde ~'+fmt(f.perd)+' sac/mes</div></div><span style="font-weight:900;color:'+col+'">'+f.drop+'%</span></div>';
+      if(nota&&nota.txt&&FUGAEDIT!==i){hh+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:6px 9px;font-size:12px;color:#f0d9a0">📝 '+(nota.txt||'').replace(/</g,'&lt;')+' <span style="color:#8a7a52">· '+(nota.ts||'')+'</span></div>';}
+      hh+='<button onclick="openFugaNota('+i+')" style="align-self:flex-start;background:#4a3a12;color:#f4d58a;border:none;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:800;cursor:pointer">📝 '+(nota&&nota.txt?'Editar motivo':'¿Por qué? (motivo)')+'</button>';
+      if(FUGAEDIT===i){
+        var cur=nota&&nota.txt?nota.txt.replace(/</g,'&lt;'):'';
+        var tags=['Precio / competencia','Problema de servicio','Cambio de comprador','Problema con una entrega','Bajó su negocio','Otro'];
+        hh+='<div style="background:#10233f;border:1px solid #21406e;border-radius:10px;padding:10px">'
+          +'<div style="font-size:11px;color:#9fb0cc;margin-bottom:6px">¿Por qué crees que está comprando menos? (toca una etiqueta para agregarla):</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px">'+tags.map(function(t){return '<button onclick="addFugaTag(\''+t.replace(/'/g,'')+'\')" style="background:#22304d;color:#cfe0ff;border:none;border-radius:14px;padding:5px 10px;font-size:11px;cursor:pointer">'+t+'</button>';}).join('')+'</div>'
+          +'<textarea id="fugnta" placeholder="Ej.: encontró más barato con otro proveedor..." style="width:100%;height:60px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#e8eef7;padding:9px;font-size:14px;resize:none">'+cur+'</textarea>'
+          +'<div style="display:flex;gap:8px;margin-top:7px"><button onclick="saveFugaNotaFor(\''+f.n.replace(/'/g,'')+'\','+i+')" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar</button><button onclick="cancelFugaNota()" style="background:#334155;color:#cbd5e1;border:none;border-radius:8px;padding:9px 14px;cursor:pointer">Cancelar</button></div></div>';
+      }
+      hh+='</div>';
+    });
+    hh+='</div>';
+    h+=hh;
+  })();
+  if(A.subioNivel&&A.subioNivel.length){
+    h+=sect('🆙 Subieron de nivel este mes',A.subioNivel,function(s){
+      return '<div class="li"><div><b>'+s.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(s.de||'')+' → '+(s.a||'')+'</div></div><span style="font-size:16px">🎉</span></div>';
+    });
+  }
+  if(A.sinSegunda&&A.sinSegunda.length){
+    h+=sect('🆕 Nuevos sin segunda compra',A.sinSegunda,function(s){
+      return '<div class="li"><div><b>'+s.n+'</b><div style="font-size:11px;color:#9fb0cc">'+(s.est||'')+' · primera compra hace '+s.meses+' mes(es)</div></div><span style="font-weight:900;color:#f59e0b">⚠</span></div>';
+    });
+  }
   var regBajo=(A.regiones||[]).filter(function(r){return r.crec<g;});
   h+='<div style="font-size:13px;color:#e8eef7;font-weight:800;margin:12px 0 6px">🗺 Regiones abajo del objetivo ('+regBajo.length+')</div>';
   if(!regBajo.length)h+='<div style="font-size:12px;color:#7ee2a8">✓ Todas tus regiones van bien.</div>';
