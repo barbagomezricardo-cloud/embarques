@@ -1474,34 +1474,119 @@ function segundaCompraInfo(c){
   if(mesesDesde<1||mesesDesde>6)return null;
   return{primer,mesesDesde};
 }
-// ── Resumen semanal (ventas): junta lo que ya calcula esta pantalla en un mensaje listo para copiar ──
+// ── Resumen semanal (ventas): junta lo que ya calcula esta pantalla en un mensaje listo para copiar,
+// y si el asistente de IA de arriba está activado, le agrega una lectura breve + sugerencias concretas.
+// Las CIFRAS siempre salen del cálculo directo de esta pantalla — nunca de la IA — para que nunca se
+// invente ni redondee mal un número; la IA solo interpreta y sugiere, usando exactamente esos datos.
+function resumenHistKey(){return 'resumenSemanalHist_v1';}
+function getResumenHistPrev(){try{return JSON.parse(localStorage.getItem(resumenHistKey())||'null');}catch(e){return null;}}
+function saveResumenHistNow(snap){try{localStorage.setItem(resumenHistKey(),JSON.stringify(snap));}catch(e){}}
 function buildResumenSemanal(){
   if(!DATA)return null;
-  let fugaN=0,fugaSac=0;
-  DATA.clients.forEach(c=>{const f=fugaInfo(c);if(f){fugaN++;fugaSac+=f.sacosPerd;}});
-  const subio=[]; DATA.clients.forEach(c=>{if(c.subioNivel)subio.push(c.nombre+' ('+c.subioNivel.de+'→'+c.subioNivel.a+')');});
-  let sinSeg=0; DATA.clients.forEach(c=>{if(segundaCompraInfo(c))sinSeg++;});
+  let fugaN=0,fugaSac=0; const fugaDetalle=[];
+  const _fnl=window._fugaNotaLive||{};
+  DATA.clients.forEach(c=>{const f=fugaInfo(c);if(f){fugaN++;fugaSac+=f.sacosPerd;
+    fugaDetalle.push({nombre:c.nombre,vendedor:c.vendedor||'',sacosPerd:Math.round(f.sacosPerd),dropPct:Math.round(f.drop),motivo:(_fnl[c.nombre]&&_fnl[c.nombre].txt)||null});}});
+  fugaDetalle.sort((a,b)=>b.sacosPerd-a.sacosPerd);
+  const subioList=[]; DATA.clients.forEach(c=>{if(c.subioNivel)subioList.push({nombre:c.nombre,vendedor:c.vendedor||'',de:c.subioNivel.de,a:c.subioNivel.a});});
+  let sinSeg=0; const sinSegDetalle=[];
+  DATA.clients.forEach(c=>{const s=segundaCompraInfo(c);if(s){sinSeg++;sinSegDetalle.push({nombre:c.nombre,vendedor:c.vendedor||'',mesesDesde:s.mesesDesde});}});
+  sinSegDetalle.sort((a,b)=>b.mesesDesde-a.mesesDesde);
   try{if(typeof computeYoY==='function'&&!DATA.yoy)computeYoY();}catch(e){}
   const yrows=(DATA.yoy&&DATA.yoy.rows)||[];
-  const nuevosTotal=yrows.filter(r=>r.nuevo).length;
-  return{fugaN,fugaSac:Math.round(fugaSac),subio,sinSeg,nuevosTotal};
+  const nuevosRows=yrows.filter(r=>r.nuevo);
+  const nuevosTotal=nuevosRows.length;
+  const fechaISO=new Date().toISOString().slice(0,10);
+  const prev=getResumenHistPrev();
+  const deltas=prev?{fechaAnterior:prev.fecha,deltaFugaN:fugaN-prev.fugaN,deltaFugaSac:Math.round(fugaSac-prev.fugaSac),deltaSubio:subioList.length-prev.subioN,deltaSinSeg:sinSeg-prev.sinSeg,deltaNuevos:nuevosTotal-prev.nuevosTotal}:null;
+  if(!window._fugaNotaLive && typeof fetchFugaNotaLive==='function'){try{fetchFugaNotaLive();}catch(e){}}
+  return{fechaISO,fugaN,fugaSac:Math.round(fugaSac),fugaTop:fugaDetalle.slice(0,8),
+    subioList,sinSeg,sinSegTop:sinSegDetalle.slice(0,8),nuevosTotal,
+    nuevosTop:nuevosRows.slice(0,8).map(r=>({nombre:r.nombre,vendedor:r.vend||''})),
+    deltas};
 }
-function copyResumenSemanal(){
-  const r=buildResumenSemanal(); if(!r){alert('Carga primero el reporte de Odoo.');return;}
+function resumenTextoBase(r){
   const pad=n=>('0'+n).slice(-2); const d=new Date();
   const fecha=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();
   const lines=[];
   lines.push('📊 *Resumen — '+fecha+'*');
   lines.push('');
-  lines.push('📉 Fuga lenta: '+r.fugaN+' cliente(s), '+fmt(r.fugaSac)+' sac/mes en riesgo.');
-  lines.push('🆙 Subieron de nivel: '+r.subio.length+(r.subio.length?(' — '+r.subio.slice(0,8).join(', ')+(r.subio.length>8?'…':'')):''));
+  lines.push('📉 Fuga lenta: '+r.fugaN+' cliente(s), '+fmt(r.fugaSac)+' sac/mes en riesgo'+(r.deltas?(' ('+(r.deltas.deltaFugaN>=0?'+':'')+r.deltas.deltaFugaN+' vs semana pasada)'):'')+'.');
+  lines.push('🆙 Subieron de nivel: '+r.subioList.length+(r.subioList.length?(' — '+r.subioList.slice(0,8).map(s=>s.nombre+' ('+s.de+'→'+s.a+')').join(', ')+(r.subioList.length>8?'…':'')):''));
   lines.push('🆕 Nuevos sin segunda compra: '+r.sinSeg);
   lines.push('👥 Clientes nuevos (trimestre en curso): '+r.nuevosTotal);
   lines.push('');
   lines.push('(Para flota y puntualidad de entrega, revisa el Programador de Embarques.)');
-  const txt=lines.join('\n');
-  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>alert('Resumen copiado ✓. Pégalo donde quieras enviarlo.')).catch(()=>alert(txt));}
-  else alert(txt);
+  return lines.join('\n');
+}
+function resumenAIContext(r){
+  return {fecha:r.fechaISO,
+    fuga:{total:r.fugaN,sacosMesPerdidos:r.fugaSac,top:r.fugaTop},
+    subieronDeNivel:r.subioList,
+    nuevosSinSegundaCompra:{total:r.sinSeg,ejemplos:r.sinSegTop},
+    clientesNuevosTrimestre:{total:r.nuevosTotal,ejemplos:r.nuevosTop},
+    comparativoSemanaAnterior:r.deltas};
+}
+function resumenAIQuestion(){
+  return 'Con los datos de contexto (resumen semanal de ventas de la empresa), escribe en español de México, sin markdown ni tablas, dos partes: '+
+    '(1) un párrafo breve de 2 a 3 frases con la lectura general de la semana — qué tan bien va y qué es lo más urgente; '+
+    '(2) de 3 a 5 sugerencias concretas y accionables para esta semana, cada una en su propia línea empezando con "- ", mencionando nombres de clientes o vendedores del contexto cuando ayude a ser específico. Interpreta las cifras, no las repitas tal cual. No inventes datos que no estén en el contexto.';
+}
+function fetchResumenIA(ctx){
+  const cfg=getAiCfg();
+  if(!cfg||!cfg.enabled||!cfg.endpoint)return Promise.reject(new Error('ai_disabled'));
+  return fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:resumenAIQuestion(),model:cfg.model||'haiku',role:'admin',vendorKey:'ADMIN',context:ctx})})
+    .then(r=>r.json().catch(()=>null))
+    .then(j=>{
+      if(!j)throw new Error('bad_response');
+      if(j.ok===false){const e=new Error(j.reason||'denied');e.userMessage=j.message||'No se pudo usar la IA en este momento.';throw e;}
+      if(!j.answer)throw new Error('empty');
+      return j.answer;
+    });
+}
+function showResumenPanel(txt){
+  let box=document.getElementById('resumenSemanalBox');
+  if(!box){
+    const card=document.getElementById('resumenSemanalCard');
+    if(!card)return;
+    box=document.createElement('div');
+    box.id='resumenSemanalBox';
+    box.style.cssText='margin-top:8px';
+    box.innerHTML='<textarea id="resumenSemanalTA" style="width:100%;min-height:170px;background:#0b1628;border:1px solid #1e4d5c;border-radius:6px;color:#e8eef7;padding:8px;font-size:.74rem;font-family:inherit;white-space:pre-wrap;box-sizing:border-box"></textarea>'+
+      '<div style="margin-top:6px;display:flex;gap:8px;align-items:center">'+
+      '<button onclick="copyResumenPanelText()" style="background:#0d9488;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">📋 Copiar</button>'+
+      '<span id="resumenSemanalStatus" style="font-size:.7rem;color:#7c8aa5"></span></div>';
+    card.appendChild(box);
+  }
+  const ta=document.getElementById('resumenSemanalTA');
+  if(ta)ta.value=txt;
+}
+function copyResumenPanelText(){
+  const ta=document.getElementById('resumenSemanalTA'); if(!ta)return;
+  const txt=ta.value;
+  const st=document.getElementById('resumenSemanalStatus');
+  const done=()=>{if(st){st.textContent='✓ Copiado al portapapeles';setTimeout(()=>{if(st)st.textContent='';},1800);}};
+  const fallback=()=>{ta.focus();ta.select();try{document.execCommand('copy');done();}catch(e){if(st)st.textContent='Selecciona el texto y cópialo manualmente.';}};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done,fallback);
+  else fallback();
+}
+function generarResumenSemanal(){
+  const r=buildResumenSemanal(); if(!r){alert('Carga primero el reporte de Odoo.');return;}
+  const base=resumenTextoBase(r);
+  showResumenPanel(base);
+  saveResumenHistNow({fecha:r.fechaISO,fugaN:r.fugaN,fugaSac:r.fugaSac,subioN:r.subioList.length,sinSeg:r.sinSeg,nuevosTotal:r.nuevosTotal});
+  const cfg=getAiCfg();
+  if(cfg&&cfg.enabled&&cfg.endpoint){
+    showResumenPanel(base+'\n\n🤖 Generando sugerencias con IA…');
+    fetchResumenIA(resumenAIContext(r)).then(ans=>{
+      showResumenPanel(base+'\n\n🤖 Sugerencias de la semana:\n'+ans);
+    }).catch(e=>{
+      const msg=(e&&e.userMessage)?e.userMessage:'No se pudo generar sugerencias con IA en este momento (revisa tu conexión o inténtalo de nuevo en un momento).';
+      showResumenPanel(base+'\n\n(⚠️ '+msg+')');
+    });
+  }else{
+    showResumenPanel(base+'\n\n(Activa el asistente de IA arriba en este panel para que el resumen incluya sugerencias automáticas.)');
+  }
 }
 var fugaSortCol='sacosPerd', fugaSortAsc=false, FUGA_ROWS=[];
 // mini-tendencia (sparkline) de los últimos 6 meses completos
@@ -5842,10 +5927,10 @@ function renderCodesPanel(){
     h+='<button onclick="saveAiCfg()" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">Guardar IA</button>';
     h+='</div>';
   })();
-  h+='<div style="background:#0e2233;border:1px solid #1e4d5c;border-radius:10px;padding:12px;margin-bottom:10px">';
+  h+='<div id="resumenSemanalCard" style="background:#0e2233;border:1px solid #1e4d5c;border-radius:10px;padding:12px;margin-bottom:10px">';
   h+='<div style="font-weight:800;color:#5eead4;margin-bottom:4px">📆 Resumen semanal</div>';
-  h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Arma un mensaje con lo que cambió esta semana (fuga, niveles, clientes sin segunda compra) usando los datos ya cargados, listo para copiar y enviar por WhatsApp o correo. No usa la IA de pago — es un cálculo directo, así que no consume tus preguntas del mes.</div>';
-  h+='<button onclick="copyResumenSemanal()" style="background:#0d9488;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">📋 Generar y copiar resumen</button>';
+  h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Arma un mensaje con lo que cambió esta semana (fuga, niveles, clientes sin segunda compra) usando los datos ya cargados, listo para copiar y enviar por WhatsApp o correo. Las cifras siempre son cálculo directo — nunca las inventa la IA. Si tienes el asistente de IA activado arriba, además te agrega una lectura breve de la semana y de 3 a 5 sugerencias concretas (usa tus preguntas del mes, igual que "Pregúntame").</div>';
+  h+='<button onclick="generarResumenSemanal()" style="background:#0d9488;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">📋 Generar resumen</button>';
   h+='</div>';
   (function(){
     let mBase=(cfg.master||'').trim().replace(/#.*$/,'');
