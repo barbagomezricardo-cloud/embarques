@@ -92,7 +92,27 @@ input[type=file]{display:none}
 const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
 const PREMIUM_RE=/PREMIUM/i, GATO_RE=/SILVER\s*CAT\s*15/i, PETFOOD_RE=/PET\s*FOOD/i;
 const PREM_CODES=['04MAS001','04MAS0011','04MAS0019','04MAS006']; // Silver Kan Premium 25/20 + Silver Cat 15
+// TIERS: valores de respaldo (se usan sin internet o antes de la primera sincronización).
+// La fuente real es ventas.html → Config → Niveles; se publica sola en /skan/_config.json
+// cada vez que el super-usuario guarda ahí, y fetchTierCfgLive() la jala a esta app para que
+// nunca haya que copiar estos números a mano en tres archivos distintos.
+const TIER_ORDER_FALLBACK=["DIAMANTE_PLUS","DIAMANTE","PLATINO","ORO","PLATA","BRONCE","COBRE","INICIAL"];
 const TIERS=[["DIAMANTE_PLUS",15000,2.0,0.75,0.75,2],["DIAMANTE",9000,2.0,0.25,0.25,2],["PLATINO",5000,1.75,0.5,0.25,3],["ORO",3000,1.5,0.5,0.5,6],["PLATA",1000,1.25,0.75,0.5,10],["BRONCE",600,1.0,0.75,0.75,20],["COBRE",200,0.75,0.75,1.0,30],["INICIAL",0,0,0,0,999]];
+function fetchTierCfgLive(){
+  if(!CLOUD.db)return;
+  const url=CLOUD.db.replace(/\/$/,'')+'/skan/_config.json';
+  fetch(url,{cache:'no-store'}).then(r=>r.json()).then(o=>{
+    if(!o||!o['tierCfg04mas_v6'])return;
+    let cfg; try{cfg=JSON.parse(o['tierCfg04mas_v6']);}catch(e){return;}
+    if(!cfg||typeof cfg!=='object')return;
+    const nuevo=TIER_ORDER_FALLBACK.map(k=>{const c=cfg[k];if(!c)return null;
+      return [k,Number(c.min)||0,Number(c.fijo)||0,Number(c.kc)||0,Number(c.kp)||0,Number(c.uc)||999];
+    }).filter(Boolean);
+    if(nuevo.length){TIERS.length=0;nuevo.forEach(row=>TIERS.push(row));
+      try{if(typeof setView==='function'&&typeof VIEW!=='undefined')setView(VIEW);}catch(e){}
+    }
+  }).catch(()=>{});
+}
 // Bono Premium+ (los % los define el gerente en el dashboard; aquí van los valores por defecto).
 let PREM={base:3,u1:5,e1:0.5,u2:7.5,e2:1.0};
 let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo define el gerente)
@@ -234,6 +254,7 @@ function applyPayload(p){
 function fetchCloud(){
   const q=parseHash(); CLOUD.db=q.db||SK_DB; CLOUD.v=q.v||'';
   if(!CLOUD.db||!CLOUD.v)return false;
+  fetchTierCfgLive();
   document.getElementById('drop').style.display='none';
   document.getElementById('loading').style.display='block';
   const url=CLOUD.db.replace(/\/$/,'')+'/skan/'+encodeURIComponent(CLOUD.v)+'.json';
