@@ -90,6 +90,68 @@ input[type=file]{display:none}
 </div>
 <script>
 const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
+
+// ── App Check (protección anti-abuso, OPCIONAL y apagada por defecto) ───────
+// Hoy cualquier script fuera de estas apps que se sepa la URL de la base (arriba)
+// puede leer/escribir los datos igual que la app real — no hay forma de distinguir
+// "la app real, en el navegador de alguien" de "un script copiando la URL". App Check
+// arregla eso: cada request lleva una credencial (de Google reCAPTCHA) que prueba que
+// salió de esta página real. Mientras RECAPTCHA_SITE_KEY esté vacío, este bloque no
+// hace NADA — las apps siguen exactamente igual que hoy. Para activarlo:
+//   1) Firebase Console → Compilación → App Check → Apps → registra esta app web
+//      (ya existe como appId 1:860212111367:web:6a020f94ef6a468af922a2) con el
+//      proveedor reCAPTCHA v3 → copia el "Site key" que te da.
+//   2) Pega ese Site key aquí abajo y publica este archivo.
+//   3) En Firebase Console → App Check → Apps → Realtime Database, déjalo en modo
+//      "No aplicado" (Unenforced) varios días — ahí puedes ver en el panel cuánto
+//      tráfico llega CON credencial válida vs. sin ella, sin bloquear a nadie.
+//   4) Solo cuando veas que toda tu app/equipo aparece "Verificado", cambias ese
+//      mismo control a "Aplicado" (Enforced) — desde ese momento, cualquier script
+//      que solo tenga la URL de la base (sin pasar por estas páginas) es rechazado.
+const RECAPTCHA_SITE_KEY = '6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj'; // Fraud Defense (reCAPTCHA Enterprise) — clave real, ya activa
+const SK_FBCFG = {apiKey:"AIzaSyBYa3yZxWML-rwxKwuXp_gTyOTkisUKe8w", authDomain:"embarques-mascotas.firebaseapp.com", databaseURL:SK_DB, projectId:"embarques-mascotas", appId:"1:860212111367:web:6a020f94ef6a468af922a2"};
+let _skAppCheckReady=null;
+function _skInitAppCheck(){
+  if(_skAppCheckReady)return _skAppCheckReady;
+  if(!RECAPTCHA_SITE_KEY){_skAppCheckReady=Promise.resolve(null);return _skAppCheckReady;}
+  _skAppCheckReady=new Promise(function(resolve){
+    try{
+      var s1=document.createElement('script'); s1.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
+      s1.onload=function(){
+        var s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js';
+        s2.onload=function(){
+          try{
+            firebase.initializeApp(SK_FBCFG);
+            var ac=firebase.appCheck();
+            ac.activate(new firebase.appCheck.RecaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true);
+            resolve(ac);
+          }catch(e){ resolve(null); }
+        };
+        s2.onerror=function(){ resolve(null); };
+        document.head.appendChild(s2);
+      };
+      s1.onerror=function(){ resolve(null); };
+      document.head.appendChild(s1);
+    }catch(e){ resolve(null); }
+  });
+  return _skAppCheckReady;
+}
+// Reemplazo de skFetch(): si la URL es de nuestra base y ya tienes tu Site key puesto,
+// agrega la credencial de App Check. Si algo falla (SDK no cargó, sin internet, etc.),
+// sigue con un fetch normal — NUNCA bloquea ni rompe nada por su cuenta; el único que
+// puede bloquear de verdad es el control "Aplicado" del paso 4 de arriba, en Firebase.
+async function skFetch(url, opts){
+  try{
+    if(RECAPTCHA_SITE_KEY && typeof url==='string' && url.indexOf('.firebaseio.com')!==-1){
+      var ac=await _skInitAppCheck();
+      if(ac){
+        var tok=await ac.getToken().catch(function(){return null;});
+        if(tok&&tok.token){ opts=opts||{}; opts.headers=Object.assign({},opts.headers,{'X-Firebase-AppCheck':tok.token}); }
+      }
+    }
+  }catch(e){ /* silencioso a propósito: nunca debe tumbar la sincronización */ }
+  return fetch(url, opts);
+}
 const PREMIUM_RE=/PREMIUM/i, GATO_RE=/SILVER\s*CAT\s*15/i, PETFOOD_RE=/PET\s*FOOD/i;
 const PREM_CODES=['04MAS001','04MAS0011','04MAS0019','04MAS006']; // Silver Kan Premium 25/20 + Silver Cat 15
 // TIERS: valores de respaldo (se usan sin internet o antes de la primera sincronización).
@@ -101,7 +163,7 @@ const TIERS=[["DIAMANTE_PLUS",15000,2.0,0.75,0.75,2],["DIAMANTE",9000,2.0,0.25,0
 function fetchTierCfgLive(){
   if(!CLOUD.db)return;
   const url=CLOUD.db.replace(/\/$/,'')+'/skan/_config.json';
-  fetch(url,{cache:'no-store'}).then(r=>r.json()).then(o=>{
+  skFetch(url,{cache:'no-store'}).then(r=>r.json()).then(o=>{
     if(!o||!o['tierCfg04mas_v6'])return;
     let cfg; try{cfg=JSON.parse(o['tierCfg04mas_v6']);}catch(e){return;}
     if(!cfg||typeof cfg!=='object')return;
@@ -258,7 +320,7 @@ function fetchCloud(){
   document.getElementById('drop').style.display='none';
   document.getElementById('loading').style.display='block';
   const url=CLOUD.db.replace(/\/$/,'')+'/skan/'+encodeURIComponent(CLOUD.v)+'.json';
-  fetch(url,{cache:'no-store'}).then(r=>r.json()).then(p=>{
+  skFetch(url,{cache:'no-store'}).then(r=>r.json()).then(p=>{
     document.getElementById('loading').style.display='none';
     if(!p||!p.rows){document.getElementById('drop').style.display='block';document.getElementById('app').innerHTML='<div class="hint">Aún no hay datos publicados para este vendedor. Pídele a tu gerente que cargue el reporte.</div>';document.getElementById('app').style.display='block';return;}
     applyPayload(p); renderList('');
@@ -423,11 +485,11 @@ function abrirMonitoreo(){
 function cargarMonitoreo(){
   if(MONCARGANDO)return; MONCARGANDO=true; MONERR='';
   var base=(CLOUD.db||SK_DB).replace(/\/$/,'');
-  fetch(base+'/skan/_index.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(idx){
+  skFetch(base+'/skan/_index.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(idx){
     var vs=(idx&&idx.vendors)||[];
     if(!vs.length)throw new Error('sin vendedores publicados');
     return Promise.all(vs.map(function(k){
-      return fetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;});
+      return skFetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;});
     }));
   }).then(function(ps){
     var m={};
@@ -554,18 +616,23 @@ let PROSPQ='', PROSPFILT='pend';
 function visKey(){return 'visitas04mas_'+(APPVEND||'v');}
 function getVisitas(){try{return JSON.parse(localStorage.getItem(visKey())||'{}');}catch(e){return {};}}
 function saveVisitas(o){try{localStorage.setItem(visKey(),JSON.stringify(o));}catch(e){}}
-function pushVisitasCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/visits/'+encodeURIComponent(CLOUD.v)+'.json';fetch(url,{method:'PUT',body:JSON.stringify(getVisitas())}).catch(function(){});}catch(e){} }
+function pushVisitasCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/visits/'+encodeURIComponent(CLOUD.v)+'.json';skFetch(url,{method:'PUT',body:JSON.stringify(getVisitas())}).catch(function(){});}catch(e){} }
 // ── Observaciones manuales del vendedor (se sincronizan con el gerente) ──
 function obsKey(){return 'obs04mas_'+(APPVEND||'v');}
 function getObs(){try{return JSON.parse(localStorage.getItem(obsKey())||'{}');}catch(e){return {};}}
 function saveObs(o){try{localStorage.setItem(obsKey(),JSON.stringify(o));}catch(e){}}
-function pushObsCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/skan/_obs/'+encodeURIComponent(CLOUD.v)+'.json';fetch(url,{method:'PUT',body:JSON.stringify(getObs())}).catch(function(){});}catch(e){} }
-var OBSEDIT=-1;
+function pushObsCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/skan/_obs/'+encodeURIComponent(CLOUD.v)+'.json';skFetch(url,{method:'PUT',body:JSON.stringify(getObs())}).catch(function(){});}catch(e){} }
+var OBSEDIT=-1, OBSEDIT_ETAPA='', OBSEDIT_PROX='', OBSEDIT_TXT='';
+// ── Etapas del embudo (pipeline) — se guardan junto con la nota, mismo canal que ya
+// se sincroniza con el gerente (skan/_obs). No es una base nueva ni un botón nuevo que
+// aprender: es la misma "Nota" de siempre, con un paso de etapa y una fecha opcional.
+var ETAPAS=[{k:'nuevo',lbl:'🆕 Nuevo',c:'#64748b'},{k:'contactado',lbl:'📞 Contactado',c:'#3b82f6'},{k:'interesado',lbl:'👍 Interesado',c:'#f59e0b'},{k:'cotizado',lbl:'💲 Cotizado',c:'#a855f7'},{k:'cliente',lbl:'✅ Ya es cliente',c:'#22c55e'},{k:'descartado',lbl:'❌ Descartado',c:'#ef4444'}];
+function etapaInfo(k){return ETAPAS.find(function(e){return e.k===k;})||null;}
 // ── Motivo de fuga (por qué un cliente está comprando menos) — mismo patrón que las observaciones de prospectos ──
 function fugaNotaKey(){return 'fugaNota04mas_'+(APPVEND||'v');}
 function getFugaNota(){try{return JSON.parse(localStorage.getItem(fugaNotaKey())||'{}');}catch(e){return {};}}
 function saveFugaNota(o){try{localStorage.setItem(fugaNotaKey(),JSON.stringify(o));}catch(e){}}
-function pushFugaNotaCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/skan/_fugaNota/'+encodeURIComponent(CLOUD.v)+'.json';fetch(url,{method:'PUT',body:JSON.stringify(getFugaNota())}).catch(function(){});}catch(e){} }
+function pushFugaNotaCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var url=CLOUD.db.replace(/\/$/,'')+'/skan/_fugaNota/'+encodeURIComponent(CLOUD.v)+'.json';skFetch(url,{method:'PUT',body:JSON.stringify(getFugaNota())}).catch(function(){});}catch(e){} }
 var FUGAEDIT=-1;
 function openFugaNota(i){FUGAEDIT=i;renderAlertas();setTimeout(function(){var ta=document.getElementById('fugnta');if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}
 function cancelFugaNota(){FUGAEDIT=-1;renderAlertas();}
@@ -580,7 +647,7 @@ var ENTREGAS_PEND=[], ENTREGAEDIT=-1;
 function fetchEntregasPendientes(){
   if(!CLOUD.db){ENTREGAS_PEND=[];return;}
   var url=CLOUD.db.replace(/\/$/,'')+'/embarques.json';
-  fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){
+  skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){
     o=o||{}; var misClientes={}; for(var n in CLIENTS) misClientes[_kp(n)]=n;
     var list=[];
     for(var id in o){ var r=o[id]||{};
@@ -603,16 +670,23 @@ function confirmarEntrega(i,estado){
   var pd=function(n){return ('0'+n).slice(-2);}; var d=new Date();
   var body={entregaEstado:estado, entregaNota:nota, entregaPor:APPVEND||'', entregaTs:pd(d.getDate())+'/'+pd(d.getMonth()+1)+' '+pd(d.getHours())+':'+pd(d.getMinutes())};
   var url=CLOUD.db.replace(/\/$/,'')+'/embarques/'+encodeURIComponent(e.id)+'.json';
-  fetch(url,{method:'PATCH',body:JSON.stringify(body)}).then(function(){
+  skFetch(url,{method:'PATCH',body:JSON.stringify(body)}).then(function(){
     ENTREGAS_PEND.splice(i,1); ENTREGAEDIT=-1; renderAlertas();
   }).catch(function(){alert('No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.');});
 }
-function openObs(i){OBSEDIT=i;renderProspectos(PROSPQ);setTimeout(function(){var ta=document.getElementById('obsta');if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}
+function openObs(i){OBSEDIT=i;var p=PROSPECTS[i];var ob=p?getObs()[p.n]:null;OBSEDIT_ETAPA=(ob&&ob.etapa)||'';OBSEDIT_PROX=(ob&&ob.proxima)||'';OBSEDIT_TXT=(ob&&ob.txt)||'';renderProspectos(PROSPQ);setTimeout(function(){var ta=document.getElementById('obsta');if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}
 function cancelObs(){OBSEDIT=-1;renderProspectos(PROSPQ);}
-function addTag(t){var ta=document.getElementById('obsta');if(!ta)return;ta.value=(ta.value.trim()?ta.value.replace(/\s*$/,'')+' · ':'')+t;ta.focus();}
-function saveObsFor(i){var p=PROSPECTS[i];if(!p)return;var ta=document.getElementById('obsta');var txt=ta?ta.value.trim():'';var o=getObs();
-  if(!txt){delete o[p.n];}else{var d=new Date();var pd=function(n){return ('0'+n).slice(-2);};o[p.n]={ts:pd(d.getDate())+'/'+pd(d.getMonth()+1)+' '+pd(d.getHours())+':'+pd(d.getMinutes()),txt:txt};}
-  saveObs(o);pushObsCloud();OBSEDIT=-1;renderProspectos(PROSPQ);}
+function addTag(t){var ta=document.getElementById('obsta');if(!ta)return;ta.value=(ta.value.trim()?ta.value.replace(/\s*$/,'')+' · ':'')+t;OBSEDIT_TXT=ta.value;ta.focus();}
+// Al tocar una etapa o cambiar la fecha se vuelve a dibujar la tarjeta (para que se vea marcada
+// la etapa elegida) — por eso guardamos lo que ya llevabas escrito en la nota (OBSEDIT_TXT) y en
+// la fecha (OBSEDIT_PROX) antes de redibujar, para que no se borre lo que ibas escribiendo.
+function setObsEtapa(k){var ta=document.getElementById('obsta');if(ta)OBSEDIT_TXT=ta.value;var dEl=document.getElementById('obsprox');if(dEl)OBSEDIT_PROX=dEl.value;OBSEDIT_ETAPA=(OBSEDIT_ETAPA===k)?'':k;renderProspectos(PROSPQ);setTimeout(function(){var ta2=document.getElementById('obsta');if(ta2)ta2.focus();},30);}
+function saveObsFor(i){var p=PROSPECTS[i];if(!p)return;var ta=document.getElementById('obsta');var txt=ta?ta.value.trim():'';
+  var dEl=document.getElementById('obsprox');var proxima=dEl?dEl.value:OBSEDIT_PROX;
+  var o=getObs();
+  if(!txt&&!OBSEDIT_ETAPA&&!proxima){delete o[p.n];}
+  else{var d=new Date();var pd=function(n){return ('0'+n).slice(-2);};o[p.n]={ts:pd(d.getDate())+'/'+pd(d.getMonth()+1)+' '+pd(d.getHours())+':'+pd(d.getMinutes()),txt:txt,etapa:OBSEDIT_ETAPA||'',proxima:proxima||''};}
+  saveObs(o);pushObsCloud();OBSEDIT=-1;OBSEDIT_ETAPA='';OBSEDIT_PROX='';OBSEDIT_TXT='';renderProspectos(PROSPQ);}
 var PROSPEST='';
 function setPEst(v){PROSPEST=v;OBSEDIT=-1;renderProspectos(PROSPQ);}
 function setVisita(name,how){var v=getVisitas();var d=new Date();var p=function(n){return ('0'+n).slice(-2);};v[name]={ts:p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes()),how:how};saveVisitas(v);pushVisitasCloud();}
@@ -639,22 +713,30 @@ function enviarVisitas(){var v=getVisitas();var ks=Object.keys(v);if(!ks.length)
 function pfilt(f){return '<button onclick="renderProspectos(PROSPQ,\''+f+'\')" style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;background:'+(PROSPFILT===f?'var(--gold)':'var(--mid)')+';color:'+(PROSPFILT===f?'var(--navy)':'#9fb0cc')+'">';}
 function prospItem(p,i,vis,obs){
   var loc=[p.c,p.e].filter(Boolean).join(', ');var url=mapsUrl(p.la,p.lo,(p.n||'')+' '+loc);var v=vis[p.n];var ob=obs[p.n];
+  var et=ob&&ob.etapa?etapaInfo(ob.etapa):null;
+  var hoyISO=new Date().toISOString().slice(0,10);
+  var venc=ob&&ob.proxima?(ob.proxima<hoyISO):false;
   var h='<div class="li" style="flex-direction:column;align-items:stretch;gap:8px'+(v?';background:#0f2417;border-color:#1a7a3f':'')+'">'
-   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b><div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
+   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b>'+(et?(' <span style="background:'+et.c+'22;color:'+et.c+';border:1px solid '+et.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">'+et.lbl+'</span>'):'')+'<div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
+  if(ob&&ob.proxima){h+='<div style="font-size:11.5px;font-weight:700;color:'+(venc?'#fca5a5':'#93c5fd')+'">⏰ Próxima acción: '+ob.proxima+(venc?' (vencida)':'')+'</div>';}
   if(ob&&ob.txt&&OBSEDIT!==i){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:7px 10px;font-size:12px;color:#f0d9a0">📝 '+(ob.txt||'').replace(/</g,'&lt;')+' <span style="color:#8a7a52">· '+(ob.ts||'')+'</span></div>';}
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap"><a href="'+url+'" target="_blank" rel="noopener" style="flex:1;min-width:104px;text-align:center;background:var(--gold);color:var(--navy);text-decoration:none;font-weight:800;border-radius:8px;padding:9px">📍 Cómo llegar</a>'
    +(v?('<button onclick="quitarVisita('+i+')" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer">Deshacer</button>')
        :('<button onclick="registrarVisita('+i+')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer">✓ Visita</button>'))
-   +'<button onclick="openObs('+i+')" style="background:#4a3a12;color:#f4d58a;border:none;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer">📝 '+(ob&&ob.txt?'Editar nota':'Nota')+'</button>'
+   +'<button onclick="openObs('+i+')" style="background:#4a3a12;color:#f4d58a;border:none;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer">📝 '+(ob&&(ob.txt||ob.etapa)?'Editar':'Etapa / Nota')+'</button>'
    +(p.tel?('<a href="tel:'+p.tel+'" style="background:#22304d;color:#dbeafe;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px">📞</a>'):'')
    +'</div>';
   if(OBSEDIT===i){
-    var cur=ob&&ob.txt?ob.txt.replace(/</g,'&lt;'):'';
+    var cur=(OBSEDIT_TXT||'').replace(/</g,'&lt;');
     var tags=['No lo encontré','Ya no existe','Dirección mal','Estado/ubicación mal','Ya es cliente','No le interesa'];
     h+='<div style="background:#10233f;border:1px solid #21406e;border-radius:10px;padding:10px;margin-top:2px">'
-      +'<div style="font-size:11px;color:#9fb0cc;margin-bottom:6px">Escribe lo que quieras (toca una etiqueta para agregarla):</div>'
+      +'<div style="font-size:11px;color:#9fb0cc;margin-bottom:6px">Etapa en el embudo:</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px">'+ETAPAS.map(function(e){var on=OBSEDIT_ETAPA===e.k;return '<button onclick="setObsEtapa(\''+e.k+'\')" style="background:'+(on?e.c:'#22304d')+';color:'+(on?'#0b1628':'#cfe0ff')+';border:none;border-radius:14px;padding:6px 11px;font-size:11.5px;font-weight:800;cursor:pointer">'+e.lbl+'</button>';}).join('')+'</div>'
+      +'<div style="font-size:11px;color:#9fb0cc;margin-bottom:4px">Próxima acción (opcional):</div>'
+      +'<input id="obsprox" type="date" value="'+(OBSEDIT_PROX||'')+'" onchange="OBSEDIT_PROX=this.value" style="background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#e8eef7;padding:8px;font-size:13px;margin-bottom:9px">'
+      +'<div style="font-size:11px;color:#9fb0cc;margin-bottom:6px">Nota (toca una etiqueta para agregarla):</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px">'+tags.map(function(t){return '<button onclick="addTag(\''+t.replace(/'/g,'')+'\')" style="background:#22304d;color:#cfe0ff;border:none;border-radius:14px;padding:5px 10px;font-size:11px;cursor:pointer">'+t+'</button>';}).join('')+'</div>'
-      +'<textarea id="obsta" placeholder="Ej.: no encontré el negocio, la dirección está mal, está en otro estado..." style="width:100%;height:66px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#e8eef7;padding:9px;font-size:14px;resize:none">'+cur+'</textarea>'
+      +'<textarea id="obsta" oninput="OBSEDIT_TXT=this.value" placeholder="Ej.: no encontré el negocio, la dirección está mal, está en otro estado..." style="width:100%;height:66px;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#e8eef7;padding:9px;font-size:14px;resize:none">'+cur+'</textarea>'
       +'<div style="display:flex;gap:8px;margin-top:7px"><button onclick="saveObsFor('+i+')" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar</button><button onclick="cancelObs()" style="background:#334155;color:#cbd5e1;border:none;border-radius:8px;padding:9px 14px;cursor:pointer">Cancelar</button></div></div>';
   }
   h+='</div>';return h;
@@ -1249,24 +1331,24 @@ function showCard(name){
 
 // ── Candado de licencia (tu panel manda) + carga en vivo + auto-refresco ──
 function skBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🔒</div><h2 style="color:#E8A020;margin:10px 0">Servicio no disponible</h2><p class="hint">Esta app está desactivada temporalmente. Contacta a tu gerente.</p></div>';}
-function skGate(cb){fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
+function skGate(cb){skFetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
 // ── Apagado POR VENDEDOR: el gerente puede desactivar a un solo vendedor sin afectar a los demás ──
 function skVendBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🚫</div><h2 style="color:#E8A020;margin:10px 0">Acceso desactivado</h2><p class="hint">Tu acceso a esta app fue desactivado por tu gerente. Contáctalo si crees que es un error.</p></div>';}
 function vBlocked(b){return b===true||(b&&b.blocked===true);}
 function skVendorGate(cb){
   var q=parseHash(); var v=q.v||''; if(!v){cb();return;}
   var DB=(q.db||SK_DB).replace(/\/$/,'');
-  fetch(DB+'/skan/_vblock/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){ if(vBlocked(b))skVendBlocked(); else cb(); }).catch(function(){cb();});
+  skFetch(DB+'/skan/_vblock/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){ if(vBlocked(b))skVendBlocked(); else cb(); }).catch(function(){cb();});
 }
 // refresco silencioso: solo cuando el vendedor está en la lista de clientes (no interrumpe una tarjeta)
 function skPoll(){ if(!CLOUD.v)return;
   var base=CLOUD.db.replace(/\/$/,'');
   lockHeartbeat();   // mantiene "vivo" el candado de este dispositivo mientras siga usando la app
   // corta la sesión abierta si el gerente desactiva a este vendedor
-  fetch(base+'/skan/_vblock/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){if(vBlocked(b))skVendBlocked();}).catch(function(){});
+  skFetch(base+'/skan/_vblock/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(b){if(vBlocked(b))skVendBlocked();}).catch(function(){});
   if(VIEW!=='clientes'||CARDOPEN)return;   // no refrescar mientras una tarjeta está abierta (se cerraría sola)
   if(buscandoAhora())return;               // ni encima de una búsqueda en curso: se cerraría el teclado
-  fetch(base+'/skan/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ if(CARDOPEN)return; applyPayload(p); renderList(CLISTQ); } }).catch(function(){}); }
+  skFetch(base+'/skan/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ if(CARDOPEN)return; applyPayload(p); renderList(CLISTQ); } }).catch(function(){}); }
 // ── Candado por DISPOSITIVO: el primer teléfono que abre el link queda autorizado; otro teléfono se bloquea ──
 function skDeviceBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">📵</div><h2 style="color:#E8A020;margin:10px 0">App bloqueada en este teléfono</h2><p class="hint">Esta app ya está activada en otro dispositivo. Si cambiaste de teléfono, pide a tu gerente que <b>libere tu acceso</b>.</p></div>';}
 /* Safari (sobre todo iPhone) borra localStorage solo (Intelligent Tracking Prevention tras ~7 días sin
@@ -1284,17 +1366,17 @@ function lockHeartbeat(){
   if(!mine)return;
   var now=Date.now(); if(now-_lastLockPing<1000*60*10)return; // máx 1 vez cada 10 min
   _lastLockPing=now;
-  try{ fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:now})}).catch(function(){}); }catch(e){}
+  try{ skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:now})}).catch(function(){}); }catch(e){}
 }
 function skDeviceLock(cb){
   var q=parseHash(); var v=q.v||''; if(!v){ cb(); return; }
   var DB=(q.db||SK_DB).replace(/\/$/,''); var lk='sk_dev_'+v; var mine='';
   try{ mine=localStorage.getItem(lk)||''; }catch(e){}
   if(!mine){ mine='d'+Date.now().toString(36)+Math.random().toString(36).slice(2,9); }
-  fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
+  skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
     var stale = c && c.dev && c.ts && (Date.now()-c.ts>LOCK_STALE_MS);
-    if(!c || !c.dev || stale){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).then(function(){cb();}).catch(function(){cb();}); }
-    else if(c.dev===mine){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); fetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).catch(function(){}); cb(); }
+    if(!c || !c.dev || stale){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).then(function(){cb();}).catch(function(){cb();}); }
+    else if(c.dev===mine){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).catch(function(){}); cb(); }
     else { skDeviceBlocked(); }
   }).catch(function(){ cb(); }); // sin internet: no bloquea (los datos tampoco cargan)
 }
@@ -1597,7 +1679,7 @@ if('serviceWorker' in navigator){ window.addEventListener('load', function(){ na
     if(!cfg||!cfg.enabled||!cfg.endpoint)return Promise.reject(new Error('ai_disabled'));
     var rk=vzRoleAndKey();
     var ctx=vzBuildAIContext(q);
-    return fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,model:cfg.model||'haiku',role:rk.role,vendorKey:rk.vendorKey,context:ctx})})
+    return skFetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,model:cfg.model||'haiku',role:rk.role,vendorKey:rk.vendorKey,context:ctx})})
       .then(function(r){return r.json().catch(function(){return null;});})
       .then(function(j){
         if(!j)throw new Error('bad_response');
@@ -1730,8 +1812,8 @@ if('serviceWorker' in navigator){ window.addEventListener('load', function(){ na
     el.innerHTML='<div style="font-size:11px;color:#9fb0cc">Cargando uso de IA…</div>';
     var mk=vzMonthKey();
     Promise.all([
-      fetch(db+'/ai_usage/'+mk+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
-      fetch(db+'/ai_caps.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
+      skFetch(db+'/ai_usage/'+mk+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
+      skFetch(db+'/ai_caps.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
     ]).then(function(res){
       var usage=res[0]||{}, caps=res[1]||{};
       var vendorDefault=caps.perVendorDefault||30;
@@ -1749,9 +1831,9 @@ if('serviceWorker' in navigator){ window.addEventListener('load', function(){ na
   window.vzAuthorizeMore=function(vendorKey){
     var db=vzUsageDb(); if(!db)return;
     var mk=vzMonthKey();
-    fetch(db+'/ai_usage/'+mk+'/'+vendorKey+'/count.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(used){
+    skFetch(db+'/ai_usage/'+mk+'/'+vendorKey+'/count.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(used){
       var newCap=(used||0)+10;
-      fetch(db+'/ai_caps/overrides/'+vendorKey+'.json',{method:'PUT',body:JSON.stringify(newCap)}).then(function(){ vzLoadUsage(); });
+      skFetch(db+'/ai_caps/overrides/'+vendorKey+'.json',{method:'PUT',body:JSON.stringify(newCap)}).then(function(){ vzLoadUsage(); });
     }).catch(function(){});
   };
 

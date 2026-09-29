@@ -675,6 +675,20 @@ function getCobreCfg(){try{const r=localStorage.getItem('cobreCfg04mas');if(r)re
 // endpoint = URL de la función segura en Firebase (nunca lleva la llave de la IA, esa vive en el servidor).
 const DEFAULT_AI_CFG={enabled:false, model:'haiku', endpoint:'', globalMonthly:500, perVendorDefault:30};
 function getAiCfg(){try{const r=localStorage.getItem('aiCfg04mas');if(r)return Object.assign({},DEFAULT_AI_CFG,JSON.parse(r));}catch(e){}return Object.assign({},DEFAULT_AI_CFG);}
+// Correo automático del resumen semanal (lo manda solo la función programada weeklyResumenEmail,
+// sin que tengas que dar clic en nada). "to" es una lista separada por comas.
+const DEFAULT_RESUMEN_EMAIL_CFG={enabled:false, to:''};
+function getResumenEmailCfg(){try{const r=localStorage.getItem('resumenEmailCfg04mas');if(r)return Object.assign({},DEFAULT_RESUMEN_EMAIL_CFG,JSON.parse(r));}catch(e){}return Object.assign({},DEFAULT_RESUMEN_EMAIL_CFG);}
+function saveResumenEmailCfg(){
+  if(!reqSuper())return;
+  const c={
+    enabled: !!(document.getElementById('re-on')||{}).checked,
+    to: ((document.getElementById('re-to')||{}).value||'').trim()
+  };
+  localStorage.setItem('resumenEmailCfg04mas', JSON.stringify(c));
+  pushConfigCloud(true);
+  alert('✅ Guardado. '+(c.enabled&&c.to?('El correo automático semanal se mandará a: '+c.to):'El correo automático semanal está apagado (actívalo y pon al menos un destinatario).'));
+}
 function saveAiCfg(){
   if(!reqSuper())return;
   const c={
@@ -690,8 +704,8 @@ function saveAiCfg(){
   // vendedor), para que un cambio de tope aplique al instante sin tener que volver a publicar.
   try{
     const DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');
-    fetch(DB+'/ai_caps/globalMonthly.json',{method:'PUT',body:JSON.stringify(c.globalMonthly)}).catch(()=>{});
-    fetch(DB+'/ai_caps/perVendorDefault.json',{method:'PUT',body:JSON.stringify(c.perVendorDefault)}).catch(()=>{});
+    skFetch(DB+'/ai_caps/globalMonthly.json',{method:'PUT',body:JSON.stringify(c.globalMonthly)}).catch(()=>{});
+    skFetch(DB+'/ai_caps/perVendorDefault.json',{method:'PUT',body:JSON.stringify(c.perVendorDefault)}).catch(()=>{});
   }catch(e){}
   renderCodesPanel();
   alert('✔ Configuración de IA guardada. Publica a la nube para que vendedor.html y maestra.html la tomen.');
@@ -1264,7 +1278,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
     document.getElementById('load-msg').textContent='Dibujando dashboard...';
-    setTimeout(()=>renderDashboard(fname),50);
+    setTimeout(()=>{ renderDashboard(fname); try{ if(typeof autoPublishResumenSemanal==='function') autoPublishResumenSemanal(); }catch(e){} },50);
 }
 
 // ── RENDER DASHBOARD ──────────────────────────────────────────────────────────
@@ -1535,7 +1549,7 @@ function resumenAIQuestion(){
 function fetchResumenIA(ctx){
   const cfg=getAiCfg();
   if(!cfg||!cfg.enabled||!cfg.endpoint)return Promise.reject(new Error('ai_disabled'));
-  return fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:resumenAIQuestion(),model:cfg.model||'haiku',role:'admin',vendorKey:'ADMIN',context:ctx})})
+  return skFetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:resumenAIQuestion(),model:cfg.model||'haiku',role:'admin',vendorKey:'ADMIN',context:ctx})})
     .then(r=>r.json().catch(()=>null))
     .then(j=>{
       if(!j)throw new Error('bad_response');
@@ -3954,7 +3968,7 @@ function renderProductos(){
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
@@ -3967,14 +3981,14 @@ function pushBaselineCloud(anio){
   try{
     if(!anio)return;
     var raw=localStorage.getItem('baseline04mas_'+anio); if(!raw)return;
-    fetch(_dbUrl()+'/skan/_baselines/'+anio+'.json',{method:'PUT',body:raw}).catch(function(){});
+    skFetch(_dbUrl()+'/skan/_baselines/'+anio+'.json',{method:'PUT',body:raw}).catch(function(){});
     var day=localStorage.getItem('baseline04mas_daym_'+anio);
-    if(day)fetch(_dbUrl()+'/skan/_baselines/'+anio+'_daym.json',{method:'PUT',body:day}).catch(function(){});
+    if(day)skFetch(_dbUrl()+'/skan/_baselines/'+anio+'_daym.json',{method:'PUT',body:day}).catch(function(){});
   }catch(e){}
 }
 function syncBaselinesCloud(cb){
   try{
-    fetch(_dbUrl()+'/skan/_baselines.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){
+    skFetch(_dbUrl()+'/skan/_baselines.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){
       if(o&&typeof o==='object'){
         for(var k in o){
           var key='baseline04mas_'+(k.indexOf('_daym')>=0?('daym_'+k.replace('_daym','')):k);
@@ -3985,8 +3999,8 @@ function syncBaselinesCloud(cb){
     }).catch(function(){ if(cb)cb(); });
   }catch(e){ if(cb)cb(); }
 }
-function pushConfigCloud(silent){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');fetch(DB+'/skan/_config.json',{method:'PUT',body:JSON.stringify(_cfgBundle())}).then(function(){if(!silent)alert('✔ Configuración guardada en la nube. Cualquier navegador la tomará sola al abrir el link.');}).catch(function(){if(!silent)alert('No se pudo guardar (revisa internet/licencia).');});}catch(e){} }
-function syncConfigCloud(cb){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');fetch(DB+'/skan/_config.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){ if(o&&typeof o==='object'){ CFG_KEYS.forEach(function(k){ if(o[k]==null)return; if(k==='cloudCfg04mas'){ try{var cloud=JSON.parse(o[k]);var loc=JSON.parse(localStorage.getItem(k)||'{}'); if(loc.secret)cloud.secret=loc.secret; localStorage.setItem(k,JSON.stringify(cloud)); }catch(e){} } else { localStorage.setItem(k,o[k]); } }); } if(cb)cb(); }).catch(function(){ if(cb)cb(); }); }catch(e){ if(cb)cb(); } }
+function pushConfigCloud(silent){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');skFetch(DB+'/skan/_config.json',{method:'PUT',body:JSON.stringify(_cfgBundle())}).then(function(){if(!silent)alert('✔ Configuración guardada en la nube. Cualquier navegador la tomará sola al abrir el link.');}).catch(function(){if(!silent)alert('No se pudo guardar (revisa internet/licencia).');});}catch(e){} }
+function syncConfigCloud(cb){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');skFetch(DB+'/skan/_config.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){ if(o&&typeof o==='object'){ CFG_KEYS.forEach(function(k){ if(o[k]==null)return; if(k==='cloudCfg04mas'){ try{var cloud=JSON.parse(o[k]);var loc=JSON.parse(localStorage.getItem(k)||'{}'); if(loc.secret)cloud.secret=loc.secret; localStorage.setItem(k,JSON.stringify(cloud)); }catch(e){} } else { localStorage.setItem(k,o[k]); } }); } if(cb)cb(); }).catch(function(){ if(cb)cb(); }); }catch(e){ if(cb)cb(); } }
 function saveVParams(){ if(!reqSuper())return;
   const p={capTonMes:parseFloat(document.getElementById('p-cap').value)||5700,
            gTarget:(parseFloat(document.getElementById('p-gt').value)||7)/100,
@@ -5193,7 +5207,7 @@ function prospecAll(){
   return _res;
 }
 const MX_ESTADOS=['AGUASCALIENTES','BAJA CALIFORNIA','BAJA CALIFORNIA SUR','CAMPECHE','CHIAPAS','CHIHUAHUA','CIUDAD DE MEXICO','COAHUILA','COLIMA','DURANGO','GUANAJUATO','GUERRERO','HIDALGO','JALISCO','MEXICO','MICHOACAN','MORELOS','NAYARIT','NUEVO LEON','OAXACA','PUEBLA','QUERETARO','QUINTANA ROO','SAN LUIS POTOSI','SINALOA','SONORA','TABASCO','TAMAULIPAS','TLAXCALA','VERACRUZ','YUCATAN','ZACATECAS'];
-function fetchProspFix(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_prospfix.json'; fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._prospFix=o||{};}).catch(function(){}); }
+function fetchProspFix(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_prospfix.json'; skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._prospFix=o||{};}).catch(function(){}); }
 function saveProspFix(){ if(!reqSuper())return;
   var name=((document.getElementById('corr-name')||{}).value||'').trim();
   var e=((document.getElementById('corr-est')||{}).value||'');
@@ -5203,7 +5217,7 @@ function saveProspFix(){ if(!reqSuper())return;
   var k=keyp(name); var rec={n:name,e:e}; if(c)rec.c=c;
   window._prospFix=window._prospFix||{}; window._prospFix[k]=rec;
   var DB=(getCloudCfg().db||SK_DB).replace(/\/$/,'');
-  fetch(DB+'/skan/_prospfix/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(rec)}).catch(function(){});
+  skFetch(DB+'/skan/_prospfix/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(rec)}).catch(function(){});
   try{if(typeof renderMap==='function')renderMap();}catch(e2){}
   renderProspec();
   alert('✔ Corrección guardada: '+name+' → '+e+'.\nPublica a la nube para que les llegue a los vendedores.');
@@ -5211,7 +5225,7 @@ function saveProspFix(){ if(!reqSuper())return;
 function delProspFix(k){ if(!reqSuper())return;
   if(window._prospFix)delete window._prospFix[k];
   var DB=(getCloudCfg().db||SK_DB).replace(/\/$/,'');
-  fetch(DB+'/skan/_prospfix/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).catch(function(){});
+  skFetch(DB+'/skan/_prospfix/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).catch(function(){});
   try{if(typeof renderMap==='function')renderMap();}catch(e2){}
   renderProspec();
 }
@@ -5235,7 +5249,7 @@ function corrPanel(){
   h+='</div>'; return h;
 }
 function getVisitasImport(){var live=window._visitasLive||{};var pasted={};try{pasted=JSON.parse(localStorage.getItem('visitasImport04mas')||'{}');}catch(e){}return Object.assign({},pasted,live);}
-function fetchVisitasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/visits.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var vis=o[v]||{};for(var n in vis){store[n]=Object.assign({},vis[n],{v:v});}}window._visitasLive=store;renderProspec();}).catch(function(){}); }
+function fetchVisitasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/visits.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var vis=o[v]||{};for(var n in vis){store[n]=Object.assign({},vis[n],{v:v});}}window._visitasLive=store;renderProspec();}).catch(function(){}); }
 function addVisitasCode(){ if(!reqSuper())return;
   var el=document.getElementById('visimport'); if(!el)return;
   var raw=(el.value||'').trim(); if(!raw){alert('Pega el código de visitas que te envió el vendedor.');return;}
@@ -5258,9 +5272,9 @@ function visitasPanel(){
   else h+='<div style="font-size:.75rem;color:#94a3b8">Las visitas aparecen aquí <b>en vivo</b> cuando los vendedores las registran en su app (vía Firebase). Si un vendedor está sin conexión, puede enviarte un código y lo pegas aquí.</div>';
   h+='</div>'; return h;
 }
-function fetchObsLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_obs.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._obsLive=store;renderProspec();}).catch(function(){}); }
+function fetchObsLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_obs.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._obsLive=store;renderProspec();}).catch(function(){}); }
 // Motivos de fuga que capturan los vendedores en su app — mismo patrón que las observaciones de prospectos.
-function fetchFugaNotaLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_fugaNota.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); fetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._fugaNotaLive=store;drawFugaTable();}).catch(function(){}); }
+function fetchFugaNotaLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_fugaNota.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._fugaNotaLive=store;drawFugaTable();}).catch(function(){}); }
 function obsPanel(){
   var st=window._obsLive||{}; var names=Object.keys(st);
   var h='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:12px;margin-bottom:12px">'
@@ -5501,6 +5515,68 @@ function quarterOf(m){for(const g of Q_GROUPS){if(g[0].indexOf(m)>=0)return {mon
 const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
 const SK_APP='https://barbagomezricardo-cloud.github.io/embarques/vendedor.html';
 const SK_MASTER='https://barbagomezricardo-cloud.github.io/embarques/maestra.html';
+
+// ── App Check (protección anti-abuso, OPCIONAL y apagada por defecto) ───────
+// Hoy cualquier script fuera de estas apps que se sepa la URL de la base (arriba)
+// puede leer/escribir los datos igual que la app real — no hay forma de distinguir
+// "la app real, en el navegador de alguien" de "un script copiando la URL". App Check
+// arregla eso: cada request lleva una credencial (de Google reCAPTCHA) que prueba que
+// salió de esta página real. Mientras RECAPTCHA_SITE_KEY esté vacío, este bloque no
+// hace NADA — las apps siguen exactamente igual que hoy. Para activarlo:
+//   1) Firebase Console → Compilación → App Check → Apps → registra esta app web
+//      (ya existe como appId 1:860212111367:web:6a020f94ef6a468af922a2) con el
+//      proveedor reCAPTCHA v3 → copia el "Site key" que te da.
+//   2) Pega ese Site key aquí abajo y publica este archivo.
+//   3) En Firebase Console → App Check → Apps → Realtime Database, déjalo en modo
+//      "No aplicado" (Unenforced) varios días — ahí puedes ver en el panel cuánto
+//      tráfico llega CON credencial válida vs. sin ella, sin bloquear a nadie.
+//   4) Solo cuando veas que toda tu app/equipo aparece "Verificado", cambias ese
+//      mismo control a "Aplicado" (Enforced) — desde ese momento, cualquier script
+//      que solo tenga la URL de la base (sin pasar por estas páginas) es rechazado.
+const RECAPTCHA_SITE_KEY = '6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj'; // Fraud Defense (reCAPTCHA Enterprise) — clave real, ya activa
+const SK_FBCFG = {apiKey:"AIzaSyBYa3yZxWML-rwxKwuXp_gTyOTkisUKe8w", authDomain:"embarques-mascotas.firebaseapp.com", databaseURL:SK_DB, projectId:"embarques-mascotas", appId:"1:860212111367:web:6a020f94ef6a468af922a2"};
+let _skAppCheckReady=null;
+function _skInitAppCheck(){
+  if(_skAppCheckReady)return _skAppCheckReady;
+  if(!RECAPTCHA_SITE_KEY){_skAppCheckReady=Promise.resolve(null);return _skAppCheckReady;}
+  _skAppCheckReady=new Promise(function(resolve){
+    try{
+      var s1=document.createElement('script'); s1.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
+      s1.onload=function(){
+        var s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js';
+        s2.onload=function(){
+          try{
+            firebase.initializeApp(SK_FBCFG);
+            var ac=firebase.appCheck();
+            ac.activate(new firebase.appCheck.RecaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true);
+            resolve(ac);
+          }catch(e){ resolve(null); }
+        };
+        s2.onerror=function(){ resolve(null); };
+        document.head.appendChild(s2);
+      };
+      s1.onerror=function(){ resolve(null); };
+      document.head.appendChild(s1);
+    }catch(e){ resolve(null); }
+  });
+  return _skAppCheckReady;
+}
+// Reemplazo de skFetch(): si la URL es de nuestra base y ya tienes tu Site key puesto,
+// agrega la credencial de App Check. Si algo falla (SDK no cargó, sin internet, etc.),
+// sigue con un fetch normal — NUNCA bloquea ni rompe nada por su cuenta; el único que
+// puede bloquear de verdad es el control "Aplicado" del paso 4 de arriba, en Firebase.
+async function skFetch(url, opts){
+  try{
+    if(RECAPTCHA_SITE_KEY && typeof url==='string' && url.indexOf('.firebaseio.com')!==-1){
+      var ac=await _skInitAppCheck();
+      if(ac){
+        var tok=await ac.getToken().catch(function(){return null;});
+        if(tok&&tok.token){ opts=opts||{}; opts.headers=Object.assign({},opts.headers,{'X-Firebase-AppCheck':tok.token}); }
+      }
+    }
+  }catch(e){ /* silencioso a propósito: nunca debe tumbar la sincronización */ }
+  return fetch(url, opts);
+}
 /* ===== ROL: super-usuario (edita/publica) vs visor (solo ver/filtrar) ===== */
 const SUPER_PWD='Poseidon201085';   // ← CONTRASEÑA DE SUPER-USUARIO. Cámbiala por la que quieras.
 let SK_SUPER=false;
@@ -5692,7 +5768,7 @@ function buildVendorPayloads(){
 function liberarDispositivo(vkey,vname){ if(!reqSuper())return;
   if(!confirm('¿Liberar el dispositivo de '+(vname||vkey)+'?\nEl próximo teléfono que abra su link quedará como el autorizado.'))return;
   var DB=(getCloudCfg().db||SK_DB).replace(/\/$/,'');
-  fetch(DB+'/locks/'+encodeURIComponent(vkey)+'.json',{method:'DELETE'})
+  skFetch(DB+'/locks/'+encodeURIComponent(vkey)+'.json',{method:'DELETE'})
     .then(function(){alert('✔ Dispositivo liberado. Pídele al vendedor que abra su link en el teléfono correcto.');})
     .catch(function(){alert('No se pudo liberar (revisa internet/licencia).');});
 }
@@ -5707,7 +5783,7 @@ function toggleVendedor(vkey,vname,btn){ if(!reqSuper())return;
   var willBlock=btn.getAttribute('data-blocked')!=='1';
   if(willBlock&&!confirm('¿Desactivar la app de '+(vname||vkey)+'?\nSu app dejará de funcionar (aunque tenga el link) hasta que la reactives. Los demás vendedores no se ven afectados.'))return;
   var url=DB+'/skan/_vblock/'+encodeURIComponent(vkey)+'.json';
-  var req=willBlock?fetch(url,{method:'PUT',body:'true'}):fetch(url,{method:'DELETE'});
+  var req=willBlock?skFetch(url,{method:'PUT',body:'true'}):skFetch(url,{method:'DELETE'});
   req.then(function(){ setVendBtn(btn,willBlock); alert(willBlock?('⛔ App de '+(vname||vkey)+' desactivada. Se bloquea en su teléfono en menos de 1 minuto.'):('✅ App de '+(vname||vkey)+' reactivada.')); })
      .catch(function(){alert('No se pudo cambiar (revisa internet/licencia).');});
 }
@@ -5859,27 +5935,41 @@ function publishCloud(){
   let done=0,fail=0; const btn=document.getElementById('cl-pubbtn'); if(btn)btn.textContent='Publicando...';
   Promise.all(keys.map(v=>{
     const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';
-    return fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).then(r=>{r.ok?done++:fail++;}).catch(()=>fail++);
+    return skFetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).then(r=>{r.ok?done++:fail++;}).catch(()=>fail++);
   })).then(()=>{
     const idx={updatedStr:pj.updatedStr,vendors:keys.filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
-    return fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
+    return skFetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
   }).then(()=>{
     // Proyección de producción (pestaña Proyección → programador.html). Va DENTRO de /skan
     // (no en una ruta nueva) porque las reglas de Firebase solo permiten leer/escribir ahí;
     // una ruta nueva a nivel raíz queda bloqueada en silencio (fetch no marca error igual).
     const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
-    if(proy)return fetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
+    if(proy)return skFetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
   }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa tu licencia/internet)'):'')+'.\nCada vendedor verá su info actualizada solo.'); });
 }
 function autoPublishCloud(){
   if(!SK_SUPER)return; // los visores no publican
   const cfg=getCloudCfg(); if(!cfg.db)return;
   const pj=buildVendorPayloads(); if(!pj)return; const db=cfg.db.replace(/\/$/,'');
-  Object.keys(pj.byVendor).forEach(v=>{const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';fetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).catch(()=>{});});
+  Object.keys(pj.byVendor).forEach(v=>{const url=db+'/skan/'+encodeURIComponent(keyp(v))+'.json';skFetch(url,{method:'PUT',body:JSON.stringify(pj.byVendor[v])}).catch(()=>{});});
   const idx={updatedStr:pj.updatedStr,vendors:Object.keys(pj.byVendor).filter(v=>!pj.byVendor[v].cobrador).map(keyp)};
-  fetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
+  skFetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
   const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
-  if(proy)fetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
+  if(proy)skFetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
+}
+// Publica el resumen semanal YA CALCULADO cada vez que cargas un reporte nuevo de Odoo
+// (no solo cuando das clic en "Generar resumen"). Así, aunque tú nunca vuelvas a tocar el
+// botón, siempre hay un resumen fresco esperando en la nube — es lo que lee la función
+// programada (weeklyResumenEmail) para mandarte el correo automático cada semana. No toca
+// el historial de comparación semana-contra-semana (eso solo avanza cuando tú generas el
+// resumen a mano) — solo dice "esto es lo más reciente que hay disponible ahorita".
+function autoPublishResumenSemanal(){
+  if(!SK_SUPER)return;
+  const cfg=getCloudCfg(); if(!cfg.db)return;
+  const r=(typeof buildResumenSemanal==='function')?buildResumenSemanal():null; if(!r)return;
+  const db=cfg.db.replace(/\/$/,'');
+  const payload={fechaISO:r.fechaISO,texto:resumenTextoBase(r),aiContext:resumenAIContext(r),publishedAt:new Date().toISOString()};
+  skFetch(db+'/skan/_resumenLatest.json',{method:'PUT',body:JSON.stringify(payload)}).catch(()=>{});
 }
 function cpv(btn){const el=btn.parentElement.querySelector('input,textarea');if(!el)return;el.select();try{navigator.clipboard&&navigator.clipboard.writeText(el.value);}catch(e){}const o=btn.textContent;btn.textContent='✓';setTimeout(()=>btn.textContent=o,1200);}
 
@@ -5931,6 +6021,15 @@ function renderCodesPanel(){
   h+='<div style="font-weight:800;color:#5eead4;margin-bottom:4px">📆 Resumen semanal</div>';
   h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Arma un mensaje con lo que cambió esta semana (fuga, niveles, clientes sin segunda compra) usando los datos ya cargados, listo para copiar y enviar por WhatsApp o correo. Las cifras siempre son cálculo directo — nunca las inventa la IA. Si tienes el asistente de IA activado arriba, además te agrega una lectura breve de la semana y de 3 a 5 sugerencias concretas (usa tus preguntas del mes, igual que "Pregúntame").</div>';
   h+='<button onclick="generarResumenSemanal()" style="background:#0d9488;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">📋 Generar resumen</button>';
+  (function(){
+    const rec=getResumenEmailCfg();
+    h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e4d5c">';
+    h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:6px"><b style="color:#cbd5e1">✉️ Envío automático por correo</b> — sin tocar nada, la función programada te lo manda solo (requiere desplegar <code>weeklyResumenEmail</code>, ver functions/DESPLIEGUE_LEEME.md). Usa siempre el último resumen disponible en la nube (el de tu último reporte de Odoo cargado).</div>';
+    h+='<label style="font-size:.76rem;color:#e8eef7;display:flex;align-items:center;gap:5px;margin-bottom:6px"><input type="checkbox" id="re-on"'+(rec.enabled?' checked':'')+'> Mandar correo automático cada semana</label>';
+    h+='<input id="re-to" placeholder="Correos separados por coma (ej: tucorreo@gmail.com, gerencia@empresa.com)" value="'+esc(rec.to)+'" style="width:100%;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem;margin-bottom:6px">';
+    h+='<button onclick="saveResumenEmailCfg()" style="background:#0d9488;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">Guardar correo automático</button>';
+    h+='</div>';
+  })();
   h+='</div>';
   (function(){
     let mBase=(cfg.master||'').trim().replace(/#.*$/,'');
@@ -5964,7 +6063,7 @@ function renderCodesPanel(){
   h+='</div>';
   box.innerHTML=h;
   // marca los botones de vendedores actualmente desactivados
-  (function(){var DB=(cfg.db||SK_DB).replace(/\/$/,'');fetch(DB+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(m){m=m||{};Object.keys(pj.byVendor).forEach(function(v){var b=document.getElementById('vb_'+keyp(v));if(b)setVendBtn(b,m[keyp(v)]===true);});}).catch(function(){});})();
+  (function(){var DB=(cfg.db||SK_DB).replace(/\/$/,'');skFetch(DB+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(m){m=m||{};Object.keys(pj.byVendor).forEach(function(v){var b=document.getElementById('vb_'+keyp(v));if(b)setVendBtn(b,m[keyp(v)]===true);});}).catch(function(){});})();
 }
 
 function resetDash(){DATA=null;selState=null;document.getElementById('dashboard').style.display='none';document.getElementById('loading').style.display='none';document.getElementById('dropzone').style.display='flex';document.getElementById('file-input').value='';}
@@ -5999,7 +6098,7 @@ function getProyEdits(){try{return JSON.parse(localStorage.getItem('proyEdits04m
 function saveProyEdits(o){try{localStorage.setItem('proyEdits04mas',JSON.stringify(o));}catch(e){}}
 function pullProyEditsCloud(cb){
   try{
-    fetch(_dbUrl()+'/skan/_proyedit.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(cloud){
+    skFetch(_dbUrl()+'/skan/_proyedit.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(cloud){
       if(cloud&&typeof cloud==='object'){
         var loc=getProyEdits();
         for(var fk in cloud){
@@ -6021,7 +6120,7 @@ function setProyEditField(famKey,field,val){
   if(isFinite(v)&&v>=0){ loc[pk][field]=v; loc[pk][field+'Ts']=now; patch[field]=v; patch[field+'Ts']=now; }
   else { delete loc[pk][field]; delete loc[pk][field+'Ts']; patch[field]=null; patch[field+'Ts']=null; }
   saveProyEdits(loc); renderProyeccion();
-  try{fetch(_dbUrl()+'/skan/_proyedit/'+encodeURIComponent(pk)+'.json',{method:'PATCH',body:JSON.stringify(patch)}).catch(function(){});}catch(e){}
+  try{skFetch(_dbUrl()+'/skan/_proyedit/'+encodeURIComponent(pk)+'.json',{method:'PATCH',body:JSON.stringify(patch)}).catch(function(){});}catch(e){}
 }
 function setProyMinStock(famKey,val){setProyEditField(famKey,'minStock',val);}
 function setProyStockActual(famKey,val){setProyEditField(famKey,'stockActual',val);}
@@ -6273,7 +6372,7 @@ applyRole();   // arranca en modo visor (config/mapeo/publicar ocultos hasta sup
 syncConfigCloud(function(){ try{renderMapeoTable();applyRole();}catch(e){} });
 syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si este navegador no la tiene
 // ── Candado de licencia: si apagas licencia/activa en tu Firebase, el tablero se bloquea ──
-(function(){try{fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(!(l&&l.activa===true)){document.body.innerHTML='<div style="max-width:460px;margin:70px auto;text-align:center;font-family:-apple-system,Segoe UI,sans-serif;color:#e8eef7"><div style="font-size:46px">🔒</div><h2 style="color:#E8A020;margin:12px 0">Servicio no disponible</h2><p style="color:#94a3b8">Este tablero está desactivado temporalmente.</p></div>';}}).catch(function(){});}catch(e){}})();
+(function(){try{skFetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(!(l&&l.activa===true)){document.body.innerHTML='<div style="max-width:460px;margin:70px auto;text-align:center;font-family:-apple-system,Segoe UI,sans-serif;color:#e8eef7"><div style="font-size:46px">🔒</div><h2 style="color:#E8A020;margin:12px 0">Servicio no disponible</h2><p style="color:#94a3b8">Este tablero está desactivado temporalmente.</p></div>';}}).catch(function(){});}catch(e){}})();
 
 /* ================================================================
    VZ — Asistente de voz e IA (v2: híbrido gratis + IA opcional)
@@ -6565,7 +6664,7 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
     if(!cfg||!cfg.enabled||!cfg.endpoint)return Promise.reject(new Error('ai_disabled'));
     var rk=vzRoleAndKey();
     var ctx=vzBuildAIContext(q);
-    return fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,model:cfg.model||'haiku',role:rk.role,vendorKey:rk.vendorKey,context:ctx})})
+    return skFetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,model:cfg.model||'haiku',role:rk.role,vendorKey:rk.vendorKey,context:ctx})})
       .then(function(r){return r.json().catch(function(){return null;});})
       .then(function(j){
         if(!j)throw new Error('bad_response');
@@ -6698,8 +6797,8 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
     el.innerHTML='<div style="font-size:11px;color:#9fb0cc">Cargando uso de IA…</div>';
     var mk=vzMonthKey();
     Promise.all([
-      fetch(db+'/ai_usage/'+mk+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
-      fetch(db+'/ai_caps.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
+      skFetch(db+'/ai_usage/'+mk+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
+      skFetch(db+'/ai_caps.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
     ]).then(function(res){
       var usage=res[0]||{}, caps=res[1]||{};
       var vendorDefault=caps.perVendorDefault||30;
@@ -6717,9 +6816,9 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
   window.vzAuthorizeMore=function(vendorKey){
     var db=vzUsageDb(); if(!db)return;
     var mk=vzMonthKey();
-    fetch(db+'/ai_usage/'+mk+'/'+vendorKey+'/count.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(used){
+    skFetch(db+'/ai_usage/'+mk+'/'+vendorKey+'/count.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(used){
       var newCap=(used||0)+10;
-      fetch(db+'/ai_caps/overrides/'+vendorKey+'.json',{method:'PUT',body:JSON.stringify(newCap)}).then(function(){ vzLoadUsage(); });
+      skFetch(db+'/ai_caps/overrides/'+vendorKey+'.json',{method:'PUT',body:JSON.stringify(newCap)}).then(function(){ vzLoadUsage(); });
     }).catch(function(){});
   };
 

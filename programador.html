@@ -1376,7 +1376,7 @@ function initFirebase(){
   if(!CFG.firebase || !CFG.firebase.databaseURL){ setConn('local','Local'); document.getElementById('footer').textContent='Programador de embarques · modo local. Conecta Firebase en ⚙ Configuración para sincronizar con la app de cargadores.'; return; }
   loadFbScripts(()=>{
     try{
-      if(!fb){ fb = firebase.initializeApp(CFG.firebase, 'prog'+Date.now()); }
+      if(!fb){ fb = firebase.initializeApp(CFG.firebase, 'prog'+Date.now()); if(RECAPTCHA_SITE_KEY){ try{ firebase.appCheck(fb).activate(new firebase.appCheck.RecaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true); }catch(e){ console.error('appCheck:',e); } } }
       const db = firebase.database(fb);
       fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('skan/_proyeccion'); fbProyEdit = db.ref('skan/_proyedit');
       setConn('online','Conectando…');
@@ -1412,10 +1412,18 @@ function initFirebase(){
   });
 }
 let fbLoaded=false;
+// App Check (protección anti-abuso, OPCIONAL y apagada por defecto): ver la nota larga
+// en ventas.html/vendedor.html/maestra.html junto a esta misma constante. Mientras esté
+// vacío, no cambia nada; en cuanto tengas tu Site key de Firebase Console → App Check,
+// lo pegas aquí y en las otras 3 apps para que las 5 queden protegidas igual.
+const RECAPTCHA_SITE_KEY = '6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj'; // Fraud Defense (reCAPTCHA Enterprise) — clave real, ya activa
 function loadFbScripts(cb){
   if(fbLoaded||window.firebase){ fbLoaded=true; return cb(); }
   const s1=document.createElement('script'); s1.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
-  s1.onload=()=>{ const s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'; s2.onload=()=>{fbLoaded=true;cb();}; s2.onerror=()=>{setConn('local','Local (sin internet)');}; document.head.appendChild(s2); };
+  s1.onload=()=>{ const s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'; s2.onload=()=>{
+    if(!RECAPTCHA_SITE_KEY){ fbLoaded=true; return cb(); }
+    const s3=document.createElement('script'); s3.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js'; s3.onload=()=>{fbLoaded=true;cb();}; s3.onerror=()=>{fbLoaded=true;cb();}; document.head.appendChild(s3);
+  }; s2.onerror=()=>{setConn('local','Local (sin internet)');}; document.head.appendChild(s2); };
   s1.onerror=()=>{ setConn('local','Local (sin internet)'); };
   document.head.appendChild(s1);
 }

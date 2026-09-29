@@ -475,7 +475,7 @@ function initFirebase(){
   const cfg=getAppCfg();
   if(!cfg||!cfg.databaseURL){ setConn('local','Local'); return; }
   loadFbScripts(()=>{ try{
-    if(!fb) fb=firebase.initializeApp(cfg,'carg'+Date.now());
+    if(!fb){ fb=firebase.initializeApp(cfg,'carg'+Date.now()); if(RECAPTCHA_SITE_KEY){ try{ firebase.appCheck(fb).activate(new firebase.appCheck.RecaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true); }catch(e){ console.error('appCheck:',e); } } }
     const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
@@ -483,9 +483,15 @@ function initFirebase(){
   }catch(e){ console.error(e); setConn('local','Local (error)'); } });
 }
 let fbLoaded=false;
+// App Check (protección anti-abuso, OPCIONAL y apagada por defecto): misma nota que en
+// ventas.html/vendedor.html/maestra.html/programador.html. Vacío = no cambia nada.
+const RECAPTCHA_SITE_KEY = '6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj'; // Fraud Defense (reCAPTCHA Enterprise) — clave real, ya activa
 function loadFbScripts(cb){ if(fbLoaded||window.firebase){fbLoaded=true;return cb();}
   const s1=document.createElement('script'); s1.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
-  s1.onload=()=>{ const s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'; s2.onload=()=>{fbLoaded=true;cb();}; s2.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s2); };
+  s1.onload=()=>{ const s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'; s2.onload=()=>{
+    if(!RECAPTCHA_SITE_KEY){ fbLoaded=true; return cb(); }
+    const s3=document.createElement('script'); s3.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js'; s3.onload=()=>{fbLoaded=true;cb();}; s3.onerror=()=>{fbLoaded=true;cb();}; document.head.appendChild(s3);
+  }; s2.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s2); };
   s1.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s1);
 }
 function openCfg(){ document.getElementById('pinInput').value=''; document.getElementById('pinErr').style.display='none'; document.getElementById('pinModal').classList.add('show'); setTimeout(()=>document.getElementById('pinInput').focus(),50); }

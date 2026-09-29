@@ -82,6 +82,68 @@ input[type=file]{display:none}
 </div>
 <script>
 const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
+
+// ── App Check (protección anti-abuso, OPCIONAL y apagada por defecto) ───────
+// Hoy cualquier script fuera de estas apps que se sepa la URL de la base (arriba)
+// puede leer/escribir los datos igual que la app real — no hay forma de distinguir
+// "la app real, en el navegador de alguien" de "un script copiando la URL". App Check
+// arregla eso: cada request lleva una credencial (de Google reCAPTCHA) que prueba que
+// salió de esta página real. Mientras RECAPTCHA_SITE_KEY esté vacío, este bloque no
+// hace NADA — las apps siguen exactamente igual que hoy. Para activarlo:
+//   1) Firebase Console → Compilación → App Check → Apps → registra esta app web
+//      (ya existe como appId 1:860212111367:web:6a020f94ef6a468af922a2) con el
+//      proveedor reCAPTCHA v3 → copia el "Site key" que te da.
+//   2) Pega ese Site key aquí abajo y publica este archivo.
+//   3) En Firebase Console → App Check → Apps → Realtime Database, déjalo en modo
+//      "No aplicado" (Unenforced) varios días — ahí puedes ver en el panel cuánto
+//      tráfico llega CON credencial válida vs. sin ella, sin bloquear a nadie.
+//   4) Solo cuando veas que toda tu app/equipo aparece "Verificado", cambias ese
+//      mismo control a "Aplicado" (Enforced) — desde ese momento, cualquier script
+//      que solo tenga la URL de la base (sin pasar por estas páginas) es rechazado.
+const RECAPTCHA_SITE_KEY = '6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj'; // Fraud Defense (reCAPTCHA Enterprise) — clave real, ya activa
+const SK_FBCFG = {apiKey:"AIzaSyBYa3yZxWML-rwxKwuXp_gTyOTkisUKe8w", authDomain:"embarques-mascotas.firebaseapp.com", databaseURL:SK_DB, projectId:"embarques-mascotas", appId:"1:860212111367:web:6a020f94ef6a468af922a2"};
+let _skAppCheckReady=null;
+function _skInitAppCheck(){
+  if(_skAppCheckReady)return _skAppCheckReady;
+  if(!RECAPTCHA_SITE_KEY){_skAppCheckReady=Promise.resolve(null);return _skAppCheckReady;}
+  _skAppCheckReady=new Promise(function(resolve){
+    try{
+      var s1=document.createElement('script'); s1.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js';
+      s1.onload=function(){
+        var s2=document.createElement('script'); s2.src='https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js';
+        s2.onload=function(){
+          try{
+            firebase.initializeApp(SK_FBCFG);
+            var ac=firebase.appCheck();
+            ac.activate(new firebase.appCheck.RecaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true);
+            resolve(ac);
+          }catch(e){ resolve(null); }
+        };
+        s2.onerror=function(){ resolve(null); };
+        document.head.appendChild(s2);
+      };
+      s1.onerror=function(){ resolve(null); };
+      document.head.appendChild(s1);
+    }catch(e){ resolve(null); }
+  });
+  return _skAppCheckReady;
+}
+// Reemplazo de skFetch(): si la URL es de nuestra base y ya tienes tu Site key puesto,
+// agrega la credencial de App Check. Si algo falla (SDK no cargó, sin internet, etc.),
+// sigue con un fetch normal — NUNCA bloquea ni rompe nada por su cuenta; el único que
+// puede bloquear de verdad es el control "Aplicado" del paso 4 de arriba, en Firebase.
+async function skFetch(url, opts){
+  try{
+    if(RECAPTCHA_SITE_KEY && typeof url==='string' && url.indexOf('.firebaseio.com')!==-1){
+      var ac=await _skInitAppCheck();
+      if(ac){
+        var tok=await ac.getToken().catch(function(){return null;});
+        if(tok&&tok.token){ opts=opts||{}; opts.headers=Object.assign({},opts.headers,{'X-Firebase-AppCheck':tok.token}); }
+      }
+    }
+  }catch(e){ /* silencioso a propósito: nunca debe tumbar la sincronización */ }
+  return fetch(url, opts);
+}
 const PREMIUM_RE=/PREMIUM/i, GATO_RE=/SILVER\s*CAT\s*15/i, PETFOOD_RE=/PET\s*FOOD/i;
 const PREM_CODES=['04MAS001','04MAS0011','04MAS0019','04MAS006']; // Silver Kan Premium 25/20 + Silver Cat 15
 // TIERS: valores de respaldo (se usan sin internet o antes de la primera sincronización).
@@ -93,7 +155,7 @@ const TIERS=[["DIAMANTE_PLUS",15000,2.0,0.75,0.75,2],["DIAMANTE",9000,2.0,0.25,0
 function fetchTierCfgLive(){
   if(!CLOUD.db)return;
   const url=CLOUD.db.replace(/\/$/,'')+'/skan/_config.json';
-  fetch(url,{cache:'no-store'}).then(r=>r.json()).then(o=>{
+  skFetch(url,{cache:'no-store'}).then(r=>r.json()).then(o=>{
     if(!o||!o['tierCfg04mas_v6'])return;
     let cfg; try{cfg=JSON.parse(o['tierCfg04mas_v6']);}catch(e){return;}
     if(!cfg||typeof cfg!=='object')return;
@@ -276,7 +338,7 @@ function fetchCloud(){
   document.getElementById('drop').style.display='none';
   document.getElementById('loading').style.display='block';
   const url=CLOUD.db.replace(/\/$/,'')+'/skan/'+encodeURIComponent(CLOUD.v)+'.json';
-  fetch(url,{cache:'no-store'}).then(r=>r.json()).then(p=>{
+  skFetch(url,{cache:'no-store'}).then(r=>r.json()).then(p=>{
     document.getElementById('loading').style.display='none';
     if(!p||!p.rows){document.getElementById('drop').style.display='block';document.getElementById('app').innerHTML='<div class="hint">Aún no hay datos publicados para este vendedor. Pídele a tu gerente que cargue el reporte.</div>';document.getElementById('app').style.display='block';return;}
     applyPayload(p); renderList('');
@@ -511,16 +573,17 @@ function renderMonitoreo(){
   var qi=document.getElementById('monq'); if(qi&&MONQ){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 
-let PROSPQ='', PROSPFILT='pend', PROSPEST='';
+let PROSPQ='', PROSPFILT='pend', PROSPEST='', PROSPETAPA='';
 function setPEst(v){PROSPEST=v;renderProspectos(PROSPQ);}
+function setPEtapa(v){PROSPETAPA=v;renderProspectos(PROSPQ);}
 function keyp(s){return (s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
 function applyMFix(){var fx=window._mFix||{};if(!fx||!PROSPECTS)return;PROSPECTS.forEach(function(p){var f=fx[keyp(p.n)];if(f){if(f.e)p.e=f.e;if(f.c)p.c=f.c;}});}
-function fetchMObs(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/skan/_obs.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mObs=st;if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
-function fetchMFix(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/skan/_prospfix.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._mFix=o||{};applyMFix();if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
+function fetchMObs(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_obs.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mObs=st;if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
+function fetchMFix(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_prospfix.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._mFix=o||{};applyMFix();if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
 // Motivos de fuga que capturan los vendedores en su app (solo lectura aquí, mismo patrón que _obs)
-function fetchMFugaNota(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/skan/_fugaNota.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mFugaNota=st;if(VIEW==='alertas')renderAlertas();}).catch(function(){});}
+function fetchMFugaNota(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_fugaNota.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mFugaNota=st;if(VIEW==='alertas')renderAlertas();}).catch(function(){});}
 // Incidencias de entrega que los vendedores confirmaron en su app (cierre del ciclo con logística).
-function fetchIncidenciasEntrega(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');fetch(base+'/embarques.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){o=o||{};var list=[];for(var id in o){var r2=o[id]||{};if(r2.entregaEstado==='incidencia')list.push({cliente:r2.cliente||'',pedido:r2.pedido||'',nota:r2.entregaNota||'',por:r2.entregaPor||'',ts:r2.entregaTs||'',fecha:r2.fechaCarga||r2.fechaProg||''});}
+function fetchIncidenciasEntrega(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/embarques.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){o=o||{};var list=[];for(var id in o){var r2=o[id]||{};if(r2.entregaEstado==='incidencia')list.push({cliente:r2.cliente||'',pedido:r2.pedido||'',nota:r2.entregaNota||'',por:r2.entregaPor||'',ts:r2.entregaTs||'',fecha:r2.fechaCarga||r2.fechaProg||''});}
   list.sort(function(a,b){return (b.fecha||'').localeCompare(a.fecha||'');});
   window._mIncidencias=list.slice(0,50);
   if(VIEW==='alertas')renderAlertas();
@@ -528,7 +591,7 @@ function fetchIncidenciasEntrega(){var base=((typeof MDB!=='undefined'&&MDB)||SK
 function visKey(){return 'visitas04mas_'+(APPVEND||'v');}
 function getVisitas(){try{return JSON.parse(localStorage.getItem(visKey())||'{}');}catch(e){return {};}}
 function saveVisitas(o){try{localStorage.setItem(visKey(),JSON.stringify(o));}catch(e){}}
-function pushVisitasCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var q=parseHash();var tok=q.wt||q.w||'';var url=CLOUD.db.replace(/\/$/,'')+'/visits/'+encodeURIComponent(CLOUD.v)+'.json'+(tok?('?auth='+encodeURIComponent(tok)):'');fetch(url,{method:'PUT',body:JSON.stringify(getVisitas())}).catch(function(){});}catch(e){} }
+function pushVisitasCloud(){ if(!CLOUD.db||!CLOUD.v)return; try{var q=parseHash();var tok=q.wt||q.w||'';var url=CLOUD.db.replace(/\/$/,'')+'/visits/'+encodeURIComponent(CLOUD.v)+'.json'+(tok?('?auth='+encodeURIComponent(tok)):'');skFetch(url,{method:'PUT',body:JSON.stringify(getVisitas())}).catch(function(){});}catch(e){} }
 function setVisita(name,how){var v=getVisitas();var d=new Date();var p=function(n){return ('0'+n).slice(-2);};v[name]={ts:p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes()),how:how};saveVisitas(v);pushVisitasCloud();}
 function quitarVisita(i){var p=PROSPECTS[i];if(!p)return;var v=getVisitas();delete v[p.n];saveVisitas(v);pushVisitasCloud();renderProspectos(PROSPQ);}
 function distM(la1,lo1,la2,lo2){var R=6371000,t=Math.PI/180;var dLa=(la2-la1)*t,dLo=(lo2-lo1)*t;var x=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*t)*Math.cos(la2*t)*Math.sin(dLo/2)*Math.sin(dLo/2);return 2*R*Math.asin(Math.sqrt(x));}
@@ -551,10 +614,17 @@ function enviarVisitas(){var v=getVisitas();var ks=Object.keys(v);if(!ks.length)
   else {alert(full);}
 }
 function pfilt(f){return '<button onclick="renderProspectos(PROSPQ,\''+f+'\')" style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;background:'+(PROSPFILT===f?'var(--gold)':'var(--mid)')+';color:'+(PROSPFILT===f?'var(--navy)':'#9fb0cc')+'">';}
+// Mismas etapas del embudo que vendedor.html (solo lectura aquí — cada vendedor la marca en su app).
+var ETAPAS=[{k:'nuevo',lbl:'🆕 Nuevo',c:'#64748b'},{k:'contactado',lbl:'📞 Contactado',c:'#3b82f6'},{k:'interesado',lbl:'👍 Interesado',c:'#f59e0b'},{k:'cotizado',lbl:'💲 Cotizado',c:'#a855f7'},{k:'cliente',lbl:'✅ Ya es cliente',c:'#22c55e'},{k:'descartado',lbl:'❌ Descartado',c:'#ef4444'}];
+function etapaInfo(k){return ETAPAS.find(function(e){return e.k===k;})||null;}
 function prospItemM(p,i,vis,obs){
   var loc=[p.c,p.e].filter(Boolean).join(', ');var url=mapsUrl(p.la,p.lo,(p.n||'')+' '+loc);var v=vis[p.n];var ob=obs[p.n];
+  var et=ob&&ob.etapa?etapaInfo(ob.etapa):null;
+  var hoyISO=new Date().toISOString().slice(0,10);
+  var venc=ob&&ob.proxima?(ob.proxima<hoyISO):false;
   var h='<div class="li" style="flex-direction:column;align-items:stretch;gap:8px'+(v?';background:#0f2417;border-color:#1a7a3f':'')+'">'
-   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b><div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
+   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b>'+(et?(' <span style="background:'+et.c+'22;color:'+et.c+';border:1px solid '+et.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">'+et.lbl+'</span>'):'')+'<div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
+  if(ob&&ob.proxima){h+='<div style="font-size:11.5px;font-weight:700;color:'+(venc?'#fca5a5':'#93c5fd')+'">⏰ Próxima acción: '+ob.proxima+(venc?' (vencida)':'')+(ob.v?(' · '+ob.v):'')+'</div>';}
   if(ob&&ob.txt){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:7px 10px;font-size:12px;color:#f0d9a0">📝 '+(ob.txt||'').replace(/</g,'&lt;')+' <span style="color:#8a7a52">· '+(ob.v?(ob.v+' · '):'')+(ob.ts||'')+'</span></div>';}
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap"><a href="'+url+'" target="_blank" rel="noopener" style="flex:1;min-width:104px;text-align:center;background:var(--gold);color:var(--navy);text-decoration:none;font-weight:800;border-radius:8px;padding:9px">📍 Cómo llegar</a>'
    +(v?('<button onclick="quitarVisita('+i+')" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer">Deshacer</button>')
@@ -570,13 +640,36 @@ function renderProspectos(q,filt){
   var nVis=PROSPECTS.filter(function(p){return vis[p.n];}).length, nPend=PROSPECTS.length-nVis;
   var arr=base.filter(function(p){return PROSPFILT==='all'?true:(PROSPFILT==='vis'?!!vis[p.n]:!vis[p.n]);});
   if(PROSPEST)arr=arr.filter(function(p){return (p.e||'(sin estado)')===PROSPEST;});
+  if(PROSPETAPA)arr=arr.filter(function(p){var ob=obs[p.n];return PROSPETAPA==='(sin etapa)'?!(ob&&ob.etapa):(ob&&ob.etapa===PROSPETAPA);});
   var estCount={}; PROSPECTS.forEach(function(p){var e=p.e||'(sin estado)';if(!estCount[e])estCount[e]={t:0,pend:0};estCount[e].t++;if(!vis[p.n])estCount[e].pend++;});
   var estados=Object.keys(estCount).sort();
   var h=syncBar()+viewTabs();
+  // ── Embudo (pipeline): cuántos prospectos hay en cada etapa, y cuáles tienen una
+  // próxima acción vencida — junta lo que cada vendedor va marcando en su app.
+  (function(){
+    var etapaCount={}; ETAPAS.forEach(function(e){etapaCount[e.k]=0;}); var sinEtapa=0;
+    var vencidos=[]; var hoyISO=new Date().toISOString().slice(0,10);
+    PROSPECTS.forEach(function(p){var ob=obs[p.n];
+      if(ob&&ob.etapa&&etapaCount.hasOwnProperty(ob.etapa))etapaCount[ob.etapa]++; else sinEtapa++;
+      if(ob&&ob.proxima&&ob.proxima<hoyISO)vencidos.push({n:p.n,fecha:ob.proxima,v:ob.v||''});
+    });
+    h+='<div style="background:#10233f;border:1px solid #21406e;border-radius:10px;padding:10px;margin-bottom:10px">';
+    h+='<div style="font-weight:800;color:#93c5fd;font-size:12.5px;margin-bottom:7px">🧭 Embudo de prospectos</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:'+(vencidos.length?'8px':'0')+'">';
+    ETAPAS.forEach(function(e){h+='<button onclick="setPEtapa(\''+(PROSPETAPA===e.k?'':e.k)+'\')" style="background:'+(PROSPETAPA===e.k?e.c:e.c+'22')+';color:'+(PROSPETAPA===e.k?'#0b1628':e.c)+';border:1px solid '+e.c+';border-radius:14px;padding:5px 10px;font-size:11.5px;font-weight:800;cursor:pointer">'+e.lbl+' · '+etapaCount[e.k]+'</button>';});
+    h+='<button onclick="setPEtapa(\''+(PROSPETAPA==='(sin etapa)'?'':'(sin etapa)')+'\')" style="background:'+(PROSPETAPA==='(sin etapa)'?'#94a3b8':'#94a3b822')+';color:'+(PROSPETAPA==='(sin etapa)'?'#0b1628':'#94a3b8')+';border:1px solid #94a3b8;border-radius:14px;padding:5px 10px;font-size:11.5px;font-weight:800;cursor:pointer">(sin etapa) · '+sinEtapa+'</button>';
+    h+='</div>';
+    if(vencidos.length){
+      vencidos.sort(function(a,b){return a.fecha.localeCompare(b.fecha);});
+      h+='<div style="font-size:11px;color:#fca5a5;font-weight:700;margin-bottom:3px">⏰ '+vencidos.length+' con próxima acción vencida:</div>';
+      h+='<div style="font-size:11px;color:#f0b0b0">'+vencidos.slice(0,8).map(function(x){return x.n+' ('+x.fecha+(x.v?(' · '+x.v):'')+')';}).join(' · ')+(vencidos.length>8?'…':'')+'</div>';
+    }
+    h+='</div>';
+  })();
   h+='<div style="display:flex;gap:6px;margin-bottom:8px">'+pfilt('pend')+'Pendientes ('+nPend+')</button>'+pfilt('vis')+'Visitados ('+nVis+')</button>'+pfilt('all')+'Todos</button></div>';
   h+='<select onchange="setPEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:8px"><option value="">📍 Todos los estados ('+PROSPECTS.length+')</option>'+estados.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(PROSPEST===e?' selected':'')+'>'+e+' — '+estCount[e].t+' ('+estCount[e].pend+' pend.)</option>';}).join('')+'</select>';
   h+='<input class="search" id="pq" placeholder="Buscar prospecto o ciudad..." value="'+q.replace(/"/g,'')+'" oninput="renderProspectos(this.value)">';
-  h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:8px">📝 Las notas son las que escriben los vendedores en su app (solo lectura). Corrige estados desde el dashboard.</div>';
+  h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:8px">📝 Las notas y etapas son las que escriben los vendedores en su app (solo lectura aquí).</div>';
   if(!arr.length){h+='<div class="hint">'+(PROSPECTS.length?'Nada en esta vista.':'Aún no hay prospectos cargados.')+'</div>';app.innerHTML=h;var q0=document.getElementById('pq');if(q0&&q){q0.focus();q0.setSelectionRange(q0.value.length,q0.value.length);}return;}
   var groups={}; arr.forEach(function(p){var e=p.e||'(sin estado)';(groups[e]=groups[e]||[]).push(p);});
   Object.keys(groups).sort().forEach(function(e){
@@ -709,11 +802,11 @@ function masterLoad(){
   fetchTierCfgLive();
   document.getElementById('drop').style.display='none';document.getElementById('loading').style.display='block';
   var base=MDB.replace(/\/$/,'');
-  fetch(base+'/skan/_index.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(idx){
+  skFetch(base+'/skan/_index.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(idx){
     var vendors=(idx&&idx.vendors)||[]; MUP=(idx&&idx.updatedStr)||'';
     if(!vendors.length){document.getElementById('loading').style.display='none';document.getElementById('drop').style.display='block';return;}
     VDATA={};
-    Promise.all(vendors.map(function(k){return fetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){if(p&&(p.rows||p.ventas)){VDATA[k]=p;VNAMES[k]=p.v||k;}}).catch(function(){});})).then(function(){
+    Promise.all(vendors.map(function(k){return skFetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){if(p&&(p.rows||p.ventas)){VDATA[k]=p;VNAMES[k]=p.v||k;}}).catch(function(){});})).then(function(){
       VKEYS=Object.keys(VDATA); document.getElementById('loading').style.display='none';
       if(!VKEYS.length){document.getElementById('drop').style.display='block';return;}
       selectVendor(CURVEND); fetchMObs(); fetchMFix();
@@ -735,8 +828,8 @@ function renderAccesos(){
   app.innerHTML=h;
   var base=MDB.replace(/\/$/,'');
   Promise.all([
-    fetch(base+'/locks.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
-    fetch(base+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
+    skFetch(base+'/locks.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
+    skFetch(base+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
   ]).then(function(res){
     var locks=res[0]||{}, blocks=res[1]||{};
     var keys=VKEYS.slice().sort(function(a,b){return (VNAMES[a]||a).localeCompare(VNAMES[b]||b);});
@@ -757,11 +850,11 @@ function renderAccesos(){
 function liberarDispositivo(k){
   if(!confirm('¿Liberar el candado de dispositivo de '+(VNAMES[k]||k)+'? La próxima vez que abra su link en cualquier teléfono quedará autorizado ahí.'))return;
   var base=MDB.replace(/\/$/,'');
-  fetch(base+'/locks/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo liberar. Intenta de nuevo.');});
+  skFetch(base+'/locks/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo liberar. Intenta de nuevo.');});
 }
 function toggleVendBlock(k,val){
   var base=MDB.replace(/\/$/,'');
-  fetch(base+'/skan/_vblock/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(val)}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo actualizar. Intenta de nuevo.');});
+  skFetch(base+'/skan/_vblock/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(val)}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo actualizar. Intenta de nuevo.');});
 }
 
 /* ── Resumen: Mercadotecnia y Ventas — KPIs clave ya filtrados/calculados,
@@ -1459,7 +1552,7 @@ function showCard(name){
 
 // ── Candado de licencia (tu panel manda) + carga en vivo + auto-refresco ──
 function skBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🔒</div><h2 style="color:#E8A020;margin:10px 0">Servicio no disponible</h2><p class="hint">El panel está desactivado temporalmente.</p></div>';}
-function skGate(cb){fetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
+function skGate(cb){skFetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
 // refresco silencioso: solo cuando está en la lista (no interrumpe una tarjeta abierta)
 function skPoll(){ if(VIEW!=='clientes'||CARDOPEN)return;
   if(buscandoAhora())return;   // no recargar encima de una búsqueda en curso: se perdería lo tecleado
@@ -1758,7 +1851,7 @@ skGate(function(){ masterLoad(); setInterval(skPoll,60000); });
     if(!cfg||!cfg.enabled||!cfg.endpoint)return Promise.reject(new Error('ai_disabled'));
     var rk=vzRoleAndKey();
     var ctx=vzBuildAIContext(q);
-    return fetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,model:cfg.model||'haiku',role:rk.role,vendorKey:rk.vendorKey,context:ctx})})
+    return skFetch(cfg.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,model:cfg.model||'haiku',role:rk.role,vendorKey:rk.vendorKey,context:ctx})})
       .then(function(r){return r.json().catch(function(){return null;});})
       .then(function(j){
         if(!j)throw new Error('bad_response');
@@ -1891,8 +1984,8 @@ skGate(function(){ masterLoad(); setInterval(skPoll,60000); });
     el.innerHTML='<div style="font-size:11px;color:#9fb0cc">Cargando uso de IA…</div>';
     var mk=vzMonthKey();
     Promise.all([
-      fetch(db+'/ai_usage/'+mk+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
-      fetch(db+'/ai_caps.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
+      skFetch(db+'/ai_usage/'+mk+'.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
+      skFetch(db+'/ai_caps.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
     ]).then(function(res){
       var usage=res[0]||{}, caps=res[1]||{};
       var vendorDefault=caps.perVendorDefault||30;
@@ -1910,9 +2003,9 @@ skGate(function(){ masterLoad(); setInterval(skPoll,60000); });
   window.vzAuthorizeMore=function(vendorKey){
     var db=vzUsageDb(); if(!db)return;
     var mk=vzMonthKey();
-    fetch(db+'/ai_usage/'+mk+'/'+vendorKey+'/count.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(used){
+    skFetch(db+'/ai_usage/'+mk+'/'+vendorKey+'/count.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(used){
       var newCap=(used||0)+10;
-      fetch(db+'/ai_caps/overrides/'+vendorKey+'.json',{method:'PUT',body:JSON.stringify(newCap)}).then(function(){ vzLoadUsage(); });
+      skFetch(db+'/ai_caps/overrides/'+vendorKey+'.json',{method:'PUT',body:JSON.stringify(newCap)}).then(function(){ vzLoadUsage(); });
     }).catch(function(){});
   };
 
