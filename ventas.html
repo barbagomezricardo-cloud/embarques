@@ -5290,6 +5290,13 @@ function rechazarAlta(id){
   skFetch(url,{method:'PATCH',body:JSON.stringify({status:'rechazado',revisadoPor:'Gerencia',revisadoEn:new Date().toISOString()})}).then(function(){fetchAltasLive();}).catch(function(){alert('No se pudo rechazar. Intenta de nuevo.');});
 }
 // ── Contacto y ubicación real de la cartera de clientes (skan/_clienteInfo) ──
+function pendContactoDe(nombre){
+  // Solicitud de un vendedor esperando tu autorización para ESTE cliente (si hay alguna).
+  const raw=window._contactoPendLive||{}; const key=keyp(nombre);
+  let found=null;
+  for(const id in raw){const r=raw[id]; if(r&&r.status==='pendiente'&&keyp(r.cliente)===key){found=Object.assign({id:id},r);break;}}
+  return found;
+}
 function abrirContacto(nombre){
   const nEl=document.getElementById('ct-nombre'); if(!nEl)return;
   nEl.value=nombre;
@@ -5302,6 +5309,13 @@ function abrirContacto(nombre){
   document.getElementById('ct-paste').value='';
   document.getElementById('ct-loc-st').textContent='';
   document.getElementById('ct-actual').innerHTML=ci.la?('Ubicación guardada: <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">ver en el mapa</a>'):'Sin ubicación guardada todavía.';
+  const pend=pendContactoDe(nombre);
+  const pEl=document.getElementById('ct-pend');
+  if(pEl){
+    pEl.innerHTML=pend?('<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:9px;margin-bottom:8px;font-size:12.5px;color:#f4d58a">'
+      +'⏳ <b>'+(pend.propuestoPor||'un vendedor')+'</b> propone: '+[pend.tel,pend.correo,(pend.la?'ubicación nueva':'')].filter(Boolean).join(' · ')
+      +'<div style="display:flex;gap:8px;margin-top:6px"><button onclick="aprobarContactoPend(\''+pend.id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">✅ Aprobar</button><button onclick="rechazarContactoPend(\''+pend.id+'\')" style="background:#7c2d12;color:#fecaca;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">❌ Rechazar</button></div></div>'):'';
+  }
   document.getElementById('contactoModal').style.display='flex';
 }
 function cerrarContacto(){const m=document.getElementById('contactoModal');if(m)m.style.display='none';}
@@ -5318,6 +5332,56 @@ function guardarContacto(){
     window._clienteInfoLive=window._clienteInfoLive||{}; window._clienteInfoLive[key]=body;
     cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
   }).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
+}
+function borrarContacto(){
+  if(!reqSuper())return;
+  const nombre=document.getElementById('ct-nombre').value; if(!nombre)return;
+  if(!confirm('¿Borrar el contacto y ubicación guardados de '+nombre+'? Esto no se puede deshacer.'))return;
+  const cfg=getCloudCfg(); if(!cfg.db)return;
+  const key=keyp(nombre);
+  const url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
+  skFetch(url,{method:'DELETE'}).then(function(){
+    if(window._clienteInfoLive)delete window._clienteInfoLive[key];
+    cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
+  }).catch(function(){alert('No se pudo borrar. Revisa tu conexión.');});
+}
+// ── Solicitudes de contacto de vendedores (skan/_contactoPend) — solo tú las autorizas ──
+function fetchContactoPendLive(){ const cfg=getCloudCfg(); if(!cfg.db)return; const url=cfg.db.replace(/\/$/,'')+'/skan/_contactoPend.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._contactoPendLive=o||{}; try{renderProspec();}catch(e){}}).catch(function(){}); }
+function aprobarContactoPend(id){
+  if(!reqSuper())return;
+  const cfg=getCloudCfg(); if(!cfg.db)return;
+  const raw=window._contactoPendLive||{}; const r=raw[id]; if(!r)return;
+  const key=keyp(r.cliente);
+  const actual=(window._clienteInfoLive&&window._clienteInfoLive[key])||{};
+  const merged={nombre:r.cliente,tel:r.tel||actual.tel||'',correo:r.correo||actual.correo||'',la:r.la||actual.la||0,lo:r.lo||actual.lo||0,actualizadoPor:'Gerencia (de '+(r.propuestoPor||'vendedor')+')',actualizadoEn:new Date().toISOString()};
+  const urlInfo=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
+  const urlPend=cfg.db.replace(/\/$/,'')+'/skan/_contactoPend/'+id+'.json';
+  skFetch(urlInfo,{method:'PUT',body:JSON.stringify(merged)}).then(function(){
+    window._clienteInfoLive=window._clienteInfoLive||{}; window._clienteInfoLive[key]=merged;
+    return skFetch(urlPend,{method:'PATCH',body:JSON.stringify({status:'aprobado',revisadoPor:'Gerencia',revisadoEn:new Date().toISOString()})});
+  }).then(function(){fetchContactoPendLive();try{renderClienteTable();}catch(e){}}).catch(function(){alert('No se pudo aprobar. Intenta de nuevo.');});
+}
+function rechazarContactoPend(id){
+  if(!reqSuper())return; if(!confirm('¿Rechazar esta propuesta de contacto?'))return;
+  const cfg=getCloudCfg(); if(!cfg.db)return;
+  const url=cfg.db.replace(/\/$/,'')+'/skan/_contactoPend/'+id+'.json';
+  skFetch(url,{method:'PATCH',body:JSON.stringify({status:'rechazado',revisadoPor:'Gerencia',revisadoEn:new Date().toISOString()})}).then(function(){fetchContactoPendLive();}).catch(function(){alert('No se pudo rechazar. Intenta de nuevo.');});
+}
+function contactoPendPanel(){
+  const raw=window._contactoPendLive||{}; const ids=Object.keys(raw);
+  const pend=ids.filter(function(id){return raw[id]&&raw[id].status==='pendiente';});
+  if(!pend.length)return '';
+  let h='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-radius:8px;padding:12px;margin-bottom:12px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:800;color:var(--gold)">📇 Contacto de clientes — '+pend.length+' esperando tu autorización</span><button onclick="fetchContactoPendLive()" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">🔄 Actualizar</button></div>';
+  pend.forEach(function(id){const r=raw[id];
+    h+='<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;padding:10px;margin-bottom:6px">'
+      +'<div style="font-weight:700;color:#fff">'+(r.cliente||'').replace(/</g,'&lt;')+' <span style="color:#9fb0cc;font-weight:400">· propuso: '+(r.propuestoPor||'')+'</span></div>'
+      +'<div style="font-size:.74rem;color:#cbd5e1;margin:3px 0">'+[r.tel,r.correo].filter(Boolean).join(' · ')+(r.la?' · 📍 ubicación nueva':'')+'</div>'
+      +'<div style="display:flex;gap:8px"><button onclick="aprobarContactoPend(\''+id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-weight:800;cursor:pointer">✅ Aprobar</button><button onclick="rechazarContactoPend(\''+id+'\')" style="background:#7c2d12;color:#fecaca;border:none;border-radius:8px;padding:6px 14px;font-weight:800;cursor:pointer">❌ Rechazar</button></div>'
+      +'</div>';
+  });
+  h+='</div>';
+  return h;
 }
 function altasPanel(){
   const raw=window._altasLive||{}; const ids=Object.keys(raw);
@@ -5510,7 +5574,7 @@ function renderProspec(){
   const prosp=view.filter(p=>p.kind==='prosp');
   const byV={}; prosp.forEach(p=>{const v=p.v||'(sin asignar)';const e=p.e||'(sin estado)';if(!byV[v])byV[v]={};byV[v][e]=(byV[v][e]||0)+1;});
   const vt=Object.keys(byV).map(v=>[v,Object.values(byV[v]).reduce((a,b)=>a+b,0)]).sort((a,b)=>b[1]-a[1]);
-  let lh=embudoPanel()+altasPanel()+visitasPanel()+obsPanel()+corrPanel();
+  let lh=embudoPanel()+altasPanel()+contactoPendPanel()+visitasPanel()+obsPanel()+corrPanel();
   if(vt.length){lh+='<div style="font-size:.95rem;font-weight:800;color:var(--gold);margin:4px 0 8px">Plan de ruta — prospectos de competencia por vendedor y estado</div><div style="display:flex;gap:10px;flex-wrap:wrap">';
     for(const [v,tot] of vt){const col=PROSPEC_VCOL[v]||'#94a3b8';const est=Object.entries(byV[v]).sort((a,b)=>b[1]-a[1]);
       lh+='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+col+';border-radius:8px;padding:10px 12px;min-width:200px"><div style="font-weight:800;color:'+col+'">'+v+' — '+tot+' prospectos</div><table style="width:100%;font-size:.76rem;color:#cbd5e1;margin-top:5px;border-collapse:collapse">';
@@ -5533,7 +5597,8 @@ function fetchClienteInfoLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var u
 try{fetchProspFix();}catch(e){}
 try{fetchAltasLive();}catch(e){}
 try{fetchClienteInfoLive();}catch(e){}
-try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db){fetchVisitasLive();fetchObsLive();fetchProspFix();fetchAltasLive();}}catch(e){}},25000);}catch(e){}
+try{fetchContactoPendLive();}catch(e){}
+try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db){fetchVisitasLive();fetchObsLive();fetchProspFix();fetchAltasLive();fetchContactoPendLive();}}catch(e){}},25000);}catch(e){}
 try{setInterval(function(){try{if(getCloudCfg().db)fetchClienteInfoLive();}catch(e){}},60000);}catch(e){}
 function prospecShow(i){const p=_prospecView[i];if(!p)return;const col=prospecColor(p);
   const info=document.getElementById('prospec-info'); if(!info)return;
@@ -7028,6 +7093,7 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
       <div style="font-weight:800;color:var(--gold);font-size:15px" id="ct-titulo">Contacto</div>
       <button onclick="cerrarContacto()" style="background:none;border:none;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1">×</button>
     </div>
+    <div id="ct-pend"></div>
     <div id="ct-actual" style="font-size:.74rem;color:#7dd3fc;margin-bottom:8px"></div>
     <input id="ct-tel" placeholder="Teléfono" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
     <input id="ct-correo" placeholder="Correo" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
@@ -7039,7 +7105,10 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
     </div>
     <div id="ct-loc-st" style="font-size:.72rem;color:#9fb0cc;margin-bottom:10px"></div>
     <input type="hidden" id="ct-la"><input type="hidden" id="ct-lo"><input type="hidden" id="ct-nombre">
-    <button onclick="guardarContacto()" style="width:100%;background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:10px;font-weight:800;cursor:pointer">Guardar</button>
+    <div style="display:flex;gap:8px">
+      <button onclick="guardarContacto()" style="flex:1;background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:10px;font-weight:800;cursor:pointer">Guardar</button>
+      <button onclick="borrarContacto()" title="Solo tú (super-usuario) puedes borrar" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer">🗑️</button>
+    </div>
   </div>
 </div>
 </body>
