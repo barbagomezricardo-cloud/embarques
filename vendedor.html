@@ -323,7 +323,7 @@ function fetchCloud(){
   skFetch(url,{cache:'no-store'}).then(r=>r.json()).then(p=>{
     document.getElementById('loading').style.display='none';
     if(!p||!p.rows){document.getElementById('drop').style.display='block';document.getElementById('app').innerHTML='<div class="hint">Aún no hay datos publicados para este vendedor. Pídele a tu gerente que cargue el reporte.</div>';document.getElementById('app').style.display='block';return;}
-    applyPayload(p); renderList('');
+    applyPayload(p); renderList(''); try{fetchAltasLive();}catch(e){} try{fetchClienteInfoLive();}catch(e){}
   }).catch(e=>{
     document.getElementById('loading').style.display='none';
     document.getElementById('drop').style.display='block';
@@ -628,6 +628,130 @@ var OBSEDIT=-1, OBSEDIT_ETAPA='', OBSEDIT_PROX='', OBSEDIT_TXT='';
 // aprender: es la misma "Nota" de siempre, con un paso de etapa y una fecha opcional.
 var ETAPAS=[{k:'nuevo',lbl:'🆕 Nuevo',c:'#64748b'},{k:'contactado',lbl:'📞 Contactado',c:'#3b82f6'},{k:'interesado',lbl:'👍 Interesado',c:'#f59e0b'},{k:'cotizado',lbl:'💲 Cotizado',c:'#a855f7'},{k:'cliente',lbl:'✅ Ya es cliente',c:'#22c55e'},{k:'descartado',lbl:'❌ Descartado',c:'#ef4444'}];
 function etapaInfo(k){return ETAPAS.find(function(e){return e.k===k;})||null;}
+// ── Alta de prospectos: tú registras uno nuevo, tu gerente lo autoriza ──
+// (Se guarda en skan/_altas. Mientras no lo autorice, sale como "pendiente" y no
+// cuenta en el embudo oficial, pero ya lo puedes ver y seguir trabajando aquí.)
+const MX_ESTADOS=['AGUASCALIENTES','BAJA CALIFORNIA','BAJA CALIFORNIA SUR','CAMPECHE','CHIAPAS','CHIHUAHUA','CIUDAD DE MEXICO','COAHUILA','COLIMA','DURANGO','GUANAJUATO','GUERRERO','HIDALGO','JALISCO','MEXICO','MICHOACAN','MORELOS','NAYARIT','NUEVO LEON','OAXACA','PUEBLA','QUERETARO','QUINTANA ROO','SAN LUIS POTOSI','SINALOA','SONORA','TABASCO','TAMAULIPAS','TLAXCALA','VERACRUZ','YUCATAN','ZACATECAS'];
+function parseLatLon(text){
+  text=(text||'').trim(); if(!text)return null;
+  let m=text.match(/@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/);
+  if(!m) m=text.match(/[?&]q=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if(!m) m=text.match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if(!m) return null;
+  const la=parseFloat(m[1]), lo=parseFloat(m[2]);
+  if(isNaN(la)||isNaN(lo)||Math.abs(la)>90||Math.abs(lo)>180) return null;
+  return {la:la,lo:lo};
+}
+function usarUbicacionActual(prefix){
+  const st=document.getElementById(prefix+'-loc-st'); if(!st)return;
+  if(!navigator.geolocation){ st.textContent='Tu celular no soporta ubicación. Pega coordenadas abajo.'; return; }
+  st.textContent='📡 Obteniendo tu ubicación...';
+  navigator.geolocation.getCurrentPosition(function(pos){
+    const la=document.getElementById(prefix+'-la'), lo=document.getElementById(prefix+'-lo');
+    if(la)la.value=pos.coords.latitude; if(lo)lo.value=pos.coords.longitude;
+    st.textContent='✅ Ubicación capturada ('+pos.coords.latitude.toFixed(5)+', '+pos.coords.longitude.toFixed(5)+')';
+  }, function(err){ st.textContent='No se pudo obtener tu ubicación ('+((err&&err.message)||'sin permiso')+'). Puedes pegar coordenadas abajo.'; }, {enableHighAccuracy:true,timeout:10000});
+}
+function aplicarPegado(prefix){
+  const inp=document.getElementById(prefix+'-paste'); const st=document.getElementById(prefix+'-loc-st'); if(!inp||!st)return;
+  const r=parseLatLon(inp.value);
+  if(!r){ st.textContent='No pude leer coordenadas ahí. Prueba con "lat,lon" o pega un link de Google Maps.'; return; }
+  const la=document.getElementById(prefix+'-la'), lo=document.getElementById(prefix+'-lo');
+  if(la)la.value=r.la; if(lo)lo.value=r.lo;
+  st.textContent='✅ Ubicación puesta ('+r.la.toFixed(5)+', '+r.lo.toFixed(5)+')';
+}
+function altaId(){return 'a'+Date.now()+Math.random().toString(36).slice(2,7);}
+function fetchAltasLive(){ if(!CLOUD.db)return; const url=CLOUD.db.replace(/\/$/,'')+'/skan/_altas.json'; skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._altasLive=o||{}; mergeMisAltasEnProspects(); if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){}); }
+function mergeMisAltasEnProspects(){
+  // Mete en tu lista de trabajo (con etapa/notas) los prospectos que TÚ registraste,
+  // aunque tu gerente todavía no publique de nuevo. Si ya lo publicó (aparece con ese
+  // nombre en PROSPECTS), no se duplica.
+  const mias=misAltas().filter(function(a){return a.status!=='rechazado';});
+  mias.forEach(function(a){
+    const ya=PROSPECTS.some(function(p){return _kp(p.n)===_kp(a.nombre);});
+    if(ya)return;
+    PROSPECTS.push({n:a.nombre,p:a.telefono||'',a:'',c:a.ciudad||'',e:a.estado||'',la:a.la||0,lo:a.lo||0,m:'',v:CLOUD.v,src:'Alta manual',brand:'Silver Kan',_altaId:a.id,_altaStatus:a.status});
+  });
+}
+function fetchClienteInfoLive(){ if(!CLOUD.db)return; const url=CLOUD.db.replace(/\/$/,'')+'/skan/_clienteInfo.json'; skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{}; if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);}).catch(function(){}); }
+function misAltas(){ const raw=window._altasLive||{}; const mine=[]; for(const id in raw){const a=raw[id]; if(a&&a.creadoPor===CLOUD.v)mine.push(Object.assign({id:id},a));} return mine; }
+function nuevoProspectoFormHtml(prefix){
+  const opts='<option value="">Estado…</option>'+MX_ESTADOS.map(function(e){return '<option value="'+e+'">'+e+'</option>';}).join('');
+  return '<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:10px;padding:10px;margin-bottom:10px">'
+   +'<div style="font-weight:800;color:#93c5fd;margin-bottom:6px">+ Registrar prospecto nuevo</div>'
+   +'<input id="'+prefix+'-nombre" placeholder="Nombre del negocio o persona *" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
+   +'<input id="'+prefix+'-tel" placeholder="Teléfono" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
+   +'<input id="'+prefix+'-correo" placeholder="Correo (opcional)" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
+   +'<input id="'+prefix+'-ciudad" placeholder="Ciudad" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
+   +'<select id="'+prefix+'-estado" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'+opts+'</select>'
+   +'<textarea id="'+prefix+'-notas" placeholder="Notas (opcional)" style="width:100%;box-sizing:border-box;min-height:44px;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px"></textarea>'
+   +'<div style="font-size:11.5px;color:#94a3b8;margin-bottom:5px">Ubicación (mucho más fácil si estás ahí):</div>'
+   +'<button type="button" onclick="usarUbicacionActual(\''+prefix+'\')" style="width:100%;background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:9px;font-weight:700;cursor:pointer;margin-bottom:6px">📍 Usar mi ubicación actual</button>'
+   +'<div style="display:flex;gap:6px;margin-bottom:5px">'
+   +'<input id="'+prefix+'-paste" placeholder="o pega coordenadas / link de Maps" style="flex:1;min-width:0;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:7px;box-sizing:border-box">'
+   +'<button type="button" onclick="aplicarPegado(\''+prefix+'\')" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Usar</button>'
+   +'</div>'
+   +'<div id="'+prefix+'-loc-st" style="font-size:11px;color:#9fb0cc;margin-bottom:8px"></div>'
+   +'<input type="hidden" id="'+prefix+'-la"><input type="hidden" id="'+prefix+'-lo">'
+   +'<button onclick="guardarProspectoNuevo(\''+prefix+'\')" style="width:100%;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:10px;font-weight:800;cursor:pointer">Enviar a autorización</button>'
+   +'</div>';
+}
+function guardarProspectoNuevo(prefix){
+  const nEl=document.getElementById(prefix+'-nombre'); const nombre=(nEl&&nEl.value||'').trim();
+  if(!nombre){alert('Falta el nombre del prospecto.');return;}
+  if(!CLOUD.db||!CLOUD.v){alert('Necesitas conexión para registrar un prospecto nuevo.');return;}
+  const id=altaId(); const now=new Date().toISOString();
+  const g=function(s){const el=document.getElementById(prefix+s);return el?(el.value||'').trim():'';};
+  const body={id:id,nombre:nombre,telefono:g('-tel'),correo:g('-correo'),ciudad:g('-ciudad'),estado:g('-estado'),notas:g('-notas'),
+    la:parseFloat(g('-la'))||0,lo:parseFloat(g('-lo'))||0,vendedor:CLOUD.v,creadoPor:CLOUD.v,creadoEn:now,status:'pendiente'};
+  const url=CLOUD.db.replace(/\/$/,'')+'/skan/_altas/'+id+'.json';
+  skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){
+    window._altasLive=window._altasLive||{}; window._altasLive[id]=body;
+    alert('✅ Enviado. Tu gerente debe autorizarlo — mientras tanto ya lo ves aquí como "pendiente".');
+    NUEVOPROSP=false; renderProspectos(PROSPQ);
+  }).catch(function(){alert('No se pudo enviar. Revisa tu conexión e intenta de nuevo.');});
+}
+let NUEVOPROSP=false;
+function toggleNuevoProsp(){NUEVOPROSP=!NUEVOPROSP;renderProspectos(PROSPQ);}
+// ── Contacto y ubicación real de tus clientes (skan/_clienteInfo) ──
+let EDITCONTACTO='';
+function toggleEditContacto(nombre){EDITCONTACTO=(EDITCONTACTO===nombre)?'':nombre; showCard(nombre);}
+function contactoClienteHtml(nombre){
+  const ci=(window._clienteInfoLive&&window._clienteInfoLive[_kp(nombre)])||{};
+  const edit=(EDITCONTACTO===nombre);
+  let h='<div style="margin:10px 12px;padding:11px 13px;background:#10233f;border:1px solid #21406e;border-radius:10px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;color:#93c5fd;font-size:13px">📇 Contacto</div><button onclick="toggleEditContacto(\''+nombre.replace(/'/g,"\\'")+'\')" style="background:none;border:none;color:#7dd3fc;font-size:12px;cursor:pointer;font-weight:700">'+(edit?'Cancelar':((ci.tel||ci.correo||ci.la)?'Editar':'+ Agregar'))+'</button></div>';
+  if(!edit){
+    h+='<div style="font-size:12.5px;color:#cbd5e1;margin-top:5px">'
+      +(ci.tel?('<div>📞 <a href="tel:'+ci.tel+'" style="color:#dbeafe">'+ci.tel+'</a></div>'):'')
+      +(ci.correo?('<div>✉️ <a href="mailto:'+ci.correo+'" style="color:#dbeafe">'+ci.correo+'</a></div>'):'')
+      +(ci.la?('<div>📍 <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">Ver ubicación en el mapa</a></div>'):'')
+      +((!ci.tel&&!ci.correo&&!ci.la)?'<div style="color:#8792a3">Sin datos de contacto guardados todavía.</div>':'')
+      +'</div>';
+  } else {
+    h+='<input id="cc-tel" placeholder="Teléfono" value="'+(ci.tel||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin:7px 0 6px">'
+      +'<input id="cc-correo" placeholder="Correo" value="'+(ci.correo||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
+      +'<button type="button" onclick="usarUbicacionActual(\'cc\')" style="width:100%;background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:8px;font-weight:700;cursor:pointer;margin-bottom:6px">📍 Usar mi ubicación actual</button>'
+      +'<div style="display:flex;gap:6px;margin-bottom:5px"><input id="cc-paste" placeholder="o pega coordenadas / link de Maps" style="flex:1;min-width:0;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:7px;box-sizing:border-box"><button type="button" onclick="aplicarPegado(\'cc\')" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Usar</button></div>'
+      +'<div id="cc-loc-st" style="font-size:11px;color:#9fb0cc;margin-bottom:6px"></div>'
+      +'<input type="hidden" id="cc-la" value="'+(ci.la||'')+'"><input type="hidden" id="cc-lo" value="'+(ci.lo||'')+'">'
+      +'<button onclick="guardarContactoCliente(\''+nombre.replace(/'/g,"\\'")+'\')" style="width:100%;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar</button>';
+  }
+  h+='</div>';
+  return h;
+}
+function guardarContactoCliente(nombre){
+  if(!CLOUD.db){alert('Necesitas conexión para guardar esto.');return;}
+  const body={nombre:nombre,tel:(document.getElementById('cc-tel').value||'').trim(),correo:(document.getElementById('cc-correo').value||'').trim(),
+    la:parseFloat(document.getElementById('cc-la').value)||0,lo:parseFloat(document.getElementById('cc-lo').value)||0,
+    actualizadoPor:CLOUD.v,actualizadoEn:new Date().toISOString()};
+  const key=_kp(nombre);
+  const url=CLOUD.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
+  skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){
+    window._clienteInfoLive=window._clienteInfoLive||{}; window._clienteInfoLive[key]=body;
+    EDITCONTACTO=''; showCard(nombre);
+  }).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
+}
 // ── Motivo de fuga (por qué un cliente está comprando menos) — mismo patrón que las observaciones de prospectos ──
 function fugaNotaKey(){return 'fugaNota04mas_'+(APPVEND||'v');}
 function getFugaNota(){try{return JSON.parse(localStorage.getItem(fugaNotaKey())||'{}');}catch(e){return {};}}
@@ -716,8 +840,10 @@ function prospItem(p,i,vis,obs){
   var et=ob&&ob.etapa?etapaInfo(ob.etapa):null;
   var hoyISO=new Date().toISOString().slice(0,10);
   var venc=ob&&ob.proxima?(ob.proxima<hoyISO):false;
+  var altaBadge=p._altaStatus==='pendiente'?' <span style="background:#4a3a1222;color:#f4d58a;border:1px solid #86612a;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">⏳ pendiente de autorización</span>'
+    :(p._altaId?' <span style="background:#0f241722;color:#4ade80;border:1px solid #1a7a3f;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">✅ autorizado</span>':'');
   var h='<div class="li" style="flex-direction:column;align-items:stretch;gap:8px'+(v?';background:#0f2417;border-color:#1a7a3f':'')+'">'
-   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b>'+(et?(' <span style="background:'+et.c+'22;color:'+et.c+';border:1px solid '+et.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">'+et.lbl+'</span>'):'')+'<div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
+   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b>'+(et?(' <span style="background:'+et.c+'22;color:'+et.c+';border:1px solid '+et.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">'+et.lbl+'</span>'):'')+altaBadge+'<div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
   if(ob&&ob.proxima){h+='<div style="font-size:11.5px;font-weight:700;color:'+(venc?'#fca5a5':'#93c5fd')+'">⏰ Próxima acción: '+ob.proxima+(venc?' (vencida)':'')+'</div>';}
   if(ob&&ob.txt&&OBSEDIT!==i){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:7px 10px;font-size:12px;color:#f0d9a0">📝 '+(ob.txt||'').replace(/</g,'&lt;')+' <span style="color:#8a7a52">· '+(ob.ts||'')+'</span></div>';}
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap"><a href="'+url+'" target="_blank" rel="noopener" style="flex:1;min-width:104px;text-align:center;background:var(--gold);color:var(--navy);text-decoration:none;font-weight:800;border-radius:8px;padding:9px">📍 Cómo llegar</a>'
@@ -754,6 +880,10 @@ function renderProspectos(q,filt){
   h+='<div style="display:flex;gap:6px;margin-bottom:8px">'+pfilt('pend')+'Pendientes ('+nPend+')</button>'+pfilt('vis')+'Visitados ('+nVis+')</button>'+pfilt('all')+'Todos</button></div>';
   h+='<select onchange="setPEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:8px"><option value="">📍 Todos los estados ('+PROSPECTS.length+')</option>'+estados.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(PROSPEST===e?' selected':'')+'>'+e+' — '+estCount[e].t+' ('+estCount[e].pend+' pend.)</option>';}).join('')+'</select>';
   h+='<input class="search" id="pq" placeholder="Buscar prospecto o ciudad..." value="'+q.replace(/"/g,'')+'" oninput="renderProspectos(this.value)">';
+  h+='<button onclick="toggleNuevoProsp()" style="width:100%;background:'+(NUEVOPROSP?'#334155':'#1e3a6b')+';color:#dbeafe;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer;margin-bottom:8px">'+(NUEVOPROSP?'✕ Cerrar':'+ Registrar prospecto nuevo')+'</button>';
+  if(NUEVOPROSP)h+=nuevoProspectoFormHtml('np');
+  var misPend=misAltas().filter(function(a){return a.status==='pendiente';});
+  if(misPend.length){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:10px;padding:9px 12px;font-size:12px;color:#f4d58a;margin-bottom:10px">⏳ Tienes '+misPend.length+' prospecto(s) esperando autorización de tu gerente.</div>';}
   if(nVis){ h+= (CLOUD.db&&CLOUD.v) ? ('<div style="background:#0f2417;border:1px solid #1a7a3f;border-radius:10px;padding:9px 12px;font-size:12px;color:#7ee2a8;margin-bottom:10px">✓ Tus visitas y notas se sincronizan solas con el gerente (en vivo).</div>') : ('<button onclick="enviarVisitas()" style="width:100%;background:#1a7a3f;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:800;margin-bottom:10px;cursor:pointer">📤 Enviar mis '+nVis+' visitas al gerente</button>'); }
   if(!arr.length){h+='<div class="hint">'+(PROSPECTS.length?'Nada en esta vista.':'Aún no hay prospectos cargados. Pídele a tu gerente que los publique.')+'</div>';app.innerHTML=h;var q0=document.getElementById('pq');if(q0&&q){q0.focus();q0.setSelectionRange(q0.value.length,q0.value.length);}return;}
   var groups={}; arr.forEach(function(p){var e=p.e||'(sin estado)';(groups[e]=groups[e]||[]).push(p);});
@@ -1237,7 +1367,7 @@ function descBloques(c,t){
 }
 
 function showCard(name){
-  const c=CLIENTS[name]||(typeof MONCLI!=='undefined'&&MONCLI[name]);if(!c)return;CARDOPEN=true;const t=tierOf(c.avg);const nx=nextTier(t[0]);
+  const c=CLIENTS[name]||(typeof MONCLI!=='undefined'&&MONCLI[name]);if(!c)return;CARDOPEN=true;window._cardCliente=name;const t=tierOf(c.avg);const nx=nextTier(t[0]);
   const fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
   const maintain=t[0]==='INICIAL'?200:t[1];
   const M=PMULT();                       // 1 si evaluación mensual, 3 si trimestral
@@ -1324,6 +1454,7 @@ function showCard(name){
    '<div class="need">'+need+'</div>'+
    '<div class="msg">Las metas están en <b>sacos del '+PW+' completo</b>. El descuento ganado se paga como <b>nota de crédito</b> en su primera compra del periodo siguiente. El PetFood también cuenta y recibe descuento.</div>'+
    prodMesHtml(c)+
+   contactoClienteHtml(name)+
    '</div>'+
    '<div class="foot">Silver Kan / Los 19 Hermanos · Programa 04MAS ('+(APPEVAL==='MES'?'mensual':'trimestral')+') · Nivel por promedio mensual (PetFood incluido).</div>';
   window.scrollTo(0,0);

@@ -1423,12 +1423,15 @@ function renderClienteTable(){
       : `${_pol.toFixed(1)}%`+(c.crecio?' ▲':'')+(c.premOk?' ◆':'')+(_deArranque?' <span style="color:#7dd3fc" title="% de arranque autorizado en la pestaña Nuevos">🚀</span>':''))
       +(_bloq?`<div style="font-size:.6rem;color:#f87171" title="No se le cuenta este % en el costeo de Rentabilidad: está bloqueado, como en Odoo">🚫 bloqueado (no se costea)</div>`:'');
     const _puedeEsp=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
+    const _ciRow=(window._clienteInfoLive&&window._clienteInfoLive[keyp(c.nombre)])||null;
+    const _tieneContacto=!!(_ciRow&&(_ciRow.tel||_ciRow.correo||_ciRow.la));
+    const nombreBtn=`${c.nombre} <button onclick="abrirContacto('${c.nombre.replace(/'/g,"\\'")}')" title="${_tieneContacto?'Ver/editar teléfono, correo y ubicación':'Agregar teléfono, correo y ubicación'}" style="background:none;border:none;cursor:pointer;font-size:.78rem;opacity:${_tieneContacto?'1':'.45'}">📇</button>`;
     // El botón se ve SIEMPRE, aunque estés en modo visor: si no, parece que la función no
     // existe. En visor sale con candado y, al tocarlo, autorizarDescEsp pide la contraseña.
     const descBtn=`<div style="margin-top:2px;display:flex;gap:3px;flex-wrap:wrap"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?'Autorizar un descuento especial por dirección':'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?'#4c1d95':'#2a2438'};color:${_puedeEsp?'#ddd6fe':'#8b7fa6'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?'⚡ especial':'🔒 especial'}</button>`
       +`<button onclick="toggleBloqueoDesc('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?(_bloq?'Quitar el bloqueo: volver a costearle el % de descuento':'Bloquearlo para el % de descuento (igual que en Odoo): recibe promoción/bonificación en vez de %'):'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?(_bloq?'#7f1d1d':'#2a2438'):'#2a2438'};color:${_puedeEsp?(_bloq?'#fecaca':'#8b7fa6'):'#8b7fa6'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?(_bloq?'🚫 bloqueado':'🔓 bloquear'):'🔒 bloquear'}</button></div>`;
     return `<tr>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${c.nombre}">${c.nombre}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${c.nombre}">${nombreBtn}</td>
       <td style="text-align:right;font-weight:700;color:var(--gold)">${fmt(c.promMes)}</td>
       <td style="text-align:right;color:#94a3b8">${fmt(c.total)}</td>
       <td><span class="tier-pill tier-${TIER_KEY[c.nivel]||c.nivel}">${TIER_ICONS[c.nivel]||''} ${c.nivel}</span></td>
@@ -5166,6 +5169,178 @@ const PROSPECT_DATA=[{"n": "Grupo Abarrotes Lupita, S.A. de C.V.", "p": "", "a":
 const CLIENT_CAT={"ALFREDOVELAZQUEZGONZALEZ": {"tel": "3331710817"}, "CEREALESYFRUTASBRAMBILA": {"tel": "36711564"}, "ELSAGUADALUPEREAMERIN": {"tel": "3318957579"}, "FORRAJESELDOLLAR": {"tel": "8182500309"}, "RICARDOMORENOPADILLA": {"tel": "7757588720"}, "RODRIGOROMOGUTIERREZ": {"tel": "3311873001"}, "PUBLICOENGENERAL": {"tel": "391916115094"}, "ARTUROGARCIAHERNANDEZ": {"tel": "5543399821"}, "SUPEROFERTASBRAVO": {"tel": "3315870463"}, "MARTINGARCIALEOCADIO": {"tel": "7222913703"}, "ABARROTERASANTANA": {"tel": "3314002126"}, "VICTORHUGOVALDESALDAPE": {"tel": "8641061249"}, "MOISESLOPEZ": {"tel": "4451082837"}, "CARLOSRASCONAISPURO": {"tel": "6622220862"}, "AGROVETERINARIAMARROQUIN": {"tel": "3338091753"}, "CARLOSPADILLAALVAREZ": {"tel": "3325305981"}, "OSCARCANALESFLORES": {"tel": "7751392352"}, "JOSELUISACEVEDOGARCIA": {"tel": "6142780788"}, "SEMILLASYCEREALESDELAREGION": {"tel": "6373705446"}, "BRENDAGOMEZFRANCO": {"tel": "3338141322"}, "GENOVEVOACOSTARIVERA": {"tel": "8717126335"}, "ELIUDCOVARRUBIASROBLEDO": {"tel": "4442076459"}, "NOECARRANZABECERRA": {"tel": "3330112852"}, "ARTUROCARDENASJIMENEZ": {"tel": "4421206850"}, "ARMANDOBRISENOSERRANO": {"tel": "7737320369"}, "VICTORJAVIERTENTLETOXQUI": {"tel": "2451040049"}, "ADRIANGONZALEZCASILLAS": {"tel": "3787150176"}, "FORRAJESJAIME": {"tel": "4773242947"}, "ALIMENTOSJUDA": {"tel": "6566292900"}, "GERARDOGARCIAVIDAURRI": {"tel": "3461009097"}, "LUISFERNANDOMARINESTRADA": {"tel": "6251069482"}, "SERGIOGUSTAVOLUGOZARAZUA": {"tel": "4191074534"}, "JONATHANGONZALESAMEZOLA": {"tel": "4611500704"}, "MAINESMERCADORAMIREZ": {"tel": "3337350016"}, "VICTORENRIQUEPADILLAHERNANDEZ": {"tel": "3316046260"}, "JORGEANTONIOPARRAGONZALEZ": {"tel": "6861250339"}, "JREFUGIOINFANTEGAMINO": {"tel": "3515603709"}, "JESUSCARLOSPINTOMIRAMONTES": {"tel": "3315355785"}, "MAJOAQUINACARRIZALESVEGA": {"tel": "91216110"}, "ARMANDODIASGARCIA": {"tel": "4941008317"}, "CRISTIANALONSOMAUROROBLES": {"tel": "5527859017"}, "FORRAJERAELIZONDO": {"tel": "8119174401"}, "DAVIDLEDONCONTRERAS": {"tel": "3316033390"}, "MAELVIARUIZRUIZ": {"tel": "4938785771"}, "JOSESANTIAGORIVERAFLORES": {"tel": "3331956433"}, "MARIADELREFUGIOMERCADONAVARRO": {"tel": "13221682157"}, "COMERCIALPRODUMEX": {"tel": "448261287507"}, "NOEMEDINACARRILLO": {"tel": "4927685015"}, "NUTRIENTESBASICOSDEMONTERREY": {"tel": "4747425550"}, "ERICRAFELCISNEROSGONZALES": {"tel": "4381212628"}, "MARIADELOURDESPRECIADOARCE": {"tel": "12221682157"}, "SERGIOGOMEZGONZALEZ": {"tel": "8343399199"}, "GUILLERMOCORONADONAVARRO": {"tel": "3487848042"}, "YESENIALIZETHDIAZVILLEGAS": {"tel": "2214076157"}, "GILBERTOCAMPOSMUNOZ": {"tel": "3951091142"}, "MIGUELANGELROJASQUIJADA": {"tel": "5543304677"}, "ALEJANDROVAZQUEZGALARZA": {"tel": "6778730890"}, "AGAWEBER": {"tel": "3334758904"}, "OSCARRAFAELHERNANDEZPENA": {"tel": "3335030873"}, "GRUPOAGROINSUMOSCAMPOFUERTEDEMEXICO": {"tel": "6673270035"}, "GRUPOVIGALAMO": {"tel": "3111641817"}, "BEATRIZADRIANAVILLALOBOSDURAN": {"tel": "4659671804"}, "BRAYANFACUNDOPADRON": {"tel": "+52 392 128 2489"}, "LUCILALOPEZGAETA": {"tel": "3223037825"}, "OLGAOLIVIASALCIDOSOTO": {"tel": "6188261194"}, "CENTRALDESEMILLASYCEREALESBARBOSA": {"tel": "4621396919"}, "PROVEEDORADEABARROTESTRG": {"tel": "6461763375"}, "JORGEGIOVANNIBARRONQUEZADA": {"tel": "4775910494"}, "JAVIERCHOLULASOLANO": {"tel": "2271019991"}, "JUANMANUELBIURQUEZHERNANDEZ": {"tel": "5523993555"}, "PROBAHDPROCESADORADEBARREDURASHD": {"tel": "5532686228"}, "JULIANMIRELESCERDA": {"tel": "4781156208"}, "LEOBARDOMARTINEZCOELLO": {"tel": "3922166784"}, "FRANCISCORENTERIAMUNOZ": {"tel": "3313503343"}, "JOSEASCENCIONMENDOZAGARCIA": {"tel": "4774062522"}, "NORMAIRENESANCHEZMARTINEZ": {"tel": "8661554671"}, "TARSICIOLARAARIAS": {"tel": "3339497615"}, "CLAUDIAJUDITHGASTELUMBANUELOS": {"tel": "6441916455"}, "CENTROCOMERCIALBOULEVARDDECEDRAL": {"tel": "488-88-7-00-30"}, "DISTRIBUIDORAELCHARAL": {"tel": "6642500063"}, "FERNANDOZAMORAFLORES": {"tel": "4813818839"}, "GONZALOHERNANDEZNIETO": {"tel": "4271225841"}, "LAUROCASTILLOPACHECO": {"tel": "6366947979"}, "LUISARTUROCONCHASEVILLA": {"tel": "3481043735"}, "MARIAFERNANDARAMOSHERRERA": {"tel": "1750660"}, "PABLOROJASVILLALON": {"tel": "5519346317"}, "RODOLFORUIZBLANCO": {"tel": "8444126769"}, "SOCIEDADCOOPERATIVADEGANADEROSORGANIZADOSDECOAHUILA": {"tel": "8781119140"}, "ADOLFOANTONIOARELLANOROJO": {"tel": "6641231684"}, "ALFONSOGOMEZCORONADO": {"tel": "3787154292"}, "ANABELLMATAGONZALEZ": {"tel": "8333005772"}, "ARIANNABAEZROSAS": {"tel": "4245362026"}, "CARLOSALBERTOJIMENEZGOMEZ": {"tel": "3781080976"}, "CLASEAGROINDUSTRIAL": {"tel": "7774044768"}, "COMERCIALIZADORAK28IN": {"tel": "38388121"}, "DIEGOARMANDOGONZALEZGONZALEZ": {"tel": "4421092899"}, "FORRAJERAYVETERINARIA7LEGUASDESEGUY": {"tel": "868 8177822"}, "FORRAJESELTUNALSADECV": {"tel": "44412770619"}, "GERARDOBAENACURIEL": {"tel": "3861092245"}, "GERARDODELIRAGARCIA": {"tel": "33-33-36-63-89"}, "HECTORANTONIOLOPEZBECERRA": {"tel": "834 314 3205"}, "INNOVATECDELOSALTOSSADECV": {"tel": "3787812455"}, "JOELRODRIGUEZCARBAL": {"tel": "4922182504"}, "JORGEALFREDOPEREZVIVANCO": {"tel": "2454520100"}, "JOSEALEJANDROLOPEZGARCIA": {"tel": "4759585539"}, "JOSELEOBARDOFERNANDEZROMO": {"tel": "4494122452"}, "LUISALFONSOPARRAOCHOA": {"tel": "6673039212"}, "LUISISMAELOTEROSALAZAR": {"tel": "22853426"}, "MARIAGUADALUPEHERNANDEZBALDERAS": {"tel": "4131148854"}, "NUVIASCARLETHDELCARMENMUNOZSANCHEZ": {"tel": "4929247875"}, "OSSANPRODUCTS": {"tel": "8113383959"}, "ROBERTOSANCHEZLOPEZ": {"tel": "4441941229"}, "VALENTINTORRESLEON": {"tel": "3459372255"}};
 const PROSPEC_VCOL={'ARMANDO':'#E8A020','VICTOR MANUEL':'#38bdf8','DAGOVIET':'#a78bfa','JOSE MANUEL AVILA':'#f472b6','SARAHI/VENTAS':'#fb923c','ADMINISTRACION':'#64748b','VARIOS':'#64748b','(sin asignar)':'#94a3b8'};
 function prospecColor(p){ if(p.kind==='churn') return '#f59e0b'; if(p.kind==='mine'||p.m) return '#22c55e'; return PROSPEC_VCOL[p.v]||'#ef4444'; }
+// Embudo de prospectos (mismas etapas que usan los vendedores en su app): ventas.html
+// se ve así solo-lectura, ya sumando a TODOS los vendedores.
+var ETAPAS=[{k:'nuevo',lbl:'🆕 Nuevo',c:'#64748b'},{k:'contactado',lbl:'📞 Contactado',c:'#3b82f6'},{k:'interesado',lbl:'👍 Interesado',c:'#f59e0b'},{k:'cotizado',lbl:'💲 Cotizado',c:'#a855f7'},{k:'cliente',lbl:'✅ Ya es cliente',c:'#22c55e'},{k:'descartado',lbl:'❌ Descartado',c:'#ef4444'}];
+let PROSPETAPA='';
+function setPEtapa(v){PROSPETAPA=v;renderProspec();}
+function embudoPanel(){
+  var obs=window._obsLive||{};
+  var prosp=(typeof prospecAll==='function')?prospecAll().filter(function(p){return p.kind==='prosp';}):[];
+  var etapaCount={}; ETAPAS.forEach(function(e){etapaCount[e.k]=0;}); var sinEtapa=0;
+  var vencidos=[]; var hoyISO=new Date().toISOString().slice(0,10);
+  prosp.forEach(function(p){var ob=obs[p.n];
+    if(ob&&ob.etapa&&etapaCount.hasOwnProperty(ob.etapa))etapaCount[ob.etapa]++; else sinEtapa++;
+    if(ob&&ob.proxima&&ob.proxima<hoyISO)vencidos.push({n:p.n,fecha:ob.proxima,v:ob.v||''});
+  });
+  var h='<div style="background:#10233f;border:1px solid #21406e;border-radius:8px;padding:12px;margin-bottom:12px">';
+  h+='<div style="font-weight:800;color:#93c5fd;margin-bottom:7px">🧭 Embudo de prospectos — todos los vendedores</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:'+(vencidos.length?'8px':'0')+'">';
+  ETAPAS.forEach(function(e){h+='<button onclick="setPEtapa(\''+(PROSPETAPA===e.k?'':e.k)+'\')" style="background:'+(PROSPETAPA===e.k?e.c:e.c+'22')+';color:'+(PROSPETAPA===e.k?'#0b1628':e.c)+';border:1px solid '+e.c+';border-radius:14px;padding:5px 10px;font-size:11.5px;font-weight:800;cursor:pointer">'+e.lbl+' · '+etapaCount[e.k]+'</button>';});
+  h+='<button onclick="setPEtapa(\''+(PROSPETAPA==='(sin etapa)'?'':'(sin etapa)')+'\')" style="background:'+(PROSPETAPA==='(sin etapa)'?'#94a3b8':'#94a3b822')+';color:'+(PROSPETAPA==='(sin etapa)'?'#0b1628':'#94a3b8')+';border:1px solid #94a3b8;border-radius:14px;padding:5px 10px;font-size:11.5px;font-weight:800;cursor:pointer">(sin etapa) · '+sinEtapa+'</button>';
+  h+='</div>';
+  if(PROSPETAPA){
+    var filt=prosp.filter(function(p){var ob=obs[p.n];return PROSPETAPA==='(sin etapa)'?!(ob&&ob.etapa):(ob&&ob.etapa===PROSPETAPA);});
+    h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:3px">'+filt.length+' en esta etapa:</div>';
+    h+='<div style="font-size:11.5px;color:#cbd5e1;max-height:140px;overflow-y:auto">'+filt.slice(0,150).map(function(p){var ob=obs[p.n];return '<div style="padding:2px 0;border-top:1px solid #1e3a6b">'+(p.n||'').replace(/</g,'&lt;')+' · '+(p.v||'(sin asignar)')+(ob&&ob.proxima?(' · próx: '+ob.proxima):'')+'</div>';}).join('')+'</div>';
+  }
+  if(vencidos.length){
+    vencidos.sort(function(a,b){return a.fecha.localeCompare(b.fecha);});
+    h+='<div style="font-size:11px;color:#fca5a5;font-weight:700;margin-top:8px;margin-bottom:3px">⏰ '+vencidos.length+' con próxima acción vencida:</div>';
+    h+='<div style="font-size:11px;color:#f0b0b0">'+vencidos.slice(0,10).map(function(x){return x.n+' ('+x.fecha+(x.v?(' · '+x.v):'')+')';}).join(' · ')+(vencidos.length>10?'…':'')+'</div>';
+  }
+  h+='</div>';
+  return h;
+}
+function keyp(s){return (s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicación')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
+// ── Alta de prospectos (tú o tus vendedores registran uno nuevo) ──
+// Se guarda en skan/_altas. Lo que registras tú aquí queda autorizado al instante;
+// lo que registra un vendedor desde su app queda "pendiente" hasta que lo aprobrés
+// o lo rechacés abajo. Una vez aprobado, entra al embudo de prospectos normal.
+function parseLatLon(text){
+  text=(text||'').trim(); if(!text)return null;
+  let m=text.match(/@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/);
+  if(!m) m=text.match(/[?&]q=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if(!m) m=text.match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if(!m) return null;
+  const la=parseFloat(m[1]), lo=parseFloat(m[2]);
+  if(isNaN(la)||isNaN(lo)||Math.abs(la)>90||Math.abs(lo)>180) return null;
+  return {la:la,lo:lo};
+}
+function usarUbicacionActual(prefix){
+  const st=document.getElementById(prefix+'-loc-st'); if(!st)return;
+  if(!navigator.geolocation){ st.textContent='Tu navegador no soporta geolocalización. Pega coordenadas abajo.'; return; }
+  st.textContent='📡 Obteniendo tu ubicación...';
+  navigator.geolocation.getCurrentPosition(function(pos){
+    const la=document.getElementById(prefix+'-la'), lo=document.getElementById(prefix+'-lo');
+    if(la)la.value=pos.coords.latitude; if(lo)lo.value=pos.coords.longitude;
+    st.textContent='✅ Ubicación capturada ('+pos.coords.latitude.toFixed(5)+', '+pos.coords.longitude.toFixed(5)+')';
+  }, function(err){ st.textContent='No se pudo obtener tu ubicación ('+((err&&err.message)||'sin permiso')+'). Puedes pegar coordenadas abajo.'; }, {enableHighAccuracy:true,timeout:10000});
+}
+function aplicarPegado(prefix){
+  const inp=document.getElementById(prefix+'-paste'); const st=document.getElementById(prefix+'-loc-st'); if(!inp||!st)return;
+  const r=parseLatLon(inp.value);
+  if(!r){ st.textContent='No pude leer coordenadas ahí. Prueba con "lat,lon" o pega un link de Google Maps.'; return; }
+  const la=document.getElementById(prefix+'-la'), lo=document.getElementById(prefix+'-lo');
+  if(la)la.value=r.la; if(lo)lo.value=r.lo;
+  st.textContent='✅ Ubicación puesta ('+r.la.toFixed(5)+', '+r.lo.toFixed(5)+')';
+}
+function nuevoProspectoFormHtml(prefix){
+  const opts='<option value="">Estado…</option>'+MX_ESTADOS.map(function(e){return '<option value="'+e+'">'+e+'</option>';}).join('');
+  const vopts=(typeof PROSPEC_VCOL!=='undefined')?Object.keys(PROSPEC_VCOL).filter(function(v){return v!=='VARIOS'&&v!=='ADMINISTRACION'&&v!=='(sin asignar)';}):[];
+  const vsel='<select id="'+prefix+'-vendedor" style="flex:1;min-width:150px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px"><option value="">Asignar a… (opcional)</option>'+vopts.map(function(v){return '<option value="'+v+'">'+v+'</option>';}).join('')+'</select>';
+  return '<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;padding:10px;margin-bottom:6px">'
+   +'<div style="font-weight:800;color:#93c5fd;margin-bottom:6px">+ Registrar prospecto nuevo</div>'
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+   +'<input id="'+prefix+'-nombre" placeholder="Nombre del negocio o persona *" style="flex:2;min-width:200px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px">'
+   +'<input id="'+prefix+'-tel" placeholder="Teléfono" style="flex:1;min-width:130px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px">'
+   +'<input id="'+prefix+'-correo" placeholder="Correo (opcional)" style="flex:1;min-width:160px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px">'
+   +'</div>'
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+   +'<input id="'+prefix+'-ciudad" placeholder="Ciudad" style="flex:1;min-width:140px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px">'
+   +'<select id="'+prefix+'-estado" style="flex:1;min-width:150px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px">'+opts+'</select>'
+   +vsel
+   +'</div>'
+   +'<textarea id="'+prefix+'-notas" placeholder="Notas (opcional)" style="width:100%;min-height:44px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px"></textarea>'
+   +'<div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Ubicación (opcional, pero ayuda mucho para encontrarlo después):</div>'
+   +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px">'
+   +'<button type="button" onclick="usarUbicacionActual(\''+prefix+'\')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">📍 Usar mi ubicación</button>'
+   +'<input id="'+prefix+'-paste" placeholder="o pega coordenadas / link de Google Maps" style="flex:1;min-width:200px;background:#0F1E3C;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:7px">'
+   +'<button type="button" onclick="aplicarPegado(\''+prefix+'\')" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Usar esto</button>'
+   +'</div>'
+   +'<div id="'+prefix+'-loc-st" style="font-size:.72rem;color:#9fb0cc;margin-bottom:6px"></div>'
+   +'<input type="hidden" id="'+prefix+'-la"><input type="hidden" id="'+prefix+'-lo">'
+   +'<button onclick="guardarProspectoNuevo(\''+prefix+'\')" style="background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer">Guardar prospecto</button>'
+   +'</div>';
+}
+function altaId(){return 'a'+Date.now()+Math.random().toString(36).slice(2,7);}
+function guardarProspectoNuevo(prefix){
+  if(!reqSuper())return;
+  const nEl=document.getElementById(prefix+'-nombre'); const nombre=(nEl&&nEl.value||'').trim();
+  if(!nombre){alert('Falta el nombre del prospecto.');return;}
+  const cfg=getCloudCfg(); if(!cfg.db){alert('No hay conexión a la nube configurada.');return;}
+  const id=altaId(); const now=new Date().toISOString();
+  const g=function(id2){const el=document.getElementById(prefix+id2);return el?(el.value||'').trim():'';};
+  const body={id:id,nombre:nombre,telefono:g('-tel'),correo:g('-correo'),ciudad:g('-ciudad'),estado:g('-estado'),notas:g('-notas'),
+    la:parseFloat(g('-la'))||0,lo:parseFloat(g('-lo'))||0,vendedor:g('-vendedor')||'(sin asignar)',
+    creadoPor:'Gerencia',creadoEn:now,status:'aprobado',revisadoPor:'Gerencia',revisadoEn:now};
+  const url=cfg.db.replace(/\/$/,'')+'/skan/_altas/'+id+'.json';
+  skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){alert('✅ Prospecto guardado y disponible de inmediato.');fetchAltasLive();}).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
+}
+function aprobarAlta(id){
+  if(!reqSuper())return; const cfg=getCloudCfg(); if(!cfg.db)return;
+  const url=cfg.db.replace(/\/$/,'')+'/skan/_altas/'+id+'.json';
+  skFetch(url,{method:'PATCH',body:JSON.stringify({status:'aprobado',revisadoPor:'Gerencia',revisadoEn:new Date().toISOString()})}).then(function(){fetchAltasLive();}).catch(function(){alert('No se pudo aprobar. Intenta de nuevo.');});
+}
+function rechazarAlta(id){
+  if(!reqSuper())return; if(!confirm('¿Rechazar esta solicitud de prospecto?'))return;
+  const cfg=getCloudCfg(); if(!cfg.db)return;
+  const url=cfg.db.replace(/\/$/,'')+'/skan/_altas/'+id+'.json';
+  skFetch(url,{method:'PATCH',body:JSON.stringify({status:'rechazado',revisadoPor:'Gerencia',revisadoEn:new Date().toISOString()})}).then(function(){fetchAltasLive();}).catch(function(){alert('No se pudo rechazar. Intenta de nuevo.');});
+}
+// ── Contacto y ubicación real de la cartera de clientes (skan/_clienteInfo) ──
+function abrirContacto(nombre){
+  const nEl=document.getElementById('ct-nombre'); if(!nEl)return;
+  nEl.value=nombre;
+  document.getElementById('ct-titulo').textContent='📇 '+nombre;
+  const ci=(window._clienteInfoLive&&window._clienteInfoLive[keyp(nombre)])||{};
+  document.getElementById('ct-tel').value=ci.tel||'';
+  document.getElementById('ct-correo').value=ci.correo||'';
+  document.getElementById('ct-la').value=ci.la||'';
+  document.getElementById('ct-lo').value=ci.lo||'';
+  document.getElementById('ct-paste').value='';
+  document.getElementById('ct-loc-st').textContent='';
+  document.getElementById('ct-actual').innerHTML=ci.la?('Ubicación guardada: <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">ver en el mapa</a>'):'Sin ubicación guardada todavía.';
+  document.getElementById('contactoModal').style.display='flex';
+}
+function cerrarContacto(){const m=document.getElementById('contactoModal');if(m)m.style.display='none';}
+function guardarContacto(){
+  if(!reqSuper())return;
+  const nombre=document.getElementById('ct-nombre').value; if(!nombre)return;
+  const cfg=getCloudCfg(); if(!cfg.db){alert('No hay conexión a la nube configurada.');return;}
+  const body={nombre:nombre,tel:(document.getElementById('ct-tel').value||'').trim(),correo:(document.getElementById('ct-correo').value||'').trim(),
+    la:parseFloat(document.getElementById('ct-la').value)||0,lo:parseFloat(document.getElementById('ct-lo').value)||0,
+    actualizadoPor:'Gerencia',actualizadoEn:new Date().toISOString()};
+  const key=keyp(nombre);
+  const url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
+  skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){
+    window._clienteInfoLive=window._clienteInfoLive||{}; window._clienteInfoLive[key]=body;
+    cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
+  }).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
+}
+function altasPanel(){
+  const raw=window._altasLive||{}; const ids=Object.keys(raw);
+  const pend=ids.filter(function(id){return raw[id]&&raw[id].status==='pendiente';});
+  let h='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-radius:8px;padding:12px;margin-bottom:12px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:800;color:var(--gold)">🆕 Alta de prospectos'+(pend.length?(' — '+pend.length+' esperando tu autorización'):'')+'</span><button onclick="fetchAltasLive()" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">🔄 Actualizar</button></div>';
+  h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Registra aquí un prospecto nuevo (queda autorizado al instante), o aprueba/rechaza los que tus vendedores registran desde su app.</div>';
+  h+=nuevoProspectoFormHtml('np');
+  if(pend.length){
+    h+='<div style="font-weight:800;color:#f4d58a;margin:12px 0 6px">⏳ Esperando tu autorización ('+pend.length+')</div>';
+    pend.forEach(function(id){const a=raw[id];
+      h+='<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;padding:10px;margin-bottom:6px">'
+        +'<div style="font-weight:700;color:#fff">'+(a.nombre||'').replace(/</g,'&lt;')+' <span style="color:#9fb0cc;font-weight:400">· pidió: '+(a.creadoPor||a.vendedor||'')+'</span></div>'
+        +'<div style="font-size:.74rem;color:#cbd5e1;margin:3px 0">'+[a.telefono,a.correo,a.ciudad,a.estado].filter(Boolean).join(' · ')+'</div>'
+        +(a.notas?'<div style="font-size:.74rem;color:#9fb0cc;font-style:italic;margin-bottom:4px">"'+a.notas.replace(/</g,'&lt;')+'"</div>':'')
+        +(a.la?'<div style="font-size:.72rem;margin-bottom:4px"><a href="'+mapsUrl(a.la,a.lo,a.nombre)+'" target="_blank" style="color:#7dd3fc">📍 Ver ubicación</a></div>':'')
+        +'<div style="display:flex;gap:8px"><button onclick="aprobarAlta(\''+id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-weight:800;cursor:pointer">✅ Aprobar</button><button onclick="rechazarAlta(\''+id+'\')" style="background:#7c2d12;color:#fecaca;border:none;border-radius:8px;padding:6px 14px;font-weight:800;cursor:pointer">❌ Rechazar</button></div>'
+        +'</div>';
+    });
+  }
+  h+='</div>';
+  return h;
+}
 function keyp(s){return (s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
 let _prospecView=[];
 function prospecMine(){
@@ -5175,7 +5350,8 @@ function prospecMine(){
     const e=(c.estado||'').toUpperCase(); if(!ST_CTR[e]) continue;
     const ct=ST_CTR[e]; const ang=(i*61)*Math.PI/180; const rad=4+(i%9)*3; i++;
     const info=(typeof CLIENT_CAT!=='undefined'&&CLIENT_CAT[keyp(c.nombre)])||{};
-    out.push({n:c.nombre,p:info.tel||'',a:'',c:e,e:e,x:Math.round((ct[0]+Math.cos(ang)*rad)*10)/10,y:Math.round((ct[1]+Math.sin(ang)*rad)*10)/10,la:0,lo:0,m:'',v:c.vendedor||'(sin asignar)',src:'Silver Kan',brand:'Silver Kan',kind:'mine',sacos:Math.round(c.total||0)});
+    const ci=(window._clienteInfoLive&&window._clienteInfoLive[keyp(c.nombre)])||{};
+    out.push({n:c.nombre,p:ci.tel||info.tel||'',correo:ci.correo||'',a:'',c:e,e:e,x:Math.round((ct[0]+Math.cos(ang)*rad)*10)/10,y:Math.round((ct[1]+Math.sin(ang)*rad)*10)/10,la:ci.la||0,lo:ci.lo||0,m:'',v:c.vendedor||'(sin asignar)',src:'Silver Kan',brand:'Silver Kan',kind:'mine',sacos:Math.round(c.total||0)});
   }
   return out;
 }
@@ -5192,6 +5368,20 @@ function prospecChurn(){
   }
   return out;
 }
+function altasAprobadas(){
+  // Prospectos dados de alta a mano (por Ricardo o por un vendedor, ya autorizados) —
+  // ver skan/_altas en la nube. Se ubican de forma esquemática por estado, igual que
+  // "mine"/"churn": la ubicación REAL (la/lo) que se capturó se guarda y sirve para el
+  // link de "ver en el mapa", no para este punto en el mapa general.
+  const raw=window._altasLive||{}; const out=[]; let i=0;
+  for(const id in raw){
+    const a=raw[id]; if(!a||a.status!=='aprobado')continue;
+    const e=(a.estado||'').toUpperCase(); const ct=(typeof ST_CTR!=='undefined'&&ST_CTR[e])||[300,300];
+    const ang=(i*97)*Math.PI/180; const rad=4+(i%9)*3; i++;
+    out.push({n:a.nombre,p:a.telefono||'',correo:a.correo||'',a:'',c:a.ciudad||'',e:e,x:Math.round((ct[0]+Math.cos(ang)*rad)*10)/10,y:Math.round((ct[1]+Math.sin(ang)*rad)*10)/10,la:a.la||0,lo:a.lo||0,m:'',v:a.vendedor||'(sin asignar)',src:'Alta manual',brand:'Silver Kan',kind:'prosp',altaId:id,notas:a.notas||''});
+  }
+  return out;
+}
 function prospecAll(){
   // Conversión automática: si un prospecto ya registra venta facturada en el Odoo cargado,
   // se marca como cliente (verde) asignado a su vendedor, y se evita el punto duplicado.
@@ -5200,7 +5390,8 @@ function prospecAll(){
   const prospKeys=new Set(PROSPECT_DATA.map(p=>keyp(p.n)));
   let all=PROSPECT_DATA.map(p=>{const k=keyp(p.n);const conv=cliByKey[k];return Object.assign({},p,{brand:(p.src&&p.src.indexOf('Nogal')>=0)?'Nogal':'Nubac',kind:(conv||p.m)?'yacli':'prosp',m:conv?'1':p.m,conv:conv?1:0,v:conv?conv.v:p.v,sacos:conv?conv.sacos:p.sacos});});
   const mine=prospecMine().filter(c=>!prospKeys.has(keyp(c.n)));
-  var _res=all.concat(mine).concat(prospecChurn());
+  const altas=altasAprobadas().filter(c=>!prospKeys.has(keyp(c.n)));
+  var _res=all.concat(mine).concat(prospecChurn()).concat(altas);
   // Correcciones manuales de estado/ciudad del gerente (se guardan en la nube)
   var fx=window._prospFix||{};
   if(fx&&Object.keys(fx).length){_res.forEach(function(p){var f=fx[keyp(p.n)];if(f){if(f.e)p.e=f.e;if(f.c)p.c=f.c;}});}
@@ -5319,7 +5510,7 @@ function renderProspec(){
   const prosp=view.filter(p=>p.kind==='prosp');
   const byV={}; prosp.forEach(p=>{const v=p.v||'(sin asignar)';const e=p.e||'(sin estado)';if(!byV[v])byV[v]={};byV[v][e]=(byV[v][e]||0)+1;});
   const vt=Object.keys(byV).map(v=>[v,Object.values(byV[v]).reduce((a,b)=>a+b,0)]).sort((a,b)=>b[1]-a[1]);
-  let lh=visitasPanel()+obsPanel()+corrPanel();
+  let lh=embudoPanel()+altasPanel()+visitasPanel()+obsPanel()+corrPanel();
   if(vt.length){lh+='<div style="font-size:.95rem;font-weight:800;color:var(--gold);margin:4px 0 8px">Plan de ruta — prospectos de competencia por vendedor y estado</div><div style="display:flex;gap:10px;flex-wrap:wrap">';
     for(const [v,tot] of vt){const col=PROSPEC_VCOL[v]||'#94a3b8';const est=Object.entries(byV[v]).sort((a,b)=>b[1]-a[1]);
       lh+='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-left:4px solid '+col+';border-radius:8px;padding:10px 12px;min-width:200px"><div style="font-weight:800;color:'+col+'">'+v+' — '+tot+' prospectos</div><table style="width:100%;font-size:.76rem;color:#cbd5e1;margin-top:5px;border-collapse:collapse">';
@@ -5337,8 +5528,13 @@ function renderProspec(){
     lh+='</div>';}
   const lEl=document.getElementById('prospec-list'); if(lEl)lEl.innerHTML=lh;
 }
+function fetchAltasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_altas.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._altasLive=o||{};renderProspec();}).catch(function(){}); }
+function fetchClienteInfoLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};try{renderClienteTable();}catch(e){}try{renderProspec();}catch(e){}}).catch(function(){}); }
 try{fetchProspFix();}catch(e){}
-try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db){fetchVisitasLive();fetchObsLive();fetchProspFix();}}catch(e){}},25000);}catch(e){}
+try{fetchAltasLive();}catch(e){}
+try{fetchClienteInfoLive();}catch(e){}
+try{setInterval(function(){try{var pn=document.getElementById('pane-prospec');if(pn&&pn.classList.contains('active')&&getCloudCfg().db){fetchVisitasLive();fetchObsLive();fetchProspFix();fetchAltasLive();}}catch(e){}},25000);}catch(e){}
+try{setInterval(function(){try{if(getCloudCfg().db)fetchClienteInfoLive();}catch(e){}},60000);}catch(e){}
 function prospecShow(i){const p=_prospecView[i];if(!p)return;const col=prospecColor(p);
   const info=document.getElementById('prospec-info'); if(!info)return;
   if(p.kind==='mine'||p.kind==='churn'){
@@ -6826,5 +7022,25 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
   else vzBuildUI();
 })();
 </script>
+<div id="contactoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#0F1E3C;border:1px solid #2a3a5c;border-radius:12px;padding:18px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-weight:800;color:var(--gold);font-size:15px" id="ct-titulo">Contacto</div>
+      <button onclick="cerrarContacto()" style="background:none;border:none;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="ct-actual" style="font-size:.74rem;color:#7dd3fc;margin-bottom:8px"></div>
+    <input id="ct-tel" placeholder="Teléfono" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
+    <input id="ct-correo" placeholder="Correo" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
+    <div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Ubicación:</div>
+    <div style="margin-bottom:6px"><button type="button" onclick="usarUbicacionActual('ct')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">📍 Usar mi ubicación</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <input id="ct-paste" placeholder="o pega coordenadas / link de Google Maps" style="flex:1;min-width:0;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:7px;box-sizing:border-box">
+      <button type="button" onclick="aplicarPegado('ct')" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Usar</button>
+    </div>
+    <div id="ct-loc-st" style="font-size:.72rem;color:#9fb0cc;margin-bottom:10px"></div>
+    <input type="hidden" id="ct-la"><input type="hidden" id="ct-lo"><input type="hidden" id="ct-nombre">
+    <button onclick="guardarContacto()" style="width:100%;background:var(--gold);color:#1A2E5A;border:none;border-radius:8px;padding:10px;font-weight:800;cursor:pointer">Guardar</button>
+  </div>
+</div>
 </body>
 </html>

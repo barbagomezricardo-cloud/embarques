@@ -173,7 +173,7 @@ let COBRE={enabled:false,opcion:1,pct:0.5,min:300,umbral:20}; // nivel Cobre (lo
 let AI_CFG={enabled:false,model:'haiku',endpoint:''}; // asistente de IA (lo activa el gerente desde ventas.html)
 let PROSPECTS=[], VENTAS=null, ALERTAS=null, RES=null; let VIEW='clientes'; let CARDOPEN=false;
 function mapsUrl(la,lo,q){var ap=/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent||'');if(la&&lo)return ap?('https://maps.apple.com/?ll='+la+','+lo+'&q='+encodeURIComponent(q||'ubicaci\u00F3n')):('https://www.google.com/maps/search/?api=1&query='+la+','+lo);return ap?('https://maps.apple.com/?q='+encodeURIComponent(q||'')):('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q||''));}
-function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas'){fetchMFugaNota();fetchIncidenciasEntrega();renderAlertas();}else if(v==='accesos')renderAccesos();else if(v==='resumen')renderResumen();else if(v==='monitoreo')abrirMonitoreo();else if(v==='marketing'){renderMarketing();}else renderList('');}
+function setView(v){CARDOPEN=false;VIEW=v;if(v==='prosp'){fetchMObs();fetchMFix();fetchMAltas();renderProspectos('');}else if(v==='ventas')renderVentas();else if(v==='alertas'){fetchMFugaNota();fetchIncidenciasEntrega();renderAlertas();}else if(v==='accesos')renderAccesos();else if(v==='resumen')renderResumen();else if(v==='monitoreo')abrirMonitoreo();else if(v==='marketing'){renderMarketing();}else{fetchMClienteInfo();renderList('');}}
 // Monitoreo trabaja siempre sobre la cartera COMPLETA, sin importar qué vendedor esté elegido arriba.
 function abrirMonitoreo(){ if(CURVEND!=='__all__'){CURVEND='__all__';applyPayload(buildAgg());} VIEW='monitoreo'; renderMonitoreo(); }
 function vtBtn(v,lbl){return '<button onclick="setView(\''+v+'\')" style="flex:1;padding:9px 4px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:12.5px;background:'+(VIEW===v?'var(--gold)':'var(--mid)')+';color:'+(VIEW===v?'var(--navy)':'#9fb0cc')+'">'+lbl+'</button>';}
@@ -579,6 +579,10 @@ function setPEtapa(v){PROSPETAPA=v;renderProspectos(PROSPQ);}
 function keyp(s){return (s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
 function applyMFix(){var fx=window._mFix||{};if(!fx||!PROSPECTS)return;PROSPECTS.forEach(function(p){var f=fx[keyp(p.n)];if(f){if(f.e)p.e=f.e;if(f.c)p.c=f.c;}});}
 function fetchMObs(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_obs.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mObs=st;if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
+// Solo lectura: altas de prospectos y contacto/ubicación real de clientes. La autorización
+// de altas se hace en ventas.html (con el gerente); aquí solo se ve para tener el panorama.
+function fetchMAltas(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_altas.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._altasLive=o||{};if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
+function fetchMClienteInfo(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_clienteInfo.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);}).catch(function(){});}
 function fetchMFix(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_prospfix.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._mFix=o||{};applyMFix();if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){});}
 // Motivos de fuga que capturan los vendedores en su app (solo lectura aquí, mismo patrón que _obs)
 function fetchMFugaNota(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_fugaNota.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var st={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){st[n]=Object.assign({},ob[n],{v:v});}}window._mFugaNota=st;if(VIEW==='alertas')renderAlertas();}).catch(function(){});}
@@ -664,6 +668,8 @@ function renderProspectos(q,filt){
       h+='<div style="font-size:11px;color:#fca5a5;font-weight:700;margin-bottom:3px">⏰ '+vencidos.length+' con próxima acción vencida:</div>';
       h+='<div style="font-size:11px;color:#f0b0b0">'+vencidos.slice(0,8).map(function(x){return x.n+' ('+x.fecha+(x.v?(' · '+x.v):'')+')';}).join(' · ')+(vencidos.length>8?'…':'')+'</div>';
     }
+    var altasRaw=window._altasLive||{}; var altasPend=Object.keys(altasRaw).filter(function(id){return altasRaw[id]&&altasRaw[id].status==='pendiente';}).length;
+    if(altasPend)h+='<div style="font-size:11px;color:#f4d58a;font-weight:700;margin-top:6px">🆕 '+altasPend+' prospecto(s) nuevo(s) esperando autorización del gerente (se aprueban en ventas.html).</div>';
     h+='</div>';
   })();
   h+='<div style="display:flex;gap:6px;margin-bottom:8px">'+pfilt('pend')+'Pendientes ('+nPend+')</button>'+pfilt('vis')+'Visitados ('+nVis+')</button>'+pfilt('all')+'Todos</button></div>';
@@ -809,7 +815,7 @@ function masterLoad(){
     Promise.all(vendors.map(function(k){return skFetch(base+'/skan/'+encodeURIComponent(k)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){if(p&&(p.rows||p.ventas)){VDATA[k]=p;VNAMES[k]=p.v||k;}}).catch(function(){});})).then(function(){
       VKEYS=Object.keys(VDATA); document.getElementById('loading').style.display='none';
       if(!VKEYS.length){document.getElementById('drop').style.display='block';return;}
-      selectVendor(CURVEND); fetchMObs(); fetchMFix();
+      selectVendor(CURVEND); fetchMObs(); fetchMFix(); fetchMAltas(); fetchMClienteInfo();
     });
   }).catch(function(){document.getElementById('loading').style.display='none';document.getElementById('drop').style.display='block';alert('No se pudo conectar a la nube. Revisa el link maestro.');});
 }
@@ -1458,7 +1464,7 @@ function descBloques(c,t){
 }
 
 function showCard(name){
-  const c=CLIENTS[name];if(!c)return;CARDOPEN=true;const t=tierOf(c.avg);const nx=nextTier(t[0]);
+  const c=CLIENTS[name];if(!c)return;CARDOPEN=true;window._cardCliente=name;const t=tierOf(c.avg);const nx=nextTier(t[0]);
   const fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
   const maintain=t[0]==='INICIAL'?200:t[1];
   const M=PMULT();                       // 1 si evaluación mensual, 3 si trimestral
@@ -1545,9 +1551,24 @@ function showCard(name){
    '<div class="need">'+need+'</div>'+
    '<div class="msg">Las metas están en <b>sacos del '+PW+' completo</b>. El descuento ganado se paga como <b>nota de crédito</b> en su primera compra del periodo siguiente. El PetFood también cuenta y recibe descuento.</div>'+
    prodMesHtml(c)+
+   contactoClienteHtmlM(name)+
    '</div>'+
    '<div class="foot">Silver Kan / Los 19 Hermanos · Programa 04MAS ('+(APPEVAL==='MES'?'mensual':'trimestral')+') · Nivel por promedio mensual (PetFood incluido).</div>';
   window.scrollTo(0,0);
+}
+function contactoClienteHtmlM(nombre){
+  // Solo lectura: el teléfono/correo/ubicación real se edita en ventas.html o en la app
+  // del vendedor; aquí nomás se ve.
+  const ci=(window._clienteInfoLive&&window._clienteInfoLive[keyp(nombre)])||{};
+  if(!ci.tel&&!ci.correo&&!ci.la)return '';
+  let h='<div style="margin:10px 12px;padding:11px 13px;background:#10233f;border:1px solid #21406e;border-radius:10px">';
+  h+='<div style="font-weight:800;color:#93c5fd;font-size:13px;margin-bottom:5px">📇 Contacto</div>';
+  h+='<div style="font-size:12.5px;color:#cbd5e1">'
+    +(ci.tel?('<div>📞 <a href="tel:'+ci.tel+'" style="color:#dbeafe">'+ci.tel+'</a></div>'):'')
+    +(ci.correo?('<div>✉️ <a href="mailto:'+ci.correo+'" style="color:#dbeafe">'+ci.correo+'</a></div>'):'')
+    +(ci.la?('<div>📍 <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">Ver ubicación en el mapa</a></div>'):'')
+    +'</div></div>';
+  return h;
 }
 
 // ── Candado de licencia (tu panel manda) + carga en vivo + auto-refresco ──
