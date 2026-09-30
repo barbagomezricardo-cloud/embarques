@@ -456,9 +456,11 @@ var _ciList=window._clienteInfoLive||{};
 arr.slice(0,500).forEach(c=>{const t=tierOf(c.avg);const dz=dormido(c);const nv=esNuevoCand(c);const na=tieneArranque(c);const ep=espApp(c);
   const _ci=_ciList[keyp(c.nombre)];
   const _mapaBtn=_ci&&_ci.la?('<a href="'+mapsUrl(_ci.la,_ci.lo,c.nombre)+'" target="_blank" onclick="event.stopPropagation()" title="Ver ubicación" style="text-decoration:none;font-size:13px;margin-left:6px">📍</a>'):'';
-  h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b>'+_mapaBtn+'<div style="font-size:11px;color:'+(dz?'#f0a868':'#9fb0cc')+'">'
+  const _telBadge=_ci&&_ci.tel?(' <span style="color:#7dd3fc;font-weight:700">📞 '+_ci.tel+'</span>'):'';
+  const _cBtn='<button onclick="event.stopPropagation();abrirContactoM(\''+c.nombre.replace(/'/g,"\\'")+'\')" title="Ver/agregar contacto y ubicación" style="background:none;border:none;cursor:pointer;font-size:13px;margin-left:6px;opacity:'+((_ci&&(_ci.tel||_ci.la||_ci.contacto))?'1':'.45')+'">📇</button>';
+  h+='<div class="li" onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')"><div><b>'+c.nombre+'</b>'+_cBtn+_mapaBtn+'<div style="font-size:11px;color:'+(dz?'#f0a868':'#9fb0cc')+'">'
     +(dz?('⏸ '+ultCompraTxt(c)+' · '+fmt(c.tot)+' sacos en el año'):(fmt(c.avg)+' sacos/mes'))
-    +(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')
+    +(c.estado?' · '+c.estado:'')+(c.vend?' · '+c.vend:'')+_telBadge
     +(nv?'<div style="font-size:11px;color:#E8A020;font-weight:700;margin-top:2px">⭐ Nuevo · pide autorización de '+c.nvPct+'%</div>':'')
     +(na?'<div style="font-size:11px;color:#4ade80;font-weight:700;margin-top:2px">✅ Arranque '+c.nvAuth.pct+'% autorizado</div>':'')
     +(ep?'<div style="font-size:11px;color:#c99bff;font-weight:700;margin-top:2px">⚡ Especial '+Number(ep.pct).toFixed(2)+'% · hasta '+_fMX(ep.hasta)+'</div>':'')
@@ -598,7 +600,7 @@ function mergeAltasAprobadasEnProspects(){
       v:a.vendedor||'(sin asignar)',src:'Alta manual',kind:'prosp',altaId:id,notas:a.notas||''});
   }
 }
-function fetchMClienteInfo(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_clienteInfo.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);else if(VIEW==='clientes')renderList(CLISTQ);}).catch(function(){});}
+function fetchMClienteInfo(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_clienteInfo.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);else if(VIEW==='clientes')renderList(CLISTQ);try{refreshContactoModalIfOpen();}catch(e){}}).catch(function(){});}
 // ── Clientes (de la cartera que ves ahora mismo) sin ubicación real guardada ──
 var SINUBICM_OPEN=false;
 function sinUbicacionPanelM(){
@@ -608,27 +610,27 @@ function sinUbicacionPanelM(){
   var h='<details '+(SINUBICM_OPEN?'open':'')+' ontoggle="SINUBICM_OPEN=this.open" style="background:#10233f;border:1px solid #21406e;border-radius:10px;margin:0 0 10px">'
    +'<summary style="cursor:pointer;padding:9px 13px;font-size:.88rem;font-weight:800;color:#93c5fd">📍 Clientes sin ubicación guardada ('+falt.length+' de '+Object.keys(CLIENTS).length+')</summary>'
    +'<div style="padding:0 13px 10px">'
-   +'<div style="font-size:.7rem;color:#9fb0cc;margin-bottom:6px">Toca un cliente para abrir su tarjeta y agregarle teléfono, correo y ubicación (necesitas 🔓 modo edición).</div>'
+   +'<div style="font-size:.7rem;color:#9fb0cc;margin-bottom:6px">Toca "Agregar" para ponerle teléfono, correo y ubicación ahí mismo (necesitas 🔓 modo edición).</div>'
    +'<div style="display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto">';
   falt.slice(0,200).forEach(function(c){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;background:#0b1628;border-radius:7px;padding:6px 9px;font-size:.76rem">'
      +'<span style="color:#e2e8f0;font-weight:600">'+c.nombre+'</span>'
-     +'<button onclick="showCard(\''+c.nombre.replace(/'/g,"\\'")+'\')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:6px;padding:3px 9px;font-weight:700;font-size:.68rem;cursor:pointer">📇 Ver/agregar</button></div>';
+     +'<button onclick="abrirContactoM(\''+c.nombre.replace(/'/g,"\\'")+'\')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:6px;padding:3px 9px;font-weight:700;font-size:.68rem;cursor:pointer">📇 Agregar</button></div>';
   });
   h+='</div></div></details>';
   return h;
 }
-function fetchMContactoPend(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_contactoPend.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._contactoPendLive=o||{};if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);}).catch(function(){});}
+function fetchMContactoPend(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');skFetch(base+'/skan/_contactoPend.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._contactoPendLive=o||{};if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}}).catch(function(){});}
 // ── Modo edición para gerencia (misma contraseña de super-usuario que ventas.html) ──
 // Por defecto maestra.html es de solo lectura (la puede ver más gente); con esta
 // contraseña Ricardo puede, si quiere, editar o borrar el contacto de un cliente aquí mismo.
 const SUPER_PWD='Poseidon201085';   // ← debe ser LA MISMA que en ventas.html
 let M_SUPER=false;
 function unlockMSuper(){
-  if(M_SUPER){M_SUPER=false;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);return;}
+  if(M_SUPER){M_SUPER=false;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}return;}
   var p=prompt('Contraseña de super-usuario (la misma de ventas.html):');
   if(p===null)return;
-  if(p===SUPER_PWD){M_SUPER=true;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);}
+  if(p===SUPER_PWD){M_SUPER=true;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}}
   else alert('Contraseña incorrecta.');
 }
 function parseLatLon(text){
@@ -659,8 +661,48 @@ function aplicarPegado(prefix){
   if(la)la.value=r.la; if(lo)lo.value=r.lo;
   st.textContent='✅ Ubicación puesta ('+r.la.toFixed(5)+', '+r.lo.toFixed(5)+')';
 }
-function guardarContactoM(nombre){
+// ── Modal de contacto (independiente de la tarjeta grande de niveles/descuentos) ──
+// Se puede abrir desde cualquier lista (Clientes, sin-ubicación, monitor, tarjeta) con
+// abrirContactoM(nombre) — no hace falta navegar a la ficha completa para agregar un dato.
+let CONTACTOM_OPEN='';
+function abrirContactoM(nombre){
+  CONTACTOM_OPEN=nombre;
+  const ci=(window._clienteInfoLive&&window._clienteInfoLive[keyp(nombre)])||{};
+  document.getElementById('mc-nombre').value=nombre;
+  document.getElementById('mcm-titulo').textContent='📇 '+nombre;
+  document.getElementById('mc-tel').value=ci.tel||'';
+  document.getElementById('mc-correo').value=ci.correo||'';
+  document.getElementById('mc-contacto').value=ci.contacto||'';
+  document.getElementById('mc-dir').value=ci.direccion||'';
+  document.getElementById('mc-notas').value=ci.notas||'';
+  document.getElementById('mc-la').value=ci.la||'';
+  document.getElementById('mc-lo').value=ci.lo||'';
+  document.getElementById('mc-paste').value='';
+  document.getElementById('mc-loc-st').textContent='';
+  document.getElementById('mcm-actual').innerHTML=ci.la?('Ubicación guardada: <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">ver en el mapa</a>'):'Sin ubicación guardada todavía.';
+  const pendRaw=window._contactoPendLive||{}; let pend=null;
+  for(const id in pendRaw){const r=pendRaw[id]; if(r&&r.status==='pendiente'&&keyp(r.cliente)===keyp(nombre)){pend=Object.assign({id:id},r);break;}}
+  const pEl=document.getElementById('mcm-pend');
+  pEl.innerHTML=pend?('<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:9px;margin-bottom:8px;font-size:12px;color:#f4d58a">'
+    +'⏳ <b>'+(pend.propuestoPor||'un vendedor')+'</b> propone: '+[pend.tel,pend.correo,pend.contacto,pend.direccion,pend.notas].filter(Boolean).join(' · ')+(pend.la?' · ubicación nueva':'')
+    +(M_SUPER?('<div style="display:flex;gap:8px;margin-top:6px"><button onclick="aprobarContactoPendM(\''+pend.id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">✅ Aprobar</button><button onclick="rechazarContactoPendM(\''+pend.id+'\')" style="background:#7c2d12;color:#fecaca;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">❌ Rechazar</button></div>'):'')
+    +'</div>'):'';
+  const viewEl=document.getElementById('mcm-view');
+  viewEl.innerHTML=(ci.tel?('<div>📞 <a href="tel:'+ci.tel+'" style="color:#dbeafe">'+ci.tel+'</a></div>'):'')
+    +(ci.correo?('<div>✉️ <a href="mailto:'+ci.correo+'" style="color:#dbeafe">'+ci.correo+'</a></div>'):'')
+    +(ci.contacto?('<div>👤 '+ci.contacto+'</div>'):'')
+    +(ci.direccion?('<div>🏠 '+ci.direccion+'</div>'):'')
+    +(ci.notas?('<div>📝 '+ci.notas+'</div>'):'')
+    +((!ci.tel&&!ci.correo&&!ci.la&&!ci.contacto&&!ci.direccion&&!ci.notas)?'<div style="color:#8792a3">Sin datos de contacto guardados todavía.</div>':'');
+  document.getElementById('mcm-lock').style.display=M_SUPER?'none':'';
+  document.getElementById('mcm-edit').style.display=M_SUPER?'':'none';
+  document.getElementById('contactoModalM').style.display='flex';
+}
+function cerrarContactoM(){CONTACTOM_OPEN='';const m=document.getElementById('contactoModalM');if(m)m.style.display='none';}
+function refreshContactoModalIfOpen(){ if(CONTACTOM_OPEN&&document.getElementById('contactoModalM').style.display!=='none')abrirContactoM(CONTACTOM_OPEN); }
+function guardarContactoM(){
   if(!M_SUPER){alert('Activa el modo edición (🔓) con la contraseña de super-usuario primero.');return;}
+  var nombre=document.getElementById('mc-nombre').value; if(!nombre)return;
   var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');
   var body={nombre:nombre,tel:(document.getElementById('mc-tel').value||'').trim(),correo:(document.getElementById('mc-correo').value||'').trim(),
     contacto:(document.getElementById('mc-contacto').value||'').trim(),direccion:(document.getElementById('mc-dir').value||'').trim(),notas:(document.getElementById('mc-notas').value||'').trim(),
@@ -670,18 +712,23 @@ function guardarContactoM(nombre){
   var url=base+'/skan/_clienteInfo/'+key+'.json';
   skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){
     window._clienteInfoLive=window._clienteInfoLive||{}; window._clienteInfoLive[key]=body;
-    EDITCONTACTOM=''; showCard(nombre);
+    cerrarContactoM();
+    if(VIEW==='clientes')renderList(CLISTQ); if(typeof paintMon==='function')try{paintMon();}catch(e){}
+    if(CARDOPEN&&window._cardCliente===nombre)showCard(nombre);
   }).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
 }
-function borrarContactoM(nombre){
+function borrarContactoM(){
   if(!M_SUPER){alert('Activa el modo edición (🔓) con la contraseña de super-usuario primero.');return;}
+  var nombre=document.getElementById('mc-nombre').value; if(!nombre)return;
   if(!confirm('¿Borrar el contacto y ubicación guardados de '+nombre+'?'))return;
   var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');
   var key=keyp(nombre);
   var url=base+'/skan/_clienteInfo/'+key+'.json';
   skFetch(url,{method:'DELETE'}).then(function(){
     if(window._clienteInfoLive)delete window._clienteInfoLive[key];
-    EDITCONTACTOM=''; showCard(nombre);
+    cerrarContactoM();
+    if(VIEW==='clientes')renderList(CLISTQ); if(typeof paintMon==='function')try{paintMon();}catch(e){}
+    if(CARDOPEN&&window._cardCliente===nombre)showCard(nombre);
   }).catch(function(){alert('No se pudo borrar. Revisa tu conexión.');});
 }
 function _vcNormM(s){return (s||'').toString().normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
@@ -1815,45 +1862,28 @@ function showCard(name){
    '<div class="foot">Silver Kan / Los 19 Hermanos · Programa 04MAS ('+(APPEVAL==='MES'?'mensual':'trimestral')+') · Nivel por promedio mensual (PetFood incluido).</div>';
   window.scrollTo(0,0);
 }
-let EDITCONTACTOM='';
-function toggleEditContactoM(nombre){EDITCONTACTOM=(EDITCONTACTOM===nombre)?'':nombre; showCard(nombre);}
 function contactoClienteHtmlM(nombre){
-  // Solo lectura por defecto (la puede ver más gente); con el candado 🔓 (misma
-  // contraseña de super-usuario de ventas.html) Ricardo puede editar o borrar aquí mismo.
+  // Resumen de solo lectura dentro de la tarjeta grande — para agregar o cambiar algo se
+  // abre el modal (abrirContactoM), que no obliga a navegar por toda la tarjeta de niveles.
   const ci=(window._clienteInfoLive&&window._clienteInfoLive[keyp(nombre)])||{};
   const pendRaw=window._contactoPendLive||{}; let pend=null;
   for(const id in pendRaw){const r=pendRaw[id]; if(r&&r.status==='pendiente'&&keyp(r.cliente)===keyp(nombre)){pend=Object.assign({id:id},r);break;}}
-  if(!ci.tel&&!ci.correo&&!ci.la&&!ci.contacto&&!ci.direccion&&!ci.notas&&!M_SUPER&&!pend)return '';
-  const edit=(EDITCONTACTOM===nombre);
+  const tiene=!!(ci.tel||ci.correo||ci.la||ci.contacto||ci.direccion||ci.notas);
   let h='<div style="margin:10px 12px;padding:11px 13px;background:#10233f;border:1px solid #21406e;border-radius:10px">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;color:#93c5fd;font-size:13px">📇 Contacto</div>'
-    +'<button onclick="unlockMSuper()" title="Activar/desactivar modo edición" style="background:none;border:none;color:'+(M_SUPER?'#4ade80':'#7dd3fc')+';font-size:12px;cursor:pointer;font-weight:700">'+(M_SUPER?'🔓 edición activa':'🔒 activar edición')+'</button></div>';
+    +'<button onclick="abrirContactoM(\''+nombre.replace(/'/g,"\\'")+'\')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:5px 11px;font-weight:700;font-size:12px;cursor:pointer">'+(tiene?'✏️ Ver / editar':'+ Agregar')+'</button></div>';
   if(pend){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:9px;margin-top:6px;font-size:12px;color:#f4d58a">⏳ <b>'+(pend.propuestoPor||'un vendedor')+'</b> propone: '+[pend.tel,pend.correo,pend.contacto,pend.direccion,pend.notas].filter(Boolean).join(' · ')+(pend.la?' · ubicación nueva':'')
     +(M_SUPER?('<div style="display:flex;gap:8px;margin-top:6px"><button onclick="aprobarContactoPendM(\''+pend.id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">✅ Aprobar</button><button onclick="rechazarContactoPendM(\''+pend.id+'\')" style="background:#7c2d12;color:#fecaca;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">❌ Rechazar</button></div>'):'')
     +'</div>';}
-  if(M_SUPER)h+='<div style="margin-top:6px"><button onclick="toggleEditContactoM(\''+nombre.replace(/'/g,"\\'")+'\')" style="background:none;border:none;color:#7dd3fc;font-size:12px;cursor:pointer;font-weight:700">'+(edit?'Cancelar':((ci.tel||ci.correo||ci.la||ci.contacto||ci.direccion||ci.notas)?'✏️ Editar':'+ Agregar'))+'</button></div>';
-  if(!edit){
-    h+='<div style="font-size:12.5px;color:#cbd5e1;margin-top:5px">'
-      +(ci.tel?('<div>📞 <a href="tel:'+ci.tel+'" style="color:#dbeafe">'+ci.tel+'</a></div>'):'')
-      +(ci.correo?('<div>✉️ <a href="mailto:'+ci.correo+'" style="color:#dbeafe">'+ci.correo+'</a></div>'):'')
-      +(ci.contacto?('<div>👤 '+ci.contacto+'</div>'):'')
-      +(ci.direccion?('<div>🏠 '+ci.direccion+'</div>'):'')
-      +(ci.notas?('<div>📝 '+ci.notas+'</div>'):'')
-      +(ci.la?('<div>📍 <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">Ver ubicación en el mapa</a></div>'):'')
-      +((!ci.tel&&!ci.correo&&!ci.la&&!ci.contacto&&!ci.direccion&&!ci.notas)?'<div style="color:#8792a3">Sin datos de contacto guardados todavía.</div>':'')
-      +'</div>';
-  } else {
-    h+='<input id="mc-tel" placeholder="Teléfono" value="'+(ci.tel||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin:7px 0 6px">'
-      +'<input id="mc-correo" placeholder="Correo" value="'+(ci.correo||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
-      +'<input id="mc-contacto" placeholder="Persona de contacto" value="'+(ci.contacto||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
-      +'<input id="mc-dir" placeholder="Dirección" value="'+(ci.direccion||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
-      +'<textarea id="mc-notas" placeholder="Notas" rows="2" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px;font-family:inherit;resize:vertical">'+(ci.notas||'')+'</textarea>'
-      +'<button type="button" onclick="usarUbicacionActual(\'mc\')" style="width:100%;background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:8px;font-weight:700;cursor:pointer;margin-bottom:6px">📍 Usar mi ubicación actual</button>'
-      +'<div style="display:flex;gap:6px;margin-bottom:5px"><input id="mc-paste" placeholder="o pega coordenadas / link de Maps" style="flex:1;min-width:0;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:7px;box-sizing:border-box"><button type="button" onclick="aplicarPegado(\'mc\')" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Usar</button></div>'
-      +'<div id="mc-loc-st" style="font-size:11px;color:#9fb0cc;margin-bottom:6px"></div>'
-      +'<input type="hidden" id="mc-la" value="'+(ci.la||'')+'"><input type="hidden" id="mc-lo" value="'+(ci.lo||'')+'">'
-      +'<div style="display:flex;gap:8px"><button onclick="guardarContactoM(\''+nombre.replace(/'/g,"\\'")+'\')" style="flex:1;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar</button><button onclick="borrarContactoM(\''+nombre.replace(/'/g,"\\'")+'\')" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:8px;padding:9px 14px;font-weight:800;cursor:pointer">🗑️</button></div>';
-  }
+  h+='<div style="font-size:12.5px;color:#cbd5e1;margin-top:5px">'
+    +(ci.tel?('<div>📞 <a href="tel:'+ci.tel+'" style="color:#dbeafe">'+ci.tel+'</a></div>'):'')
+    +(ci.correo?('<div>✉️ <a href="mailto:'+ci.correo+'" style="color:#dbeafe">'+ci.correo+'</a></div>'):'')
+    +(ci.contacto?('<div>👤 '+ci.contacto+'</div>'):'')
+    +(ci.direccion?('<div>🏠 '+ci.direccion+'</div>'):'')
+    +(ci.notas?('<div>📝 '+ci.notas+'</div>'):'')
+    +(ci.la?('<div>📍 <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">Ver ubicación en el mapa</a></div>'):'')
+    +(!tiene?'<div style="color:#8792a3">Sin datos de contacto guardados todavía.</div>':'')
+    +'</div>';
   h+='</div>';
   return h;
 }
@@ -2323,4 +2353,33 @@ skGate(function(){ masterLoad(); setInterval(skPoll,60000); });
 
 
 </script>
+<div id="contactoModalM" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#0b1628;border:1px solid #21406e;border-radius:14px;padding:16px;max-width:420px;width:100%;max-height:88vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div id="mcm-titulo" style="font-weight:800;color:#93c5fd;font-size:14px">📇 Contacto</div>
+      <button onclick="cerrarContactoM()" style="background:none;border:none;color:#9fb0cc;font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <input type="hidden" id="mc-nombre">
+    <div id="mcm-pend"></div>
+    <div id="mcm-lock" style="display:none;background:#2a1512;border:1px solid #7f1d1d;border-left:4px solid #ef4444;border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-weight:800;color:#f87171;font-size:13px">🔒 Modo edición desactivado</div>
+      <div style="font-size:11.5px;color:#cbd5e1;margin:4px 0 8px">Activa el modo edición con tu contraseña de super-usuario para agregar o cambiar estos datos.</div>
+      <button onclick="unlockMSuper()" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">🔓 Activar edición</button>
+    </div>
+    <div id="mcm-view" style="font-size:12.5px;color:#cbd5e1;margin-bottom:8px"></div>
+    <div id="mcm-edit" style="display:none">
+      <input id="mc-tel" placeholder="Teléfono" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">
+      <input id="mc-correo" placeholder="Correo" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">
+      <input id="mc-contacto" placeholder="Persona de contacto" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">
+      <input id="mc-dir" placeholder="Dirección" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">
+      <textarea id="mc-notas" placeholder="Notas" rows="2" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px;font-family:inherit;resize:vertical"></textarea>
+      <button type="button" onclick="usarUbicacionActual('mc')" style="width:100%;background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:8px;font-weight:700;cursor:pointer;margin-bottom:6px">📍 Usar mi ubicación actual</button>
+      <div style="display:flex;gap:6px;margin-bottom:5px"><input id="mc-paste" placeholder="o pega coordenadas / link de Maps" style="flex:1;min-width:0;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:7px;box-sizing:border-box"><button type="button" onclick="aplicarPegado('mc')" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Usar</button></div>
+      <div id="mc-loc-st" style="font-size:11px;color:#9fb0cc;margin-bottom:6px"></div>
+      <div id="mcm-actual" style="font-size:11.5px;color:#9fb0cc;margin-bottom:8px"></div>
+      <input type="hidden" id="mc-la"><input type="hidden" id="mc-lo">
+      <div style="display:flex;gap:8px"><button onclick="guardarContactoM()" style="flex:1;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar</button><button onclick="borrarContactoM()" style="background:#3a1e1e;color:#fca5a5;border:none;border-radius:8px;padding:9px 14px;font-weight:800;cursor:pointer">🗑️</button></div>
+    </div>
+  </div>
+</div>
 </body></html>

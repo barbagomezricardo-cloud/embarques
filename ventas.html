@@ -445,7 +445,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
           <input type="text" id="m-vend" placeholder="Ej: ARMANDO"></div>
         <button class="btn-add" onclick="addMapping()">Guardar</button>
       </div>
-      <table class="mt"><thead><tr><th>Cliente</th><th>Estado</th><th>Vendedor</th><th></th></tr></thead>
+      <table class="mt"><thead><tr><th>Cliente</th><th>Estado</th><th>Vendedor</th><th>Contacto</th><th></th></tr></thead>
         <tbody id="mapeo-body"></tbody>
       </table>
     </div>
@@ -1848,8 +1848,11 @@ function renderRiesgo(){
     const dval=c.dias>=999?'—':(c.dias+'d');
     const diasColor=critico?'var(--red)':alerta?'#f97316':'var(--amber)';
     const cs=(c.nombre||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const _ciR=(window._clienteInfoLive&&window._clienteInfoLive[keyp(c.nombre)])||null;
+    const _tieneCR=!!(_ciR&&(_ciR.tel||_ciR.correo||_ciR.la||_ciR.contacto));
+    const _mapaR=_ciR&&_ciR.la?` <a href="${mapsUrl(_ciR.la,_ciR.lo,c.nombre)}" target="_blank" title="Ver ubicación en el mapa" style="text-decoration:none;font-size:.78rem">📍</a>`:'';
     return `<tr>
-      <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis">${c.nombre} <button onclick="abrirContacto('${cs}')" title="Contacto y ubicación" style="background:none;border:none;color:#7dd3fc;cursor:pointer;font-size:.85rem;vertical-align:middle">📇</button></td>
+      <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis">${c.nombre} <button onclick="abrirContacto('${cs}')" title="${_tieneCR?'Ver/editar contacto y ubicación':'Agregar contacto y ubicación'}" style="background:none;border:none;color:#7dd3fc;cursor:pointer;font-size:.85rem;vertical-align:middle;opacity:${_tieneCR?1:.5}">📇</button>${_mapaR}</td>
       <td><span class="tier-pill tier-${TIER_KEY[c.nivel]||c.nivel}" style="font-size:.62rem">${c.nivel}</span></td>
       <td style="text-align:right;color:var(--gold)">${fmt(c.promMes)}</td>
       <td style="color:#6ee7b7;font-size:.72rem">${c.desc.toFixed(1)}%</td>
@@ -2335,7 +2338,14 @@ function vendedoresConocidos(){
 }
 function renderMapeoTable(){
   const m=getMapping();const entries=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
-  document.getElementById('mapeo-body').innerHTML=entries.map(([c,{e,v}])=>{const cs=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");return `<tr><td>${c}</td><td>${e}</td><td>${v}</td><td style="white-space:nowrap"><button class="btn-del" style="background:#0f766e;margin-right:4px" title="Contacto y ubicación" onclick="abrirContacto('${cs}')">📇</button><button class="btn-del" style="background:#2563EB;margin-right:4px" title="Editar" onclick="editMapping('${cs}')">✎</button><button class="btn-del" title="Eliminar" onclick="delMapping('${cs}')">✕</button></td></tr>`;}).join('');
+  document.getElementById('mapeo-body').innerHTML=entries.map(([c,{e,v}])=>{
+    const cs=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const ci=(window._clienteInfoLive&&window._clienteInfoLive[keyp(c)])||null;
+    const tieneContacto=!!(ci&&(ci.tel||ci.correo||ci.la||ci.contacto));
+    const contactoTxt=ci&&(ci.tel||ci.contacto)?('<div style="font-size:.7rem;color:#cbd5e1;white-space:nowrap">'+[ci.tel,ci.contacto].filter(Boolean).join(' · ')+'</div>'):'<span style="color:#475569;font-size:.7rem">— sin datos —</span>';
+    const mapaBtn=ci&&ci.la?(' <a href="'+mapsUrl(ci.la,ci.lo,c)+'" target="_blank" title="Ver ubicación en el mapa" style="text-decoration:none">📍</a>'):'';
+    return `<tr><td>${c}</td><td>${e}</td><td>${v}</td><td>${contactoTxt}${mapaBtn}</td><td style="white-space:nowrap"><button class="btn-del" style="background:#0f766e;margin-right:4px;opacity:${tieneContacto?1:.55}" title="${tieneContacto?'Ver/editar contacto y ubicación':'Agregar contacto y ubicación'}" onclick="abrirContacto('${cs}')">📇</button><button class="btn-del" style="background:#2563EB;margin-right:4px" title="Editar" onclick="editMapping('${cs}')">✎</button><button class="btn-del" title="Eliminar" onclick="delMapping('${cs}')">✕</button></td></tr>`;
+  }).join('');
   // datalist de clientes del reporte actual
   const dl=document.getElementById('client-list');
   if(dl&&DATA&&DATA.clients){dl.innerHTML=DATA.clients.map(c=>`<option value="${(c.nombre||'').replace(/"/g,'')}">`).join('');}
@@ -5368,7 +5378,7 @@ function guardarContacto(){
   const url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
   skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){
     window._clienteInfoLive=window._clienteInfoLive||{}; window._clienteInfoLive[key]=body;
-    cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
+    cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){} try{renderMapeoTable();}catch(e){} try{renderRiesgo();}catch(e){}
   }).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
 }
 function borrarContacto(){
@@ -5380,7 +5390,7 @@ function borrarContacto(){
   const url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
   skFetch(url,{method:'DELETE'}).then(function(){
     if(window._clienteInfoLive)delete window._clienteInfoLive[key];
-    cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
+    cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){} try{renderMapeoTable();}catch(e){} try{renderRiesgo();}catch(e){}
   }).catch(function(){alert('No se pudo borrar. Revisa tu conexión.');});
 }
 function _vcNormV(s){return (s||'').toString().normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
@@ -5461,7 +5471,7 @@ function guardarVcardMatchesV(){
   Promise.all(proms).then(function(){
     alert('✅ '+sel.length+' contacto(s) guardado(s).');
     VCARD_MATCHES_V=[]; renderVcardReviewV();
-    try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
+    try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){} try{renderMapeoTable();}catch(e){} try{renderRiesgo();}catch(e){}
   }).catch(function(){alert('Algo no se pudo guardar. Revisa tu conexión e intenta de nuevo.');});
 }
 // ── Solicitudes de contacto de vendedores (skan/_contactoPend) — solo tú las autorizas ──
@@ -5480,7 +5490,7 @@ function aprobarContactoPend(id){
   skFetch(urlInfo,{method:'PUT',body:JSON.stringify(merged)}).then(function(){
     window._clienteInfoLive=window._clienteInfoLive||{}; window._clienteInfoLive[key]=merged;
     return skFetch(urlPend,{method:'PATCH',body:JSON.stringify({status:'aprobado',revisadoPor:'Gerencia',revisadoEn:new Date().toISOString()})});
-  }).then(function(){fetchContactoPendLive();try{renderClienteTable();}catch(e){}}).catch(function(){alert('No se pudo aprobar. Intenta de nuevo.');});
+  }).then(function(){fetchContactoPendLive();try{renderClienteTable();}catch(e){}try{renderMapeoTable();}catch(e){}try{renderRiesgo();}catch(e){}}).catch(function(){alert('No se pudo aprobar. Intenta de nuevo.');});
 }
 function rechazarContactoPend(id){
   if(!reqSuper())return; if(!confirm('¿Rechazar esta propuesta de contacto?'))return;
@@ -5714,7 +5724,7 @@ function renderProspec(){
   const lEl=document.getElementById('prospec-list'); if(lEl)lEl.innerHTML=lh;
 }
 function fetchAltasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_altas.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._altasLive=o||{};renderProspec();}).catch(function(){}); }
-function fetchClienteInfoLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};try{renderClienteTable();}catch(e){}try{renderProspec();}catch(e){}}).catch(function(){}); }
+function fetchClienteInfoLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};try{renderClienteTable();}catch(e){}try{renderProspec();}catch(e){}try{renderMapeoTable();}catch(e){}try{renderRiesgo();}catch(e){}}).catch(function(){}); }
 try{fetchProspFix();}catch(e){}
 try{fetchAltasLive();}catch(e){}
 try{fetchClienteInfoLive();}catch(e){}
