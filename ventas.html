@@ -292,6 +292,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
       <div id="esp-panel" style="display:none"></div>
       <div id="bloq-panel" style="display:none"></div>
       <div id="odoo-diff-panel" style="display:none"></div>
+      <div id="sinubic-panel" style="display:none"></div>
       <div class="tbl-wrap">
         <table class="dt" id="cliente-tbl">
           <thead><tr>
@@ -644,7 +645,7 @@ let ODOO_DESC_ROWS=null, ODOO_DESC_FNAME='', ODOO_DIFF_ONLY=true;   // comparaci
 // renglones (con varias docenas de bloqueados, el panel abierto tapaba el scroll de la tabla).
 // Guardan su propio estado en window para que sobreviva cada re-render (si no, el <details> se
 // volvía a cerrar solo cada vez que se repintaba, por ejemplo al escribir en el buscador).
-let PANEL_OPEN={esp:false,bloq:false,odoo:false,rentDesc:false};
+let PANEL_OPEN={esp:false,bloq:false,odoo:false,rentDesc:false,sinubic:false};
 var LAST_PROMO_PROD={};   // {cliente:{producto:sacos}} — sacos regalados como promo/bonificación por producto (para costearlos en Rentabilidad)
 const TODAY=new Date();
 
@@ -1407,6 +1408,7 @@ function renderClienteTable(){
   try{renderEspPanel();}catch(e){}
   try{renderBloqueadosPanel();}catch(e){}
   try{renderOdooDiff();}catch(e){}
+  try{renderSinUbicacionPanel();}catch(e){}
   document.getElementById('cliente-body').innerHTML=rows.map(c=>{
     const dk=c.tier||TIER_KEY[c.nivel]||c.nivel;
     const diasColor=c.dias>=45?'var(--red)':c.dias>=30?'#f97316':c.dias>=15?'var(--amber)':'var(--green)';
@@ -1425,7 +1427,8 @@ function renderClienteTable(){
     const _puedeEsp=(typeof SK_SUPER!=='undefined')&&SK_SUPER;
     const _ciRow=(window._clienteInfoLive&&window._clienteInfoLive[keyp(c.nombre)])||null;
     const _tieneContacto=!!(_ciRow&&(_ciRow.tel||_ciRow.correo||_ciRow.la));
-    const nombreBtn=`${c.nombre} <button onclick="abrirContacto('${c.nombre.replace(/'/g,"\\'")}')" title="${_tieneContacto?'Ver/editar teléfono, correo y ubicación':'Agregar teléfono, correo y ubicación'}" style="background:none;border:none;cursor:pointer;font-size:.78rem;opacity:${_tieneContacto?'1':'.45'}">📇</button>`;
+    const _mapaBtn=_ciRow&&_ciRow.la?`<a href="${mapsUrl(_ciRow.la,_ciRow.lo,c.nombre)}" target="_blank" title="Ver ubicación en el mapa" style="text-decoration:none;font-size:.78rem">📍</a>`:'';
+    const nombreBtn=`${c.nombre} <button onclick="abrirContacto('${c.nombre.replace(/'/g,"\\'")}')" title="${_tieneContacto?'Ver/editar teléfono, correo y ubicación':'Agregar teléfono, correo y ubicación'}" style="background:none;border:none;cursor:pointer;font-size:.78rem;opacity:${_tieneContacto?'1':'.45'}">📇</button> ${_mapaBtn}`;
     // El botón se ve SIEMPRE, aunque estés en modo visor: si no, parece que la función no
     // existe. En visor sale con candado y, al tocarlo, autorizarDescEsp pide la contraseña.
     const descBtn=`<div style="margin-top:2px;display:flex;gap:3px;flex-wrap:wrap"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?'Autorizar un descuento especial por dirección':'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?'#4c1d95':'#2a2438'};color:${_puedeEsp?'#ddd6fe':'#8b7fa6'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?'⚡ especial':'🔒 especial'}</button>`
@@ -1841,8 +1844,9 @@ function renderRiesgo(){
     const dfmt=c.lastDate?c.lastDate.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'2-digit'}):'—';
     const dval=c.dias>=999?'—':(c.dias+'d');
     const diasColor=critico?'var(--red)':alerta?'#f97316':'var(--amber)';
+    const cs=(c.nombre||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return `<tr>
-      <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis">${c.nombre}</td>
+      <td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis">${c.nombre} <button onclick="abrirContacto('${cs}')" title="Contacto y ubicación" style="background:none;border:none;color:#7dd3fc;cursor:pointer;font-size:.85rem;vertical-align:middle">📇</button></td>
       <td><span class="tier-pill tier-${TIER_KEY[c.nivel]||c.nivel}" style="font-size:.62rem">${c.nivel}</span></td>
       <td style="text-align:right;color:var(--gold)">${fmt(c.promMes)}</td>
       <td style="color:#6ee7b7;font-size:.72rem">${c.desc.toFixed(1)}%</td>
@@ -2328,7 +2332,7 @@ function vendedoresConocidos(){
 }
 function renderMapeoTable(){
   const m=getMapping();const entries=Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
-  document.getElementById('mapeo-body').innerHTML=entries.map(([c,{e,v}])=>{const cs=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");return `<tr><td>${c}</td><td>${e}</td><td>${v}</td><td style="white-space:nowrap"><button class="btn-del" style="background:#2563EB;margin-right:4px" title="Editar" onclick="editMapping('${cs}')">✎</button><button class="btn-del" title="Eliminar" onclick="delMapping('${cs}')">✕</button></td></tr>`;}).join('');
+  document.getElementById('mapeo-body').innerHTML=entries.map(([c,{e,v}])=>{const cs=c.replace(/\\/g,'\\\\').replace(/'/g,"\\'");return `<tr><td>${c}</td><td>${e}</td><td>${v}</td><td style="white-space:nowrap"><button class="btn-del" style="background:#0f766e;margin-right:4px" title="Contacto y ubicación" onclick="abrirContacto('${cs}')">📇</button><button class="btn-del" style="background:#2563EB;margin-right:4px" title="Editar" onclick="editMapping('${cs}')">✎</button><button class="btn-del" title="Eliminar" onclick="delMapping('${cs}')">✕</button></td></tr>`;}).join('');
   // datalist de clientes del reporte actual
   const dl=document.getElementById('client-list');
   if(dl&&DATA&&DATA.clients){dl.innerHTML=DATA.clients.map(c=>`<option value="${(c.nombre||'').replace(/"/g,'')}">`).join('');}
@@ -4410,6 +4414,33 @@ function renderBloqueadosPanel(){
   h+='</tbody></table></div></div></details>';
   box.innerHTML=h;
 }
+// ── Clientes de tu cartera SIN ubicación real guardada todavía (skan/_clienteInfo) ──
+// Ricardo pidió ver, de un vistazo, a cuáles de sus clientes YA CARGADOS todavía les falta
+// la ubicación precisa (la que se guarda con el 📇), para poder ir completándolos.
+function renderSinUbicacionPanel(){
+  var box=document.getElementById('sinubic-panel'); if(!box||!DATA)return;
+  var ci=window._clienteInfoLive||{};
+  var falt=DATA.clients.filter(function(c){var i=ci[keyp(c.nombre)];return !(i&&i.la);}).sort(function(a,b){return (b.total||0)-(a.total||0);});
+  if(!falt.length){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='';
+  var h='<details '+(PANEL_OPEN.sinubic?'open':'')+' ontoggle="PANEL_OPEN.sinubic=this.open" style="background:#10233f;border:1px solid #21406e;border-radius:10px;margin:0 0 12px">'
+   +'<summary style="cursor:pointer;padding:10px 15px;font-size:.92rem;font-weight:800;color:#93c5fd">📍 Clientes sin ubicación guardada ('+falt.length+' de '+DATA.clients.length+') <span style="font-size:.68rem;font-weight:400;color:#9fb0cc">— toca para '+(PANEL_OPEN.sinubic?'ocultar':'ver la lista')+'</span></summary>'
+   +'<div style="padding:0 15px 12px">'
+   +'<div style="font-size:.73rem;color:#9fb0cc;margin-top:3px">Toca 📇 junto a cada nombre para guardarle teléfono, correo y ubicación real (GPS o pegando coordenadas/link de Maps) — igual que ya haces con los prospectos.</div>'
+   +'<div style="overflow:auto;margin-top:9px;max-height:320px"><table style="width:100%;border-collapse:collapse;font-size:.74rem;min-width:420px"><thead><tr style="background:#14243f;color:#9fb0cc">'
+   +'<th style="padding:6px 9px;text-align:left">Cliente</th><th style="padding:6px;text-align:left">Vendedor</th><th style="padding:6px;text-align:center">¿Tel./correo?</th><th style="padding:6px;text-align:center">Acción</th></tr></thead><tbody>';
+  falt.slice(0,300).forEach(function(c){
+    var i=ci[keyp(c.nombre)]; var tieneAlgo=!!(i&&(i.tel||i.correo));
+    var cs=c.nombre.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    h+='<tr style="border-bottom:1px solid #1e293b">'
+      +'<td style="padding:5px 9px;color:#e2e8f0;font-weight:600">'+c.nombre+'</td>'
+      +'<td style="padding:5px;color:#94a3b8">'+(c.vendedor||'—')+'</td>'
+      +'<td style="padding:5px;text-align:center">'+(tieneAlgo?'✅':'—')+'</td>'
+      +'<td style="padding:5px;text-align:center"><button onclick="abrirContacto(\''+cs+'\')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:6px;padding:3px 10px;font-weight:700;font-size:.7rem;cursor:pointer">📇 Agregar</button></td></tr>';
+  });
+  h+='</tbody></table></div>'+(falt.length>300?'<div style="font-size:.68rem;color:#94a3b8;margin-top:4px">Se muestran los 300 de mayor volumen, de '+falt.length+'.</div>':'')+'</div></details>';
+  box.innerHTML=h;
+}
 function _isoHoy(){var d=new Date(),p=function(x){return ('0'+x).slice(-2);};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function _finDeMes(){var d=new Date(),f=new Date(d.getFullYear(),d.getMonth()+1,0),p=function(x){return ('0'+x).slice(-2);};
   return f.getFullYear()+'-'+p(f.getMonth()+1)+'-'+p(f.getDate());}
@@ -5304,6 +5335,9 @@ function abrirContacto(nombre){
   const ci=(window._clienteInfoLive&&window._clienteInfoLive[keyp(nombre)])||{};
   document.getElementById('ct-tel').value=ci.tel||'';
   document.getElementById('ct-correo').value=ci.correo||'';
+  document.getElementById('ct-contacto').value=ci.contacto||'';
+  document.getElementById('ct-dir').value=ci.direccion||'';
+  document.getElementById('ct-notas').value=ci.notas||'';
   document.getElementById('ct-la').value=ci.la||'';
   document.getElementById('ct-lo').value=ci.lo||'';
   document.getElementById('ct-paste').value='';
@@ -5313,7 +5347,7 @@ function abrirContacto(nombre){
   const pEl=document.getElementById('ct-pend');
   if(pEl){
     pEl.innerHTML=pend?('<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:9px;margin-bottom:8px;font-size:12.5px;color:#f4d58a">'
-      +'⏳ <b>'+(pend.propuestoPor||'un vendedor')+'</b> propone: '+[pend.tel,pend.correo,(pend.la?'ubicación nueva':'')].filter(Boolean).join(' · ')
+      +'⏳ <b>'+(pend.propuestoPor||'un vendedor')+'</b> propone: '+[pend.tel,pend.correo,pend.contacto,pend.direccion,pend.notas,(pend.la?'ubicación nueva':'')].filter(Boolean).join(' · ')
       +'<div style="display:flex;gap:8px;margin-top:6px"><button onclick="aprobarContactoPend(\''+pend.id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">✅ Aprobar</button><button onclick="rechazarContactoPend(\''+pend.id+'\')" style="background:#7c2d12;color:#fecaca;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">❌ Rechazar</button></div></div>'):'';
   }
   document.getElementById('contactoModal').style.display='flex';
@@ -5324,6 +5358,7 @@ function guardarContacto(){
   const nombre=document.getElementById('ct-nombre').value; if(!nombre)return;
   const cfg=getCloudCfg(); if(!cfg.db){alert('No hay conexión a la nube configurada.');return;}
   const body={nombre:nombre,tel:(document.getElementById('ct-tel').value||'').trim(),correo:(document.getElementById('ct-correo').value||'').trim(),
+    contacto:(document.getElementById('ct-contacto').value||'').trim(),direccion:(document.getElementById('ct-dir').value||'').trim(),notas:(document.getElementById('ct-notas').value||'').trim(),
     la:parseFloat(document.getElementById('ct-la').value)||0,lo:parseFloat(document.getElementById('ct-lo').value)||0,
     actualizadoPor:'Gerencia',actualizadoEn:new Date().toISOString()};
   const key=keyp(nombre);
@@ -5353,7 +5388,9 @@ function aprobarContactoPend(id){
   const raw=window._contactoPendLive||{}; const r=raw[id]; if(!r)return;
   const key=keyp(r.cliente);
   const actual=(window._clienteInfoLive&&window._clienteInfoLive[key])||{};
-  const merged={nombre:r.cliente,tel:r.tel||actual.tel||'',correo:r.correo||actual.correo||'',la:r.la||actual.la||0,lo:r.lo||actual.lo||0,actualizadoPor:'Gerencia (de '+(r.propuestoPor||'vendedor')+')',actualizadoEn:new Date().toISOString()};
+  const merged={nombre:r.cliente,tel:r.tel||actual.tel||'',correo:r.correo||actual.correo||'',
+    contacto:r.contacto||actual.contacto||'',direccion:r.direccion||actual.direccion||'',notas:r.notas||actual.notas||'',
+    la:r.la||actual.la||0,lo:r.lo||actual.lo||0,actualizadoPor:'Gerencia (de '+(r.propuestoPor||'vendedor')+')',actualizadoEn:new Date().toISOString()};
   const urlInfo=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
   const urlPend=cfg.db.replace(/\/$/,'')+'/skan/_contactoPend/'+id+'.json';
   skFetch(urlInfo,{method:'PUT',body:JSON.stringify(merged)}).then(function(){
@@ -5376,7 +5413,7 @@ function contactoPendPanel(){
   pend.forEach(function(id){const r=raw[id];
     h+='<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;padding:10px;margin-bottom:6px">'
       +'<div style="font-weight:700;color:#fff">'+(r.cliente||'').replace(/</g,'&lt;')+' <span style="color:#9fb0cc;font-weight:400">· propuso: '+(r.propuestoPor||'')+'</span></div>'
-      +'<div style="font-size:.74rem;color:#cbd5e1;margin:3px 0">'+[r.tel,r.correo].filter(Boolean).join(' · ')+(r.la?' · 📍 ubicación nueva':'')+'</div>'
+      +'<div style="font-size:.74rem;color:#cbd5e1;margin:3px 0">'+[r.tel,r.correo,r.contacto,r.direccion,r.notas].filter(Boolean).join(' · ')+(r.la?' · 📍 ubicación nueva':'')+'</div>'
       +'<div style="display:flex;gap:8px"><button onclick="aprobarContactoPend(\''+id+'\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-weight:800;cursor:pointer">✅ Aprobar</button><button onclick="rechazarContactoPend(\''+id+'\')" style="background:#7c2d12;color:#fecaca;border:none;border-radius:8px;padding:6px 14px;font-weight:800;cursor:pointer">❌ Rechazar</button></div>'
       +'</div>';
   });
@@ -7097,6 +7134,9 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
     <div id="ct-actual" style="font-size:.74rem;color:#7dd3fc;margin-bottom:8px"></div>
     <input id="ct-tel" placeholder="Teléfono" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
     <input id="ct-correo" placeholder="Correo" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
+    <input id="ct-contacto" placeholder="Persona de contacto" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
+    <input id="ct-dir" placeholder="Dirección" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box">
+    <textarea id="ct-notas" placeholder="Notas" rows="2" style="width:100%;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:8px;box-sizing:border-box;font-family:inherit;resize:vertical"></textarea>
     <div style="font-size:.72rem;color:#94a3b8;margin-bottom:4px">Ubicación:</div>
     <div style="margin-bottom:6px"><button type="button" onclick="usarUbicacionActual('ct')" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">📍 Usar mi ubicación</button></div>
     <div style="display:flex;gap:8px;margin-bottom:4px">

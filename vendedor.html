@@ -724,19 +724,25 @@ function contactoClienteHtml(nombre){
   const edit=(EDITCONTACTO===nombre);
   const pend=miContactoPend(nombre);
   let h='<div style="margin:10px 12px;padding:11px 13px;background:#10233f;border:1px solid #21406e;border-radius:10px">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;color:#93c5fd;font-size:13px">📇 Contacto</div><button onclick="toggleEditContacto(\''+nombre.replace(/'/g,"\\'")+'\')" style="background:none;border:none;color:#7dd3fc;font-size:12px;cursor:pointer;font-weight:700">'+(edit?'Cancelar':((ci.tel||ci.correo||ci.la)?'Proponer cambio':'+ Agregar'))+'</button></div>';
-  if(pend){h+='<div style="font-size:11.5px;color:#f4d58a;margin-top:5px">⏳ Enviaste una actualización ('+[pend.tel,pend.correo].filter(Boolean).join(' · ')+(pend.la?' · ubicación nueva':'')+') — esperando autorización de tu gerente.</div>';}
+  h+='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;color:#93c5fd;font-size:13px">📇 Contacto</div><button onclick="toggleEditContacto(\''+nombre.replace(/'/g,"\\'")+'\')" style="background:none;border:none;color:#7dd3fc;font-size:12px;cursor:pointer;font-weight:700">'+(edit?'Cancelar':((ci.tel||ci.correo||ci.la||ci.contacto||ci.direccion||ci.notas)?'Proponer cambio':'+ Agregar'))+'</button></div>';
+  if(pend){h+='<div style="font-size:11.5px;color:#f4d58a;margin-top:5px">⏳ Enviaste una actualización ('+[pend.tel,pend.correo,pend.contacto,pend.direccion,pend.notas].filter(Boolean).join(' · ')+(pend.la?' · ubicación nueva':'')+') — esperando autorización de tu gerente.</div>';}
   if(!edit){
     h+='<div style="font-size:12.5px;color:#cbd5e1;margin-top:5px">'
       +(ci.tel?('<div>📞 <a href="tel:'+ci.tel+'" style="color:#dbeafe">'+ci.tel+'</a></div>'):'')
       +(ci.correo?('<div>✉️ <a href="mailto:'+ci.correo+'" style="color:#dbeafe">'+ci.correo+'</a></div>'):'')
+      +(ci.contacto?('<div>👤 '+ci.contacto+'</div>'):'')
+      +(ci.direccion?('<div>🏠 '+ci.direccion+'</div>'):'')
+      +(ci.notas?('<div>📝 '+ci.notas+'</div>'):'')
       +(ci.la?('<div>📍 <a href="'+mapsUrl(ci.la,ci.lo,nombre)+'" target="_blank" style="color:#7dd3fc">Ver ubicación en el mapa</a></div>'):'')
-      +((!ci.tel&&!ci.correo&&!ci.la)?'<div style="color:#8792a3">Sin datos de contacto guardados todavía.</div>':'')
+      +((!ci.tel&&!ci.correo&&!ci.la&&!ci.contacto&&!ci.direccion&&!ci.notas)?'<div style="color:#8792a3">Sin datos de contacto guardados todavía.</div>':'')
       +'</div>';
   } else {
     h+='<div style="font-size:11px;color:#94a3b8;margin:6px 0">Esto queda como propuesta — tu gerente debe autorizarlo antes de que se guarde de verdad.</div>'
       +'<input id="cc-tel" placeholder="Teléfono" value="'+((pend&&pend.tel)||ci.tel||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
       +'<input id="cc-correo" placeholder="Correo" value="'+((pend&&pend.correo)||ci.correo||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
+      +'<input id="cc-contacto" placeholder="Persona de contacto" value="'+((pend&&pend.contacto)||ci.contacto||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
+      +'<input id="cc-dir" placeholder="Dirección" value="'+((pend&&pend.direccion)||ci.direccion||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
+      +'<textarea id="cc-notas" placeholder="Notas" rows="2" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px;font-family:inherit;resize:vertical">'+((pend&&pend.notas)||ci.notas||'')+'</textarea>'
       +'<button type="button" onclick="usarUbicacionActual(\'cc\')" style="width:100%;background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:8px;font-weight:700;cursor:pointer;margin-bottom:6px">📍 Usar mi ubicación actual</button>'
       +'<div style="display:flex;gap:6px;margin-bottom:5px"><input id="cc-paste" placeholder="o pega coordenadas / link de Maps" style="flex:1;min-width:0;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:7px;box-sizing:border-box"><button type="button" onclick="aplicarPegado(\'cc\')" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Usar</button></div>'
       +'<div id="cc-loc-st" style="font-size:11px;color:#9fb0cc;margin-bottom:6px"></div>'
@@ -750,6 +756,7 @@ function guardarContactoCliente(nombre){
   if(!CLOUD.db||!CLOUD.v){alert('Necesitas conexión para enviar esto.');return;}
   const id=miContactoPendId(nombre);
   const body={cliente:nombre,tel:(document.getElementById('cc-tel').value||'').trim(),correo:(document.getElementById('cc-correo').value||'').trim(),
+    contacto:(document.getElementById('cc-contacto').value||'').trim(),direccion:(document.getElementById('cc-dir').value||'').trim(),notas:(document.getElementById('cc-notas').value||'').trim(),
     la:parseFloat(document.getElementById('cc-la').value)||0,lo:parseFloat(document.getElementById('cc-lo').value)||0,
     propuestoPor:CLOUD.v,propuestoEn:new Date().toISOString(),status:'pendiente'};
   const url=CLOUD.db.replace(/\/$/,'')+'/skan/_contactoPend/'+id+'.json';
