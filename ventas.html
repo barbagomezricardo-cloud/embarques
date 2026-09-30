@@ -287,12 +287,15 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
         <select id="vnd-fil" onchange="renderClienteTable()"><option value="">Todos vendedores</option></select>
         <button onclick="document.getElementById('odoo-desc-input').click()" title="Sube el reporte de descuento comercial que calculó Odoo para compararlo contra tu programa" style="background:#1e3258;color:#7dd3fc;border:1px solid #2563EB;border-radius:6px;padding:5px 10px;font-size:.72rem;cursor:pointer;margin-left:auto">📊 Comparar con Odoo</button>
         <input type="file" id="odoo-desc-input" accept=".xlsx,.xls" style="display:none" onchange="handleOdooDescFile(this.files[0])">
+        <button onclick="document.getElementById('vcf-input-v').click()" title="Sube un archivo .vcf exportado de tus contactos para llenar teléfonos que falten" style="background:#0f766e;color:#e6fffa;border:1px solid #0d9488;border-radius:6px;padding:5px 10px;font-size:.72rem;cursor:pointer">📇 Importar contactos</button>
+        <input type="file" id="vcf-input-v" accept=".vcf,text/vcard,text/x-vcard" style="display:none" onchange="onVcardFileV(this)">
         <span id="tbl-count" style="font-size:.75rem;color:#64748b"></span>
       </div>
       <div id="esp-panel" style="display:none"></div>
       <div id="bloq-panel" style="display:none"></div>
       <div id="odoo-diff-panel" style="display:none"></div>
       <div id="sinubic-panel" style="display:none"></div>
+      <div id="vcf-review-panel-v" style="display:none"></div>
       <div class="tbl-wrap">
         <table class="dt" id="cliente-tbl">
           <thead><tr>
@@ -5379,6 +5382,87 @@ function borrarContacto(){
     if(window._clienteInfoLive)delete window._clienteInfoLive[key];
     cerrarContacto(); try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
   }).catch(function(){alert('No se pudo borrar. Revisa tu conexión.');});
+}
+function _vcNormV(s){return (s||'').toString().normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+function _vcMatchV(contactName,targetName){
+  var ak=keyp(contactName),bk=keyp(targetName);
+  if(!ak||!bk)return false;
+  if(ak===bk||ak.indexOf(bk)>=0||bk.indexOf(ak)>=0)return true;
+  var aw=_vcNormV(contactName).split(' ').filter(function(w){return w.length>=4;});
+  var bw=_vcNormV(targetName).split(' ').filter(function(w){return w.length>=4;});
+  for(var i=0;i<aw.length;i++) if(bw.indexOf(aw[i])>=0) return true;
+  return false;
+}
+function parseVCardV(text){
+  var out=[]; var cards=(text||'').split(/BEGIN:VCARD/i).slice(1);
+  cards.forEach(function(block){
+    var nm=block.match(/\nFN[^:]*:(.+)/i)||block.match(/^FN[^:]*:(.+)/i);
+    var name=nm?nm[1].trim():'';
+    if(!name){var n2=block.match(/\nN[^:]*:(.+)/i); if(n2)name=n2[1].split(';').filter(Boolean).reverse().join(' ').trim();}
+    var tels=[],re=/TEL[^:]*:([^\r\n]+)/ig,m;
+    while((m=re.exec(block))){var t=m[1].replace(/[^\d+]/g,'');if(t)tels.push(t);}
+    if(name&&tels.length)out.push({name:name,tel:tels[0]});
+  });
+  return out;
+}
+let VCARD_MATCHES_V=[];
+function onVcardFileV(input){
+  if(!reqSuper())return;
+  var f=input.files&&input.files[0]; if(!f)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    var entries=parseVCardV(String(e.target.result||''));
+    if(!entries.length){alert('No pude leer contactos de ese archivo. Revisa que sea un .vcf exportado desde Contactos.');return;}
+    var seen={},targets=[];
+    (((typeof DATA!=='undefined'&&DATA&&DATA.clients)?DATA.clients.map(function(c){return c.nombre;}):[])
+      .concat((typeof prospecAll==='function')?prospecAll().map(function(p){return p.n;}):[]))
+      .forEach(function(t){var k=keyp(t);if(!t||seen[k])return;seen[k]=true;targets.push(t);});
+    var matches=[];
+    entries.forEach(function(en){
+      for(var i=0;i<targets.length;i++){ if(_vcMatchV(en.name,targets[i])){matches.push({contacto:en.name,nombre:targets[i],tel:en.tel,on:true});break;} }
+    });
+    var box=document.getElementById('vcf-review-panel-v');
+    if(!matches.length){if(box){box.style.display='none';box.innerHTML='';}alert('No encontré coincidencias entre esos contactos y tu lista de clientes/prospectos.');return;}
+    VCARD_MATCHES_V=matches; renderVcardReviewV();
+  };
+  r.readAsText(f); input.value='';
+}
+function toggleVcardOnV(i){VCARD_MATCHES_V[i].on=!VCARD_MATCHES_V[i].on;renderVcardReviewV();}
+function cancelarVcardImportV(){VCARD_MATCHES_V=[];renderVcardReviewV();}
+function renderVcardReviewV(){
+  var box=document.getElementById('vcf-review-panel-v'); if(!box)return;
+  if(!VCARD_MATCHES_V.length){box.style.display='none';box.innerHTML='';return;}
+  var h='<div style="background:#0F1E3C;border:1px solid #1e3a6b;border-radius:8px;padding:12px;margin-bottom:12px">';
+  h+='<div style="font-weight:800;color:var(--gold);margin-bottom:4px">📇 '+VCARD_MATCHES_V.length+' coincidencia(s) encontradas</div>';
+  h+='<div style="font-size:.74rem;color:#9fb0cc;margin-bottom:8px">Desmarca los que no sean correctos. Se guardan directo en la ficha del cliente/prospecto — sólo llenan lo que falte, no pisan un teléfono que ya tenías.</div>';
+  VCARD_MATCHES_V.forEach(function(m,i){
+    h+='<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #1e293b;font-size:.78rem;color:#e2e8f0">'
+      +'<input type="checkbox" '+(m.on?'checked':'')+' onchange="toggleVcardOnV('+i+')">'
+      +'<span style="flex:1"><b>'+m.nombre+'</b><div style="color:#94a3b8;font-size:.7rem">'+m.contacto+' · '+m.tel+'</div></span></label>';
+  });
+  h+='<div style="display:flex;gap:8px;margin-top:8px"><button onclick="guardarVcardMatchesV()" style="flex:1;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar seleccionados</button><button onclick="cancelarVcardImportV()" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer">Cancelar</button></div></div>';
+  box.innerHTML=h; box.style.display='';
+}
+function guardarVcardMatchesV(){
+  if(!reqSuper())return;
+  var sel=VCARD_MATCHES_V.filter(function(m){return m.on;});
+  if(!sel.length){alert('No dejaste ninguno seleccionado.');return;}
+  var cfg=getCloudCfg(); if(!cfg.db){alert('No hay conexión a la nube configurada.');return;}
+  var ci=window._clienteInfoLive||{};
+  var proms=sel.map(function(m){
+    var key=keyp(m.nombre);
+    var actual=ci[key]||{};
+    var body={nombre:m.nombre,tel:actual.tel||m.tel,correo:actual.correo||'',contacto:actual.contacto||m.contacto||'',
+      direccion:actual.direccion||'',notas:actual.notas||'',la:actual.la||0,lo:actual.lo||0,
+      actualizadoPor:'Gerencia (importado de contactos)',actualizadoEn:new Date().toISOString()};
+    var url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo/'+key+'.json';
+    return skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){window._clienteInfoLive=window._clienteInfoLive||{};window._clienteInfoLive[key]=body;});
+  });
+  Promise.all(proms).then(function(){
+    alert('✅ '+sel.length+' contacto(s) guardado(s).');
+    VCARD_MATCHES_V=[]; renderVcardReviewV();
+    try{renderClienteTable();}catch(e){} try{renderProspec();}catch(e){}
+  }).catch(function(){alert('Algo no se pudo guardar. Revisa tu conexión e intenta de nuevo.');});
 }
 // ── Solicitudes de contacto de vendedores (skan/_contactoPend) — solo tú las autorizas ──
 function fetchContactoPendLive(){ const cfg=getCloudCfg(); if(!cfg.db)return; const url=cfg.db.replace(/\/$/,'')+'/skan/_contactoPend.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._contactoPendLive=o||{}; try{renderProspec();}catch(e){}}).catch(function(){}); }

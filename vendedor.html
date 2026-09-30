@@ -660,6 +660,117 @@ function aplicarPegado(prefix){
   if(la)la.value=r.la; if(lo)lo.value=r.lo;
   st.textContent='✅ Ubicación puesta ('+r.la.toFixed(5)+', '+r.lo.toFixed(5)+')';
 }
+// ── Traer el teléfono directo de los contactos del celular (Contact Picker) ──
+// Solo funciona en Chrome para Android (todavía no existe en iPhone/Safari ni en
+// escritorio) — si no está disponible, el botón avisa y no rompe nada.
+function contactosDisponibles(){ return !!(navigator.contacts && navigator.contacts.select && window.ContactsManager); }
+// Ladas que se pueden afirmar con certeza (capitales de estado + las metrópolis más conocidas).
+// A propósito NO se listan ladas de poblaciones chicas: es preferible no sugerir nada a sugerir
+// una ciudad equivocada.
+const LADA_ESTADO={'55':'Ciudad de México','33':'Guadalajara, Jalisco','81':'Monterrey, Nuevo León',
+ '656':'Cd. Juárez, Chihuahua','614':'Chihuahua, Chihuahua','443':'Morelia, Michoacán','664':'Tijuana, Baja California',
+ '646':'Ensenada, Baja California','686':'Mexicali, Baja California','612':'La Paz, Baja California Sur',
+ '981':'Campeche, Campeche','961':'Tuxtla Gutiérrez, Chiapas','844':'Saltillo, Coahuila','871':'Torreón, Coahuila',
+ '312':'Colima, Colima','618':'Durango, Durango','722':'Toluca, Estado de México','473':'Guanajuato, Guanajuato',
+ '477':'León, Guanajuato','747':'Chilpancingo, Guerrero','744':'Acapulco, Guerrero','771':'Pachuca, Hidalgo',
+ '777':'Cuernavaca, Morelos','311':'Tepic, Nayarit','951':'Oaxaca, Oaxaca','222':'Puebla, Puebla',
+ '442':'Querétaro, Querétaro','983':'Chetumal, Quintana Roo','998':'Cancún, Quintana Roo','444':'San Luis Potosí, San Luis Potosí',
+ '667':'Culiacán, Sinaloa','662':'Hermosillo, Sonora','993':'Villahermosa, Tabasco','834':'Cd. Victoria, Tamaulipas',
+ '867':'Nuevo Laredo, Tamaulipas','899':'Reynosa, Tamaulipas','833':'Tampico, Tamaulipas','246':'Tlaxcala, Tlaxcala',
+ '228':'Xalapa, Veracruz','999':'Mérida, Yucatán','492':'Zacatecas, Zacatecas','449':'Aguascalientes, Aguascalientes'};
+function ladaCiudad(tel){
+  var d=String(tel||'').replace(/\D/g,'').replace(/^52/,'').replace(/^1/,'');
+  if(d.length<10)return null;
+  for(var len=3;len>=2;len--){ var p=d.slice(0,len); if(LADA_ESTADO[p])return LADA_ESTADO[p]; }
+  return null;
+}
+// ── Importar contactos desde un archivo .vcf (funciona en iPhone/Safari y en cualquier
+// navegador: en Contactos, selecciona varios, Compartir → Guardar en Archivos, y sube ese
+// archivo aquí). Compara los nombres contra tu lista de clientes/prospectos y arma una lista
+// para revisar antes de enviar — nunca se guarda nada sin que tú confirmes.
+function _vcNorm(s){return (s||'').toString().normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+function _vcMatch(contactName,targetName){
+  var ak=_kp(contactName),bk=_kp(targetName);
+  if(!ak||!bk)return false;
+  if(ak===bk||ak.indexOf(bk)>=0||bk.indexOf(ak)>=0)return true;
+  var aw=_vcNorm(contactName).split(' ').filter(function(w){return w.length>=4;});
+  var bw=_vcNorm(targetName).split(' ').filter(function(w){return w.length>=4;});
+  for(var i=0;i<aw.length;i++) if(bw.indexOf(aw[i])>=0) return true;
+  return false;
+}
+function parseVCard(text){
+  var out=[]; var cards=(text||'').split(/BEGIN:VCARD/i).slice(1);
+  cards.forEach(function(block){
+    var nm=block.match(/\nFN[^:]*:(.+)/i)||block.match(/^FN[^:]*:(.+)/i);
+    var name=nm?nm[1].trim():'';
+    if(!name){var n2=block.match(/\nN[^:]*:(.+)/i); if(n2)name=n2[1].split(';').filter(Boolean).reverse().join(' ').trim();}
+    var tels=[],re=/TEL[^:]*:([^\r\n]+)/ig,m;
+    while((m=re.exec(block))){var t=m[1].replace(/[^\d+]/g,'');if(t)tels.push(t);}
+    if(name&&tels.length)out.push({name:name,tel:tels[0]});
+  });
+  return out;
+}
+let VCARD_MATCHES=[];
+function onVcardFile(input){
+  var f=input.files&&input.files[0]; if(!f)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    var entries=parseVCard(String(e.target.result||''));
+    if(!entries.length){alert('No pude leer contactos de ese archivo. Revisa que sea un .vcf exportado desde Contactos.');return;}
+    var seen={},targets=[];
+    Object.keys(CLIENTS).concat(PROSPECTS.map(function(p){return p.n;})).forEach(function(t){var k=_kp(t);if(!t||seen[k])return;seen[k]=true;targets.push(t);});
+    var matches=[];
+    entries.forEach(function(en){
+      for(var i=0;i<targets.length;i++){ if(_vcMatch(en.name,targets[i])){matches.push({contacto:en.name,nombre:targets[i],tel:en.tel,on:true});break;} }
+    });
+    if(!matches.length){alert('No encontré coincidencias entre esos contactos y tu lista de clientes/prospectos.');return;}
+    VCARD_MATCHES=matches; renderProspectos(PROSPQ);
+  };
+  r.readAsText(f); input.value='';
+}
+function toggleVcardOn(i){VCARD_MATCHES[i].on=!VCARD_MATCHES[i].on;renderProspectos(PROSPQ);}
+function cancelarVcardImport(){VCARD_MATCHES=[];renderProspectos(PROSPQ);}
+function vcardReviewHtml(){
+  if(!VCARD_MATCHES.length)return '';
+  var h='<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:10px;padding:10px;margin-bottom:10px">';
+  h+='<div style="font-weight:800;color:#93c5fd;margin-bottom:4px">📇 '+VCARD_MATCHES.length+' coincidencia(s) encontradas</div>';
+  h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:8px">Desmarca los que no sean correctos. Se envían como propuesta — tu gerente los autoriza, nunca se guardan solos.</div>';
+  VCARD_MATCHES.forEach(function(m,i){
+    h+='<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #1e293b;font-size:12.5px;color:#e2e8f0">'
+      +'<input type="checkbox" '+(m.on?'checked':'')+' onchange="toggleVcardOn('+i+')">'
+      +'<span style="flex:1"><b>'+m.nombre+'</b><div style="color:#94a3b8;font-size:11px">'+m.contacto+' · '+m.tel+'</div></span></label>';
+  });
+  h+='<div style="display:flex;gap:8px;margin-top:8px"><button onclick="enviarVcardMatches()" style="flex:1;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Enviar seleccionados</button><button onclick="cancelarVcardImport()" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer">Cancelar</button></div></div>';
+  return h;
+}
+function enviarVcardMatches(){
+  var sel=VCARD_MATCHES.filter(function(m){return m.on;});
+  if(!sel.length){alert('No dejaste ninguno seleccionado.');return;}
+  if(!CLOUD.db){alert('Necesitas conexión para enviar esto.');return;}
+  var proms=sel.map(function(m){
+    var id=miContactoPendId(m.nombre);
+    var body={cliente:m.nombre,tel:m.tel,correo:'',contacto:'',direccion:'',notas:'',propuestoPor:CLOUD.v,propuestoEn:new Date().toISOString(),status:'pendiente'};
+    var url=CLOUD.db.replace(/\/$/,'')+'/skan/_contactoPend/'+id+'.json';
+    return skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){window._contactoPendLive=window._contactoPendLive||{};window._contactoPendLive[id]=body;});
+  });
+  Promise.all(proms).then(function(){
+    alert('✅ '+sel.length+' propuesta(s) enviada(s). Tu gerente las debe autorizar.');
+    VCARD_MATCHES=[]; renderProspectos(PROSPQ);
+  }).catch(function(){alert('Algo no se pudo enviar. Revisa tu conexión e intenta de nuevo.');});
+}
+async function elegirDeContactos(telId,hintId){
+  if(!contactosDisponibles()){ alert('Tu navegador no permite elegir contactos desde aquí — esto solo funciona en Chrome para Android por ahora. Puedes copiar y pegar el teléfono a mano.'); return; }
+  try{
+    var contactos=await navigator.contacts.select(['name','tel'],{multiple:false});
+    if(!contactos||!contactos.length)return;
+    var c=contactos[0];
+    var tel=(c.tel&&c.tel[0])?String(c.tel[0]).replace(/[^\d+]/g,''):'';
+    if(!tel){alert('Ese contacto no tiene teléfono guardado.');return;}
+    var el=document.getElementById(telId); if(el)el.value=tel;
+    var st=hintId?document.getElementById(hintId):null;
+    if(st){ var loc=ladaCiudad(tel); st.textContent=loc?('📍 Lada de '+loc+' (aproximado, confírmalo)'):''; }
+  }catch(e){ /* canceló el picker o no dio permiso: no hacemos nada */ }
+}
 function altaId(){return 'a'+Date.now()+Math.random().toString(36).slice(2,7);}
 function fetchAltasLive(){ if(!CLOUD.db)return; const url=CLOUD.db.replace(/\/$/,'')+'/skan/_altas.json'; skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._altasLive=o||{}; mergeMisAltasEnProspects(); if(VIEW==='prosp')renderProspectos(PROSPQ);}).catch(function(){}); }
 function mergeMisAltasEnProspects(){
@@ -680,7 +791,9 @@ function nuevoProspectoFormHtml(prefix){
   return '<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:10px;padding:10px;margin-bottom:10px">'
    +'<div style="font-weight:800;color:#93c5fd;margin-bottom:6px">+ Registrar prospecto nuevo</div>'
    +'<input id="'+prefix+'-nombre" placeholder="Nombre del negocio o persona *" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
-   +'<input id="'+prefix+'-tel" placeholder="Teléfono" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
+   +'<div style="display:flex;gap:6px;margin-bottom:2px"><input id="'+prefix+'-tel" placeholder="Teléfono" style="flex:1;min-width:0;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px">'
+   +(contactosDisponibles()?('<button type="button" onclick="elegirDeContactos(\''+prefix+'-tel\',\''+prefix+'-ladahint\')" title="Traer el teléfono de mis contactos" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:9px 10px;font-weight:700;cursor:pointer;white-space:nowrap">📱 Contactos</button>'):(''))+'</div>'
+   +'<div id="'+prefix+'-ladahint" style="font-size:10.5px;color:#9fb0cc;margin-bottom:4px"></div>'
    +'<input id="'+prefix+'-correo" placeholder="Correo (opcional)" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
    +'<input id="'+prefix+'-ciudad" placeholder="Ciudad" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'
    +'<select id="'+prefix+'-estado" style="width:100%;box-sizing:border-box;background:#10233f;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:9px;margin-bottom:6px">'+opts+'</select>'
@@ -738,7 +851,9 @@ function contactoClienteHtml(nombre){
       +'</div>';
   } else {
     h+='<div style="font-size:11px;color:#94a3b8;margin:6px 0">Esto queda como propuesta — tu gerente debe autorizarlo antes de que se guarde de verdad.</div>'
-      +'<input id="cc-tel" placeholder="Teléfono" value="'+((pend&&pend.tel)||ci.tel||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
+      +'<div style="display:flex;gap:6px;margin-bottom:2px"><input id="cc-tel" placeholder="Teléfono" value="'+((pend&&pend.tel)||ci.tel||'')+'" style="flex:1;min-width:0;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px">'
+      +(contactosDisponibles()?('<button type="button" onclick="elegirDeContactos(\'cc-tel\',\'cc-ladahint\')" title="Traer el teléfono de mis contactos" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;white-space:nowrap">📱 Contactos</button>'):(''))+'</div>'
+      +'<div id="cc-ladahint" style="font-size:10.5px;color:#9fb0cc;margin-bottom:4px"></div>'
       +'<input id="cc-correo" placeholder="Correo" value="'+((pend&&pend.correo)||ci.correo||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
       +'<input id="cc-contacto" placeholder="Persona de contacto" value="'+((pend&&pend.contacto)||ci.contacto||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
       +'<input id="cc-dir" placeholder="Dirección" value="'+((pend&&pend.direccion)||ci.direccion||'')+'" style="width:100%;box-sizing:border-box;background:#0b1628;border:1px solid #2a3a5c;border-radius:8px;color:#fff;padding:8px;margin-bottom:6px">'
@@ -896,6 +1011,8 @@ function renderProspectos(q,filt){
   h+='<input class="search" id="pq" placeholder="Buscar prospecto o ciudad..." value="'+q.replace(/"/g,'')+'" oninput="renderProspectos(this.value)">';
   h+='<button onclick="toggleNuevoProsp()" style="width:100%;background:'+(NUEVOPROSP?'#334155':'#1e3a6b')+';color:#dbeafe;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer;margin-bottom:8px">'+(NUEVOPROSP?'✕ Cerrar':'+ Registrar prospecto nuevo')+'</button>';
   if(NUEVOPROSP)h+=nuevoProspectoFormHtml('np');
+  h+='<div style="margin-bottom:8px"><input type="file" id="vcf-input" accept=".vcf,text/vcard,text/x-vcard" style="display:none" onchange="onVcardFile(this)"><button onclick="document.getElementById(\'vcf-input\').click()" style="width:100%;background:#0f766e;color:#e6fffa;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer">📇 Importar contactos (archivo .vcf)</button><div style="font-size:11px;color:#9fb0cc;margin-top:4px">Exporta tus contactos desde la app Contactos (Compartir → Guardar en Archivos) y súbelos aquí. Tú eliges cuáles coinciden y cuáles se envían — nada se manda sin que lo confirmes.</div></div>';
+  h+=vcardReviewHtml();
   var misPend=misAltas().filter(function(a){return a.status==='pendiente';});
   if(misPend.length){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:10px;padding:9px 12px;font-size:12px;color:#f4d58a;margin-bottom:10px">⏳ Tienes '+misPend.length+' prospecto(s) esperando autorización de tu gerente.</div>';}
   if(nVis){ h+= (CLOUD.db&&CLOUD.v) ? ('<div style="background:#0f2417;border:1px solid #1a7a3f;border-radius:10px;padding:9px 12px;font-size:12px;color:#7ee2a8;margin-bottom:10px">✓ Tus visitas y notas se sincronizan solas con el gerente (en vivo).</div>') : ('<button onclick="enviarVisitas()" style="width:100%;background:#1a7a3f;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:800;margin-bottom:10px;cursor:pointer">📤 Enviar mis '+nVis+' visitas al gerente</button>'); }

@@ -684,6 +684,82 @@ function borrarContactoM(nombre){
     EDITCONTACTOM=''; showCard(nombre);
   }).catch(function(){alert('No se pudo borrar. Revisa tu conexión.');});
 }
+function _vcNormM(s){return (s||'').toString().normalize('NFKD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+function _vcMatchM(contactName,targetName){
+  var ak=keyp(contactName),bk=keyp(targetName);
+  if(!ak||!bk)return false;
+  if(ak===bk||ak.indexOf(bk)>=0||bk.indexOf(ak)>=0)return true;
+  var aw=_vcNormM(contactName).split(' ').filter(function(w){return w.length>=4;});
+  var bw=_vcNormM(targetName).split(' ').filter(function(w){return w.length>=4;});
+  for(var i=0;i<aw.length;i++) if(bw.indexOf(aw[i])>=0) return true;
+  return false;
+}
+function parseVCardM(text){
+  var out=[]; var cards=(text||'').split(/BEGIN:VCARD/i).slice(1);
+  cards.forEach(function(block){
+    var nm=block.match(/\nFN[^:]*:(.+)/i)||block.match(/^FN[^:]*:(.+)/i);
+    var name=nm?nm[1].trim():'';
+    if(!name){var n2=block.match(/\nN[^:]*:(.+)/i); if(n2)name=n2[1].split(';').filter(Boolean).reverse().join(' ').trim();}
+    var tels=[],re=/TEL[^:]*:([^\r\n]+)/ig,m;
+    while((m=re.exec(block))){var t=m[1].replace(/[^\d+]/g,'');if(t)tels.push(t);}
+    if(name&&tels.length)out.push({name:name,tel:tels[0]});
+  });
+  return out;
+}
+let VCARD_MATCHES_M=[];
+function onVcardFileM(input){
+  if(!M_SUPER){alert('Activa el modo edición (🔓) con la contraseña de super-usuario primero.');return;}
+  var f=input.files&&input.files[0]; if(!f)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    var entries=parseVCardM(String(e.target.result||''));
+    if(!entries.length){alert('No pude leer contactos de ese archivo. Revisa que sea un .vcf exportado desde Contactos.');return;}
+    var seen={},targets=[];
+    Object.values(CLIENTS).map(function(c){return c.nombre;}).concat(PROSPECTS.map(function(p){return p.n;})).forEach(function(t){var k=keyp(t);if(!t||seen[k])return;seen[k]=true;targets.push(t);});
+    var matches=[];
+    entries.forEach(function(en){
+      for(var i=0;i<targets.length;i++){ if(_vcMatchM(en.name,targets[i])){matches.push({contacto:en.name,nombre:targets[i],tel:en.tel,on:true});break;} }
+    });
+    if(!matches.length){alert('No encontré coincidencias entre esos contactos y tu lista de clientes/prospectos.');return;}
+    VCARD_MATCHES_M=matches; renderProspectos(PROSPQ);
+  };
+  r.readAsText(f); input.value='';
+}
+function toggleVcardOnM(i){VCARD_MATCHES_M[i].on=!VCARD_MATCHES_M[i].on;renderProspectos(PROSPQ);}
+function cancelarVcardImportM(){VCARD_MATCHES_M=[];renderProspectos(PROSPQ);}
+function vcardReviewHtmlM(){
+  if(!VCARD_MATCHES_M.length)return '';
+  var h='<div style="background:#0b1628;border:1px solid #2a3a5c;border-radius:10px;padding:10px;margin-bottom:10px">';
+  h+='<div style="font-weight:800;color:#93c5fd;margin-bottom:4px">📇 '+VCARD_MATCHES_M.length+' coincidencia(s) encontradas</div>';
+  h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:8px">Desmarca los que no sean correctos. Se guardan directo en la ficha del cliente/prospecto (no pisan un teléfono que ya tenías, sólo llenan lo que falte).</div>';
+  VCARD_MATCHES_M.forEach(function(m,i){
+    h+='<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #1e293b;font-size:12.5px;color:#e2e8f0">'
+      +'<input type="checkbox" '+(m.on?'checked':'')+' onchange="toggleVcardOnM('+i+')">'
+      +'<span style="flex:1"><b>'+m.nombre+'</b><div style="color:#94a3b8;font-size:11px">'+m.contacto+' · '+m.tel+'</div></span></label>';
+  });
+  h+='<div style="display:flex;gap:8px;margin-top:8px"><button onclick="guardarVcardMatchesM()" style="flex:1;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">Guardar seleccionados</button><button onclick="cancelarVcardImportM()" style="background:#334155;color:#dbeafe;border:none;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer">Cancelar</button></div></div>';
+  return h;
+}
+function guardarVcardMatchesM(){
+  if(!M_SUPER){alert('Activa el modo edición (🔓) con la contraseña de super-usuario primero.');return;}
+  var sel=VCARD_MATCHES_M.filter(function(m){return m.on;});
+  if(!sel.length){alert('No dejaste ninguno seleccionado.');return;}
+  var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');
+  var ci=window._clienteInfoLive||{};
+  var proms=sel.map(function(m){
+    var key=keyp(m.nombre);
+    var actual=ci[key]||{};
+    var body={nombre:m.nombre,tel:actual.tel||m.tel,correo:actual.correo||'',contacto:actual.contacto||m.contacto||'',
+      direccion:actual.direccion||'',notas:actual.notas||'',la:actual.la||0,lo:actual.lo||0,
+      actualizadoPor:'Gerencia (importado de contactos)',actualizadoEn:new Date().toISOString()};
+    var url=base+'/skan/_clienteInfo/'+key+'.json';
+    return skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){window._clienteInfoLive=window._clienteInfoLive||{};window._clienteInfoLive[key]=body;});
+  });
+  Promise.all(proms).then(function(){
+    alert('✅ '+sel.length+' contacto(s) guardado(s).');
+    VCARD_MATCHES_M=[]; renderProspectos(PROSPQ);
+  }).catch(function(){alert('Algo no se pudo guardar. Revisa tu conexión e intenta de nuevo.');});
+}
 function aprobarContactoPendM(id){
   if(!M_SUPER){alert('Activa el modo edición (🔓) primero.');return;}
   var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).replace(/\/$/,'');
@@ -850,6 +926,8 @@ function renderProspectos(q,filt){
     if(M_SUPER){
       h+='<div style="margin-top:6px"><button onclick="toggleNuevoProspM()" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer">'+(NUEVOPROSPM?'Cancelar':'+ Registrar prospecto nuevo')+'</button></div>';
       if(NUEVOPROSPM)h+='<div style="margin-top:8px">'+nuevoProspectoFormHtmlM('mnp')+'</div>';
+      h+='<div style="margin-top:8px"><input type="file" id="vcf-input-m" accept=".vcf,text/vcard,text/x-vcard" style="display:none" onchange="onVcardFileM(this)"><button onclick="document.getElementById(\'vcf-input-m\').click()" style="background:#0f766e;color:#e6fffa;border:none;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer">📇 Importar contactos (archivo .vcf)</button></div>';
+      h+=vcardReviewHtmlM();
     }
     h+='</div>';
   })();
