@@ -552,6 +552,12 @@ const TIER_ICONS = {"DIAMANTE":"💎","PLATINO":"🥇","ORO":"🏅","PLATA":"�
 const TIER_KEY   = {"DIAMANTE":"DIAMANTE","PLATINO":"PLATINO","ORO":"ORO","PLATA":"PLATA","BRONCE":"BRONCE"};
 const PREMIUM_RE = /PREMIUM/i;
 const GATO_RE = /SILVER\s*CAT\s*15/i;           // Silver Cat 15 kg (04MAS006) cuenta como premium para el bono, por default
+// Código que Odoo ya nombra "PROMOCION ..." / "BONIFICACION ..." como renglón normal del pivote de
+// producto (un regalo capturado ahí, NO por la hoja de regalos aparte que arma promoProd/promoProdMes)
+// — no es venta real, así que un análisis de "qué le estoy vendiendo al cliente" (mezcla, margen por
+// saco, etc.) debe excluirlo, igual que la pestaña "cierre de mes" ya lo categoriza aparte.
+const PROMOBONO_RE = /PROMOCION|BONIFICACION/i;
+const esPromoBonoProd = n => PROMOBONO_RE.test(String(n||''));
 // ══ CATÁLOGO DE PRODUCTOS (editable) ══════════════════════════════════════════
 // Antes esto solo se podía tocar editando el código: qué cuenta para el promedio/nivel del
 // cliente (qualMes → promMes → nivel → descuento) y qué cuenta como "Mix Premium" para el
@@ -568,7 +574,13 @@ function prodQualifica(nombreProd){
 function esPremiumProd(nombreProd){
   var o=getProdCfg()[_prodKeyN(nombreProd)];
   if(o && typeof o.prem==='boolean') return o.prem;
-  return PREMIUM_RE.test(nombreProd) || GATO_RE.test(nombreProd);   // default: el criterio de siempre
+  // Odoo escribe el saco de 15 kg como "SILVER CAT 15" o "SILVER KAT 15" indistintamente — es el
+  // mismo alias que _famKey ya normaliza para encontrarle el costo (ver el comentario ahí). Sin
+  // normalizarlo aquí también, GATO_RE solo detectaba la mitad de las veces, y ese saco se perdía
+  // del mix premium, del bono Premium+ y del 3% base del descuento cada vez que Odoo lo exportaba
+  // como "KAT" en vez de "CAT".
+  var nn=String(nombreProd||'').toUpperCase().replace(/KAT/g,'CAT');
+  return PREMIUM_RE.test(nn) || GATO_RE.test(nn);   // default: el criterio de siempre
 }
 const isPremiumPlus = n => esPremiumProd(n);
 const PETFOOD_RE = /PET\s*FOOD/i;
@@ -3045,10 +3057,21 @@ function renderRentabilidad(){
     }
     const baseSet=new Set(baseMs), recSet=new Set(recMs);
     function bucketStats(monthSet){
-      let premSac=0,premRev=0,premCost=0,noSac=0,noRev=0,noCost=0,totalSacTodos=0;
+      // premSac/noSac (y por lo tanto mixPct) son el VOLUMEN real vendido — cuentan todo código
+      // vendido, tenga o no costo capturado en el catálogo. premSacCosted/noSacCosted son el
+      // subconjunto CON costo capturado, y son el denominador correcto para el margen por saco:
+      // antes el margen dividía entre premSac/noSac (todos los sacos) pero solo sumaba ingreso/costo
+      // de los que sí tenían costo mapeado, así que si algún código premium o del resto del
+      // portafolio no estaba en el catálogo de costos, el margen por saco salía diluido/más bajo
+      // de lo real sin avisar.
+      let premSac=0,premSacCosted=0,premRev=0,premCost=0,noSac=0,noSacCosted=0,noRev=0,noCost=0,totalSacTodos=0;
       DATA.clients.forEach(c=>{
         const pm=c.prodMes||{}, pmv=pmvOf(c);
         for(const p in pm){
+          // Un código ya nombrado "PROMOCION ..." / "BONIFICACION ..." en el pivote normal es un
+          // regalo, no una venta — no debe contar para medir qué le estás vendiendo de verdad al
+          // cliente (ni para el mix ni para el margen).
+          if(esPromoBonoProd(p))continue;
           const mo=pm[p], mv=pmv[p]||{};
           let sac=0,real=0;
           for(const m in mo){ if(!monthSet.has(+m))continue; sac+=mo[m]||0; real+=mv[m]||0; }
@@ -3056,14 +3079,14 @@ function renderRentabilidad(){
           totalSacTodos+=sac;
           const esP=isPremiumPlus(p), cc=CM[_famKey(p)];
           const rev=_tieneRealRENT?real:(cc?sac*cc.precio:0), cost=cc?sac*cc.costo:0;
-          if(esP){ premSac+=sac; if(cc){premRev+=rev;premCost+=cost;} }
-          else { noSac+=sac; if(cc){noRev+=rev;noCost+=cost;} }
+          if(esP){ premSac+=sac; if(cc){premSacCosted+=sac;premRev+=rev;premCost+=cost;} }
+          else { noSac+=sac; if(cc){noSacCosted+=sac;noRev+=rev;noCost+=cost;} }
         }
       });
       return {premSac,premRev,premCost,noSac,noRev,noCost,totalSacTodos,
         mixPct: totalSacTodos>0?premSac/totalSacTodos*100:0,
-        margPremSac: (premSac>0&&premRev>0)?(premRev-premCost)/premSac:null,
-        margNoSac: (noSac>0&&noRev>0)?(noRev-noCost)/noSac:null};
+        margPremSac: premSacCosted>0?(premRev-premCost)/premSacCosted:null,
+        margNoSac: noSacCosted>0?(noRev-noCost)/noSacCosted:null};
     }
     const B=bucketStats(baseSet), R=bucketStats(recSet);
     const nomB=baseMs.map(m=>MES_NOM[m]).join('-'), nomR=recMs.map(m=>MES_NOM[m]).join('-');
