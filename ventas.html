@@ -1095,7 +1095,15 @@ function processPivot(rows,fname){
         promoCliProdMes[cli][_pn][mes]=(promoCliProdMes[cli][_pn][mes]||0)+val; }
       if(mes>0){const kgm=(prodTxt.toUpperCase().match(/(\d+(?:\.\d+)?)\s*KG/g)||[]).slice(-1)[0];promoMesTon[mes]=(promoMesTon[mes]||0)+val*(kgm?parseFloat(kgm):25)/1000;}
     };
-    const prodInfo=(t)=>{const mp=t.match(/\[(\S+)\]/);if(!mp)return null;const code=mp[1].toUpperCase();return {es04:t.toUpperCase().includes('04MAS'),promo:/[PB]\d*$/.test(code),name:t.split(']').slice(1).join(']').trim()};};
+    // Un renglón es "regalo" (promo/bonificación) si su CÓDIGO trae el sufijo P/B de siempre, O si
+    // su NOMBRE ya viene como "PROMOCION ..." / "BONIFICACION ..." aunque el código no cambie —
+    // Odoo exporta ambas formas (ver el comentario de _famKey más abajo, que ya limpiaba ese prefijo
+    // del nombre para encontrarle el costo, pero solo DESPUÉS de que el renglón ya hubiera entrado
+    // por el camino de regalo). Antes, un renglón con nombre "PROMOCION ..."/"BONIFICACION ..." pero
+    // código SIN el sufijo P/B cola por 'fin' como si fuera venta real: contaba como compra para el
+    // promedio/nivel del cliente (inflando su descuento) y como ingreso real en Rentabilidad — un
+    // regalo pagando descuento y margen que nunca fue venta.
+    const prodInfo=(t)=>{const mp=t.match(/\[(\S+)\]/);if(!mp)return null;const code=mp[1].toUpperCase();const name=t.split(']').slice(1).join(']').trim();return {es04:t.toUpperCase().includes('04MAS'),promo:/[PB]\d*$/.test(code)||PROMOBONO_RE.test(name),name:name};};
     for(let i=2;i<rows.length;i++){
       const c0=rows[i][0];const val=parseFloat(rows[i][colVal])||0;
       const monto=colMonto>=0?(parseFloat(rows[i][colMonto])||0):0;
