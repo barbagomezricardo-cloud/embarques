@@ -2682,20 +2682,23 @@ function buildCierreMes(mes){
   CIERRE_CATS.forEach(c=>porCat[c.key].prods.sort((a,b)=>Math.abs(b.sin)-Math.abs(a.sin)||Math.abs(b.sacos)-Math.abs(a.sacos)));
   // La cascada se arma EN PARALELO en $ y en piezas (sacos) — Ricardo cuadra las dos cosas a la vez
   // contra Odoo, no solo el dinero. "Salidas Odoo (general)" es la suma de TODO lo categorizado
-  // excepto el renglón de descuento, más la MAGNITUD del descuento (igual que Ricardo arma su
+  // excepto el renglón de descuento, más la MAGNITUD del descuento — igual que Ricardo arma su
   // tabla a mano: ahí el descuento aparece como un renglón más, en positivo, dentro del total
-  // general, y se resta explícito más abajo junto con maniobra y costal vacío). OJO: el descuento
-  // NO debe restarse dos veces — antes esta función lo excluía del total general (restando el
-  // Subtotal ANTES del descuento) Y LUEGO lo volvía a restar en la cascada, lo que dejaba "Salidas
-  // Odoo (real)" y todo lo de abajo exactamente $707 más bajo de lo que de verdad cuadra contra Odoo.
-  const dsc=porCat.descuento.sin, dscSacos=porCat.descuento.sacos;   // viene negativo (o 0)
+  // general, y se resta explícito más abajo junto con maniobra y costal vacío.
+  // OJO con el signo: el renglón "Descuento s/ venta" puede llegar en + o en − según cómo lo haya
+  // exportado Odoo ese mes (no es un convenio fijo) — por eso aquí SIEMPRE se usa su magnitud
+  // (Math.abs), nunca su signo crudo. Una versión anterior asumía que siempre venía negativo y
+  // restaba dos veces (o, cuando en realidad venía positivo, lo sumaba donde debía restarlo),
+  // dejando "Salidas Odoo (general)" y todo lo de abajo cientos de pesos fuera de lo que de
+  // verdad cuadra contra Odoo. Usar la magnitud evita que el signo de Odoo rompa la cascada.
+  const dscAbs=Math.abs(porCat.descuento.sin), dscSacosAbs=Math.abs(porCat.descuento.sacos);
   const S=CIERRE_CATS.filter(c=>c.key!=='descuento').reduce((a,c)=>a+porCat[c.key].sin,0);
   const Ssacos=CIERRE_CATS.filter(c=>c.key!=='descuento').reduce((a,c)=>a+porCat[c.key].sacos,0);
-  const salidasGeneral=S-dsc, totalSacosGeneral=Ssacos-dscSacos;
+  const salidasGeneral=S+dscAbs, totalSacosGeneral=Ssacos+dscSacosAbs;
   const wf=[]; let acc=salidasGeneral, accS=totalSacosGeneral;
   wf.push({label:'Salidas Odoo (general)',val:salidasGeneral,sacos:totalSacosGeneral,total:true});
   ['maniobra','costalvacio'].forEach(k=>{ const g=porCat[k]; if(g.sin||g.sacos){ wf.push({label:'− '+CIERRE_CATS.find(c=>c.key===k).label,val:-g.sin,sacos:-g.sacos}); acc-=g.sin; accS-=g.sacos; } });
-  if(dsc||dscSacos){ wf.push({label:'− Descuento s/ venta',val:dsc,sacos:dscSacos}); acc+=dsc; accS+=dscSacos; }
+  if(dscAbs||dscSacosAbs){ wf.push({label:'− Descuento s/ venta',val:-dscAbs,sacos:-dscSacosAbs}); acc-=dscAbs; accS-=dscSacosAbs; }
   wf.push({label:'= Salidas Odoo (real)',val:acc,sacos:accS,total:true});
   if(porCat.pecuario.sin||porCat.pecuario.sacos){ wf.push({label:'− Producto pecuario (no pet food)',val:-porCat.pecuario.sin,sacos:-porCat.pecuario.sacos}); acc-=porCat.pecuario.sin; accS-=porCat.pecuario.sacos; }
   wf.push({label:'= Salidas solo pet food',val:acc,sacos:accS,total:true});
@@ -2704,7 +2707,7 @@ function buildCierreMes(mes){
   wf.push({label:'= Venta real solo pet food (04MAS)',val:acc,sacos:accS,total:true});
   return {mes,porCat,wf,salidasGeneral,salidasGeneralSacos:totalSacosGeneral,ventaRealPetfood:acc,ventaRealPetfoodSacos:accS,petfoodDirecto:porCat.petfood.sin,petfoodDirectoSacos:porCat.petfood.sacos,otrosCount:porCat.otros.prods.length,otrosMonto:porCat.otros.sin,otrosSacos:porCat.otros.sacos};
 }
-let CIERRE_MES=0;
+let CIERRE_MES=0, CIERRE_EDIT_OPEN=false;
 function cierreMesActivo(){if(CIERRE_MES&&DATA.meses&&DATA.meses.indexOf(CIERRE_MES)>=0)return CIERRE_MES;return (DATA.meses&&DATA.meses.length)?DATA.meses[DATA.meses.length-1]:0;}
 function cierreSetMes(v){CIERRE_MES=parseInt(v,10)||0;renderCierreMes();}
 
@@ -3128,7 +3131,7 @@ function renderCierreMes(){
   h+='</div>';
   if(R.otrosCount>0)h+='<div style="background:#2a1213;border:1px solid #7c2d12;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:.74rem;color:#fecaca">⚠ Hay <b>'+R.otrosCount+' producto'+(R.otrosCount>1?'s':'')+'</b> sin clasificar ('+fmt(R.otrosSacos)+' pz · '+_money(R.otrosMonto)+') — revísalos en la tabla de abajo antes de confiar en el total de "Venta real solo pet food".</div>';
   // tabla editable por producto, agrupada por categoría
-  h+='<details style="margin-top:6px"><summary style="cursor:pointer;font-weight:800;color:var(--gold);font-size:.82rem">⚙ Ver y corregir la categoría de cada producto ('+mesL(mes)+')</summary>';
+  h+='<details '+(CIERRE_EDIT_OPEN?'open':'')+' ontoggle="CIERRE_EDIT_OPEN=this.open" style="margin-top:6px"><summary style="cursor:pointer;font-weight:800;color:var(--gold);font-size:.82rem">⚙ Ver y corregir la categoría de cada producto ('+mesL(mes)+')</summary>';
   h+='<div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:620px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:5px 7px">Producto</th><th style="text-align:right">Piezas (sacos)</th><th style="text-align:right">$ sin IVA</th><th style="text-align:left;padding-left:10px">Categoría</th><th></th></tr></thead><tbody>';
   const catOpts=cat=>CIERRE_CATS.map(c=>'<option value="'+c.key+'"'+(c.key===cat?' selected':'')+'>'+c.label+'</option>').join('');
   CIERRE_CATS.forEach(c=>{
