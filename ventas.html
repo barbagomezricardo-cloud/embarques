@@ -2691,7 +2691,28 @@ function buildCierreMes(mes){
   // restaba dos veces (o, cuando en realidad venía positivo, lo sumaba donde debía restarlo),
   // dejando "Salidas Odoo (general)" y todo lo de abajo cientos de pesos fuera de lo que de
   // verdad cuadra contra Odoo. Usar la magnitud evita que el signo de Odoo rompa la cascada.
-  const dscAbs=Math.abs(porCat.descuento.sin), dscSacosAbs=Math.abs(porCat.descuento.sacos);
+  // Además: categorizar por NOMBRE de producto solo encuentra los renglones que Odoo llamó
+  // literalmente "Descuento s/venta" — pero el programa también mete notas de crédito/ajustes
+  // negativos bajo el nombre de OTROS productos, que esa categorización por nombre nunca ve (se
+  // quedan clasificados como pet food, pecuario, etc., con su signo negativo adentro). DATA.todosMesDesc
+  // ya suma, renglón por renglón, TODO lo negativo del mes sin importar el nombre del producto — es
+  // la misma fuente que usa el cuadro "Referencia" de la pestaña Rentabilidad para cuadrar contra
+  // Odoo, y es la que de verdad cuadra. Por eso aquí se usa ESA cifra para el $ del descuento de la
+  // cascada (y del Excel), y lo que no alcanzó a explicar la categorización por nombre se deja como
+  // un renglón de "Ajuste de cuadre" en el detalle, para que la tabla de abajo siga sumando exacto.
+  const dscPorNombreAbs=Math.abs(porCat.descuento.sin), dscSacosAbs=Math.abs(porCat.descuento.sacos);
+  const _descRealMes=(DATA.todosMesDesc||{})[mes];
+  const _descBasis=DATA.tieneSubtotalSinIva?'sinIva':'conIva';
+  const _descRealAbs=_descRealMes?Math.abs(_descRealMes[_descBasis]||0):null;
+  const dscAbs=(_descRealAbs!=null)?_descRealAbs:dscPorNombreAbs;
+  if(_descRealAbs!=null){
+    const ajuste=dscAbs-dscPorNombreAbs;
+    if(Math.abs(ajuste)>0.5){
+      const signo=porCat.descuento.sin<0?-1:1;
+      porCat.descuento.prods.push({nombre:'Ajuste de cuadre (otras notas de crédito / renglones negativos sin nombre "Descuento…", según el total real de Odoo)',sin:Math.round(signo*ajuste*100)/100,sacos:0,auto:'descuento',manual:false});
+      porCat.descuento.sin+=signo*ajuste;
+    }
+  }
   const S=CIERRE_CATS.filter(c=>c.key!=='descuento').reduce((a,c)=>a+porCat[c.key].sin,0);
   const Ssacos=CIERRE_CATS.filter(c=>c.key!=='descuento').reduce((a,c)=>a+porCat[c.key].sacos,0);
   const salidasGeneral=S+dscAbs, totalSacosGeneral=Ssacos+dscSacosAbs;
@@ -2791,6 +2812,24 @@ function renderRentabilidad(){
   }
   const TGM=TR-TC;
   const _mk=Object.keys(MM).map(Number).sort((a,b)=>a-b);
+  // El costo de descuento % de cada mes (o.disc) hasta aquí es MODELADO: % vigente del cliente ×
+  // su venta. El renglón que Odoo de verdad aplicó (notas de crédito "Descuento s/venta" y
+  // similares) no viene separado por cliente en el reporte, así que solo es exacto contra el total
+  // COMPLETO del mes — por eso aquí se reemplaza o.disc por ese $ real (DATA.todosMesDesc, la misma
+  // fuente que ya usa el cuadro "Referencia" de abajo y que usa el Excel de "cierre de mes") SOLO
+  // cuando no hay filtro de Vendedor/Estado activo; con un filtro activo se deja el modelado, porque
+  // mezclar venta filtrada con un descuento del reporte completo dejaría de cuadrar. Así el costo de
+  // arriba, el margen NETO y el Excel de cierre de mes quedan alineados al mismo número real.
+  const _descBasisRent=DATA.tieneSubtotalSinIva?'sinIva':'conIva';
+  const _sinFiltroRent=!RENT_VF&&!RENT_EST;
+  let _usoDescReal=false;
+  if(_sinFiltroRent){
+    _mk.forEach(m=>{
+      if(m<MDESC)return;
+      const d=(DATA.todosMesDesc||{})[m];
+      if(d){ const real=Math.abs(d[_descBasisRent]||0); MM[m].discModelado=MM[m].disc; MM[m].disc=real; _usoDescReal=true; }
+    });
+  }
   // a = periodo de REGALO (antes de MDESC, solo sacos) · n = periodo de DESCUENTO % (desde MDESC).
   // OJO: desde MDESC el costo de un mes es sacos regalados + descuento %, LOS DOS SUMADOS — no
   // uno u otro. Antes esta cuenta solo tomaba o.disc desde MDESC y tiraba o.pcost a la basura,
@@ -2847,23 +2886,31 @@ function renderRentabilidad(){
   // El pivote que subes trae, renglón por renglón, un movimiento "Descuento s/ venta" (negativo)
   // por documento — es el $ que Odoo YA aplicó de verdad en la factura/nota de crédito, y por eso
   // contempla todo lo que ese renglón contempla (ajustes, redondeos, lo que se haya capturado ahí).
-  // nDiscDado de arriba es un cálculo aparte y más simple: % vigente de cada cliente × su venta,
-  // mes por mes — puede no coincidir peso por peso con lo que Odoo aplicó. Se usa solo como
-  // referencia/cruce aquí abajo, nunca entra en ningún cálculo del tablero. Ese renglón de Odoo
-  // no viene separado por cliente, así que es el total DEL REPORTE COMPLETO — con un filtro de
-  // Vendedor/Estado activo arriba, la comparación deja de ser exacta (se avisa en ese caso).
+  // Sin filtro de Vendedor/Estado, el costo de arriba (💳 Descuento %) YA ES este $ real (ver el
+  // reemplazo de o.disc más arriba) — es el mismo que descarga el Excel de "cierre de mes", así que
+  // ambos reportes quedan alineados al mismo número. Con un filtro activo no se puede: ese renglón
+  // de Odoo no viene separado por cliente, así que no se puede filtrar, y aquí se avisa de eso y se
+  // usa el % modelado (vigente de cada cliente × su venta) solo como respaldo.
   {
     const _tmd=DATA.todosMesDesc||{};
     const _basis=DATA.tieneSubtotalSinIva?'sinIva':'conIva';
-    let _odooDisc=0,_tieneOdooDisc=false;
-    mesesN.forEach(m=>{const d=_tmd[m];if(d&&d[_basis]){_odooDisc+=Math.abs(d[_basis]);_tieneOdooDisc=true;}});
+    let _odooDisc=0,_tieneOdooDisc=false,_modelado=0,_tieneModelado=false;
+    mesesN.forEach(m=>{
+      const d=_tmd[m];if(d&&d[_basis]){_odooDisc+=Math.abs(d[_basis]);_tieneOdooDisc=true;}
+      const o=MM[m];if(o&&typeof o.discModelado==='number'){_modelado+=o.discModelado;_tieneModelado=true;}
+    });
     if(_tieneOdooDisc){
-      const _dif=nDiscDado-_odooDisc,_difPct=_odooDisc>0?(_dif/_odooDisc*100):0,_cerca=Math.abs(_difPct)<=5;
-      h+='<div style="background:#0F1E3C;border:1px solid #2563EB;border-radius:10px;padding:11px 14px;margin-bottom:4px;font-size:.78rem;color:#cbd5e1">'
-        +'🧾 <b>Referencia — descuento real aplicado según Odoo</b> ('+rangoN+'): tu reporte ya trae, renglón por renglón, cuánto se aplicó de verdad de descuento — Odoo aplicó <b style="color:#7dd3fc">'+_money(_odooDisc)+'</b>'+(DATA.tieneSubtotalSinIva?' (sin IVA)':' (con IVA)')+'. '
-        +'Tu costo calculado arriba (💳 Descuento %) es <b>'+_money(nDiscDado)+'</b>, una diferencia de <b style="color:'+(_cerca?'#4ade80':'#f87171')+'">'+(_dif>=0?'+':'')+_money(_dif)+' ('+(_difPct>=0?'+':'')+_difPct.toFixed(1)+'%)</b>'+(_cerca?' — están cerca.':' — vale la pena revisar por qué difieren tanto.')+'</div>';
-      if(RENT_VF||RENT_EST)h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:16px">⚠ Este total de Odoo es del reporte COMPLETO (ese renglón no viene separado por cliente), así que no respeta los filtros de Vendedor/Estado de arriba — la comparación es menos exacta con un filtro activo.</div>';
-      else h+='<div style="margin-bottom:16px"></div>';
+      if(_usoDescReal){
+        h+='<div style="background:#0F1E3C;border:1px solid #2563EB;border-radius:10px;padding:11px 14px;margin-bottom:16px;font-size:.78rem;color:#cbd5e1">'
+          +'🧾 <b>Descuento % ('+rangoN+') ya es el real aplicado según Odoo</b>: <b style="color:#7dd3fc">'+_money(_odooDisc)+'</b>'+(DATA.tieneSubtotalSinIva?' (sin IVA)':' (con IVA)')+', renglón por renglón de tu propio reporte — es el mismo $ que descarga el Excel de "cierre de mes", así que ambos quedan alineados.'
+          +(_tieneModelado?' Calculado solo con el % vigente de cada cliente (sin ver lo que Odoo de verdad aplicó) habría salido <b>'+_money(_modelado)+'</b>, <b style="color:'+(Math.abs(_odooDisc-_modelado)<=_odooDisc*0.05?'#4ade80':'#f87171')+'">'+(_odooDisc-_modelado>=0?'+':'')+_money(_odooDisc-_modelado)+'</b> de diferencia — esa diferencia son ajustes, redondeos o notas de crédito que el % por cliente no ve. Esa estimación por % sigue usándose, sin cambios, en el desglose por cliente de abajo (no hay forma de repartir el renglón real de Odoo cliente por cliente).':'')+'</div>';
+      } else {
+        const _dif=nDiscDado-_odooDisc,_difPct=_odooDisc>0?(_dif/_odooDisc*100):0,_cerca=Math.abs(_difPct)<=5;
+        h+='<div style="background:#0F1E3C;border:1px solid #2563EB;border-radius:10px;padding:11px 14px;margin-bottom:4px;font-size:.78rem;color:#cbd5e1">'
+          +'🧾 <b>Referencia — descuento real aplicado según Odoo</b> ('+rangoN+'): tu reporte ya trae, renglón por renglón, cuánto se aplicó de verdad de descuento — Odoo aplicó <b style="color:#7dd3fc">'+_money(_odooDisc)+'</b>'+(DATA.tieneSubtotalSinIva?' (sin IVA)':' (con IVA)')+'. '
+          +'Tu costo calculado arriba (💳 Descuento %) es <b>'+_money(nDiscDado)+'</b>, una diferencia de <b style="color:'+(_cerca?'#4ade80':'#f87171')+'">'+(_dif>=0?'+':'')+_money(_dif)+' ('+(_difPct>=0?'+':'')+_difPct.toFixed(1)+'%)</b>'+(_cerca?' — están cerca.':' — vale la pena revisar por qué difieren tanto.')+'</div>';
+        h+='<div style="font-size:.68rem;color:#64748b;margin-bottom:16px">⚠ Con un filtro de Vendedor/Estado activo, el costo de arriba usa el % modelado (ese renglón de Odoo no viene separado por cliente, así que no se puede filtrar) — quita los filtros para ver el $ real aplicado, igual que el Excel de "cierre de mes".</div>';
+      }
     }
   }
 
@@ -2878,7 +2925,10 @@ function renderRentabilidad(){
       const o=MM[m], nuevo=(m>=MDESC);
       const dado=o.pcost+o.disc;   // costo total del mes: sacos regalados + descuento %, lo que se haya dado de cada uno
       const pctD=o.rev>0?dado/o.rev*100:0;
-      const descProm=o.rev>0?o.descW/o.rev:0;
+      // Si este mes ya usa el $ real de Odoo (o.discModelado quedó guardado al reemplazar o.disc),
+      // el % que se muestra es el % EFECTIVO real (o.disc/o.rev) para que cuadre con el $ de la
+      // misma fila; si no, es el % vigente promedio ponderado por cliente (modelado, como antes).
+      const descProm=o.rev>0?(typeof o.discModelado==='number'?o.disc/o.rev*100:o.descW/o.rev):0;
       const bRuta=o.rev-o.cost, bRutaPct=o.rev>0?bRuta/o.rev*100:0;
       const neto=bRuta-dado, netoPct=o.rev>0?neto/o.rev*100:0;
       const col=pctD<=3?'#4ade80':(pctD<=5?'#fbbf24':'#f87171');
@@ -2946,7 +2996,8 @@ function renderRentabilidad(){
     h+='<details '+(PANEL_OPEN.rentDesc?'open':'')+' ontoggle="PANEL_OPEN.rentDesc=this.open" style="margin:18px 0 6px">';
     h+='<summary style="cursor:pointer;font-weight:800;color:#cbd5e1">💳 Clientes con costo de descuento % este periodo ('+rangoN+') <span style="font-weight:400;color:#64748b">— '+conDesc.length+' clientes, -'+_money(totDesc)+' en total — toca para '+(PANEL_OPEN.rentDesc?'ocultar':'ver la lista')+'</span></summary>';
     h+='<div style="padding-top:6px">';
-    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Si alguno de estos NO recibe realmente el % — está bloqueado en Odoo y en su lugar le das promoción/bonificación, no siempre — bloquéalo aquí: sale de esta lista y del costeo de arriba al instante.</div>';
+    h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Si alguno de estos NO recibe realmente el % — está bloqueado en Odoo y en su lugar le das promoción/bonificación, no siempre — bloquéalo aquí: sale de esta lista y del costeo de arriba al instante.</div>'
+      +(_usoDescReal?'<div style="font-size:.68rem;color:#64748b;margin-bottom:8px">ℹ Esta lista reparte el costo por el % vigente de cada cliente (modelado) — es la única forma de verlo cliente por cliente, porque el renglón real de Odoo no viene separado por cliente. El $ de arriba (💳 Descuento %) ya es el real aplicado, así que el total de esta lista ('+_money(totDesc)+') puede no ser idéntico a ese.</div>':'');
     if(!conDesc.length){
       h+='<div style="font-size:.75rem;color:#4ade80">Ningún cliente tiene costo de descuento % '+rangoN+'.</div>';
     }else{
