@@ -2655,7 +2655,11 @@ function cierreCategoriaAuto(nombreProd){
   const n=String(nombreProd||'').toUpperCase().normalize('NFKD').replace(/[̀-ͯ]/g,'');
   if(/DESCUENTO/.test(n))return 'descuento';
   if(/MANIOBRA|SERVICIO/.test(n))return 'maniobra';
-  if(/COSTAL\s*VAC/.test(n))return 'costalvacio';
+  // Ojo: Odoo NO nombra estas líneas "costal vacío" — las nombra "COSTAL <nombre del producto>"
+  // (p.ej. "COSTAL SILVER KAN PREMIUM 25 KG"), así que exigir la palabra "vacío" nunca las
+  // encontraba y, peor, como el nombre arrastra el del producto real, _famKey() las igualaba al
+  // producto y las clasificaba como pet food por error (inflando pet food y dejando el costal en $0).
+  if(/^COSTAL\b/.test(n))return 'costalvacio';
   if(/PROMOCION|BONIFICACION/.test(n))return 'promobono';
   if(costMap()[_famKey(nombreProd)])return 'petfood';
   if(/GALLO|GALLINA|CABALLO|POLLO|CROQUETA|CERDO|GANADO|RUMIANTE|BOVINO|PORCINO|EQUINO|PECUARIO|CONEJO|BORREGO/.test(n))return 'pecuario';
@@ -2677,16 +2681,19 @@ function buildCierreMes(mes){
   });
   CIERRE_CATS.forEach(c=>porCat[c.key].prods.sort((a,b)=>Math.abs(b.sin)-Math.abs(a.sin)||Math.abs(b.sacos)-Math.abs(a.sacos)));
   // La cascada se arma EN PARALELO en $ y en piezas (sacos) — Ricardo cuadra las dos cosas a la vez
-  // contra Odoo, no solo el dinero. Punto de partida del $: el total general tal cual Odoo lo
-  // muestra en pantalla ANTES del descuento (el mismo número que la hoja "Todos-Resumen (cuadre)"
-  // llama "Subtotal ANTES del descuento"). Las piezas no tienen ese ajuste (el renglón de descuento
-  // casi nunca trae Cant. facturada), así que ahí se parte directo de la suma de todo lo categorizado.
-  const dsc=porCat.descuento.sin, dscSacos=porCat.descuento.sacos;   // $ viene negativo
-  const totalNeto=(DATA.todosMesValSinIva&&DATA.todosMesValSinIva[mes])||0;
-  const salidasGeneral=totalNeto-dsc;
-  const totalSacosGeneral=CIERRE_CATS.reduce((a,c)=>a+porCat[c.key].sacos,0);
+  // contra Odoo, no solo el dinero. "Salidas Odoo (general)" es la suma de TODO lo categorizado
+  // excepto el renglón de descuento, más la MAGNITUD del descuento (igual que Ricardo arma su
+  // tabla a mano: ahí el descuento aparece como un renglón más, en positivo, dentro del total
+  // general, y se resta explícito más abajo junto con maniobra y costal vacío). OJO: el descuento
+  // NO debe restarse dos veces — antes esta función lo excluía del total general (restando el
+  // Subtotal ANTES del descuento) Y LUEGO lo volvía a restar en la cascada, lo que dejaba "Salidas
+  // Odoo (real)" y todo lo de abajo exactamente $707 más bajo de lo que de verdad cuadra contra Odoo.
+  const dsc=porCat.descuento.sin, dscSacos=porCat.descuento.sacos;   // viene negativo (o 0)
+  const S=CIERRE_CATS.filter(c=>c.key!=='descuento').reduce((a,c)=>a+porCat[c.key].sin,0);
+  const Ssacos=CIERRE_CATS.filter(c=>c.key!=='descuento').reduce((a,c)=>a+porCat[c.key].sacos,0);
+  const salidasGeneral=S-dsc, totalSacosGeneral=Ssacos-dscSacos;
   const wf=[]; let acc=salidasGeneral, accS=totalSacosGeneral;
-  wf.push({label:'Salidas Odoo (general, antes de descuento)',val:salidasGeneral,sacos:totalSacosGeneral,total:true});
+  wf.push({label:'Salidas Odoo (general)',val:salidasGeneral,sacos:totalSacosGeneral,total:true});
   ['maniobra','costalvacio'].forEach(k=>{ const g=porCat[k]; if(g.sin||g.sacos){ wf.push({label:'− '+CIERRE_CATS.find(c=>c.key===k).label,val:-g.sin,sacos:-g.sacos}); acc-=g.sin; accS-=g.sacos; } });
   if(dsc||dscSacos){ wf.push({label:'− Descuento s/ venta',val:dsc,sacos:dscSacos}); acc+=dsc; accS+=dscSacos; }
   wf.push({label:'= Salidas Odoo (real)',val:acc,sacos:accS,total:true});
