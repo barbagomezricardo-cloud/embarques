@@ -684,6 +684,14 @@ const UMBRAL_PREM = 3;
 const DEFAULT_PREM_CFG = {umbralBase:3, u1:5, e1:0.5, u2:7.5, e2:1.0};
 function getPremCfg(){try{const r=localStorage.getItem('premCfg04mas');if(r)return Object.assign({},DEFAULT_PREM_CFG,JSON.parse(r));}catch(e){}return Object.assign({},DEFAULT_PREM_CFG);}
 function premBoost(mixPrem,pc){pc=pc||getPremCfg();return mixPrem>=pc.u2?pc.e2:(mixPrem>=pc.u1?pc.e1:0);}
+// Cualquier % de mix premium que se muestre junto a un ✓/✗ (o que vaya a una app/credencial donde
+// el cliente lo lea como "ya llegué") tiene que mostrar SIEMPRE la misma cifra que decide ese
+// ✓/✗ — nunca una más generosa. .toFixed()/Math.round() normal REDONDEA HACIA ARRIBA (4.96% se ve
+// como "5.0%"), así que un cliente con 4.96% real ve "5.0%" en pantalla sin haber ganado ese bono
+// (el bono, correctamente, NO se le da — la comparación real nunca usó el número redondeado) y
+// reclama con razón. Truncar hacia abajo (nunca hacia arriba) asegura que la pantalla jamás
+// prometa un bono que el cliente todavía no tiene asegurado.
+function pctUmbral(x){return Math.floor((x||0)*10)/10;}
 // Nivel Cobre (BLOQUEADO por defecto; se activa con autorización de dirección)
 const DEFAULT_COBRE_CFG={enabled:false,opcion:1,pct:0.5,min:300,umbral:20};
 function getCobreCfg(){try{const r=localStorage.getItem('cobreCfg04mas');if(r)return Object.assign({},DEFAULT_COBRE_CFG,JSON.parse(r));}catch(e){}return Object.assign({},DEFAULT_COBRE_CFG);}
@@ -6104,7 +6112,7 @@ function renderSeguimiento(){
       '<td>'+(c.vendedor||'—')+'</td>'+
       '<td style="font-weight:800;color:'+_nivColor(c.nivel)+'">'+c.nivel+'</td>'+
       '<td style="text-align:right">'+fmt(c.promMes||0)+'</td>'+
-      '<td style="text-align:right">'+((c.mixPrem||0).toFixed(1))+'% '+(premOk?'<span style="color:#22c55e">✓</span>':'<span style="color:#ef4444">✗</span>')+'</td>'+
+      '<td style="text-align:right">'+(pctUmbral(c.mixPrem).toFixed(1))+'% '+(premOk?'<span style="color:#22c55e">✓</span>':'<span style="color:#ef4444">✗</span>')+'</td>'+
       '<td style="text-align:right;font-weight:700">'+(c.nivel==='COBRE'?'—':((t.fijo||0).toFixed(2)+'%'))+'</td>'+'<td style="text-align:right;font-weight:700;color:#4ade80">'+(c.nivel==='COBRE'?'—':(topeMax.toFixed(2)+'%'))+'</td>'+
       '<td style="text-align:right">'+fmt(maintainP)+'</td>'+
       '<td style="text-align:right">'+(nx?(nx+': '+fmt(nextP)):'— máx')+'</td>'+
@@ -6353,7 +6361,7 @@ function buildVendorPayloads(){
       // en la app (con su fecha) y no como un cliente en ceros sin explicación.
       const _actM=Object.keys(c.mesData||{}).map(Number).filter(function(m){return (c.mesData[m]||0)>0;}).sort(function(a,b){return a-b;});
       const ultM=_actM.length?_actM[_actM.length-1]:0;
-      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:Math.round((c.mixPrem||0)*10)/10,mixp:Math.round((c.mixPlus||0)*10)/10,cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb),e:(c.estado||''),vd:(c.vendedor||''),pm:pmOut,
+      return {n:(c.nombre||'').replace(/[|]/g,' '),avg:Math.round(c.promMes||0),mix:pctUmbral(c.mixPrem),mixp:pctUmbral(c.mixPlus),cur:cur,qtd:Math.round(qtd),qp:Math.round(qp),qpb:Math.round(qpb),e:(c.estado||''),vd:(c.vendedor||''),pm:pmOut,
         desc:Math.round((((c.desc||0)>0?c.desc:_arr)||0)*1000)/1000, crecio:!!c.crecio, premOk:!!c.premOk,
         nvCand:!!_nvi.cand, nvRitmo:_nvi.ritmo||0, nvProm6:Math.round(_nvi.prom6||0), nvMeses:_nvi.mesesDesde||0,
         nvAuth:(_nvi.auth?{pct:_nvi.auth.pct,fecha:_nvi.auth.fecha,vig:_nvi.auth.vig,desde:_nvi.auth.desde}:null),
