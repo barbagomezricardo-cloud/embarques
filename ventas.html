@@ -767,7 +767,15 @@ function calcNivel(promMes){
 function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
   const _cmp=(completos&&completos.length)?completos:null;
   const meses=Object.keys(mesData||{}).map(Number).filter(m=>m>0&&mesData[m]>0&&(!_cmp||_cmp.indexOf(m)>=0)).sort((a,b)=>a-b);
-  const um=meses[meses.length-1]||0;
+  // El mes de referencia (um) para crecimiento Y para la compra premium del periodo SIEMPRE es
+  // el último mes YA CERRADO del calendario -el mismo para TODOS los clientes-, NUNCA el último
+  // mes en que ESE cliente compró. Ricardo: "evalua compra de los 2 ultimos meses anteriores...
+  // si por algo no tiene compra en alguno de estos meses, pues no podriamos darle bono de
+  // crecimiento". Antes, un cliente que dejó de comprar hace tiempo seguía mostrando un bono de
+  // crecimiento/premium "congelado" calculado contra su última ventana activa, en vez de 0% /
+  // sin bono en el periodo real que se evalúa cada inicio de mes (ej. Xenia Gabriela).
+  const _cmpSorted=_cmp?_cmp.slice().sort((a,b)=>a-b):null;
+  const um=_cmpSorted?(_cmpSorted[_cmpSorted.length-1]||0):(meses[meses.length-1]||0);
   const evalP=getEvalPeriod();
   const win=evalWindows(um,evalP);                                    // meses del periodo actual y anterior
   const sumM=(arr)=>arr.reduce((a,m)=>a+((mesData&&mesData[m])||0),0);
