@@ -2675,23 +2675,27 @@ function buildCierreMes(mes){
     porCat[cat].sin+=sin; porCat[cat].sacos+=sacos;
     porCat[cat].prods.push({nombre:p,sin:Math.round(sin*100)/100,sacos:Math.round(sacos*100)/100,auto:cierreCategoriaAuto(p),manual:!!getCierreOv()[p]});
   });
-  CIERRE_CATS.forEach(c=>porCat[c.key].prods.sort((a,b)=>Math.abs(b.sin)-Math.abs(a.sin)));
-  // Punto de partida: el total general tal cual Odoo lo muestra en pantalla ANTES del descuento
-  // (el mismo número que la hoja "Todos-Resumen (cuadre)" llama "Subtotal ANTES del descuento").
-  const dsc=porCat.descuento.sin;   // viene negativo
+  CIERRE_CATS.forEach(c=>porCat[c.key].prods.sort((a,b)=>Math.abs(b.sin)-Math.abs(a.sin)||Math.abs(b.sacos)-Math.abs(a.sacos)));
+  // La cascada se arma EN PARALELO en $ y en piezas (sacos) — Ricardo cuadra las dos cosas a la vez
+  // contra Odoo, no solo el dinero. Punto de partida del $: el total general tal cual Odoo lo
+  // muestra en pantalla ANTES del descuento (el mismo número que la hoja "Todos-Resumen (cuadre)"
+  // llama "Subtotal ANTES del descuento"). Las piezas no tienen ese ajuste (el renglón de descuento
+  // casi nunca trae Cant. facturada), así que ahí se parte directo de la suma de todo lo categorizado.
+  const dsc=porCat.descuento.sin, dscSacos=porCat.descuento.sacos;   // $ viene negativo
   const totalNeto=(DATA.todosMesValSinIva&&DATA.todosMesValSinIva[mes])||0;
   const salidasGeneral=totalNeto-dsc;
-  const wf=[]; let acc=salidasGeneral;
-  wf.push({label:'Salidas Odoo (general, antes de descuento)',val:salidasGeneral,total:true});
-  ['maniobra','costalvacio'].forEach(k=>{ if(porCat[k].sin){ wf.push({label:'− '+CIERRE_CATS.find(c=>c.key===k).label,val:-porCat[k].sin}); acc-=porCat[k].sin; } });
-  if(dsc){ wf.push({label:'− Descuento s/ venta',val:dsc}); acc+=dsc; }
-  wf.push({label:'= Salidas Odoo (real)',val:acc,total:true});
-  if(porCat.pecuario.sin){ wf.push({label:'− Producto pecuario (no pet food)',val:-porCat.pecuario.sin}); acc-=porCat.pecuario.sin; }
-  wf.push({label:'= Salidas solo pet food',val:acc,total:true});
-  if(porCat.promobono.sin){ wf.push({label:'− Promoción / bonificación',val:-porCat.promobono.sin}); acc-=porCat.promobono.sin; }
-  if(porCat.otros.sin){ wf.push({label:'− Otros / sin clasificar (revisar)',val:-porCat.otros.sin}); acc-=porCat.otros.sin; }
-  wf.push({label:'= Venta real solo pet food (04MAS)',val:acc,total:true});
-  return {mes,porCat,wf,salidasGeneral,ventaRealPetfood:acc,petfoodDirecto:porCat.petfood.sin,otrosCount:porCat.otros.prods.length,otrosMonto:porCat.otros.sin};
+  const totalSacosGeneral=CIERRE_CATS.reduce((a,c)=>a+porCat[c.key].sacos,0);
+  const wf=[]; let acc=salidasGeneral, accS=totalSacosGeneral;
+  wf.push({label:'Salidas Odoo (general, antes de descuento)',val:salidasGeneral,sacos:totalSacosGeneral,total:true});
+  ['maniobra','costalvacio'].forEach(k=>{ const g=porCat[k]; if(g.sin||g.sacos){ wf.push({label:'− '+CIERRE_CATS.find(c=>c.key===k).label,val:-g.sin,sacos:-g.sacos}); acc-=g.sin; accS-=g.sacos; } });
+  if(dsc||dscSacos){ wf.push({label:'− Descuento s/ venta',val:dsc,sacos:dscSacos}); acc+=dsc; accS+=dscSacos; }
+  wf.push({label:'= Salidas Odoo (real)',val:acc,sacos:accS,total:true});
+  if(porCat.pecuario.sin||porCat.pecuario.sacos){ wf.push({label:'− Producto pecuario (no pet food)',val:-porCat.pecuario.sin,sacos:-porCat.pecuario.sacos}); acc-=porCat.pecuario.sin; accS-=porCat.pecuario.sacos; }
+  wf.push({label:'= Salidas solo pet food',val:acc,sacos:accS,total:true});
+  if(porCat.promobono.sin||porCat.promobono.sacos){ wf.push({label:'− Promoción / bonificación',val:-porCat.promobono.sin,sacos:-porCat.promobono.sacos}); acc-=porCat.promobono.sin; accS-=porCat.promobono.sacos; }
+  if(porCat.otros.sin||porCat.otros.sacos){ wf.push({label:'− Otros / sin clasificar (revisar)',val:-porCat.otros.sin,sacos:-porCat.otros.sacos}); acc-=porCat.otros.sin; accS-=porCat.otros.sacos; }
+  wf.push({label:'= Venta real solo pet food (04MAS)',val:acc,sacos:accS,total:true});
+  return {mes,porCat,wf,salidasGeneral,salidasGeneralSacos:totalSacosGeneral,ventaRealPetfood:acc,ventaRealPetfoodSacos:accS,petfoodDirecto:porCat.petfood.sin,petfoodDirectoSacos:porCat.petfood.sacos,otrosCount:porCat.otros.prods.length,otrosMonto:porCat.otros.sin,otrosSacos:porCat.otros.sacos};
 }
 let CIERRE_MES=0;
 function cierreMesActivo(){if(CIERRE_MES&&DATA.meses&&DATA.meses.indexOf(CIERRE_MES)>=0)return CIERRE_MES;return (DATA.meses&&DATA.meses.length)?DATA.meses[DATA.meses.length-1]:0;}
@@ -3100,29 +3104,32 @@ function renderCierreMes(){
    +'<div style="font-size:1.0rem;font-weight:800;color:var(--gold)">📊 Reporte de cierre de mes</div>'
    +'<div style="display:flex;gap:8px;align-items:center">'
    +'<label style="font-size:.76rem;color:#94a3b8">Mes:</label><select onchange="cierreSetMes(this.value)">'+DATA.meses.slice().sort((a,b)=>a-b).map(m=>'<option value="'+m+'"'+(m===mes?' selected':'')+'>'+mesL(m)+'</option>').join('')+'</select>'
-   +'<button onclick="descargarExcelCierre()" style="background:var(--gold);color:var(--navy);border:none;border-radius:7px;padding:5px 13px;font-size:.76rem;font-weight:800;cursor:pointer">⬇ Descargar Excel (cierre de mes)</button>'
+   +'<button onclick="descargarExcelCierre()" style="background:var(--gold);color:var(--navy);border:none;border-radius:7px;padding:5px 13px;font-size:.76rem;font-weight:800;cursor:pointer">⬇ Descargar Excel (cierre de mes: piezas y $)</button>'
    +'</div></div>';
-  h+='<div style="font-size:.7rem;color:#94a3b8;margin-bottom:10px">Cuadra, por producto, las <b>salidas generales</b> de Odoo en '+mesL(mes)+' hasta llegar a la venta real de solo pet food (04MAS) — es un borrador automático de la conciliación que ya haces a mano. Corrige abajo cualquier producto mal clasificado; la corrección se recuerda para los próximos meses.</div>';
-  // cascada
+  h+='<div style="font-size:.7rem;color:#94a3b8;margin-bottom:10px">Cuadra, por producto, las <b>salidas generales</b> de Odoo en '+mesL(mes)+' hasta llegar a la venta real de solo pet food (04MAS) — en <b>piezas (sacos)</b> y en <b>$ sin IVA</b> a la vez, para que cuadres dinero e inventario juntos. Es un borrador automático de la conciliación que ya haces a mano. Corrige abajo cualquier producto mal clasificado; la corrección se recuerda para los próximos meses.</div>';
+  // cascada — piezas y $ lado a lado en cada renglón
   h+='<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">';
   R.wf.forEach(r=>{
-   const neg=r.val<0&&!r.total;
-   h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-radius:8px;background:'+(r.total?'#0f2036':'transparent')+';'+(r.total?'border:1px solid #2563EB;':'')+'font-weight:'+(r.total?'800':'600')+'">'
+   const negVal=r.val<0&&!r.total, negSac=r.sacos<0&&!r.total;
+   h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 12px;border-radius:8px;background:'+(r.total?'#0f2036':'transparent')+';'+(r.total?'border:1px solid #2563EB;':'')+'font-weight:'+(r.total?'800':'600')+'">'
     +'<span style="font-size:.78rem;color:'+(r.total?'#e8eef7':'#94a3b8')+'">'+r.label+'</span>'
-    +'<span style="font-size:'+(r.total?'.95rem':'.82rem')+';color:'+(r.total?'#7ee2a8':(neg?'#fca5a5':'#e8eef7'))+'">'+(r.total?_money(r.val):(r.val<0?'−'+_money(Math.abs(r.val)):_money(r.val)))+'</span></div>';
+    +'<span style="display:flex;gap:16px;align-items:baseline;white-space:nowrap">'
+    +'<span style="font-size:.74rem;color:'+(r.total?'#7dd3fc':(negSac?'#fca5a5':'#94a3b8'))+'" title="Piezas (sacos)">'+(r.sacos<0?'−'+fmt(Math.abs(r.sacos)):fmt(r.sacos))+' pz</span>'
+    +'<span style="font-size:'+(r.total?'.95rem':'.82rem')+';color:'+(r.total?'#7ee2a8':(negVal?'#fca5a5':'#e8eef7'))+'">'+(r.total?_money(r.val):(r.val<0?'−'+_money(Math.abs(r.val)):_money(r.val)))+'</span>'
+    +'</span></div>';
   });
   h+='</div>';
-  if(R.otrosCount>0)h+='<div style="background:#2a1213;border:1px solid #7c2d12;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:.74rem;color:#fecaca">⚠ Hay <b>'+R.otrosCount+' producto'+(R.otrosCount>1?'s':'')+'</b> sin clasificar ('+_money(R.otrosMonto)+') — revísalos en la tabla de abajo antes de confiar en el total de "Venta real solo pet food".</div>';
+  if(R.otrosCount>0)h+='<div style="background:#2a1213;border:1px solid #7c2d12;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:.74rem;color:#fecaca">⚠ Hay <b>'+R.otrosCount+' producto'+(R.otrosCount>1?'s':'')+'</b> sin clasificar ('+fmt(R.otrosSacos)+' pz · '+_money(R.otrosMonto)+') — revísalos en la tabla de abajo antes de confiar en el total de "Venta real solo pet food".</div>';
   // tabla editable por producto, agrupada por categoría
   h+='<details style="margin-top:6px"><summary style="cursor:pointer;font-weight:800;color:var(--gold);font-size:.82rem">⚙ Ver y corregir la categoría de cada producto ('+mesL(mes)+')</summary>';
-  h+='<div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:620px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:5px 7px">Producto</th><th style="text-align:right">Sacos</th><th style="text-align:right">$ sin IVA</th><th style="text-align:left;padding-left:10px">Categoría</th><th></th></tr></thead><tbody>';
+  h+='<div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:620px"><thead><tr style="color:#9fb0cc"><th style="text-align:left;padding:5px 7px">Producto</th><th style="text-align:right">Piezas (sacos)</th><th style="text-align:right">$ sin IVA</th><th style="text-align:left;padding-left:10px">Categoría</th><th></th></tr></thead><tbody>';
   const catOpts=cat=>CIERRE_CATS.map(c=>'<option value="'+c.key+'"'+(c.key===cat?' selected':'')+'>'+c.label+'</option>').join('');
   CIERRE_CATS.forEach(c=>{
    const grp=R.porCat[c.key]; if(!grp.prods.length)return;
-   h+='<tr><td colspan="5" style="padding:10px 7px 3px;font-weight:800;color:#cbd5e1">'+c.label+' <span style="font-weight:400;color:#64748b">— '+_money(grp.sin)+'</span></td></tr>';
+   h+='<tr><td colspan="5" style="padding:10px 7px 3px;font-weight:800;color:#cbd5e1">'+c.label+' <span style="font-weight:400;color:#64748b">— '+fmt(grp.sacos)+' pz · '+_money(grp.sin)+'</span></td></tr>';
    grp.prods.forEach(p=>{
     h+='<tr style="border-top:1px solid #16233f"><td style="padding:4px 7px;color:#e8eef7;max-width:260px;overflow:hidden;text-overflow:ellipsis">'+p.nombre+(p.manual?' <span title="Categoría corregida a mano" style="color:#fbbf24">✏️</span>':'')+'</td>'
-     +'<td style="text-align:right;color:#94a3b8">'+(p.sacos?fmt(p.sacos):'—')+'</td>'
+     +'<td style="text-align:right;color:'+(p.sacos<0?'#fca5a5':'#94a3b8')+'">'+(p.sacos?fmt(p.sacos):'—')+'</td>'
      +'<td style="text-align:right;color:'+(p.sin<0?'#fca5a5':'#e8eef7')+'">'+(p.sin<0?'−'+_money(Math.abs(p.sin)):_money(p.sin))+'</td>'
      +'<td style="padding-left:10px"><select onchange="setCierreCat(\''+p.nombre.replace(/'/g,"\\'")+'\',this.value)">'+catOpts(c.key)+'</select></td>'
      +'<td>'+(p.manual?'<button onclick="resetCierreCat(\''+p.nombre.replace(/'/g,"\\'")+'\')" title="Quitar la corrección manual y volver a la categoría automática" style="background:#334155;color:#cbd5e1;border:none;border-radius:6px;padding:2px 7px;font-size:.66rem;cursor:pointer">↺</button>':'')+'</td></tr>';
@@ -3131,8 +3138,9 @@ function renderCierreMes(){
   h+='</tbody></table></div></details>';
   box.innerHTML=h;
 }
-// Descarga el reporte de cierre de mes en Excel: resumen/cascada, pet food por producto, y todo lo
-// demás categorizado — para que Ricardo lo revise o lo archive igual que el Excel que ya hacía a mano.
+// Descarga el reporte de cierre de mes en Excel: resumen/cascada en piezas y $, más el detalle
+// completo por producto y mes (una hoja en $, otra en piezas) — para que Ricardo lo use igual que
+// el Excel que ya hacía a mano, tanto para cuadrar dinero como para cuadrar inventario.
 function descargarExcelCierre(){
   if(typeof DATA==='undefined'||!DATA||!DATA.meses||!DATA.meses.length){alert('Primero sube un reporte de ventas.');return;}
   if(typeof XLSX==='undefined'||!XLSX.utils){alert('No se pudo cargar el motor de Excel. Revisa tu conexión e intenta de nuevo.');return;}
@@ -3141,36 +3149,47 @@ function descargarExcelCierre(){
     function fmtRange(ws,r1,c1,r2,c2,fmt){for(let r=r1;r<=r2;r++)for(let c=c1;c<=c2;c++){const cell=ws[XLSX.utils.encode_cell({r,c})];if(cell&&typeof cell.v==='number')cell.z=fmt;}}
     const meses=DATA.meses.slice().sort((a,b)=>a-b);
     const hoy=new Date();
-    const rows=[['Reporte de cierre de mes — cuadre automático de salidas generales'],[],['Generado',hoy.toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})],['Archivo de origen',DATA.fname||'(sin nombre)'],[],
-     ['Cada mes se cuadra por separado: arranca de las salidas generales que reporta Odoo (antes del'],
-     ['descuento) y va restando, categoría por categoría, hasta llegar a la venta real de solo pet food'],
-     ['(04MAS). Las categorías que no son pet food ni un descuento/servicio quedan en "Otros / sin'],
-     ['clasificar" cuando el programa no está seguro — revísalas en la pestaña Rentabilidad.'],[]];
+    const rows=[['Reporte de cierre de mes — cuadre automático de salidas generales, en piezas y en $'],[],['Generado',hoy.toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})],['Archivo de origen',DATA.fname||'(sin nombre)'],[],
+     ['Cada mes se cuadra por separado, en piezas (sacos) Y en $ sin IVA a la vez: arranca de las'],
+     ['salidas generales que reporta Odoo (antes del descuento) y va restando, categoría por categoría,'],
+     ['hasta llegar a la venta real de solo pet food (04MAS). Las categorías que no son pet food ni un'],
+     ['descuento/servicio quedan en "Otros / sin clasificar" cuando el programa no está seguro —'],
+     ['revísalas en la pestaña Rentabilidad.'],[],
+     ['Renglón','Piezas (sacos)','$ sin IVA']];
     meses.forEach(m=>{
       const R=buildCierreMes(m);
-      rows.push([mesL(m).toUpperCase()]);
-      R.wf.forEach(r=>rows.push([r.label,Math.round(r.val*100)/100]));
-      if(R.otrosCount)rows.push(['  ⚠ '+R.otrosCount+' producto(s) sin clasificar, incluidos arriba en "Otros"',Math.round(R.otrosMonto*100)/100]);
+      rows.push([mesL(m).toUpperCase(),'','']);
+      R.wf.forEach(r=>rows.push([r.label,Math.round(r.sacos*100)/100,Math.round(r.val*100)/100]));
+      if(R.otrosCount)rows.push(['  ⚠ '+R.otrosCount+' producto(s) sin clasificar, incluidos arriba en "Otros"',Math.round(R.otrosSacos*100)/100,Math.round(R.otrosMonto*100)/100]);
       rows.push([]);
     });
     const wsResumen=XLSX.utils.aoa_to_sheet(rows);
-    wsResumen['!cols']=[{wch:48},{wch:16}];
-    fmtRange(wsResumen,0,1,rows.length-1,1,FMT_MONEY);
-    // detalle por producto y mes, con la categoría asignada (auto o manual)
+    wsResumen['!cols']=[{wch:48},{wch:16},{wch:16}];
+    fmtRange(wsResumen,0,1,rows.length-1,1,FMT_QTY);
+    fmtRange(wsResumen,0,2,rows.length-1,2,FMT_MONEY);
+    // detalle por producto y mes, con la categoría asignada (auto o manual) — una hoja en $ y otra
+    // en piezas, para que Ricardo pueda cuadrar inventario producto por producto igual que el dinero.
     const allProd={};
-    meses.forEach(m=>{const R=buildCierreMes(m);CIERRE_CATS.forEach(c=>{R.porCat[c.key].prods.forEach(p=>{const k=p.nombre;if(!allProd[k])allProd[k]={cat:c.label,byMes:{}};allProd[k].byMes[m]=p.sin;});});});
+    meses.forEach(m=>{const R=buildCierreMes(m);CIERRE_CATS.forEach(c=>{R.porCat[c.key].prods.forEach(p=>{const k=p.nombre;if(!allProd[k])allProd[k]={cat:c.label,sin:{},sacos:{}};allProd[k].sin[m]=p.sin;allProd[k].sacos[m]=p.sacos;});});});
     const mesLbl=meses.map(m=>MES_NOM[m]||('Mes '+m));
-    const detRows=[['Detalle por producto y mes, con la categoría usada en el cuadre'],[],['Producto','Categoría',...mesLbl,'Total']];
-    Object.keys(allProd).sort((a,b)=>{const ta=Object.values(allProd[a].byMes).reduce((x,y)=>x+Math.abs(y),0);const tb=Object.values(allProd[b].byMes).reduce((x,y)=>x+Math.abs(y),0);return tb-ta;}).forEach(p=>{
-      const o=allProd[p]; const vals=meses.map(m=>Math.round((o.byMes[m]||0)*100)/100); const total=Math.round(vals.reduce((a,b)=>a+b,0)*100)/100;
-      detRows.push([p,o.cat,...vals,total]);
-    });
-    const wsDet=XLSX.utils.aoa_to_sheet(detRows);
+    function hojaDet(titulo,campo){
+      const rws=[[titulo],[],['Producto','Categoría',...mesLbl,'Total']];
+      Object.keys(allProd).sort((a,b)=>{const ta=Object.values(allProd[a][campo]).reduce((x,y)=>x+Math.abs(y),0);const tb=Object.values(allProd[b][campo]).reduce((x,y)=>x+Math.abs(y),0);return tb-ta;}).forEach(p=>{
+        const o=allProd[p]; const vals=meses.map(m=>Math.round((o[campo][m]||0)*100)/100); const total=Math.round(vals.reduce((a,b)=>a+b,0)*100)/100;
+        rws.push([p,o.cat,...vals,total]);
+      });
+      return rws;
+    }
+    const wsDet=XLSX.utils.aoa_to_sheet(hojaDet('Detalle por producto y mes — $ sin IVA, con la categoría usada en el cuadre','sin'));
     wsDet['!cols']=[{wch:50},{wch:30},...meses.map(()=>({wch:12})),{wch:13}];
     fmtRange(wsDet,3,2,3+Object.keys(allProd).length-1,meses.length+2,FMT_MONEY);
+    const wsDetPz=XLSX.utils.aoa_to_sheet(hojaDet('Detalle por producto y mes — piezas (sacos), con la categoría usada en el cuadre','sacos'));
+    wsDetPz['!cols']=[{wch:50},{wch:30},...meses.map(()=>({wch:12})),{wch:13}];
+    fmtRange(wsDetPz,3,2,3+Object.keys(allProd).length-1,meses.length+2,FMT_QTY);
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,wsResumen,'Cierre de mes');
-    XLSX.utils.book_append_sheet(wb,wsDet,'Detalle por producto');
+    XLSX.utils.book_append_sheet(wb,wsDet,'Detalle $ por producto');
+    XLSX.utils.book_append_sheet(wb,wsDetPz,'Detalle piezas por producto');
     XLSX.writeFile(wb,'Cierre_de_mes_'+(DATA.dataYear||hoy.getFullYear())+'_'+hoy.toISOString().slice(0,10)+'.xlsx');
   }catch(err){
     console.error(err);
