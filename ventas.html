@@ -285,7 +285,8 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
         <select id="seg-fil" onchange="renderClienteTable()"><option value="">Todos segmentos</option><option value="VIP">VIP</option><option value="Recurrente">Recurrente</option><option value="Esporadico">Esporádico</option><option value="EnRiesgo">En Riesgo</option></select>
         <select id="est-fil" onchange="renderClienteTable()"><option value="">Todos estados</option></select>
         <select id="vnd-fil" onchange="renderClienteTable()"><option value="">Todos vendedores</option></select>
-        <button onclick="document.getElementById('odoo-desc-input').click()" title="Sube el reporte de descuento comercial que calculó Odoo para compararlo contra tu programa" style="background:#1e3258;color:#7dd3fc;border:1px solid #2563EB;border-radius:6px;padding:5px 10px;font-size:.72rem;cursor:pointer;margin-left:auto">📊 Comparar con Odoo</button>
+        <button onclick="descargarExcelDescuentos()" title="Descarga un Excel con el descuento de cada cliente y las FÓRMULAS que lo respaldan (política, sacos por producto y mes, nivel, crecimiento, mix premium), para validar que lo que se da es correcto" style="background:var(--gold);color:var(--navy);border:none;border-radius:6px;padding:5px 11px;font-size:.72rem;font-weight:800;cursor:pointer;margin-left:auto">⬇ Excel de descuentos (con fórmulas)</button>
+        <button onclick="document.getElementById('odoo-desc-input').click()" title="Sube el reporte de descuento comercial que calculó Odoo para compararlo contra tu programa" style="background:#1e3258;color:#7dd3fc;border:1px solid #2563EB;border-radius:6px;padding:5px 10px;font-size:.72rem;cursor:pointer">📊 Comparar con Odoo</button>
         <input type="file" id="odoo-desc-input" accept=".xlsx,.xls" style="display:none" onchange="handleOdooDescFile(this.files[0])">
         <button onclick="document.getElementById('vcf-input-v').click()" title="Sube un archivo .vcf exportado de tus contactos para llenar teléfonos que falten" style="background:#0f766e;color:#e6fffa;border:1px solid #0d9488;border-radius:6px;padding:5px 10px;font-size:.72rem;cursor:pointer">📇 Importar contactos</button>
         <input type="file" id="vcf-input-v" accept=".vcf,text/vcard,text/x-vcard" style="display:none" onchange="onVcardFileV(this)">
@@ -3303,6 +3304,292 @@ function descargarExcelCierre(){
     console.error(err);
     alert('No se pudo generar el Excel:\n'+err.message);
   }
+}
+
+// ── EXPORTAR EXCEL: descuento de cada cliente, CON LAS FÓRMULAS que lo respaldan ──
+// Ricardo: "necesito los datos y las formulas que respalden el descuento actual que esta calculando
+// el programa en automatico, de manera que yo tenga una base de datos para validar que lo que
+// estamos dando de descuentos es correcto conforme a la politica y a tu programacion".
+// Idea: el libro NO es una foto de números ya masticados. Trae (1) la política tal cual está
+// configurada (hoja Parametros), (2) los sacos de cada cliente por producto y mes (hoja
+// Detalle_producto, el dato crudo), y (3) una hoja Descuentos donde TODO el cálculo es FÓRMULA de
+// Excel que lee esas dos hojas: nivel, crecimiento, mix premium, bonos y descuento final. Al lado
+// va el % que calculó el programa y la diferencia, para que se vea de un vistazo si la fórmula
+// independiente de Excel y el código del programa coinciden (deben dar 0.0000 en todos).
+// Todo cambiable: si en Parametros cambias el mes de referencia o un umbral, Descuentos se recalcula.
+// Las celdas con fórmula llevan además el valor ya calculado, para que se vean aunque el visor no recalcule.
+function construirLibroDescuentos(opts){
+  opts=opts||{};
+  const conCache=(opts.conCache!==false);
+  const clients=DATA.clients||[];
+  const MESES=[1,2,3,4,5,6,7,8,9,10,11,12];
+  const cfgT=getTierCfg(), pc=getPremCfg(), evalP=getEvalPeriod();
+  const cerr=new Set((DATA.completos||[]).map(Number));
+  const mod=(a,n)=>((a%n)+n)%n;
+  const r2=x=>Math.round(x*100)/100;
+  const dot=(f,a)=>f.reduce((s,x,i)=>s+x*(a[i]||0),0);
+  const COL=n=>XLSX.utils.encode_col(n);          // columna 0-based → letras
+  const N=clients.length;
+
+  // ── 1) Banderas de meses (mismas reglas que calcDesc) ──
+  const cerrado=MESES.map(m=>cerr.has(m)?1:0);
+  const grp=MESES.map(m=>{for(let g=0;g<Q_GROUPS.length;g++){if(Q_GROUPS[g][0].indexOf(m)>=0)return g+1;}return 0;});
+  const nivelFlag=MESES.map((m,i)=>cerrado[i]===1?(cerrado.slice(i).reduce((a,b)=>a+b,0)<=6?1:0):0);
+  const ref=Math.max(0,...MESES.filter((m,i)=>cerrado[i]===1));      // último mes YA CERRADO (igual para todos)
+  const prevM=(evalP==='MES')?(mod(ref-2+12,12)+1):(mod(ref-3-1+12,12)+1);
+  const curFlag=MESES.map(m=>ref===0?0:(evalP==='MES'?(m===ref?1:0):(grp[m-1]===grp[ref-1]?1:0)));
+  const prevFlag=MESES.map(m=>ref===0?0:(evalP==='MES'?(m===prevM?1:0):(grp[m-1]===grp[prevM-1]?1:0)));
+  const nCur=curFlag.reduce((a,b)=>a+b,0);
+  const corte=nCur?Math.min(...MESES.filter((m,i)=>curFlag[i]===1)):ref;
+  const metaFlag=MESES.map((m,i)=>(cerrado[i]===1&&m<corte)?(MESES.filter((k,j)=>cerrado[j]===1&&k<corte&&k>=m).length<=6?1:0):0);
+  const nMeta=metaFlag.reduce((a,b)=>a+b,0);
+  const nNivel=Math.max(1,nivelFlag.reduce((a,b)=>a+b,0));
+
+  // ── 2) Tabla de niveles y parámetros premium (lo que está configurado HOY en el programa) ──
+  const tiers=TIER_ORDER.map(t=>{const c=cfgT[t]||{min:0,fijo:0,kc:0,kp:0,uc:999};
+    return{name:t,min:c.min||0,fijo:c.fijo||0,kc:c.kc||0,kp:c.kp||0,uc:(c.uc!=null?c.uc:UMBRAL_CREC)};});
+  const T0=23;                                  // primera fila (Excel, 1-based) de la tabla de niveles en Parametros
+  const TL=T0+tiers.length-1;
+  const P0=TL+3;                                // primera fila de los parámetros premium
+  const pBase=(pc.umbralBase!=null?pc.umbralBase:UMBRAL_PREM);
+  const PR={base:'Parametros!$B$'+P0,u1:'Parametros!$B$'+(P0+1),e1:'Parametros!$B$'+(P0+2),u2:'Parametros!$B$'+(P0+3),e2:'Parametros!$B$'+(P0+4)};
+  const tRng=c=>'Parametros!$'+c+'$'+T0+':$'+c+'$'+TL;
+
+  // ── 3) Hoja Detalle_producto: dato crudo (cliente × producto × mes, sacos) ──
+  const D0=5;                                   // primera fila de datos en Detalle_producto / Base_mensual / Descuentos
+  const detRows=[]; const qualArr=[], premArr=[];
+  clients.forEach((c,i)=>{
+    const q=Array(12).fill(0), pm=Array(12).fill(0);
+    for(const p in (c.prodMes||{})){
+      const mo=c.prodMes[p]||{}; const meses=MESES.map(m=>mo[m]||0);
+      if(!meses.some(v=>v!==0))continue;
+      const cal=prodQualifica(p)?1:0, pr=esPremiumProd(p)?1:0;
+      detRows.push([i+1,c.nombre,p,cal,pr,...meses.map(r2),r2(meses.reduce((a,b)=>a+b,0))]);
+      if(cal){ meses.forEach((v,k)=>{q[k]+=v; if(pr)pm[k]+=v;}); }
+    }
+    qualArr.push(q); premArr.push(pm);
+  });
+  const DL=D0+Math.max(detRows.length,1)-1;     // última fila de datos en Detalle_producto
+  const wsDet=XLSX.utils.aoa_to_sheet([
+    ['Detalle por cliente, producto y mes — sacos facturados (dato crudo que alimenta todo el cálculo)'],
+    ['"Cuenta para promedio" y "Es premium" salen de Config → Productos (por omisión todo cuenta; premium = Silver Kan Premium 25/20 + Silver Cat/Kat 15). Las promociones/bonificaciones NO vienen aquí: no son venta.'],
+    [],
+    ['ID cliente','Cliente','Producto','Cuenta para promedio (1/0)','Es premium (1/0)',...MESES.map(m=>MES_NOM[m]),'Total'],
+    ...detRows
+  ]);
+  wsDet['!cols']=[{wch:9},{wch:38},{wch:44},{wch:12},{wch:10},...MESES.map(()=>({wch:9})),{wch:11}];
+  wsDet['!autofilter']={ref:'A4:R'+DL};
+
+  // ── 4) Hoja Base_mensual: sacos por cliente y mes, SUMIFS sobre el detalle ──
+  // Nombres definidos (DET_ID, DET_CAL, DET_PREM, DET_M1..DET_M12) en vez de rangos escritos en cada
+  // celda: el libro pesa una fracción y las fórmulas se leen "SUMIFS(DET_M9,DET_ID,$A5,DET_CAL,1)".
+  const rngDet=c=>'Detalle_producto!$'+c+'$'+D0+':$'+c+'$'+DL;
+  const nombresDet=[{Name:'DET_ID',Ref:rngDet('A')},{Name:'DET_CAL',Ref:rngDet('D')},{Name:'DET_PREM',Ref:rngDet('E')}]
+    .concat(MESES.map((m,k)=>({Name:'DET_M'+m,Ref:rngDet(COL(5+k))})));
+  const baseRows=clients.map((c,i)=>{
+    const R=D0+i; const row=[i+1,c.nombre];
+    MESES.forEach((m,k)=>{
+      row.push({f:'SUMIFS(DET_M'+m+',DET_ID,$A'+R+',DET_CAL,1)',v:r2(qualArr[i][k]),z:'#,##0.00'}); });
+    MESES.forEach((m,k)=>{
+      row.push({f:'SUMIFS(DET_M'+m+',DET_ID,$A'+R+',DET_CAL,1,DET_PREM,1)',v:r2(premArr[i][k]),z:'#,##0.00'}); });
+    return row;
+  });
+  const wsBase=XLSX.utils.aoa_to_sheet([
+    ['Sacos por cliente y mes — suma (SUMIFS) del detalle por producto'],
+    ['Bloque izquierdo: sacos que CUENTAN para promedio/nivel/crecimiento. Bloque derecho: de esos, los de productos PREMIUM.'],
+    [],
+    ['ID cliente','Cliente',...MESES.map(m=>'Cuenta '+MES_NOM[m]),...MESES.map(m=>'Premium '+MES_NOM[m])],
+    ...baseRows
+  ]);
+  wsBase['!cols']=[{wch:9},{wch:38},...Array(24).fill({wch:10})];
+
+  // ── 5) Hoja Parametros: política + banderas de meses (todo con fórmula, cambiable) ──
+  const ng=MESES.map(m=>MES_NOM[m]);
+  const rowOf=(label,arr)=>[label,'',...arr];
+  const flagF=(rowN)=>MESES.map((m,i)=>{const X=COL(2+i);
+    if(rowN===16)return{f:'IF('+X+'14=1,IF(SUM('+X+'14:$N$14)<=6,1,0),0)',v:nivelFlag[i]};
+    if(rowN===17)return{f:'IF($B$5=0,0,IF($B$4="MES",IF('+X+'12=$B$5,1,0),IF('+X+'15=INDEX($C$15:$N$15,$B$5),1,0)))',v:curFlag[i]};
+    if(rowN===18)return{f:'IF($B$5=0,0,IF($B$4="MES",IF('+X+'12=MOD($B$5-2+12,12)+1,1,0),IF('+X+'15=INDEX($C$15:$N$15,MOD($B$5-3-1+12,12)+1),1,0)))',v:prevFlag[i]};
+    return{f:'IF(AND('+X+'14=1,'+X+'12<$B$6),IF(SUMPRODUCT(($C$14:$N$14=1)*($C$12:$N$12<$B$6)*($C$12:$N$12>='+X+'12))<=6,1,0),0)',v:metaFlag[i]};
+  });
+  const par=[];
+  par[0]=['Parámetros de la política de descuento — TAL CUAL están configurados hoy en el programa'];
+  par[1]=['Todo lo de la hoja Descuentos se calcula leyendo estas celdas. Puedes cambiarlas (mes de referencia, umbrales, %) para simular; las celdas grises/de dato las pone el programa.'];
+  par[2]=[];
+  par[3]=['Periodo de evaluación (MES o TRIM)',evalP];
+  par[4]=['Mes de referencia (número) = último mes CERRADO, igual para TODOS los clientes',{f:'SUMPRODUCT(MAX($C$14:$N$14*$C$12:$N$12))',v:ref}];
+  par[5]=['Corte = primer mes del periodo evaluado (la meta usa los meses cerrados ANTES de este)',{f:'IF($B$7=0,$B$5,SUMPRODUCT(MIN($C$12:$N$12+($C$17:$N$17=0)*100)))',v:corte}];
+  par[6]=['Nº de meses del periodo actual',{f:'SUM($C$17:$N$17)',v:nCur}];
+  par[7]=['Nº de meses del promedio de nivel (últimos 6 cerrados)',{f:'MAX(1,SUM($C$16:$N$16))',v:nNivel}];
+  par[8]=['Nº de meses de la meta (6 cerrados antes del corte)',{f:'SUM($C$19:$N$19)',v:nMeta}];
+  par[9]=[]; par[10]=['Calendario de evaluación (1 = sí, 0 = no)'];
+  par[11]=rowOf('Mes (número)',MESES);
+  par[12]=rowOf('Mes',ng);
+  par[13]=rowOf('¿Mes CERRADO? (dato del reporte: no es el mes en curso ni uno incompleto)',cerrado);
+  par[14]=rowOf('Grupo de trimestre (Feb–Abr=1, May–Jul=2, Ago–Oct=3, Nov–Ene=4)',grp);
+  par[15]=rowOf('¿Entra al promedio de 6 meses (define el NIVEL)?',flagF(16));
+  par[16]=rowOf('¿Periodo ACTUAL evaluado? (mes de referencia, o su trimestre)',flagF(17));
+  par[17]=rowOf('¿Periodo PREVIO? (contra el que se mide el CRECIMIENTO)',flagF(18));
+  par[18]=rowOf('¿Mes de la META premium? (6 cerrados antes del corte)',flagF(19));
+  par[19]=[]; par[20]=['Niveles del programa'];
+  par[21]=['Nivel','Mín. sacos/mes','% fijo','% bono crecimiento','% bono premium base','Umbral de crecimiento (%)','Tope máx. (%)'];
+  tiers.forEach((t,i)=>{par[T0-1+i]=[t.name,t.min,t.fijo,t.kc,t.kp,t.uc,{f:'C'+(T0+i)+'+D'+(T0+i)+'+E'+(T0+i)+'+$B$'+(P0+4),v:t.fijo+t.kc+t.kp+(pc.e2||0)}];});
+  par[TL+1]=[]; par[TL+1]=['Bono Premium (mix = sacos premium del periodo ÷ meta mensual del cliente × 100)'];
+  par[P0-1]=['Mix mínimo para el bono premium base (%)',pBase];
+  par[P0]=['Premium+: primer escalón, mix ≥ (%)',pc.u1];
+  par[P0+1]=['Premium+: primer escalón, bono extra (%)',pc.e1];
+  par[P0+2]=['Premium+: segundo escalón, mix ≥ (%)',pc.u2];
+  par[P0+3]=['Premium+: segundo escalón, bono extra (%)',pc.e2];
+  for(let i=0;i<par.length;i++) if(!par[i])par[i]=[];
+  const wsPar=XLSX.utils.aoa_to_sheet(par);
+  wsPar['!cols']=[{wch:78},{wch:16},...Array(12).fill({wch:8})];
+
+  // ── 6) Hoja Descuentos: el cálculo, 100% fórmulas ──
+  const pR='Parametros!';
+  const BM=(a,b,R)=>'Base_mensual!'+a+R+':'+b+R;      // bloque de meses del cliente en Base_mensual
+  const nivelChain=(E)=>{let s='"INICIAL"'; tiers.filter(t=>t.name!=='INICIAL'&&cfgT[t.name]).reverse().forEach(t=>{
+      const i=tiers.findIndex(x=>x.name===t.name); s='IF('+E+'>='+pR+'$B$'+(T0+i)+',"'+t.name+'",'+s+')'; }); return s; };
+  const nivelDe=(prom)=>{for(const t of TIER_ORDER){if(cfgT[t]&&prom>=cfgT[t].min)return t;}return 'INICIAL';};
+  const rows=clients.map((c,i)=>{
+    const R=D0+i; const q=qualArr[i], pm=premArr[i];
+    // —— espejo en JS de las mismas fórmulas, solo para dejar el valor ya calculado en la celda ——
+    const prom=Math.round(dot(nivelFlag,q)/nNivel);
+    const nivel=nivelDe(prom);
+    const ini=(nivel==='INICIAL');
+    const t=tiers.find(x=>x.name===nivel)||{fijo:0,kc:0,kp:0,uc:UMBRAL_CREC};
+    const vU=dot(curFlag,q), vP=dot(prevFlag,q);
+    const crecPct=(vU>0&&vP>0)?((vU-vP)/vP*100):'';
+    const crece=ini?0:((vU>0&&vP>0)?(crecPct>=t.uc?1:0):0);
+    const prU=dot(curFlag,pm);
+    const meta=(nMeta>0)?dot(metaFlag,q)/nMeta:prom;
+    const den=meta*Math.max(1,nCur);
+    const mix=den>0?prU/den*100:0;
+    const prOk=ini?0:(mix>=pBase?1:0);
+    const boost=ini?0:(mix>=pc.u2?pc.e2:(mix>=pc.u1?pc.e1:0));
+    const calc=ini?0:(t.fijo+crece*t.kc+prOk*t.kp+boost);
+    const tope=ini?0:(t.fijo+t.kc+t.kp+(pc.e2||0));
+    const dProg=c.desc||0;
+    const pol=(typeof descPolitica==='function')?descPolitica(c):dProg;
+    const efec=(typeof descEfec==='function')?descEfec(c):pol;
+    const arr=(typeof pctArranque==='function')?pctArranque(c,0):0;
+    const esp=(typeof espVigente==='function')?espVigente(c.nombre):null;
+    const bloq=(typeof estaBloqueadoDesc==='function'&&estaBloqueadoDesc(c.nombre))?'SI':'NO';
+    const expl=nivel+': prom. '+prom.toLocaleString('es-MX')+' sacos/mes'
+      +(ini?' (menos del mínimo de Cobre: sin descuento todavía)'
+        :'. Fijo '+t.fijo+'% + crecimiento '+(crece?t.kc:0)+'% ('+(crecPct===''?'sin base: no compró en el mes de referencia o en el previo':(r2(crecPct)+'% vs umbral '+t.uc+'%'))+') + premium base '+(prOk?t.kp:0)+'% (mix '+(Math.floor(mix*10)/10)+'% vs mínimo '+pBase+'%) + Premium+ '+boost+'% = '+r2(calc)+'%');
+    const f=(s,v,z)=>conCache?{f:s,v:v,z:z}:{f:s,z:z};
+    return [
+      i+1,c.nombre,c.vendedor||'',c.estado||'',
+      f('ROUND(SUMPRODUCT('+pR+'$C$16:$N$16,'+BM('C','N',R)+')/'+pR+'$B$8,0)',prom,'#,##0'),                    // E
+      f(nivelChain('E'+R),nivel),                                                                              // F
+      f('SUMPRODUCT('+pR+'$C$17:$N$17,'+BM('C','N',R)+')',r2(vU),'#,##0.00'),                                   // G
+      f('SUMPRODUCT('+pR+'$C$18:$N$18,'+BM('C','N',R)+')',r2(vP),'#,##0.00'),                                   // H
+      f('IF(AND(G'+R+'>0,H'+R+'>0),(G'+R+'-H'+R+')/H'+R+'*100,"")',crecPct===''?'':crecPct,'0.00'),             // I
+      f('INDEX('+tRng('F')+',MATCH(F'+R+','+tRng('A')+',0))',t.uc,'0.##'),            // J
+      f('IF(F'+R+'="INICIAL",0,IF(AND(G'+R+'>0,H'+R+'>0),IF(I'+R+'>=J'+R+',1,0),0))',crece),                    // K
+      f('SUMPRODUCT('+pR+'$C$17:$N$17,'+BM('O','Z',R)+')',r2(prU),'#,##0.00'),                                  // L
+      f('IF('+pR+'$B$9>0,SUMPRODUCT('+pR+'$C$19:$N$19,'+BM('C','N',R)+')/'+pR+'$B$9,E'+R+')',meta,'#,##0.00'),  // M
+      f('M'+R+'*MAX(1,'+pR+'$B$7)',den,'#,##0.00'),                                                            // N
+      f('IF(N'+R+'>0,L'+R+'/N'+R+'*100,0)',mix,'0.00'),                                                        // O
+      f('ROUNDDOWN(O'+R+',1)',Math.floor(mix*10)/10,'0.0'),                                                    // P
+      f('IF(F'+R+'="INICIAL",0,IF(O'+R+'>='+PR.base+',1,0))',prOk),                                            // Q
+      f('IF(F'+R+'="INICIAL",0,IF(O'+R+'>='+PR.u2+','+PR.e2+',IF(O'+R+'>='+PR.u1+','+PR.e1+',0)))',boost,'0.00'),// R
+      f('INDEX('+tRng('C')+',MATCH(F'+R+','+tRng('A')+',0))',t.fijo,'0.00'),                                    // S
+      f('INDEX('+tRng('D')+',MATCH(F'+R+','+tRng('A')+',0))',t.kc,'0.00'),                                      // T
+      f('INDEX('+tRng('E')+',MATCH(F'+R+','+tRng('A')+',0))',t.kp,'0.00'),                                      // U
+      f('IF(F'+R+'="INICIAL",0,S'+R+'+K'+R+'*T'+R+'+Q'+R+'*U'+R+'+R'+R+')',calc,'0.00'),                         // V
+      dProg,                                                                                                   // W
+      f('ROUND(V'+R+'-W'+R+',4)',Math.round((calc-dProg)*10000)/10000,'0.0000'),                                // X
+      f('IF(X'+R+'=0,"OK","REVISAR")',Math.round((calc-dProg)*10000)===0?'OK':'REVISAR'),                       // Y
+      f('IF(F'+R+'="INICIAL",0,INDEX('+tRng('G')+',MATCH(F'+R+','+tRng('A')+',0)))',tope,'0.00'),               // Z
+      arr||0,                                                                                                  // AA
+      esp?Number(esp.pct):'',                                                                                  // AB
+      bloq,                                                                                                    // AC
+      pol,                                                                                                     // AD
+      efec,                                                                                                    // AE
+      expl                                                                                                     // AF
+    ];
+  });
+  const head=['ID','Cliente','Vendedor','Estado',
+    'Prom. 6 meses cerrados (sacos/mes)','Nivel','Sacos periodo ACTUAL','Sacos periodo PREVIO','Crecimiento %','Umbral crecim. del nivel %','¿Ganó crecimiento? (1/0)',
+    'Sacos premium periodo actual','Meta mensual (prom. 6 meses previos al corte)','Base premium (meta × meses)','Mix premium %','Mix mostrado (truncado 1 dec.)','¿Premium base? (1/0)','Bono Premium+ %',
+    '% fijo del nivel','% bono crecimiento del nivel','% bono premium base del nivel',
+    'DESCUENTO CALCULADO EN EXCEL %','Descuento del PROGRAMA %','Diferencia','Validación','Tope máx. del nivel %',
+    '% arranque autorizado','% especial vigente (dirección)','¿Bloqueado para % en Odoo?','% de política que ve el cliente','% que realmente se paga','Explicación del cálculo'];
+  const wsDes=XLSX.utils.aoa_to_sheet([
+    ['Descuento por cliente — cálculo con fórmulas vs. lo que calculó el programa'],
+    ['Columna V = política calculada con FÓRMULAS de Excel (leen Parametros y Base_mensual). Columna W = lo que calculó el programa. Columna Y debe decir OK en todos los renglones.'],
+    ['Las columnas AA–AE son decisiones de dirección que se montan ENCIMA de la política (arranque, especial, bloqueo): no entran en V/W; AE es lo que finalmente se paga.'],
+    head,
+    ...rows
+  ]);
+  const DLd=D0+Math.max(N,1)-1;
+  wsDes['!cols']=[{wch:6},{wch:38},{wch:16},{wch:14},{wch:13},{wch:15},{wch:12},{wch:12},{wch:11},{wch:11},{wch:11},{wch:12},{wch:14},{wch:13},{wch:10},{wch:12},{wch:10},{wch:10},{wch:9},{wch:11},{wch:11},{wch:14},{wch:14},{wch:10},{wch:11},{wch:10},{wch:11},{wch:12},{wch:12},{wch:12},{wch:12},{wch:110}];
+  wsDes['!autofilter']={ref:'A4:AF'+DLd};
+
+  // ── 7) Hoja Resumen: qué es, cómo leerlo y totales (con fórmulas) ──
+  const hoy=new Date();
+  const dRng=c=>'Descuentos!$'+c+'$'+D0+':$'+c+'$'+DLd;
+  const nOk=rows.filter(r=>r[24]&&r[24].v==='OK').length;
+  const wavgNum=rows.reduce((s,r)=>s+(r[21].v||0)*(r[4].v||0),0), wavgDen=rows.reduce((s,r)=>s+(r[4].v||0),0);
+  const refTxt=ref?(MES_NOM[ref]+(evalP==='MES'?(' (contra '+MES_NOM[prevM]+')'):' (trimestre)')):'(sin meses cerrados)';
+  const res=[
+    ['Descuentos por cliente — respaldo con fórmulas'],
+    [],
+    ['Generado',hoy.toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})],
+    ['Archivo de origen',DATA.fname||'(sin nombre)'],
+    ['Periodo de evaluación',evalP==='MES'?'Mensual: mes de referencia vs. el mes anterior':'Trimestral'],
+    ['Mes de referencia',{f:'IF(Parametros!$B$5=0,"(sin meses cerrados)",INDEX(Parametros!$C$13:$N$13,Parametros!$B$5))',v:ref?MES_NOM[ref]:'(sin meses cerrados)'}],
+    [],
+    ['Clientes en el libro',{f:'COUNTA('+dRng('B')+')',v:N}],
+    ['Clientes donde Excel y programa coinciden (OK)',{f:'COUNTIF('+dRng('Y')+',"OK")',v:nOk}],
+    ['Clientes a REVISAR (difieren)',{f:'COUNTIF('+dRng('Y')+',"REVISAR")',v:N-nOk}],
+    ['Descuento promedio ponderado por sacos/mes (política, Excel)',{f:'IF(SUM('+dRng('E')+')=0,0,SUMPRODUCT('+dRng('V')+','+dRng('E')+')/SUM('+dRng('E')+'))',v:wavgDen?wavgNum/wavgDen:0,z:'0.00'}],
+    [],
+    ['Resumen por nivel','Clientes','Descuento promedio %','Ganaron crecimiento','Ganaron premium base'],
+    ...tiers.map(t=>{const sel=rows.filter(r=>r[5].v===t.name);
+      return [t.name,
+        {f:'COUNTIF('+dRng('F')+',A'+(14+tiers.indexOf(t))+')',v:sel.length},
+        {f:'IFERROR(AVERAGEIF('+dRng('F')+',A'+(14+tiers.indexOf(t))+','+dRng('V')+'),0)',v:sel.length?sel.reduce((s,r)=>s+r[21].v,0)/sel.length:0,z:'0.00'},
+        {f:'COUNTIFS('+dRng('F')+',A'+(14+tiers.indexOf(t))+','+dRng('K')+',1)',v:sel.filter(r=>r[10].v===1).length},
+        {f:'COUNTIFS('+dRng('F')+',A'+(14+tiers.indexOf(t))+','+dRng('Q')+',1)',v:sel.filter(r=>r[16].v===1).length}];}),
+    [],
+    ['CÓMO SE CALCULA EL DESCUENTO (lo que hacen las fórmulas de la hoja Descuentos)'],
+    ['1. Nivel: promedio de sacos de los últimos 6 meses CERRADOS (Parametros, fila "¿Entra al promedio?"), contado sobre los productos que cuentan para promedio. Se compara contra el mínimo de cada nivel.'],
+    ['2. % fijo: el que tiene el nivel en la tabla de Parametros. El nivel INICIAL (menos de 200 sacos/mes) no recibe descuento.'],
+    ['3. Bono de crecimiento: se compara el periodo ACTUAL contra el PREVIO — por omisión, el último mes cerrado contra el anterior, IGUAL para todos los clientes. Si no compró en alguno de los dos meses, NO hay bono (no se premia crecer desde cero). Si (actual − previo) ÷ previo ≥ umbral del nivel, suma el bono de crecimiento.'],
+    ['4. Bono premium base: sacos de productos premium del periodo actual ÷ (meta mensual × nº de meses del periodo) × 100. La meta es el promedio de los 6 meses cerrados ANTERIORES al periodo evaluado (la que se le fijó el día 1). Si el mix ≥ el mínimo (por omisión 3%) suma el bono premium base del nivel.'],
+    ['5. Bono Premium+: extra por subir el mix premium (por omisión +0.5% con mix ≥5%, +1% con mix ≥7.5%). Se compara el mix SIN redondear; la columna "Mix mostrado" lo trunca a 1 decimal para que nadie vea un 5.0% que en realidad es 4.96%.'],
+    ['6. Descuento de política = % fijo + bono crecimiento + bono premium base + Premium+. Es la columna V. La columna W es lo que calculó el programa con su propio código; la diferencia (X) debe ser 0.'],
+    ['7. Encima de la política, dirección puede autorizar un % de arranque o un % especial con vigencia, o bloquear al cliente para % (recibe bonificación en vez de nota de crédito). Eso va en las columnas AA–AE; AE es lo que realmente se paga.'],
+    [],
+    ['Hojas del libro: Descuentos (el cálculo) · Parametros (política y calendario, editable para simular) · Base_mensual (sacos por cliente y mes) · Detalle_producto (dato crudo por producto).']
+  ];
+  const wsRes=XLSX.utils.aoa_to_sheet(res);
+  wsRes['!cols']=[{wch:62},{wch:18},{wch:20},{wch:20},{wch:20}];
+
+  // sin valor en caché (solo para pruebas): que Excel/LibreOffice calculen todo al abrir
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,wsRes,'Resumen');
+  XLSX.utils.book_append_sheet(wb,wsDes,'Descuentos');
+  XLSX.utils.book_append_sheet(wb,wsPar,'Parametros');
+  XLSX.utils.book_append_sheet(wb,wsBase,'Base_mensual');
+  XLSX.utils.book_append_sheet(wb,wsDet,'Detalle_producto');
+  wb.Workbook={CalcPr:{fullCalcOnLoad:true},Names:nombresDet};
+  // aoa_to_sheet NO deduce el tipo de una celda que ya viene como objeto {f,v}: sin t='n' el número
+  // cacheado se guardaría como texto. Se lo asignamos aquí.
+  for(const ws of [wsRes,wsDes,wsPar,wsBase]) for(const k in ws){ if(k[0]==='!')continue; const cell=ws[k]; if(cell&&typeof cell==='object'&&cell.t===undefined&&cell.v!==undefined) cell.t=(typeof cell.v==='number')?'n':'s'; }
+  if(!conCache){ for(const ws of [wsRes,wsDes,wsPar,wsBase]) for(const k in ws){ if(k[0]==='!')continue; const cell=ws[k]; if(cell&&cell.f!==undefined){ delete cell.v; } } }
+  return wb;
+}
+function descargarExcelDescuentos(){
+  if(typeof DATA==='undefined'||!DATA||!DATA.clients||!DATA.clients.length){alert('Primero sube un reporte de ventas.');return;}
+  if(typeof XLSX==='undefined'||!XLSX.utils){alert('No se pudo cargar el motor de Excel. Revisa tu conexión e intenta de nuevo.');return;}
+  try{
+    const wb=construirLibroDescuentos();
+    const hoy=new Date();
+    XLSX.writeFile(wb,'Descuentos_por_cliente_'+(DATA.dataYear||hoy.getFullYear())+'_'+hoy.toISOString().slice(0,10)+'.xlsx');
+  }catch(e){console.error(e);alert('No se pudo generar el Excel de descuentos:\n'+e.message);}
 }
 
 // ── EXPORTAR EXCEL: ventas por mes y producto (sacos, $ sin IVA, $ con IVA) ──────
