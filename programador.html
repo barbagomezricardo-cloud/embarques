@@ -184,6 +184,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="arrastre" onclick="setView('arrastre')">⚠️ Arrastres y pendientes <span id="arrCount" class="pill p-warn" style="margin-left:4px"></span></button>
     <button data-v="flota" onclick="setView('flota')">🚚 Flota y mantenimiento <span id="flotaCount" class="pill p-late" style="margin-left:4px"></span></button>
     <button data-v="proyeccion" onclick="setView('proyeccion')">🏭 Proyección</button>
+    <button data-v="traza" onclick="setView('traza')">🧾 Trazabilidad <span id="trzCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
   </div>
 
@@ -263,6 +264,29 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <div id="proyFoot" class="legend" style="margin-top:10px"></div>
   </div>
 
+  <!-- TRAZABILIDAD VIEW (lotes por producto: qué lote se fue, cuántos sacos y a qué cliente — lo capturan los cargadores en la app) -->
+  <div class="view" id="v-traza">
+    <div class="kpis" id="trzKpis"></div>
+    <div class="periodbar" style="margin-bottom:10px">
+      <div class="f"><label>Vista</label><select id="trzView" onchange="trzSet('view',this.value)"><option value="lote">Por lote</option><option value="cliente">Por cliente</option><option value="detalle">Detalle por embarque</option></select></div>
+      <div class="f"><label>Producto</label><select id="trzProd" onchange="trzSet('prod',this.value)"></select></div>
+      <div class="f"><label>Lote (rastrear)</label><input id="trzLote" placeholder="Ej. L260901A" oninput="trzSet('lote',this.value)"></div>
+      <div class="f"><label>Cliente</label><input id="trzCli" placeholder="Filtrar cliente…" oninput="trzSet('cli',this.value)"></div>
+      <div class="spacer"></div>
+      <button class="ghost" onclick="trzLimpiar()">✕ Limpiar filtros</button>
+      <button class="ghost" onclick="exportTraza()">⬇ CSV trazabilidad</button>
+    </div>
+    <div id="trzBanner"></div>
+    <div class="legend"><span class="muted">Usa el <b>periodo</b>, la búsqueda y los filtros de arriba (programación) más los de esta pestaña. Escribe un <b>lote</b> para rastrear a qué clientes llegó. Clic en un lote para ver sus clientes; clic en un renglón del detalle para abrir el embarque.</span></div>
+    <div class="charts" style="margin-bottom:14px">
+      <div class="card"><h3>Sacos por producto</h3><div class="chart" id="trzChProd"></div></div>
+      <div class="card"><h3>Top lotes por sacos</h3><div class="chart" id="trzChLote"></div></div>
+      <div class="card"><h3>Top clientes por sacos</h3><div class="chart" id="trzChCli"></div></div>
+      <div class="card"><h3>Sacos trazados por día</h3><div class="chart" id="trzChDia"></div></div>
+    </div>
+    <div class="tablewrap"><table style="min-width:900px"><thead><tr id="theadTz"></tr></thead><tbody id="tbodyTz"></tbody></table></div>
+  </div>
+
 </main>
 
 <!-- FORM MODAL -->
@@ -305,6 +329,8 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <div class="field execfld"><label>Fecha de carga real</label><input type="date" id="f_fechaCarga"></div>
       <div class="field execfld"><label>¿Despachado?</label><select id="f_despachado"><option value="">No</option><option value="1">Sí</option></select></div>
       <div class="field half execfld" id="delayWrap" style="display:none"><label>Motivo de retraso</label><select id="f_motivo"></select></div>
+      <div class="sech full execfld">📦 Lotes cargados (trazabilidad) <span style="font-weight:400;color:var(--muted)">— normalmente los captura el cargador en la app; aquí se pueden corregir</span></div>
+      <div class="field full execfld" id="f_lotesWrap"><div id="f_lotes"></div><div style="display:flex;gap:8px;align-items:center;margin-top:6px"><button type="button" class="ghost protected" data-prot onclick="addFormLote()">＋ Agregar lote</button><span class="hint" id="f_lotesTot"></span></div></div>
       <div class="field full"><label>Observaciones</label><textarea id="f_obs" rows="2"></textarea></div>
       <div class="calcbox full" id="calcbox"></div>
     </div>
@@ -355,6 +381,15 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <h3 style="margin:0 0 8px;font-size:13px">🚧 Motivos de retraso</h3>
       <p class="hint" style="margin-top:0">Esta es la lista que ven los cargadores en su app al reportar un retraso de carga o de salida. Agrega los que falten y quita los que ya no ocurran — se sincroniza a la app al instante.</p>
       <button class="ghost" onclick="openMotivosEditor()" style="border-color:var(--accent);color:var(--accent)">✏️ Editar motivos de retraso</button>
+      <hr style="border-color:var(--line);margin:16px 0">
+      <h3 style="margin:0 0 8px;font-size:13px">📦 Trazabilidad por lotes</h3>
+      <p class="hint" style="margin-top:0">La app de cargadores pide producto, lote y sacos de cada lote que se sube a la unidad. Con esto activo <b>no se puede finalizar la carga ni despachar</b> sin capturarlos.</p>
+      <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt);text-transform:none;letter-spacing:0"><input type="checkbox" id="cfgLotesReq" style="width:auto"> Lotes obligatorios para finalizar y despachar</label>
+        <div class="field"><label>Tolerancia kg vs lotes (%)</label><input type="number" id="cfgTolLot" style="width:90px" min="0" step="0.5"></div>
+        <button class="ghost" onclick="openProductosEditor()" style="border-color:var(--accent);color:var(--accent)">✏️ Catálogo de productos</button>
+      </div>
+      <p class="hint">Tolerancia: diferencia máxima permitida entre los kg capturados y los kg que suman los lotes (sacos × kg por saco). 0 = no comparar.</p>
       <hr style="border-color:var(--line);margin:16px 0">
       <h3 style="margin:0 0 8px;font-size:13px">Seguridad y datos</h3>
       <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
@@ -447,6 +482,25 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   </div>
 </div>
 
+<!-- EDITOR DE CATÁLOGO DE PRODUCTOS (trazabilidad) -->
+<div class="overlay" id="prodOverlay">
+  <div class="modal" style="max-width:700px">
+    <h2>📦 Catálogo de productos (trazabilidad)</h2>
+    <div style="padding:14px 18px">
+      <p class="hint" style="margin-top:0">Esta es la lista de productos que el cargador elige en la app al capturar lotes. El <b>kg por saco</b> sirve para comprobar que los lotes cuadren con los kg cargados. Los cambios se guardan solos y se sincronizan a la app.</p>
+      <div id="prodList" style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px"></div>
+      <div class="serv-addbox">
+        <input id="prodNewCod" placeholder="Código (ej. 04MAS011)" style="max-width:170px">
+        <input id="prodNewName" placeholder="Nombre del producto…">
+        <input id="prodNewKg" type="number" placeholder="kg/saco" style="max-width:90px" onkeydown="if(event.key==='Enter')addProducto()">
+        <button class="ghost" onclick="addProducto()">＋ Agregar</button>
+      </div>
+    </div>
+    <div class="actions"><span class="hint">Cambiar un nombre no altera lo ya capturado: cada lote guarda el nombre que tenía al cargarse.</span>
+      <button class="primary" onclick="closeProductosEditor()">Listo</button></div>
+  </div>
+</div>
+
 <!-- FLOTA FORM MODAL -->
 <div class="overlay" id="flotaOverlay">
   <div class="modal" style="max-width:640px">
@@ -529,7 +583,7 @@ const MOTIVOS_DEFAULT = [
   {cod:"SEG-01",desc:"Revisión de seguridad / inspección"},
   {cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"},
 ];
-let CFG = { limites:{...DEFAULT_LIMITES}, semV:15, semA:30, pwd:"admin123", masterPwd:"master-2026", firebase:null, users:[{name:"CARGADOR 1",pin:"1111"}], motivos:MOTIVOS_DEFAULT.map(m=>({...m})) };
+let CFG = { limites:{...DEFAULT_LIMITES}, semV:15, semA:30, pwd:"admin123", masterPwd:"master-2026", firebase:null, users:[{name:"CARGADOR 1",pin:"1111"}], motivos:MOTIVOS_DEFAULT.map(m=>({...m})), productos:null, lotesObligatorios:true, tolLotesPct:5 };
 // lista de motivos vigente: la de CFG si ya tiene algo, si no la semilla por defecto
 function motivosActuales(){ return (CFG.motivos&&CFG.motivos.length)?CFG.motivos:MOTIVOS_DEFAULT; }
 // mapa código -> descripción, para mostrar el motivo específico en tablero y tabla; se
@@ -587,8 +641,8 @@ let fb=null, fbData=null, fbCfg=null, fbAudit=null, fbFlota=null, fbProy=null, f
 let PROY=null;   // último payload de proyección publicado desde ventas.html ({ts,updatedStr,families:[...]})
 let PROY_EDIT={};   // stock mínimo / inventario real editados a mano — COMPARTIDO con ventas.html (/skan/_proyedit)
 function loadProyLocal(){ try{ const p=localStorage.getItem(PROY_KEY); if(p!=null)PROY=JSON.parse(p); }catch(e){} try{ const pe=localStorage.getItem(PROYEDIT_KEY); if(pe!=null)PROY_EDIT=JSON.parse(pe)||{}; }catch(e){} }
-const AUDIT_FIELDS = ['colocacion','inicioCarga','finCarga','kilos','sacos','motivo','despachado','tipo','peso','horaSalida','horaSalidaProg','horaProg','libSAP'];
-const AUDIT_LABELS = {colocacion:'Colocación',inicioCarga:'Inicio carga',finCarga:'Fin carga',kilos:'Kg cargados',sacos:'Sacos',motivo:'Motivo',despachado:'Despachado',tipo:'Tipo unidad',peso:'Peso prog',horaSalida:'Hora salida',horaSalidaProg:'Salida programada',horaProg:'Hora de cita',libSAP:'Lib. SAP'};
+const AUDIT_FIELDS = ['colocacion','inicioCarga','finCarga','kilos','sacos','motivo','despachado','tipo','peso','horaSalida','horaSalidaProg','horaProg','libSAP','lotes'];
+const AUDIT_LABELS = {colocacion:'Colocación',inicioCarga:'Inicio carga',finCarga:'Fin carga',kilos:'Kg cargados',sacos:'Sacos',motivo:'Motivo',despachado:'Despachado',tipo:'Tipo unidad',peso:'Peso prog',horaSalida:'Hora salida',horaSalidaProg:'Salida programada',horaProg:'Hora de cita',libSAP:'Lib. SAP',lotes:'Lotes'};
 
 /* ================= CÁLCULO ================= */
 function toMin(h){ if(!h) return null; const p=h.split(':'); return (+p[0])*60+(+p[1]); }
@@ -700,7 +754,7 @@ const COLS=[
   {k:'finCarga',t:'Fin'},{k:'horaSalida',t:'Salida'},{k:'carga',t:'T.Carga',calc:1},
   {k:'estatusCarga',t:'Carga',calc:1},{k:'estatusSalida',t:'Salida ✓',calc:1},
   {k:'peso',t:'Kg prog',num:1},{k:'kilos',t:'Kg cargados',num:1},{k:'fechaCarga',t:'F. Carga'},
-  {k:'motivo',t:'Motivo'},{k:'cargador',t:'Cargador'}
+  {k:'lotes',t:'Lotes',calc:1},{k:'motivo',t:'Motivo'},{k:'cargador',t:'Cargador'}
 ];
 function pill(estatus){ const m={'A TIEMPO':'p-ok','RETRASADO':'p-late','LENTA':'p-late','TARDE':'p-late','EN PROCESO':'p-proc','PENDIENTE':'p-warn','CANCELADO':'p-proc','—':'p-proc'}; return `<span class="pill ${m[estatus]||'p-proc'}">${estatus}</span>`; }
 function cellHTML(r,c,cv){
@@ -708,6 +762,7 @@ function cellHTML(r,c,cv){
   if(c.calc){
     if(c.k==='carga') return cv.carga==null?'<span class="muted">—</span>':minToHM(cv.carga)+(cv.retrasoCarga?` <span style="color:var(--late)">(+${cv.retrasoCarga}m)</span>`:'');
     if(c.k==='estatusCarga') return pill(cv.estatusCarga);
+    if(c.k==='lotes'){ const n=lotesDe(r).length; if(n) return `<span class="pill p-ok" title="${escProy(lotesResumen(r.lotes))}">${n} · ${lotesSacos(r).toLocaleString('es-MX')} sc</span>`; return cv.despachado?'<span class="pill p-late">SIN LOTES</span>':'<span class="muted">—</span>'; }
     if(c.k==='estatusSalida') return pill(cv.estatusSalida)+(cv.retrasoSalida?` <span class="muted">+${cv.retrasoSalida}m</span>`:'');
   }
   let v=r[c.k];
@@ -734,6 +789,7 @@ function render(){
   renderFlota();
   renderBanners();
   refreshOptions();
+  if(curView==='traza')renderTraza(); else { try{ const n=DATA.filter(r=>!r.cancelado&&(r.despachado===true||r.despachado==='1'||r.despachado===1)&&!lotesDe(r).length&&inPeriod(r)).length; const c=document.getElementById('trzCount'); if(c){ c.textContent=n||''; c.style.display=n?'':'none'; } }catch(e){} }
 }
 
 /* ================= AVISOS PROACTIVOS (banner fijo, visible sin entrar a la pestaña) ================= */
@@ -1120,7 +1176,8 @@ function openForm(id){
   set('f_libSAP','libSAP'); set('f_horaSalida','horaSalida'); set('f_kilos','kilos'); set('f_sacos','sacos');
   set('f_fechaCarga','fechaCarga'); set('f_motivo','motivo'); set('f_obs','obs');
   document.getElementById('f_despachado').value = (r.despachado===true||r.despachado==='1'||r.despachado===1)?'1':'';
-  const hasExec = !!(r.colocacion||r.inicioCarga||r.finCarga||r.kilos||r.sacos||r.horaSalida||r.libSAP||(r.despachado===true||r.despachado==='1'||r.despachado===1));
+  formLotes=lotesDe(r).map(x=>({...x})); renderFormLotes();
+  const hasExec = !!(r.colocacion||r.inicioCarga||r.finCarga||r.kilos||r.sacos||lotesDe(r).length||r.horaSalida||r.libSAP||(r.despachado===true||r.despachado==='1'||r.despachado===1));
   toggleExec(hasExec);
   servAlertUpd();
   recalc();
@@ -1143,7 +1200,7 @@ function readForm(){
     peso:g('f_peso'),anden:g('f_anden').trim(),fechaProg:g('f_fechaProg'),horaProg:g('f_horaProg'),horaSalidaProg:g('f_horaSalidaProg'),turno:g('f_turno'),
     cargador:g('f_cargador').trim(),cargador2:g('f_cargador2').trim(),monta:g('f_monta').trim(),candado:g('f_candado').trim(),
     colocacion:g('f_colocacion'),inicioCarga:g('f_inicioCarga'),finCarga:g('f_finCarga'),libSAP:g('f_libSAP'),horaSalida:g('f_horaSalida'),
-    kilos:g('f_kilos'),sacos:g('f_sacos'),fechaCarga:g('f_fechaCarga'),despachado:g('f_despachado')==='1',motivo:g('f_motivo'),obs:g('f_obs').trim() };
+    kilos:g('f_kilos'),sacos:g('f_sacos'),fechaCarga:g('f_fechaCarga'),despachado:g('f_despachado')==='1',motivo:g('f_motivo'),obs:g('f_obs').trim(), lotes:lotesLimpios() };
 }
 function recalc(){
   const r=readForm(), cv=calc(r);
@@ -1163,7 +1220,10 @@ function recalc(){
     <div>Salida real: <b>${cv.salidaReal||'—'}</b></div>
     <div>Estatus de salida: <b style="color:${cs}">${cv.estatusSalida}${cv.retrasoSalida?` (+${cv.retrasoSalida}m tarde)`:cv.adelantoSalida?` (${cv.adelantoSalida}m antes)`:''}</b></div>
     <div>Semáforo de ingreso: <b>${semTxt}</b></div>
-    <div>Permanencia total: <b>${cv.permanencia!=null?minToHM(cv.permanencia):'—'}</b></div>`;
+    <div>Permanencia total: <b>${cv.permanencia!=null?minToHM(cv.permanencia):'—'}</b></div>
+    <div style="width:100%;color:#cfe0f2;font-weight:600;border-bottom:1px solid var(--line);padding-bottom:4px;margin:6px 0 2px">📦 TRAZABILIDAD</div>
+    <div>Lotes: <b>${r.lotes&&r.lotes.length?r.lotes.length+' · '+r.lotes.reduce((a,x)=>a+x.sacos,0).toLocaleString('es-MX')+' sacos (≈'+Math.round(r.lotes.reduce((a,x)=>a+x.sacos*(x.kgSaco||0),0)).toLocaleString('es-MX')+' kg)':'sin capturar'}</b></div>
+    <div>Revisión: <b style="color:${(r.lotes&&r.lotes.length&&!validaLotes(r))?'var(--ok)':(lotesReq()?'var(--warn)':'var(--proc)')}">${(r.lotes&&r.lotes.length)?(validaLotes(r)||'✓ cuadra con los kg cargados'):(lotesReq()?'faltan lotes para despachar':'lotes opcionales')}</b></div>`;
   document.getElementById('delayWrap').style.display=cv.estatus==='RETRASADO'?'flex':'none';
   // auto-set fechaCarga when despachado y vacío
   if(r.despachado && !document.getElementById('f_fechaCarga').value){ document.getElementById('f_fechaCarga').value=r.fechaProg||TODAY; }
@@ -1189,6 +1249,11 @@ function saveRow(){
   const r=readForm();
   r.kilos=fixUnidadKilos(r.kilos, r.peso);
   if(!r.cliente && !r.pedido){ toast('Captura al menos cliente o pedido'); return; }
+  // trazabilidad: lotes a medias no se guardan en silencio; y no se marca DESPACHADA una unidad sin producto/lote que cuadre con los kg
+  if(lotesFormIncompletos()){ toast('Hay lotes a medias: completa producto, lote (mín. 3 caracteres) y sacos, o quítalos'); return; }
+  if(r.lotes.length) r.sacos=String(r.lotes.reduce((a,x)=>a+x.sacos,0));
+  { const prevRec=editId?(DATA.find(x=>x.id===editId)||{}):{}; const yaDesp=prevRec.despachado===true||prevRec.despachado==='1'||prevRec.despachado===1;
+    if(r.despachado && !yaDesp){ const vl=validaLotes(r); if(vl){ toast('🚫 '+vl,5200); return; } } }
   if(!r.fechaProg) r.fechaProg=TODAY;
   if(editId){
     const i=DATA.findIndex(x=>x.id===editId); const prev=DATA[i]||{};
@@ -1227,7 +1292,7 @@ function auditConfig(oldL,newL,oldSV,newSV,oldSA,newSA){
 function normVal(v){ if(v===true)return 'Sí'; if(v===false||v===''||v==null)return v===false?'No':''; return String(v); }
 function auditDiff(prev, next){
   AUDIT_FIELDS.forEach(f=>{
-    const a=normVal(prev[f]), b=normVal(next[f]);
+    const a=(f==='lotes'?lotesResumen(prev[f]):normVal(prev[f])), b=(f==='lotes'?lotesResumen(next[f]):normVal(next[f]));
     if(a!==b && !(a===''&&b==='')){
       // ¿esta edición "maquilla" un retraso? comparar estatus antes/después
       const before=calc(prev), afterRec={...prev,...next}, after=calc(afterRec);
@@ -1284,6 +1349,7 @@ function buildCfg(){
       <input value="${k}" class="cfgKey" style="flex:1"><input type="number" value="${v}" class="cfgVal" style="width:80px"><span class="hint">min</span></div>`).join('')
     +`<button class="ghost" onclick="addCfgRow()">＋ Agregar tipo</button>`;
   document.getElementById('cfgSemV').value=CFG.semV; document.getElementById('cfgSemA').value=CFG.semA;
+  document.getElementById('cfgLotesReq').checked=lotesReq(); document.getElementById('cfgTolLot').value=tolLot();
   document.getElementById('cfgFb').value=CFG.firebase?JSON.stringify(CFG.firebase,null,2):'';
   buildUsers();
 }
@@ -1304,6 +1370,9 @@ function saveConfig(){
   const newSemV=Number(document.getElementById('cfgSemV').value)||15, newSemA=Number(document.getElementById('cfgSemA').value)||30;
   auditConfig(CFG.limites, n, CFG.semV, newSemV, CFG.semA, newSemA);   // registrar cambios de estándares
   CFG.limites=n; CFG.semV=newSemV; CFG.semA=newSemA;
+  { const nr=document.getElementById('cfgLotesReq').checked, nt=Math.max(0,Number(document.getElementById('cfgTolLot').value)||0);
+    if(nr!==lotesReq()) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'lotesObligatorios',label:'Lotes obligatorios',from:lotesReq()?'Sí':'No',to:nr?'Sí':'No',maquillaje:!nr,estatusAntes:'',estatusDespues:'',by:isMaster?'master':'superusuario',origen:'programador'});
+    CFG.lotesObligatorios=nr; CFG.tolLotesPct=nt; }
   // usuarios de la app (solo master edita)
   if(isMaster){ const uN=[...document.querySelectorAll('.uName')], uP=[...document.querySelectorAll('.uPin')];
     const us=[]; uN.forEach((el,i)=>{ const nm=el.value.trim(); const pn=(uP[i].value||'').trim(); if(nm&&pn) us.push({name:nm,pin:pn}); });
@@ -1395,6 +1464,8 @@ function initFirebase(){
       fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; SERV_OVERRIDES=CFG.servClientes||null;
         // la nube todavía no tiene el catálogo de motivos (cuentas ya sembradas antes de este cambio): lo sube ahora
         if(!v.motivos || !v.motivos.length){ CFG.motivos=MOTIVOS_DEFAULT.map(m=>({...m})); persistCfg(); }
+        // lo mismo para la trazabilidad: la app de cargadores lee el catálogo de productos y las reglas desde la nube
+        if(!asArr(v.productos).length || !('lotesObligatorios' in v)){ if(!asArr(CFG.productos).length)CFG.productos=PRODUCTOS_DEFAULT.map(p=>({...p})); if(!('lotesObligatorios' in v))CFG.lotesObligatorios=true; if(v.tolLotesPct==null)CFG.tolLotesPct=5; persistCfg(); }
         rebuildMotivoMap();
         try{render();}catch(e){} } });
       fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster){ renderAudit(); renderBanners(); } } });
@@ -1444,7 +1515,7 @@ function fill(id,arr){ const el=document.getElementById(id); if(!el)return; cons
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
 
 /* ================= VISTAS ================= */
-function setView(v){ if(v==='audit'&&!isMaster)return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); }
+function setView(v){ if(v==='audit'&&!isMaster)return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); }
 
 /* ================================================================
    ================= FLOTA / MANTENIMIENTO ========================
@@ -1705,6 +1776,168 @@ function exportFlotaCSV(){
 let tT; function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),1800); }
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o)o.classList.remove('show'); }));
 document.addEventListener('keydown',e=>{ if(e.key==='Escape')document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show')); });
+
+/* ================================================================
+   ================= TRAZABILIDAD POR LOTES =======================
+   Cada embarque guarda r.lotes = [{cod, prod, lote, sacos, kgSaco}] (lo captura el cargador en la app;
+   aquí se pueden corregir). La pestaña 🧾 Trazabilidad solo LEE eso: qué lote de qué producto se fue,
+   cuántos sacos y a qué cliente, filtrable por periodo, producto, lote y cliente.
+   ================================================================ */
+const PRODUCTOS_DEFAULT=[{cod:'04MAS001',name:'SILVER KAN PREMIUM +22% 25 KG',kg:25},{cod:'04MAS0019',name:'SILVER KAN PREMIUM 20 KGS',kg:20},{cod:'04MAS006',name:'SILVER CAT 15 KGS',kg:15},{cod:'04MAS007',name:'SILVER CAT 5 KGS',kg:5},{cod:'04MAS009',name:'KAN KAN 20 KGS',kg:20},{cod:'04MAS0020',name:'KAN KAN 25 KG',kg:25},{cod:'04MAS008',name:'MI BOOB 20 KGS',kg:20},{cod:'04MAS010',name:'PET FOOD 20 KG (R)',kg:20},{cod:'04MAS003',name:'SILVER KAN 18% 25 KGS',kg:25},{cod:'04MAS002',name:'SILVER KAN 18% 5 KGS',kg:5},{cod:'04MAS004',name:'SILVER KAN CACHORRO 20 KGS',kg:20},{cod:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',kg:5}];
+function asArr(x){ return Array.isArray(x)?x.filter(Boolean):(x&&typeof x==='object'?Object.values(x).filter(Boolean):[]); }
+function productosActuales(){ const a=asArr(CFG.productos).filter(p=>p&&p.cod&&p.name); return a.length?a:PRODUCTOS_DEFAULT; }
+function lotesReq(){ return CFG.lotesObligatorios!==false; }
+function tolLot(){ const t=Number(CFG.tolLotesPct); return isNaN(t)?5:Math.max(0,t); }
+function normLote(t){ return String(t||'').toUpperCase().replace(/\s+/g,'').replace(/[^A-Z0-9\-\/\.]/g,''); }
+function lotesDe(r){ return asArr(r&&r.lotes); }
+function lotesSacos(r){ return lotesDe(r).reduce((a,x)=>a+(Number(x.sacos)||0),0); }
+function lotesKg(r){ return lotesDe(r).reduce((a,x)=>a+(Number(x.sacos)||0)*(Number(x.kgSaco)||0),0); }
+function lotesResumen(arr){ return asArr(arr).map(x=>(x.cod||'')+' '+x.lote+' x'+x.sacos).join(' | '); }
+// mismas reglas que la app de cargadores: sin lotes, o lotes que no cuadran con los kg capturados -> mensaje; todo bien -> null
+function validaLotes(r){
+  if(!lotesReq()) return null;
+  const L=lotesDe(r);
+  if(!L.length) return 'Captura los lotes (producto, lote y sacos) antes de marcar la unidad como despachada';
+  const tol=tolLot(), kc=Number(r.kilos)||0, ke=lotesKg(r);
+  if(tol>0 && kc>0 && ke>0){ const dif=(ke-kc)/kc*100; if(Math.abs(dif)>tol) return 'Los lotes suman '+lotesSacos(r).toLocaleString('es-MX')+' sacos (≈'+Math.round(ke).toLocaleString('es-MX')+' kg) y los kg cargados son '+Math.round(kc).toLocaleString('es-MX')+' ('+(dif>0?'+':'')+dif.toFixed(1)+'%): corrige sacos de los lotes o kg'; }
+  return null;
+}
+
+/* ---- editor de lotes dentro del formulario del embarque ---- */
+let formLotes=[];
+function renderFormLotes(){
+  const box=document.getElementById('f_lotes'); if(!box) return;
+  const prods=productosActuales(); const can=unlocked;
+  box.innerHTML=formLotes.length? formLotes.map((x,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+      <select ${can?'':'disabled'} onchange="setFormLote(${i},'cod',this.value)" style="flex:2;min-width:200px"><option value="">— producto —</option>${prods.map(p=>`<option value="${escProy(p.cod)}" ${p.cod===x.cod?'selected':''}>${escProy(p.name)}</option>`).join('')}${x.cod&&!prods.some(p=>p.cod===x.cod)?`<option value="${escProy(x.cod)}" selected>${escProy(x.prod||x.cod)}</option>`:''}</select>
+      <input ${can?'':'disabled'} value="${escProy(x.lote||'')}" placeholder="LOTE" style="flex:1;min-width:120px;text-transform:uppercase" onchange="setFormLote(${i},'lote',this.value)">
+      <input ${can?'':'disabled'} type="number" value="${x.sacos!=null?x.sacos:''}" placeholder="sacos" style="width:90px" onchange="setFormLote(${i},'sacos',this.value)">
+      ${can?`<button type="button" class="ghost" style="color:var(--late);padding:6px 9px" onclick="delFormLote(${i})">✕</button>`:''}
+    </div>`).join('') : '<div class="hint">Sin lotes capturados.</div>';
+  const sacos=formLotes.reduce((a,x)=>a+(Number(x.sacos)||0),0), kg=formLotes.reduce((a,x)=>a+(Number(x.sacos)||0)*(Number(x.kgSaco)||0),0);
+  document.getElementById('f_lotesTot').textContent=formLotes.length?(sacos.toLocaleString('es-MX')+' sacos · ≈ '+Math.round(kg).toLocaleString('es-MX')+' kg'):'';
+}
+function addFormLote(){ if(!requireUnlock())return; formLotes.push({cod:'',prod:'',lote:'',sacos:'',kgSaco:0}); renderFormLotes(); }
+function delFormLote(i){ formLotes.splice(i,1); renderFormLotes(); recalc(); }
+function setFormLote(i,k,v){ const x=formLotes[i]; if(!x)return;
+  if(k==='cod'){ const p=productosActuales().find(q=>q.cod===v); x.cod=v; x.prod=p?p.name:''; x.kgSaco=p?(Number(p.kg)||0):0; }
+  else if(k==='lote'){ x.lote=normLote(v); }
+  else if(k==='sacos'){ x.sacos=Math.round(Number(v)||0); }
+  renderFormLotes(); recalc(); }
+// líneas válidas (producto + lote ≥3 + sacos>0); mismo producto y lote se fusionan
+function lotesLimpios(){ const m=new Map();
+  formLotes.forEach(x=>{ const lote=normLote(x.lote), sacos=Math.round(Number(x.sacos)||0); if(!x.cod||lote.length<3||!(sacos>0))return;
+    const k=x.cod+'|'+lote; if(m.has(k)) m.get(k).sacos+=sacos; else m.set(k,{cod:x.cod,prod:x.prod||x.cod,lote:lote,sacos:sacos,kgSaco:Number(x.kgSaco)||0}); });
+  return [...m.values()]; }
+function lotesFormIncompletos(){ return formLotes.filter(x=>(x.cod||x.lote||x.sacos)&&!(x.cod&&normLote(x.lote).length>=3&&Math.round(Number(x.sacos)||0)>0)).length; }
+
+/* ---- editor del catálogo de productos (CFG.productos, sincronizado a la app) ---- */
+function openProductosEditor(){ if(!requireUnlock())return; renderProductosList(); document.getElementById('prodOverlay').classList.add('show'); }
+function closeProductosEditor(){ document.getElementById('prodOverlay').classList.remove('show'); }
+function _prodSave(list){ CFG.productos=list; persistCfg(); renderProductosList(); try{render();}catch(e){} }
+function renderProductosList(){ const box=document.getElementById('prodList'); if(!box)return; const list=productosActuales();
+  box.innerHTML=list.map((p,i)=>`<div class="servrow">
+    <input value="${escProy(p.cod)}" style="width:110px;font-weight:800;color:var(--accent)" onchange="editProducto(${i},'cod',this.value)">
+    <input class="servn" value="${escProy(p.name)}" style="border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--panel2);color:var(--txt)" onchange="editProducto(${i},'name',this.value)">
+    <input type="number" value="${p.kg||''}" style="width:70px" placeholder="kg" onchange="editProducto(${i},'kg',this.value)"><span class="hint">kg</span>
+    <div class="servbtns"><button class="servbtn" style="color:var(--late)" onclick="delProducto(${i})">🗑</button></div></div>`).join('')||'<div class="hint" style="padding:12px">Sin productos.</div>'; }
+function editProducto(i,k,v){ if(!requireUnlock())return; const list=productosActuales().map(p=>({...p})); if(!list[i])return;
+  if(k==='kg')list[i].kg=Number(v)||0; else { v=String(v||'').trim(); if(!v){ toast('No puede quedar vacío'); renderProductosList(); return; } list[i][k]=(k==='cod'?v.toUpperCase():v); }
+  _prodSave(list); toast('Producto actualizado ✓'); }
+function delProducto(i){ if(!requireUnlock())return; const list=productosActuales().map(p=>({...p})); const p=list[i]; if(!p)return;
+  if(!confirm('¿Quitar "'+p.name+'" del catálogo? Los lotes ya capturados de este producto se conservan.'))return; list.splice(i,1); _prodSave(list); }
+function addProducto(){ if(!requireUnlock())return; const cod=document.getElementById('prodNewCod').value.trim().toUpperCase(), name=document.getElementById('prodNewName').value.trim(), kg=Number(document.getElementById('prodNewKg').value)||0;
+  if(!cod||!name){ toast('Escribe código y nombre'); return; } const list=productosActuales().map(p=>({...p})); if(list.some(p=>p.cod===cod)){ toast('Ese código ya existe'); return; }
+  list.push({cod,name,kg}); ['prodNewCod','prodNewName','prodNewKg'].forEach(id=>document.getElementById(id).value=''); _prodSave(list); toast('Producto agregado ✓'); }
+
+/* ---- pestaña Trazabilidad ---- */
+let TRZ={view:'lote',prod:'',lote:'',cli:'',sk:'',sd:1}, TRZ_AGG=[];
+function trzSet(k,v){ TRZ[k]=v; if(k==='view'){TRZ.sk='';TRZ.sd=1;} renderTraza(); }
+function trzLimpiar(){ TRZ.prod='';TRZ.lote='';TRZ.cli=''; document.getElementById('trzLote').value=''; document.getElementById('trzCli').value=''; renderTraza(); }
+function trzSort(k){ if(TRZ.sk===k)TRZ.sd*=-1; else{TRZ.sk=k;TRZ.sd=(k==='lote'||k==='prod'||k==='cliente'||k==='pedido')?1:-1;} renderTraza(); }
+function trzData(){
+  const rows=rowsFor(DATA.filter(inPeriod)).filter(x=>!x.cv.cancelado);
+  const all=[]; let embCon=0, embDesp=0, despSin=0;
+  rows.forEach(({r,cv})=>{ const L=lotesDe(r); if(cv.despachado){ embDesp++; if(!L.length)despSin++; } if(L.length)embCon++;
+    L.forEach(x=>all.push({id:r.id,pedido:r.pedido||'',cliente:r.cliente||'(sin cliente)',destino:r.destino||'',fecha:r.fechaCarga||r.fechaProg||'',eco:r.eco||'',operador:r.operador||'',desp:cv.despachado,
+      cod:x.cod||'',prod:x.prod||x.cod||'',lote:x.lote||'',sacos:Number(x.sacos)||0,kg:(Number(x.sacos)||0)*(Number(x.kgSaco)||0)})); });
+  const ql=normLote(TRZ.lote), qc=(TRZ.cli||'').toLowerCase().trim();
+  const lines=all.filter(l=>(!TRZ.prod||l.cod===TRZ.prod)&&(!ql||normLote(l.lote).includes(ql))&&(!qc||l.cliente.toLowerCase().includes(qc)));
+  return {all,lines,rows,embCon,embDesp,despSin,totalEmb:rows.length};
+}
+function trzAgg(lines,by){ const m=new Map();
+  lines.forEach(l=>{ const k=by==='lote'?(l.cod+'|'+l.lote):l.cliente;
+    let o=m.get(k); if(!o){ o=by==='lote'?{cod:l.cod,prod:l.prod,lote:l.lote,sacos:0,kg:0,cli:new Map(),emb:new Set(),first:l.fecha,last:l.fecha}:{cliente:l.cliente,sacos:0,kg:0,items:new Map(),emb:new Set(),first:l.fecha,last:l.fecha}; m.set(k,o); }
+    o.sacos+=l.sacos; o.kg+=l.kg; o.emb.add(l.id); if(l.fecha&&(!o.first||l.fecha<o.first))o.first=l.fecha; if(l.fecha&&l.fecha>o.last)o.last=l.fecha;
+    if(by==='lote'){ const c=o.cli.get(l.cliente)||{sacos:0,fecha:''}; c.sacos+=l.sacos; if(l.fecha>c.fecha)c.fecha=l.fecha; o.cli.set(l.cliente,c); }
+    else { const ik=l.cod+'|'+l.lote; const it=o.items.get(ik)||{prod:l.prod,lote:l.lote,sacos:0}; it.sacos+=l.sacos; o.items.set(ik,it); } });
+  return [...m.values()]; }
+const fmtN=n=>Math.round(n).toLocaleString('es-MX');
+function renderTraza(){
+  const sel=document.getElementById('trzProd'); if(!sel) return;
+  const D=trzData(), L=D.lines;
+  // opciones de producto: catálogo + lo que haya capturado (aunque ya no esté en el catálogo)
+  const prodMap=new Map(); productosActuales().forEach(p=>prodMap.set(p.cod,p.name)); D.all.forEach(l=>{ if(l.cod&&!prodMap.has(l.cod))prodMap.set(l.cod,l.prod); });
+  sel.innerHTML='<option value="">Todos</option>'+[...prodMap.entries()].map(([c,n])=>`<option value="${escProy(c)}" ${c===TRZ.prod?'selected':''}>${escProy(n)}</option>`).join('');
+  document.getElementById('trzView').value=TRZ.view;
+  const sacos=L.reduce((a,l)=>a+l.sacos,0), kg=L.reduce((a,l)=>a+l.kg,0);
+  const lotesN=new Set(L.map(l=>l.cod+'|'+l.lote)).size, cliN=new Set(L.map(l=>l.cliente)).size, embN=new Set(L.map(l=>l.id)).size;
+  const cob=D.embDesp?Math.round((D.embDesp-D.despSin)/D.embDesp*100):0;
+  const K=[
+    {lbl:'Sacos trazados',val:fmtN(sacos),foot:`≈ ${(kg/1000).toFixed(1)} ton · ${embN} embarques`,cls:'blue'},
+    {lbl:'Lotes distintos',val:lotesN,foot:`${new Set(L.map(l=>l.cod)).size} productos`,cls:'pur'},
+    {lbl:'Clientes alcanzados',val:cliN,foot:'con producto trazado',cls:'ok'},
+    {lbl:'Despachados con lotes',val:cob+'%',foot:`${D.embDesp-D.despSin} de ${D.embDesp} despachados`,cls:cob>=100?'ok':'warn',bar:cob},
+    {lbl:'Despachados SIN lotes',val:D.despSin,foot:D.despSin?'anteriores a la función o capturados a mano':'todo trazado',cls:D.despSin?'late':'ok'},
+  ];
+  document.getElementById('trzKpis').innerHTML=K.map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div><div class="foot">${k.foot||''}</div>${k.bar!=null?`<div class="bar"><i style="width:${k.bar}%"></i></div>`:''}</div>`).join('');
+  const cnt=document.getElementById('trzCount'); if(cnt){ cnt.textContent=D.despSin||''; cnt.style.display=D.despSin?'':'none'; }
+  // banner de rastreo cuando se busca un lote
+  const bn=document.getElementById('trzBanner');
+  if(normLote(TRZ.lote).length>=2 && L.length){ const ag=trzAgg(L,'lote'); const prods=[...new Set(ag.map(a=>a.prod))].join(', '); const ns=L.reduce((a,l)=>a+l.sacos,0);
+    bn.innerHTML=`<div class="card" style="margin-bottom:12px;border-color:var(--accent)"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:240px"><b style="color:var(--accent)">🔎 Rastreo “${escProy(normLote(TRZ.lote))}”</b><div class="hint" style="font-size:12px;margin-top:3px">${escProy(prods)} · <b>${fmtN(ns)} sacos</b> en <b>${embN}</b> embarque(s) hacia <b>${cliN}</b> cliente(s) · del ${[...L.map(l=>l.fecha)].filter(Boolean).sort()[0]||'—'} al ${[...L.map(l=>l.fecha)].filter(Boolean).sort().slice(-1)[0]||'—'}</div></div><button class="ghost" onclick="trzCopiar()">📋 Copiar resumen</button></div></div>`; }
+  else if(normLote(TRZ.lote).length>=2){ bn.innerHTML=`<div class="card" style="margin-bottom:12px;border-color:var(--warn)"><span style="color:var(--warn)">Ningún embarque del periodo tiene el lote “${escProy(normLote(TRZ.lote))}”.</span> <span class="hint">Amplía el periodo (botón “Todo”) si buscas un lote antiguo.</span></div>`; }
+  else bn.innerHTML='';
+  // gráficas
+  const byProd=new Map(); L.forEach(l=>byProd.set(l.prod,(byProd.get(l.prod)||0)+l.sacos));
+  const pk=[...byProd.entries()].sort((a,b)=>b[1]-a[1]);
+  document.getElementById('trzChProd').innerHTML=pk.length?hBars(pk.map(([k,v])=>({label:escProy(k),v:Math.round(v)})),'#3b9dff'):emptyChart();
+  const aL=trzAgg(L,'lote').sort((a,b)=>b.sacos-a.sacos), aC=trzAgg(L,'cliente').sort((a,b)=>b.sacos-a.sacos);
+  document.getElementById('trzChLote').innerHTML=aL.length?hBars(aL.slice(0,10).map(a=>({label:escProy(a.lote+' · '+a.prod.slice(0,18)),v:Math.round(a.sacos)})),'#a06bff'):emptyChart();
+  document.getElementById('trzChCli').innerHTML=aC.length?hBars(aC.slice(0,10).map(a=>({label:escProy(a.cliente),v:Math.round(a.sacos)})),'#2ecc71'):emptyChart();
+  const byDay={}; L.forEach(l=>{ if(l.fecha)byDay[l.fecha]=(byDay[l.fecha]||0)+l.sacos; }); const days=Object.keys(byDay).sort();
+  document.getElementById('trzChDia').innerHTML=days.length?svgBars(days.map(d=>({label:d.slice(5),v:Math.round(byDay[d]),color:'#28c8d8'})),{showVal:1,h:200}):emptyChart();
+  // tabla
+  const th=(k,t,num)=>`<th onclick="trzSort('${k}')" style="${num?'text-align:right':''}">${t}${TRZ.sk===k?(TRZ.sd>0?' ▲':' ▼'):''}</th>`;
+  const cmp=(k)=>(a,b)=>{ let x=a[k],y=b[k]; if(x instanceof Set)x=x.size; if(y instanceof Set)y=y.size; if(x instanceof Map)x=x.size; if(y instanceof Map)y=y.size; if(typeof x==='string'||typeof y==='string')return String(x||'').localeCompare(String(y||''),'es')*TRZ.sd; return ((x||0)-(y||0))*TRZ.sd; };
+  let head='',body='';
+  if(TRZ.view==='lote'){
+    TRZ_AGG=aL; if(TRZ.sk)TRZ_AGG=aL.slice().sort(cmp(TRZ.sk));
+    head=th('prod','Producto')+th('lote','Lote')+th('sacos','Sacos',1)+th('kg','Kg estimados',1)+th('cli','Clientes',1)+th('emb','Embarques',1)+th('first','Primer envío')+th('last','Último envío');
+    body=TRZ_AGG.map((a,i)=>`<tr style="cursor:pointer" onclick="trzToggle(${i})"><td>${escProy(a.prod)}</td><td class="code"><b>${escProy(a.lote)}</b></td><td class="num"><b>${fmtN(a.sacos)}</b></td><td class="num">${fmtN(a.kg)}</td><td class="num">${a.cli.size}</td><td class="num">${a.emb.size}</td><td>${a.first||'—'}</td><td>${a.last||'—'}</td></tr>
+      <tr id="trzd${i}" style="display:none"><td colspan="8" style="white-space:normal;background:#0f1c2a">${[...a.cli.entries()].sort((x,y)=>y[1].sacos-x[1].sacos).map(([c,v])=>`<span class="pill p-proc" style="margin:2px 4px 2px 0">${escProy(c)} · <b style="color:#fff">${fmtN(v.sacos)}</b> sacos${v.fecha?' · '+v.fecha:''}</span>`).join('')}</td></tr>`).join('');
+  } else if(TRZ.view==='cliente'){
+    TRZ_AGG=aC; if(TRZ.sk)TRZ_AGG=aC.slice().sort(cmp(TRZ.sk));
+    head=th('cliente','Cliente')+th('sacos','Sacos',1)+th('kg','Kg estimados',1)+th('items','Lotes',1)+th('emb','Embarques',1)+th('last','Último envío');
+    body=TRZ_AGG.map((a,i)=>`<tr style="cursor:pointer" onclick="trzToggle(${i})"><td>${escProy(a.cliente)}${servBadge(a.cliente)}</td><td class="num"><b>${fmtN(a.sacos)}</b></td><td class="num">${fmtN(a.kg)}</td><td class="num">${a.items.size}</td><td class="num">${a.emb.size}</td><td>${a.last||'—'}</td></tr>
+      <tr id="trzd${i}" style="display:none"><td colspan="6" style="white-space:normal;background:#0f1c2a">${[...a.items.values()].sort((x,y)=>y.sacos-x.sacos).map(v=>`<span class="pill p-proc" style="margin:2px 4px 2px 0">${escProy(v.prod)} · <b style="color:#fff">${escProy(v.lote)}</b> · ${fmtN(v.sacos)} sacos</span>`).join('')}</td></tr>`).join('');
+  } else {
+    let rows=L.slice(); const k=TRZ.sk||'fecha'; const sd=TRZ.sk?TRZ.sd:-1; rows.sort((a,b)=>{ const x=a[k],y=b[k]; return (typeof x==='string'||typeof y==='string'?String(x||'').localeCompare(String(y||''),'es'):((x||0)-(y||0)))*sd; });
+    head=th('fecha','Fecha')+th('pedido','Pedido')+th('cliente','Cliente')+th('destino','Destino')+th('prod','Producto')+th('lote','Lote')+th('sacos','Sacos',1)+th('kg','Kg est.',1)+th('eco','Eco')+th('operador','Operador')+'<th>Estatus</th>';
+    body=rows.map(l=>`<tr style="cursor:pointer" onclick="openForm('${l.id}')"><td>${l.fecha||'—'}</td><td>${escProy(l.pedido)}</td><td>${escProy(l.cliente)}</td><td>${escProy(l.destino)}</td><td>${escProy(l.prod)}</td><td class="code"><b>${escProy(l.lote)}</b></td><td class="num">${fmtN(l.sacos)}</td><td class="num">${fmtN(l.kg)}</td><td>${escProy(l.eco)}</td><td>${escProy(l.operador)}</td><td>${l.desp?'<span class="pill p-ok">DESPACHADO</span>':'<span class="pill p-warn">EN PROCESO</span>'}</td></tr>`).join('');
+  }
+  document.getElementById('theadTz').innerHTML=head;
+  document.getElementById('tbodyTz').innerHTML=body||`<tr><td colspan="11" class="empty">Sin lotes capturados en este periodo / filtro. Los cargadores los capturan en la app al cargar cada unidad.</td></tr>`;
+}
+function trzToggle(i){ const el=document.getElementById('trzd'+i); if(el)el.style.display=el.style.display==='none'?'':'none'; }
+function trzCopiar(){ const D=trzData(), L=D.lines; if(!L.length)return; const ag=trzAgg(L,'lote');
+  const tx='Rastreo de lote '+normLote(TRZ.lote)+' ('+[...new Set(ag.map(a=>a.prod))].join(', ')+')\n'+fmtN(L.reduce((a,l)=>a+l.sacos,0))+' sacos en '+new Set(L.map(l=>l.id)).size+' embarque(s):\n'
+    +L.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')).map(l=>'- '+(l.fecha||'s/f')+' · '+l.cliente+' · pedido '+(l.pedido||'—')+' · '+l.lote+' · '+fmtN(l.sacos)+' sacos').join('\n');
+  const done=()=>toast('Resumen copiado ✓');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(tx).then(done,()=>{ prompt('Copia el resumen:',tx); }); else prompt('Copia el resumen:',tx); }
+function exportTraza(){ const D=trzData(); const H=['Fecha','Pedido','Cliente','Destino','CodProducto','Producto','Lote','Sacos','KgEstimados','Eco','Operador','Despachado'];
+  const L=[H.join(',')]; D.lines.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')).forEach(l=>{ L.push([l.fecha,l.pedido,l.cliente,l.destino,l.cod,l.prod,l.lote,l.sacos,Math.round(l.kg),l.eco,l.operador,l.desp?'SI':'NO'].map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',')); });
+  dlBlob(new Blob(['﻿'+L.join('\n')],{type:'text/csv;charset=utf-8'}),'trazabilidad_lotes.csv'); toast('CSV de trazabilidad descargado'); }
 
 /* ================= INIT ================= */
 loadLocal();
