@@ -1024,18 +1024,24 @@ function processPivot(rows,fname){
     const colVal=colCant>=0?colCant:1;
     const lastReal={},yearCount={},diaMes={},diaMesCli={},clienteVend={};let esDiario=false;let curVendor=null;
     // Detectar jerarquía: cliente->producto->mes  vs  cliente->mes->producto
+    // OJO: "Descuento s/ venta" es un renglón del MISMO nivel que los productos ([04MAS...]), aunque no
+    // empiece con '['. Odoo ordena los renglones de cada cliente por cantidad, así que a veces el
+    // descuento sale PRIMERO. Si se leía como un "nombre" más (cliente/vendedor), la jerarquía se
+    // detectaba al revés (cliente→mes→producto en vez de cliente→producto→mes) y los sacos de cada
+    // producto completo caían en un solo mes: meses cerrados "se movían" y septiembre/octubre se inflaban.
+    const _esDesc=t=>/^descuento\s*s\/\s*venta/i.test(t);
     let productFirst=false,seenClient=false;
     for(let i=2;i<rows.length;i++){
       const c0=rows[i][0];if(c0===''||c0==null)continue;
       if(c0 instanceof Date){if(seenClient){productFirst=false;break;}continue;}
       const t=String(c0).trim();if(t==='Total')continue;
-      if(t.startsWith('[')){if(seenClient){productFirst=true;break;}continue;}
+      if(t.startsWith('[')||_esDesc(t)){if(seenClient){productFirst=true;break;}continue;}
       seenClient=true;
     }
     // ¿Hay nivel de vendedor? (dos NOMBRES consecutivos: cliente y luego su vendedor)
-    let hasVendorLevel=false;{let pn=false;for(let i=2;i<rows.length;i++){const c0=rows[i][0];if(c0===''||c0==null)continue;if(c0 instanceof Date){pn=false;continue;}const t=String(c0).trim();if(t==='Total')continue;if(t.startsWith('[')){pn=false;continue;}if(pn){hasVendorLevel=true;break;}pn=true;}}
+    let hasVendorLevel=false;{let pn=false;for(let i=2;i<rows.length;i++){const c0=rows[i][0];if(c0===''||c0==null)continue;if(c0 instanceof Date){pn=false;continue;}const t=String(c0).trim();if(t==='Total')continue;if(t.startsWith('[')||_esDesc(t)){pn=false;continue;}if(pn){hasVendorLevel=true;break;}pn=true;}}
     // tipo de la siguiente fila relevante (para distinguir cliente vs vendedor)
-    const nextType=(i)=>{for(let j=i+1;j<rows.length;j++){const c0=rows[j][0];if(c0===''||c0==null)continue;if(c0 instanceof Date)return 'date';const t=String(c0).trim();if(t==='Total')continue;if(t.startsWith('['))return 'prod';return 'name';}return 'end';};
+    const nextType=(i)=>{for(let j=i+1;j<rows.length;j++){const c0=rows[j][0];if(c0===''||c0==null)continue;if(c0 instanceof Date)return 'date';const t=String(c0).trim();if(t==='Total')continue;if(t.startsWith('[')||_esDesc(t))return 'prod';return 'name';}return 'end';};
 
     // Pre-pasada: los nombres que en VARIAS partes del archivo van seguidos de producto o fecha
     // son vendedores (un vendedor se repite una vez por cada cliente suyo; un cliente aparece una sola vez).
@@ -1043,7 +1049,7 @@ function processPivot(rows,fname){
     if(hasVendorLevel){ const _cnt={};
       for(let k=2;k<rows.length;k++){ const c0=rows[k][0]; if(c0===''||c0==null)continue;
         if(c0 instanceof Date)continue; const tt=String(c0).trim();
-        if(tt==='Total'||tt.startsWith('['))continue;
+        if(tt==='Total'||tt.startsWith('[')||_esDesc(tt))continue;
         if(nextType(k)!=='name'){ const nn=normName(tt); _cnt[nn]=(_cnt[nn]||0)+1; } }
       for(const nn in _cnt) if(_cnt[nn]>=2) VEND_SET.add(nn);
     }    let cli=null,curMes=0,fdate=null,curKind='skip',curProdName='',filas=0;
@@ -1164,7 +1170,13 @@ function processPivot(rows,fname){
         }
         continue;
       }
-      if(t==='Descuento s/ venta')curProdNameAll=t;  // para "todos los productos": no altera la detección de cliente/vendedor de abajo
+      if(_esDesc(t)){
+        // El descuento es un renglón de producto, NO un nombre: no debe volverse cliente ni vendedor.
+        curProdNameAll=t;   // para "todos los productos"
+        if(productFirst){curKind='skip';curProdName='';}      // sus fechas de abajo se suman solo en "todos los productos"
+        else if(curMes)recTodos(t,curMes,val,monto,montoSinIva,fdate,cli);   // cliente→mes→producto: el renglón mismo es la hoja
+        continue;
+      }
       // Nombre: si le sigue OTRO nombre => es CLIENTE; si le sigue un producto/fecha => es VENDEDOR (1º o adicional) del cliente actual.
       // Excepción: si ese nombre ya se identificó como VENDEDOR en otras partes del archivo, es vendedor
       // aunque aquí le siga otro nombre. Sin esto, cuando Odoo dejaba a un vendedor seguido de un nombre,
