@@ -2856,7 +2856,7 @@ function conciliar(P){
       else if(!okRem){ hall.push({who:'P',k:'rem',t:`Remisión capturada «${ped}» ≠ Odoo ${vs.join(', ')}`}); fixes.add('pedido'); } }
     const dC=difLineas(C,od,cfg.tolSacos);
     dC.forEach(d=>hall.push({who:'C',k:dKind(d),t:dTxt(d,'Cargadores')})); if(dC.length) fixes.add('C');
-    if(b){ const dB=b.generado?[]:difLineas(B,od,cfg.tolSacos); dB.forEach(d=>hall.push({who:'B',k:dKind(d),t:dTxt(d,'Báscula')})); if(dB.length) fixes.add('B'); }
+    if(b){ const dB=difLineas(B,od,cfg.tolSacos); dB.forEach(d=>hall.push({who:'B',k:dKind(d),gen:!!b.generado,t:dTxt(d,b.generado?'Báscula (generada)':'Báscula')})); if(dB.length) fixes.add('B'); }
     else { hall.push({who:'B',k:'sinb',t:'Sin registro de báscula (el botón crea uno marcado «generado», con los sacos de Odoo)'}); fixes.add('crearB'); }
     items.push({id:r.id,r,b,picks:m.ps,via:m.via,od,hall,fixes:[...fixes]});
   });
@@ -3012,12 +3012,15 @@ function planSinLotes(is){
   const i=is.item, r=i.r, b=i.b, tol=cuadCfg().tolSacos; let cL=lotesDe(r);
   if(is.fixes.includes('pedido')){ p.pedido=true; p.nada=false; }
   if(is.fixes.includes('C')){ const a=ajusteSinLotes(cL,i.od,tol); if(a.n){ p.C=a.items; cL=a.items; p.nada=false; } p.restoC=a.rest; }
-  if(is.fixes.includes('B')&&b){ const a=ajusteSinLotes(bascItems(b),i.od,tol); if(a.n){ p.B=a.items; p.nada=false; } p.restoB=a.rest; }
+  if(is.fixes.includes('B')&&b){
+    if(b.generado){ const ls=asArr(cL).map(x=>({pk:pkey(x.cod||x.prod),x})).filter(o=>o.pk&&!esSacoVacio(o.pk)).map(o=>catLinea(o.pk,o.x,Number(o.x.sacos)||0));
+      if(ls.length&&difLineas(capLineas(bascItems(b)),capLineas(ls),0).length){ p.B=ls; p.nada=false; p.gen=true; } }
+    else { const a=ajusteSinLotes(bascItems(b),i.od,tol); if(a.n){ p.B=a.items; p.nada=false; } p.restoB=a.rest; } }
   if(is.fixes.includes('crearB')){ const ls=asArr(cL).map(x=>({pk:pkey(x.cod||x.prod),x})).filter(o=>o.pk&&!esSacoVacio(o.pk)).map(o=>catLinea(o.pk,o.x,Number(o.x.sacos)||0));
     if(ls.length){ p.crearB=ls; p.nada=false; } else p.motivo='Cargadores no tiene lotes: la báscula se tendría que crear con los lotes de Odoo'; }
   if(p.nada&&!p.motivo) p.motivo='Solo difieren los lotes'; return p;
 }
-const plTxt=p=>{ const a=[]; if(p.pedido)a.push('remisión'); if(p.C)a.push('cantidad/producto en Cargadores'); if(p.B)a.push('cantidad/producto en Báscula'); if(p.crearB)a.push('crear báscula con los lotes de Cargadores'); return a.join(' · '); };
+const plTxt=p=>{ const a=[]; if(p.pedido)a.push('remisión'); if(p.C)a.push('cantidad/producto en Cargadores'); if(p.B)a.push(p.gen?'igualar la báscula generada a Cargadores':'cantidad/producto en Báscula'); if(p.crearB)a.push('crear báscula con los lotes de Cargadores'); return a.join(' · '); };
 function concFixOne(key,sl){ concApplyList([key],!!sl); }
 function concApply(modo,sl){
   if(!requireMaster())return; const R=CC.res; if(!R)return; const F=CC.f, q=normNom(F.q);
@@ -3040,7 +3043,7 @@ function concApplyList(keys,sl){
   todo.forEach((is,ix)=>{ const t=now+ix;
     if(is.tipo==='odoo'){ n+=crearEmbarque(is,t)?1:0; return; }
     const i=is.item, r=DATA.find(x=>x.id===i.id); if(!r)return; const b=CUAD.bascula[i.id]||null, pl=plans.get(is.key); const nuevas=lineasCat(i.od);
-    const antes={pedido:r.pedido||'',lotes:lotesDe(r).map(x=>({...x})),items:b?bascItems(b).map(x=>({...x})):null,bpedido:b?b.pedido||'':null};
+    const antes={pedido:r.pedido||'',lotes:lotesDe(r).map(x=>({...x})),items:b?bascItems(b).map(x=>({...x})):null,bpedido:b?b.pedido||'':null,bneto:b&&b.estimado?(Number(b.neto)||0):null};
     const venta=[...new Set(i.picks.map(p=>p.v).filter(Boolean))].join(', '), refTxt=i.picks.map(p=>p.ref).join('+');
     // lo que realmente se aplica en este caso
     const doPed=sl?!!pl.pedido:is.fixes.includes('pedido'), newC=sl?(pl.C||null):(is.fixes.includes('C')?nuevas:null),
@@ -3050,7 +3053,7 @@ function concApplyList(keys,sl){
     if(newC) r.lotes=newC.map(x=>({...x}));
     persist(r.id,r);
     if(newB&&b){ const sc=newB.reduce((a,x)=>a+(Number(x.sacos)||0),0), h=Object.assign({},b.hist||{}); h['h'+t]={ts:t,usuario:cuadUser(),accion:sl?'Cuadre vs Odoo (sin tocar lotes)':'Cuadre vs Odoo',detalle:'antes: '+_lin(antes.items)+' → después: '+_lin(newB)};
-      cuadSet('bascula/'+i.id,{...CUAD.bascula[i.id],items:newB.map(x=>({...x})),sacos:sc,tsEdit:t,editor:cuadUser(),hist:h}); }
+      cuadSet('bascula/'+i.id,{...CUAD.bascula[i.id],items:newB.map(x=>({...x})),sacos:sc,...(b.estimado?{neto:Math.round(newB.reduce((a,x)=>a+(Number(x.sacos)||0)*(Number(x.kgSaco)||0),0))}:{}),tsEdit:t,editor:cuadUser(),hist:h}); }
     if(newCrB) cuadSet('bascula/'+i.id,genBasc(r,newCrB,refTxt,t));
     cuadSet('ajustes/'+keySafe(i.id)+'_'+t,{ts:t,usuario:cuadUser(),id:i.id,cliente:r.cliente||'',pedido:r.pedido||'',srcs:eff,sinLotes:!!sl,antes,despues:{pedido:r.pedido||'',lotes:newC||antes.lotes,items:newB||newCrB||antes.items},creados:newCrB?{basc:i.id}:null,picks:i.picks.map(p=>p.ref)});
     auditPush({ts:new Date(t).toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'lotes',label:'Cuadre master vs Odoo'+(sl?' SIN tocar lotes':' (con lotes)')+' ('+eff.join('+')+')',from:'Carg.: '+_lin(antes.lotes)+(antes.items?' · Bás.: '+_lin(antes.items):' · sin báscula')+(eff.includes('pedido')?' · pedido '+(antes.pedido||'—'):''),to:(sl?'Carg.: '+_lin(newC||antes.lotes)+(newB||newCrB?' · Bás.: '+_lin(newB||newCrB):''):'Odoo: '+_lin(nuevas))+(venta?' · '+venta:''),maquillaje:true,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
@@ -3076,7 +3079,7 @@ function concUndo(key){
     if(r){ r.pedido=a.antes.pedido; if(a.srcs.includes('C')) r.lotes=asArr(a.antes.lotes).map(x=>({...x})); persist(r.id,r); }
     const b=!(a.creados&&a.creados.basc)&&CUAD.bascula[a.id];
     if(b){ const h=Object.assign({},b.hist||{}); h['h'+now]={ts:now,usuario:cuadUser(),accion:'Deshacer cuadre',detalle:'regresa: '+_lin(a.antes.items)};
-      const rec={...b,tsEdit:now,editor:cuadUser(),hist:h}; if(a.srcs.includes('B')&&a.antes.items){ rec.items=a.antes.items.map(x=>({...x})); rec.sacos=rec.items.reduce((s,x)=>s+(Number(x.sacos)||0),0); } if(a.antes.bpedido!=null) rec.pedido=a.antes.bpedido; cuadSet('bascula/'+a.id,rec); } }
+      const rec={...b,tsEdit:now,editor:cuadUser(),hist:h}; if(a.srcs.includes('B')&&a.antes.items){ rec.items=a.antes.items.map(x=>({...x})); rec.sacos=rec.items.reduce((s,x)=>s+(Number(x.sacos)||0),0); } if(a.antes.bpedido!=null) rec.pedido=a.antes.bpedido; if(a.antes.bneto!=null&&b.estimado) rec.neto=a.antes.bneto; cuadSet('bascula/'+a.id,rec); } }
   cuadSet('ajustes/'+key+'/deshecho',now);
   auditPush({ts:new Date(now).toISOString(),id:a.id,pedido:a.pedido||'',cliente:a.cliente||'',field:'lotes',label:'Deshacer cuadre master',from:'Odoo: '+_lin(a.despues&&a.despues.lotes),to:a.creados?'(lo creado se borró)':'Carg.: '+_lin(a.antes.lotes),maquillaje:true,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
   bandejaSync(conciliarTodo()); refreshCuad(); concRender(); toast('Cuadre deshecho'); }
