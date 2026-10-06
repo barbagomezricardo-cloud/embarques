@@ -356,6 +356,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <div class="f"><label>Revisar desde</label><input type="date" id="concDesde" onchange="concDesdeSet(this.value)"></div>
       <div class="f"><label>Estado</label><select id="concEstado" onchange="concSet('estado',this.value)"><option value="abierto">Abiertos</option><option value="ignorado">Ignorados</option><option value="resuelto">Resueltos</option><option value="todos">Todos</option></select></div>
       <div class="f"><label>Tipo de error</label><select id="concTipo" onchange="concSet('tipo',this.value)"><option value="">Todos</option><option value="C">Cargadores</option><option value="B">Báscula</option><option value="P">Remisión / programa</option><option value="prod">Producto cambiado</option><option value="odoo">Salida Odoo sin embarque</option><option value="sin">Despachado sin salida Odoo</option></select></div>
+      <div class="f"><label>Ranking de personas</label><select id="concRango" onchange="concSet('rango',this.value)"><option value="hoy">Hoy</option><option value="7">Últimos 7 días</option><option value="todo">Todo lo revisado</option></select></div>
       <div class="f"><label>Buscar</label><input id="concQ" placeholder="Cliente, remisión, cargador…" oninput="concSet('q',this.value)"></div>
       <div class="f"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--txt);text-transform:none"><input type="checkbox" id="concDet" onchange="concSet('det',this.checked)"> Solo nuevos de hoy</label></div>
       <div class="spacer"></div>
@@ -476,6 +477,14 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <h2>🖼️ Imagen del cuadre</h2>
     <div style="padding:14px 18px;overflow:auto"><img id="cqImgPrev" alt="Cuadre" style="max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff"></div>
     <div class="actions"><span class="hint">Descárgala o toma pantallazo para anexarla al reporte de Odoo.</span><div style="display:flex;gap:9px"><a class="ghost" id="cqImgDl" style="padding:8px 14px;border:1px solid var(--line);border-radius:9px;color:var(--txt);text-decoration:none">⬇ Descargar PNG</a><button class="ghost" onclick="closeCuadImg()">Cerrar</button></div></div>
+  </div>
+</div>
+<!-- AVISO A UNA PERSONA -->
+<div class="overlay" id="concMsgOverlay">
+  <div class="modal">
+    <h2 id="concMsgT">📨 Aviso</h2>
+    <div style="padding:14px 18px"><textarea id="concMsgTx" style="width:100%;height:320px;resize:vertical;background:var(--bg2,#0f1522);color:var(--txt);border:1px solid var(--line);border-radius:9px;padding:10px;font:inherit"></textarea></div>
+    <div class="actions"><span class="hint">Cópialo y mándalo por WhatsApp. Puedes editarlo antes.</span><div style="display:flex;gap:9px"><button class="primary" onclick="concMsgCopy()">📋 Copiar</button><button class="ghost" onclick="closeConcMsg()">Cerrar</button></div></div>
   </div>
 </div>
 <div id="cqReport"></div>
@@ -2780,7 +2789,7 @@ const BASC_VIEWS=['bascula','cuadre','cierre'];
    El master los va corrigiendo a mano (al volver a cargar Odoo, lo corregido pasa solo a «resuelto») y, lo que no pueda,
    lo cuadra con el botón: corrige Cargadores/Báscula/remisión y CREA lo que falte (embarque y/o registro de báscula).
    Todo lo creado queda marcado «generado» (no es un pesaje real), con respaldo para deshacer y en Auditoría. */
-const CC={f:{estado:'abierto',det:'',tipo:'',q:''},res:null,sel:{}};
+const CC={f:{estado:'abierto',det:'',tipo:'',q:'',rango:'todo',persona:''},res:null,sel:{},personas:[],rowsAll:[]};
 const remDig=s=>{ const m=String(s||'').match(/\d{4,}/g); return m?m.map(x=>x.replace(/^0+/,'')):[]; };
 const addDias=(f,n)=>{ const d=new Date(f+'T12:00:00'); d.setDate(d.getDate()+n); return iso(d); };
 const difDias=(a,b)=>Math.abs(Math.round((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/864e5));
@@ -2801,6 +2810,7 @@ function difLineas(cap,od,tol){
   C.forEach(c=>out.push({t:'sobra',c})); O.forEach(o=>out.push({t:'falta',o}));
   return out;
 }
+const dKind=d=>({cant:'cant',prod:'prod',prodcant:'prod',lote:'lote',sobra:'extra',falta:'extra'}[d.t]||'cant');
 function dTxt(d,src){
   const pn=k=>prodNameByKey(k,k), c=d.c, o=d.o;
   if(d.t==='cant') return `${pn(c.pk)} lote ${c.lote}: ${src} registró ${fS(c.q)} sacos y Odoo sacó ${fS(o.q)}`;
@@ -2812,6 +2822,9 @@ function dTxt(d,src){
 }
 function concPicks(P){ const out=[]; [prevPer(P),P,nextPer(P)].forEach(p=>{ const x=odooRows(p,'mov'); if(x&&x.rows) out.push(...x.rows); }); return out; }
 const lineasCat=od=>[...od.values()].map(o=>{ const pr=bascProductos().find(p=>pkey(p.cod)===o.pk); return {cod:pr?pr.cod:o.pk,prod:pr?pr.name:prodNameByKey(o.pk,o.pk),lote:o.lote,sacos:o.q,kgSaco:pr?(Number(pr.kg)||0):0}; });
+// ¿quién capturó? (los registros generados por el master no cargan error a nadie)
+const quienDe=(r,b)=>({C:[r.cargador,r.cargador2].map(x=>String(x||'').trim()).filter(Boolean).length?[r.cargador,r.cargador2].map(x=>String(x||'').trim()).filter(Boolean):['(sin cargador)'],B:(b&&!b.generado)?String(b.oper||b.usuario||'báscula'):''});
+const detDe=hall=>hall.map(h=>({w:h.who,k:h.k||'',t:String(h.t||'').slice(0,170)}));
 function conciliar(P){
   if(!(CUAD.odoo[P]&&CUAD.odoo[P].mov)) return null;
   const ultimo=new Date(+P.slice(0,4),+P.slice(5,7),0).getDate(), from=P+'-01', to=P+'-'+String(ultimo).padStart(2,'0'), lo=addDias(from,-4), hi=addDias(to,4);
@@ -2832,28 +2845,28 @@ function conciliar(P){
   embs.filter(r=>fechaEmb(r)>=from&&fechaEmb(r)<=to).forEach(r=>{
     const b=CUAD.bascula[r.id]||null, m=match.get(r.id), hall=[], fixes=new Set();
     if(!m){ sinSalida.push({r,b});
-      hall.push({who:'P',t:'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión/cliente está mal capturado)',sin:true});
+      hall.push({who:'P',k:'sinsal',t:'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión/cliente está mal capturado)',sin:true});
       // aun sin salida en Odoo se puede cachar un producto que no corresponde al lote (según el histórico de Odoo)
-      [['Cargadores',lotesDe(r)],['Báscula',b?bascItems(b):[]]].forEach(([src,ls])=>ls.forEach(x=>{ const pk=pkey(x.cod||x.prod), l=normLote(x.lote); if(lm[l]&&lm[l]!=='?'&&lm[l]!==pk) hall.push({who:src==='Cargadores'?'C':'B',t:`Lote ${l}: ${src} registró «${prodNameByKey(pk,pk)}» pero en Odoo ese lote es «${prodNameByKey(lm[l],lm[l])}»`}); }));
+      [['Cargadores',lotesDe(r)],['Báscula',b?bascItems(b):[]]].forEach(([src,ls])=>ls.forEach(x=>{ const pk=pkey(x.cod||x.prod), l=normLote(x.lote); if(lm[l]&&lm[l]!=='?'&&lm[l]!==pk) hall.push({who:src==='Cargadores'?'C':'B',k:'prod',t:`Lote ${l}: ${src} registró «${prodNameByKey(pk,pk)}» pero en Odoo ese lote es «${prodNameByKey(lm[l],lm[l])}»`}); }));
       items.push({id:r.id,r,b,picks:[],hall,fixes:[],sinSalida:true}); return; }
     const od=odLineas(m.ps), C=capLineas(r.lotes), B=b?capLineas(b.items):null;
     const vs=[...new Set(m.ps.map(p=>p.v).filter(Boolean))], ped=String(r.pedido||'').trim();
     if(vs.length){ const okRem=remDig(ped).some(x=>vs.some(v=>remDig(v).includes(x)));
-      if(!ped){ hall.push({who:'P',t:`Sin remisión capturada; Odoo salió con ${vs.join(', ')}`}); fixes.add('pedido'); }
-      else if(!okRem){ hall.push({who:'P',t:`Remisión capturada «${ped}» ≠ Odoo ${vs.join(', ')}`}); fixes.add('pedido'); } }
+      if(!ped){ hall.push({who:'P',k:'rem',t:`Sin remisión capturada; Odoo salió con ${vs.join(', ')}`}); fixes.add('pedido'); }
+      else if(!okRem){ hall.push({who:'P',k:'rem',t:`Remisión capturada «${ped}» ≠ Odoo ${vs.join(', ')}`}); fixes.add('pedido'); } }
     const dC=difLineas(C,od,cfg.tolSacos);
-    dC.forEach(d=>hall.push({who:'C',t:dTxt(d,'Cargadores')})); if(dC.length) fixes.add('C');
-    if(b){ const dB=b.generado?[]:difLineas(B,od,cfg.tolSacos); dB.forEach(d=>hall.push({who:'B',t:dTxt(d,'Báscula')})); if(dB.length) fixes.add('B'); }
-    else { hall.push({who:'B',t:'Sin registro de báscula (el botón crea uno marcado «generado», con los sacos de Odoo)'}); fixes.add('crearB'); }
+    dC.forEach(d=>hall.push({who:'C',k:dKind(d),t:dTxt(d,'Cargadores')})); if(dC.length) fixes.add('C');
+    if(b){ const dB=b.generado?[]:difLineas(B,od,cfg.tolSacos); dB.forEach(d=>hall.push({who:'B',k:dKind(d),t:dTxt(d,'Báscula')})); if(dB.length) fixes.add('B'); }
+    else { hall.push({who:'B',k:'sinb',t:'Sin registro de báscula (el botón crea uno marcado «generado», con los sacos de Odoo)'}); fixes.add('crearB'); }
     items.push({id:r.id,r,b,picks:m.ps,via:m.via,od,hall,fixes:[...fixes]});
   });
   const odooSolo=picks.filter(p=>!used.has(p.ref)&&p.f>=from&&p.f<=to&&p.l.some(x=>!esSacoVacio(x[0])));
   // bandeja: un renglón por problema
   const issues=[]; const mkKey=(t,x)=>t+'_'+keySafe(x);
   items.forEach(i=>{ if(!i.hall.length)return; const tipo=i.sinSalida?'sin':'emb'; const cats=new Set(i.hall.map(h=>h.who)); if(i.hall.some(h=>/Producto cambiado|Producto y cantidad|ese lote es/.test(h.t))) cats.add('prod'); if(i.sinSalida) cats.add('sin');
-    issues.push({key:mkKey(tipo,i.id),tipo,per:P,fecha:fechaEmb(i.r),cliente:i.r.cliente||'',id:i.id,hall:i.hall,fixes:i.fixes,item:i,cats:[...cats],sig:hash(i.hall.map(h=>h.t).join('|'))}); });
+    issues.push({key:mkKey(tipo,i.id),tipo,per:P,fecha:fechaEmb(i.r),cliente:i.r.cliente||'',id:i.id,hall:i.hall,fixes:i.fixes,item:i,cats:[...cats],sig:hash(i.hall.map(h=>h.t).join('|')),quien:quienDe(i.r,i.b),det:detDe(i.hall)}); });
   odooSolo.forEach(p=>{ const od=odLineas([p]), u=[...od.values()].reduce((a,x)=>a+x.q,0);
-    issues.push({key:mkKey('odoo',p.ref),tipo:'odoo',per:P,fecha:p.f,cliente:p.cli,hall:[{who:'P',t:`Salió de inventario (${p.ref} · ${p.v||'s/remisión'} · ${fS(u)} u.) y no hay embarque en el programa`}],fixes:['crearE'],pick:p,od,cats:['odoo'],sig:hash(p.ref+'|'+u)}); });
+    issues.push({key:mkKey('odoo',p.ref),tipo:'odoo',per:P,fecha:p.f,cliente:p.cli,hall:[{who:'P',k:'odoo',t:`Salió de inventario (${p.ref} · ${p.v||'s/remisión'} · ${fS(u)} u.) y no hay embarque en el programa`}],fixes:['crearE'],pick:p,od,cats:['odoo'],sig:hash(p.ref+'|'+u),quien:{},det:[{w:'P',k:'odoo',t:`Salió de inventario ${p.ref} · ${p.v||'s/remisión'} y no hay embarque en el programa`}]}); });
   return {P,items,sinSalida,odooSolo,issues};
 }
 function concPeriodos(){ return Object.keys(CUAD.odoo).filter(p=>CUAD.odoo[p]&&CUAD.odoo[p].mov).sort().reverse(); }
@@ -2867,13 +2880,15 @@ function conciliarTodo(){
   return R;
 }
 // sincroniza la bandeja con lo que hay HOY: nuevos errores → «abierto» con fecha de detección; lo que ya cuadra → «resuelto»
+// el historial de quién se equivocó es acumulativo: lo que ya se corrigió sigue contando aunque el caso siga abierto por otra cosa
+const mergeDet=(old,nw)=>{ const m=new Map(); asArr(old).concat(asArr(nw)).forEach(d=>m.set(d.w+':'+d.k+':'+d.t,d)); return [...m.values()]; };
 function bandejaSync(R){
   if(!R) return; const now=Date.now(), upd={}, cur=new Set(R.issues.map(i=>i.key)), ps=new Set(R.pers);
-  R.issues.forEach(is=>{ const b=CUAD.bandeja[is.key]; const base={per:is.per,fecha:is.fecha,cliente:is.cliente,tipo:is.tipo,resumen:is.hall.map(h=>h.t).join(' · ').slice(0,400),sig:is.sig};
+  R.issues.forEach(is=>{ const b=CUAD.bandeja[is.key]; const base={per:is.per,fecha:is.fecha,cliente:is.cliente,tipo:is.tipo,resumen:is.hall.map(h=>h.t).join(' · ').slice(0,400),sig:is.sig,quien:is.quien||{},det:mergeDet(b&&b.det,is.det),pedido:(is.item&&is.item.r.pedido)||''};
     if(!b) upd[is.key]={...base,estado:'abierto',ts:now};
     else if(b.estado==='resuelto') upd[is.key]={...b,...base,estado:'abierto',reabierto:now,resTs:null};            // reapareció
     else if(b.estado==='ignorado'&&b.sig!==is.sig) upd[is.key]={...b,...base,estado:'abierto',reabierto:now};          // cambió el problema: vuelve a pedir atención
-    else if(b.sig!==is.sig||b.resumen!==base.resumen) upd[is.key]={...b,...base}; });
+    else if(b.sig!==is.sig||b.resumen!==base.resumen||JSON.stringify(b.quien||{})!==JSON.stringify(base.quien)||(b.det||[]).length!==base.det.length) upd[is.key]={...b,...base}; });
   Object.entries(CUAD.bandeja).forEach(([k,b])=>{ if(!cur.has(k)&&(b.estado==='abierto'||b.estado==='ignorado')&&ps.has(b.per)&&(b.fecha||'')>=R.desde) upd[k]={...b,estado:'resuelto',resTs:now}; });
   if(Object.keys(upd).length) cuadMerge('bandeja',upd);
 }
@@ -2887,6 +2902,43 @@ function concRows(R){
   return out;
 }
 const esHoy=ts=>ts&&iso(new Date(ts))===TODAY;
+// ═══ ranking de errores por persona (cuenta TODO lo detectado, aunque el master ya lo haya corregido) ═══
+const detX=x=>mergeDet(x.b&&x.b.det,x.det), quienX=x=>{ const q=x.quien||(x.b&&x.b.quien)||{}; return {C:asArr(q.C),B:q.B||''}; };
+const KIND_TXT={rem:'Remisión',prod:'Producto',cant:'Cantidad',lote:'Lote',extra:'Falta/sobra',sinb:'Sin pesar'};
+const BUCKETS={odoo:'🏭 Odoo: falta liberar',sinemb:'📋 Salida sin embarque en programa',sinpesar:'⚖️ Embarque sin pesar'};
+// a quién se le carga cada hallazgo: remisión/producto/cantidad/lote → quien lo capturó; lo que depende de Odoo o de que falte un registro va a un renglón aparte
+function dueños(d,q){
+  if(d.w==='P'&&d.k==='sinsal') return [{key:'b:odoo',n:BUCKETS.odoo,b:true}];
+  if(d.w==='P'&&d.k==='odoo') return [{key:'b:sinemb',n:BUCKETS.sinemb,b:true}];
+  if(d.w==='B'&&d.k==='sinb') return [{key:'b:sinpesar',n:BUCKETS.sinpesar,b:true}];
+  if(d.w==='B') return q.B?[{key:'⚖️ '+q.B,n:q.B,ic:'⚖️'}]:[];
+  if(d.w==='C'||(d.w==='P'&&d.k==='rem')) return q.C.map(n=>({key:'📲 '+n,n,ic:'📲'}));
+  return [];
+}
+const personasDe=x=>{ const q=quienX(x), s=new Set(); detX(x).forEach(d=>dueños(d,q).forEach(o=>s.add(o.key))); return [...s]; };
+const rangoOk=f=>{ const g=CC.f.rango||'todo'; return g==='hoy'?f===TODAY:g==='7'?f>=addDias(TODAY,-6):true; };
+const rangoTxt=()=>({hoy:'de hoy','7':'de los últimos 7 días',todo:'desde el '+concDesde()}[CC.f.rango||'todo']);
+function concPersonas(R,rowsAll){
+  const P={}, get=(key,n,ic,b)=>P[key]||(P[key]={key,n,ic,b:!!b,emb:0,err:0,ab:0,rem:0,prod:0,cant:0,lote:0,extra:0});
+  R.items.filter(i=>rangoOk(fechaEmb(i.r))).forEach(i=>{ const q=quienDe(i.r,i.b); q.C.forEach(n=>get('📲 '+n,n,'📲').emb++); if(q.B) get('⚖️ '+q.B,q.B,'⚖️').emb++; });
+  rowsAll.filter(x=>rangoOk(x.fecha)).forEach(x=>{ const q=quienX(x), seen=new Set(), seenAb=new Set();
+    detX(x).forEach(d=>dueños(d,q).forEach(o=>{ const p=get(o.key,o.n,o.ic||'',o.b); if(!seen.has(o.key)){ seen.add(o.key); p.err++; } if(x.est==='abierto'&&!seenAb.has(o.key)){ seenAb.add(o.key); p.ab++; } if(KIND_TXT[d.k]&&p[d.k]!==undefined&&!seen.has(o.key+'|'+d.k)){ seen.add(o.key+'|'+d.k); p[d.k]++; } })); });
+  return Object.values(P).filter(p=>p.err||p.emb).sort((a,b)=>(a.b-b.b)||b.err-a.err||b.emb-a.emb);
+}
+function concPersonaSet(ix){ const p=CC.personas[ix]; CC.f.persona=p?p.key:''; CC.sel={}; concRender(); }
+function concAvisar(ix){
+  if(!requireMaster())return; const p=CC.personas[ix]; if(!p||p.b)return;
+  const rel=(d)=>p.ic==='⚖️'?(d.w==='B'&&d.k!=='sinb'):(d.w==='C'||(d.w==='P'&&d.k==='rem'));
+  const rows=CC.rowsAll.filter(x=>rangoOk(x.fecha)&&personasDe(x).includes(p.key)).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  const L=rows.map(x=>{ const t=detX(x).filter(rel).map(d=>d.t).join('; '); return '• '+x.fecha+' · '+(x.cliente||'')+' ('+(((x.item&&x.item.r.pedido)||(x.b&&x.b.pedido))||'sin remisión')+'): '+t; });
+  const msg='Hola '+p.n+', este es tu resumen de errores de captura '+rangoTxt()+':\n\n'+L.slice(0,20).join('\n')+(L.length>20?'\n… y '+(L.length-20)+' más':'')+'\n\nTotal: '+p.err+' embarque(s) con error de '+(p.emb||'?')+' que registraste'+(p.emb?' ('+Math.round(p.err/p.emb*100)+'%)':'')+'.\nPor favor captura remisión, producto, lote y sacos exactamente como salen del producto cargado. Si algo no te cuadra, avísame antes de cerrar el registro.';
+  document.getElementById('concMsgT').textContent='📨 Aviso para '+p.n; document.getElementById('concMsgTx').value=msg; document.getElementById('concMsgOverlay').classList.add('show');
+  auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'',field:'aviso',label:'Aviso de errores generado',from:'',to:p.n+' · '+p.err+' error(es) '+rangoTxt(),maquillaje:false,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
+}
+function closeConcMsg(){ document.getElementById('concMsgOverlay').classList.remove('show'); }
+function concMsgCopy(){ const ta=document.getElementById('concMsgTx'), tx=ta.value; const ok=()=>toast('Mensaje copiado ✓ Pégalo en WhatsApp');
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(ok,()=>{ ta.select(); document.execCommand('copy'); ok(); }); else { ta.select(); document.execCommand('copy'); ok(); } }
+
 function concRender(){
   if(!document.getElementById('concBody')) return;
   const ps=concPeriodos();
@@ -2901,19 +2953,17 @@ function concRender(){
     {l:'Remisión',v:abiertos.filter(x=>x.cats.includes('P')&&x.tipo==='emb').length,f:'pedido ≠ Odoo',c:'warn'},{l:'Producto cambiado',v:abiertos.filter(x=>x.cats.includes('prod')).length,f:'un producto por otro',c:'late'},
     {l:'Salida Odoo sin embarque',v:abiertos.filter(x=>x.tipo==='odoo').length,f:'no está en el programa',c:'warn'},{l:'Despachado sin salida Odoo',v:abiertos.filter(x=>x.tipo==='sin').length,f:'falta liberar en Odoo',c:'warn'},
     {l:'Ignorados / resueltos',v:rowsAll.filter(x=>x.est==='ignorado').length+' / '+rowsAll.filter(x=>x.est==='resuelto').length,f:'ya atendidos',c:'ok'}];
-  const rows=rowsAll.filter(x=>(F.estado==='todos'||x.est===F.estado)&&(!F.det||(x.b&&esHoy(x.b.ts)))&&(!F.tipo||x.cats.includes(F.tipo))
+  const rows=rowsAll.filter(x=>(F.estado==='todos'||x.est===F.estado)&&(!F.det||(x.b&&esHoy(x.b.ts)))&&(!F.tipo||x.cats.includes(F.tipo))&&(!F.persona||personasDe(x).includes(F.persona))
     &&(!q||normNom(x.cliente+' '+(x.hall||[]).map(h=>h.t).join(' ')+' '+(x.item?(x.item.r.pedido||'')+' '+(x.item.r.cargador||''):'')).includes(q)))
     .sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
-  // errores por persona (sobre lo abierto)
-  const per={}; const add=(n,k)=>{ const o=per[n]||(per[n]={n,emb:0,err:0}); o[k]++; };
-  R.items.filter(i=>!i.sinSalida).forEach(i=>{ const cn='📲 '+(i.r.cargador||'(sin cargador)'), bn=i.b?'⚖️ '+(i.b.oper||i.b.usuario||'báscula'):null; const open=abiertos.find(x=>x.id===i.id);
-    add(cn,'emb'); if(open&&open.cats.includes('C')) add(cn,'err'); if(bn){ add(bn,'emb'); if(open&&open.cats.includes('B')) add(bn,'err'); } });
+  // errores por persona (todo lo detectado en el rango, corregido o no)
+  CC.rowsAll=rowsAll; CC.personas=concPersonas(R,rowsAll);
   const quien={C:'📲 Cargadores',B:'⚖️ Báscula',P:'📋 Programa'}, tipoTxt={emb:'Embarque',sin:'Sin salida en Odoo',odoo:'Salida sin embarque'};
   const nSel=Object.keys(CC.sel).filter(k=>CC.sel[k]).length, fixVis=rows.filter(x=>x.est==='abierto'&&x.fixes.length).length, fixVisSL=rows.filter(x=>x.est==='abierto'&&x.pl&&!x.pl.nada).length, nSelSL=rows.filter(x=>CC.sel[x.key]&&x.est==='abierto'&&x.pl&&!x.pl.nada).length;
   document.getElementById('concBody').innerHTML=
     `<div class="kpis">${kp.map(k=>`<div class="kpi ${k.c}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="foot">${k.f}</div></div>`).join('')}</div>
     <div class="hint" style="margin-bottom:8px">Odoo cargado: ${ps.map(p=>perLabel(p)+' ('+ttsStr(CUAD.odoo[p].mov.ts)+')').join(' · ')}. <b>Odoo es la verdad</b>, salvo los lotes si cuadras con <b>«sin lotes»</b> (ahí manda Cargadores y los lotes no se tocan). Se revisa desde el ${R.desde} (cámbialo arriba). Lo que corrijas en el sistema pasa solo a «resuelto» la próxima vez que cargues Odoo (o con 🔄).</div>
-    <div class="card" style="margin-bottom:12px"><h3>Errores por persona (abiertos)</h3><div class="tablewrap" style="max-height:180px"><table style="min-width:0;width:100%"><thead><tr><th>Persona</th><th style="text-align:right">Embarques</th><th style="text-align:right">Con error</th><th style="text-align:right">%</th></tr></thead><tbody>${Object.values(per).sort((a,b)=>b.err-a.err).map(p=>`<tr><td>${escProy(p.n)}</td><td class="num">${p.emb}</td><td class="num ${p.err?'dcrit':''}">${p.err}</td><td class="num">${p.emb?Math.round(p.err/p.emb*100):0}%</td></tr>`).join('')||'<tr><td colspan="4" class="empty">Sin datos</td></tr>'}</tbody></table></div></div>
+    <div class="card" style="margin-bottom:12px"><h3>Errores por persona <span class="hint" style="font-weight:400">· ${rangoTxt()} · cuenta todo lo detectado, aunque ya se haya corregido. Lo que generó el master no se le carga a nadie.</span></h3>${F.persona?`<div class="hint" style="margin:6px 0">Mostrando solo: <b>${escProy((CC.personas.find(p=>p.key===F.persona)||{n:F.persona}).n)}</b> <button class="ghost" onclick="concPersonaSet(-1)">✕ quitar filtro</button></div>`:''}<div class="tablewrap" style="max-height:260px"><table style="min-width:0;width:100%"><thead><tr><th>Persona</th><th style="text-align:right">Embarques</th><th style="text-align:right">Con error</th><th style="text-align:right">%</th><th style="text-align:right">Remisión</th><th style="text-align:right">Producto</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Lote</th><th style="text-align:right">Falta/sobra</th><th style="text-align:right">Abiertos</th><th></th></tr></thead><tbody>${CC.personas.map((p,ix)=>`<tr${F.persona===p.key?' style="background:rgba(120,140,255,.12)"':''}><td>${p.b?'':p.ic+' '}${escProy(p.b?p.n:p.n)}</td><td class="num">${p.b?'—':p.emb}</td><td class="num ${p.err?'dcrit':''}">${p.err}</td><td class="num">${p.b||!p.emb?'—':Math.round(p.err/p.emb*100)+'%'}</td><td class="num">${p.rem||''}</td><td class="num">${p.prod||''}</td><td class="num">${p.cant||''}</td><td class="num">${p.lote||''}</td><td class="num">${p.extra||''}</td><td class="num">${p.ab||''}</td><td style="white-space:nowrap">${p.err?`<button class="ghost" onclick="concPersonaSet(${ix})">Ver</button>${p.b?'':` <button class="ghost" onclick="concAvisar(${ix})">📨 Avisar</button>`}`:''}</td></tr>`).join('')||'<tr><td colspan="11" class="empty">Sin datos</td></tr>'}</tbody></table></div></div>
     <div class="tablewrap"><table style="min-width:980px"><thead><tr><th style="width:28px"><input type="checkbox" onchange="concSelAll(this.checked)"></th><th>Detectado</th><th>Fecha</th><th>Tipo</th><th>Cliente · remisión</th><th>Qué pasó</th><th>Acciones</th></tr></thead><tbody>${rows.map(x=>{ const it=x.item, r=it&&it.r;
       const rem=it?(escProy(r.pedido||'—')+' → '+(it.picks.length?escProy([...new Set(it.picks.map(p=>p.v||p.ref))].join(', ')):'<span class="muted">sin salida</span>')+(it.via==='cliente'?' <span class="pill p-warn" title="Ligado por cliente y fecha, no por remisión">por cliente</span>':'')):(x.pick?escProy(x.pick.v||x.pick.ref):'');
       const fx=x.fixes.map(f=>f==='C'?'dejar Cargadores como Odoo':f==='B'?'dejar Báscula como Odoo':f==='pedido'?'poner la remisión de Odoo':f==='crearB'?'crear registro de báscula':'crear embarque + báscula').join(' · ');
@@ -2923,7 +2973,7 @@ function concRender(){
       <td style="white-space:normal">${(x.hall||[]).map(h=>`<div style="margin:2px 0">${h.who?`<span class="pill p-late" style="margin-right:5px">${quien[h.who]}</span>`:''}${escProy(h.t)}</div>`).join('')}${fx&&x.est==='abierto'?`<div class="hint">Con lotes: ${fx}</div>`:''}${x.pl&&x.est==='abierto'?(x.pl.nada?`<div class="hint">${x.tipo==='odoo'?'':'<span class="pill p-warn">solo lotes</span> '}Sin tocar lotes no se hace nada aquí: ${escProy(x.pl.motivo)}.</div>`:`<div class="hint">Sin tocar lotes: ${plTxt(x.pl)}${(x.pl.restoC||x.pl.restoB)?' · los lotes distintos se quedan como están':''}</div>`):''}</td><td style="white-space:nowrap">${acc}</td></tr>`; }).join('')||`<tr><td colspan="7" class="empty">${F.estado==='abierto'?'No hay errores abiertos ✓':'Nada en este filtro'}.</td></tr>`}</tbody></table></div>
     ${concAjustesHTML()}`;
   document.getElementById('concBtns').innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="hint">Seleccionados:</span><button class="primary" ${nSelSL?'':'disabled'} title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concApply(null,true)">✅ sin lotes (${nSelSL})</button><button class="ghost" ${nSel?'':'disabled'} title="Cuadra todo con Odoo, lotes incluidos" onclick="concApply(null,false)">🔁 con lotes (${nSel})</button><span class="hint" style="margin-left:8px">Todo lo visible:</span><button class="primary" ${fixVisSL?'':'disabled'} title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concApply('all',true)">⚡ sin lotes (${fixVisSL})</button><button class="ghost" ${fixVis?'':'disabled'} title="Cuadra todo con Odoo, lotes incluidos" onclick="concApply('all',false)">⚡ con lotes (${fixVis})</button><button class="ghost" onclick="concCSV()">⬇ CSV</button></div>`;
-  document.getElementById('concDesde').value=concDesde(); document.getElementById('concEstado').value=F.estado; document.getElementById('concTipo').value=F.tipo; document.getElementById('concDet').checked=!!F.det;
+  document.getElementById('concDesde').value=concDesde(); document.getElementById('concEstado').value=F.estado; document.getElementById('concTipo').value=F.tipo; document.getElementById('concRango').value=F.rango||'todo'; document.getElementById('concDet').checked=!!F.det;
   const tc=document.getElementById('concCount'); if(tc){ const n=Object.values(CUAD.bandeja).filter(b=>b.estado==='abierto').length; tc.textContent=n; tc.style.display=n?'inline-flex':'none'; }
 }
 function concSel(k,v){ CC.sel[k]=v; concRender(); }
@@ -2971,7 +3021,7 @@ const plTxt=p=>{ const a=[]; if(p.pedido)a.push('remisión'); if(p.C)a.push('can
 function concFixOne(key,sl){ concApplyList([key],!!sl); }
 function concApply(modo,sl){
   if(!requireMaster())return; const R=CC.res; if(!R)return; const F=CC.f, q=normNom(F.q);
-  const vis=concRows(R).filter(x=>x.est==='abierto'&&x.fixes.length&&(!F.det||(x.b&&esHoy(x.b.ts)))&&(!F.tipo||x.cats.includes(F.tipo))&&(!q||normNom(x.cliente+' '+x.hall.map(h=>h.t).join(' ')).includes(q)));
+  const vis=concRows(R).filter(x=>x.est==='abierto'&&x.fixes.length&&(!F.det||(x.b&&esHoy(x.b.ts)))&&(!F.tipo||x.cats.includes(F.tipo))&&(!F.persona||personasDe(x).includes(F.persona))&&(!q||normNom(x.cliente+' '+x.hall.map(h=>h.t).join(' ')).includes(q)));
   concApplyList(modo==='all'?vis.map(x=>x.key):Object.keys(CC.sel).filter(k=>CC.sel[k]),!!sl);
 }
 // sl=true → «sin tocar lotes»; sl=false → cuadra todo con Odoo, lotes incluidos
