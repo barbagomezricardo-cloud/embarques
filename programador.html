@@ -203,7 +203,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="traza" onclick="setView('traza')">🧾 Trazabilidad <span id="trzCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="bascula" data-basc onclick="setView('bascula')">⚖️ Báscula <span id="bsCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="cuadre" data-basc onclick="setView('cuadre')">🧮 Cuadre</button>
-    <button data-v="cierre" onclick="setView('cierre')">🗓️ Cierre de mes</button>
+    <button data-v="cierre" data-basc onclick="setView('cierre')">🗓️ Corte de mes <span id="ciCount" class="pill p-warn" style="margin-left:4px;display:none"></span></button>
     <button data-v="conc" id="tabConc" style="display:none" onclick="setView('conc')">🕵️ Conciliación <span id="concCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
   </div>
@@ -352,7 +352,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   <div class="view" id="v-cierre">
     <div class="periodbar" style="margin-bottom:10px">
       <div class="f"><label>Periodo</label><select id="ciPer" onchange="ciSet(this.value)"></select></div>
-      <div class="f" style="flex:1;min-width:260px"><span class="hint">Las dos áreas (Embarques y Báscula) hacen su corte y confirman cuál fue el último pesaje. Cuando coinciden queda la solicitud para el master. Lo que se pese después del corte cuenta para el mes siguiente.</span></div>
+      <div class="f" style="flex:1;min-width:260px"><span class="hint">Las dos áreas (Embarques / Programación y Báscula) hacen su corte y confirman cuál fue el último pesaje. Cuando coinciden queda la solicitud para el master. Lo que se pese después del corte cuenta para el mes siguiente.</span></div>
     </div>
     <div id="ciBox"></div>
     <div class="card" style="margin-top:12px"><h3>📚 Meses cerrados</h3><div class="tablewrap" style="margin-top:8px" id="ciHist"></div></div>
@@ -2737,7 +2737,7 @@ function closeCuadImg(){ document.getElementById('cqImgOverlay').classList.remov
    Lo que se pese DESPUÉS del corte cuenta para el mes siguiente (perEmb). Al cerrar se guarda una "foto" del cuadre
    (snap) para poder sacar la imagen del mes tal como se cerró, aunque después se vuelvan a cargar reportes de Odoo. */
 const CI={per:''};
-const CI_AREAS=[['embarques','📋','Embarques'],['bascula','⚖️','Báscula']];
+const CI_AREAS=[['embarques','📋','Embarques / Programación'],['bascula','⚖️','Báscula']];
 function cierreInfo(P){
   const cus=cuadUnits().filter(u=>u.per===P).map(cuadUnit);
   const conB=cus.filter(c=>c.u.b); let last=null; conB.forEach(c=>{ if(!last||(c.u.b.ts||0)>=(last.u.b.ts||0)) last=c; });
@@ -2756,7 +2756,7 @@ function renderCierre(){
   const box=a=>{ const [k,ic,lab]=a; const x=A[k]; const stale=x&&!c.corteTs&&(x.lastId!==I.lastId||x.n!==I.n||x.nB!==I.nB);
     return `<div class="card" style="padding:12px 14px;${x&&!stale?'border-color:var(--ok)':stale?'border-color:var(--warn)':''}"><h3 style="margin:0 0 6px">${ic} ${lab} ${x&&!stale?'<span class="pill p-ok">✓ corte hecho</span>':stale?'<span class="pill p-warn">confirmar de nuevo</span>':'<span class="pill p-proc">sin corte</span>'}</h3>`
       +(x?`<div class="hint" style="margin:0">Corte de <b>${escProy(x.usuario||'')}</b> · ${ttsStr(x.ts)}<br>Último pesaje: <b>${escProy(x.lastFolio||'—')}</b> · ${x.n} embarques (${x.nB} con báscula)${x.just?'<br>⚠️ Cortó con pendientes: '+escProy(x.just):''}</div>${stale?'<div class="hint" style="color:var(--warn)">Cambió algo después de su corte (nuevo pesaje o embarque): debe confirmar otra vez.</div>':''}`:'<div class="hint" style="margin:0">Aún no hace su corte.</div>')
-      +(!c.corteTs&&!c.cerrado&&ciPuedeArea(k)?`<div style="margin-top:8px"><button class="primary" onclick="hacerCorte('${P}','${k}')">✂️ Hacer corte de ${lab}</button></div>`:'')+'</div>'; };
+      +(!c.corteTs&&!c.cerrado&&ciPuedeArea(k)?`<div style="margin-top:8px"><button class="primary" onclick="hacerCorte('${P}','${k}')">✂️ Hacer corte de ${lab}</button></div>`:(!c.corteTs&&!c.cerrado?`<div class="hint" style="margin-top:8px">Este corte lo hace ${k==='bascula'?'el usuario de Báscula':'Programación (superusuario)'}.</div>`:''))+'</div>'; };
   let est='';
   if(c.cerrado) est=`<div class="card" style="border-color:var(--ok);padding:10px 14px">🔒 <b>Periodo cerrado</b> por ${escProy(c.cerrado.usuario||'')} el ${ttsStr(c.cerrado.ts)}${c.cerrado.forzado?' (cierre directo del master'+(c.cerrado.nota?': '+escProy(c.cerrado.nota):'')+')':' (acordado por las dos áreas)'}.
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="ghost" onclick="imagenCuadre('${P}')">🖼️ Imagen del cuadre al cierre</button>${isMaster?`<button class="ghost" style="color:var(--late)" onclick="reabrirCierre('${P}')">↩ Reabrir (master)</button>`:''}</div></div>`;
@@ -2781,9 +2781,9 @@ function renderCierre(){
 }
 function ciSet(v){ CI.per=v; renderCierre(); }
 async function hacerCorte(P,area){
-  if(!ciPuedeArea(area)){ toast('Este corte lo hace el área de '+(area==='bascula'?'Báscula':'Embarques')); if(!unlocked&&!isBasc)toggleLock(); return; }
+  if(!ciPuedeArea(area)){ toast('Este corte lo hace el área de '+(area==='bascula'?'Báscula':'Embarques / Programación')); return; }
   const c=cierreDe(P); if(c.corteTs||c.cerrado) return;
-  const I=cierreInfo(P), lab=area==='bascula'?'Báscula':'Embarques';
+  const I=cierreInfo(P), lab=area==='bascula'?'Báscula':'Embarques / Programación';
   if(!I.n && !confirm('No hay embarques en '+perLabel(P)+'. ¿Hacer el corte en ceros?')) return;
   const now=new Date(), [y,m]=P.split('-').map(Number), dim=new Date(y,m,0).getDate();
   if(P===perDe(TODAY)&&now.getDate()<dim-2&&!confirm('⚠️ Aún no termina '+perLabel(P)+'. Si se corta hoy, lo que se pese después contará para '+perLabel(nextPer(P))+'. ¿Continuar?')) return;
@@ -2823,9 +2823,14 @@ function reabrirCierre(P){ if(!requireMaster())return; const m=prompt('Reabrir '
 /* ================= ENGANCHE CON render() Y CON LOS PERFILES ================= */
 function cuadRenderHook(){ if(curView==='bascula')renderBascula(); else if(curView==='cuadre')renderCuadre(); else if(curView==='cierre')renderCierre(); else if(curView==='conc')concRender();
   try{ const tc=document.getElementById('concCount'); if(tc&&curView!=='conc'){ const n=Object.values(CUAD.bandeja||{}).filter(x=>x.estado==='abierto').length; tc.textContent=n; tc.style.display=n?'inline-flex':'none'; } }catch(e){}
+  // pestaña Corte de mes: al master le avisa cuántos cierres esperan su autorización; a cada área, en cuántos meses falta su corte
+  try{ const e=document.getElementById('ciCount'); if(e){ let n=0;
+      if(isMaster) n=Object.values(CUAD.cierres||{}).filter(x=>x&&x.solicitud&&!x.cerrado).length;
+      else { const area=isBasc?'bascula':(unlocked?'embarques':''); if(area){ const hoy=perDe(TODAY); n=cierrePeriodos().filter(p=>p<hoy&&!perCerrado(p)&&!((cierreDe(p).areas||{})[area])&&!cierreDe(p).corteTs).length; } }
+      e.textContent=n; e.style.display=n?'inline-flex':'none'; } }catch(e){}
   // contador de pendientes de pesar en la pestaña Báscula
   try{ const n=DATA.filter(r=>!r.cancelado&&isDesp(r)&&!CUAD.bascula[r.id]).length; const e=document.getElementById('bsCount'); if(e){ e.textContent=n; e.style.display=n?'inline-flex':'none'; } }catch(e){} }
-const BASC_VIEWS=['tabla','bascula','cuadre'];
+const BASC_VIEWS=['tabla','bascula','cuadre','cierre'];
 
 /* ================= CONCILIACIÓN MAESTRA CON ODOO · BANDEJA DE ERRORES (solo master) =================
    Cada vez que se cargan las salidas de inventario de Odoo (cada una con su folio PT/SAL y su remisión R#####), esta pestaña
