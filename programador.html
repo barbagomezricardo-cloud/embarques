@@ -2243,7 +2243,7 @@ const isDesp=r=>r&&(r.despachado===true||r.despachado==='1'||r.despachado===1);
 // registraba lotes y se llenan desde Odoo. Por defecto = primer día con lotes capturados; el master puede fijarla en Configuración.
 let _ldC={t:0,v:''};
 function lotesDesde(){ if(CFG.lotesDesde) return CFG.lotesDesde; const n=Date.now(); if(n-_ldC.t<2500) return _ldC.v;
-  let m=''; DATA.forEach(r=>{ if(r&&!r.cancelado&&lotesDe(r).length){ const f=fechaEmb(r); if(f&&(!m||f<m)) m=f; } }); _ldC={t:n,v:m||'2999-01-01'}; return _ldC.v; }
+  let m=''; DATA.forEach(r=>{ if(r&&!r.cancelado&&!r.lotesOdoo&&lotesDe(r).length){ const f=fechaEmb(r); if(f&&(!m||f<m)) m=f; } }); _ldC={t:n,v:m||'2999-01-01'}; return _ldC.v; }
 
 /* ---------- unidades del cuadre: embarques programados + unidades pesadas sin programa ---------- */
 function cuadUnits(){
@@ -3141,6 +3141,7 @@ function regBannerHtml(){
 }
 function concRegularizar(silent){
   if(!requireMaster())return; const pl=regPlan(true);
+  if(!CFG.lotesDesde&&pl.corte<'2999'){ CFG.lotesDesde=pl.corte; persistCfg(); }   // fija la fecha del control para que no se mueva al llenar lotes
   if(!pl.out.length){ toast('No hay nada que cuadrar antes del '+fmtF(pl.corte)+(pl.sinOdoo.length?' · falta cargar el detalle de Odoo de: '+pl.sinOdoo.map(perLabel).join(', '):''),5000); return; }
   const cB=pl.out.filter(i=>i.fixes.includes('crearB')).length;
   if(!silent&&!confirm('Antes del '+fmtF(pl.corte)+' (Cargadores no registraba lotes):\n· '+pl.out.length+' embarque(s) se cuadran contra Odoo: los lotes de Cargadores se llenan con los de Odoo\n· '+cB+' registro(s) de báscula «generados» a crear\n· '+pl.sinSal.length+' despachados SIN salida en Odoo se quedan pendientes'+(pl.sinOdoo.length?'\n· Sin detalle de Odoo (no se tocan): '+pl.sinOdoo.map(perLabel).join(', '):'')+'\n\nDesde el '+fmtF(pl.corte)+' no se toca nada de Cargadores.\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return;
@@ -3183,7 +3184,7 @@ function concApplyList(keys,sl,ov,silent){
           newB=slI?(pl.B||null):(is.fixes.includes('B')&&b?nuevas:null), newCrB=slI?(pl.crearB||null):(is.fixes.includes('crearB')?nuevas:null);
     const eff=[]; if(doPed&&venta)eff.push('pedido'); if(newC)eff.push('C'); if(newB&&b)eff.push('B'); if(newCrB)eff.push('crearB');
     if(doPed&&venta){ r.pedido=venta; if(b) cuadSet('bascula/'+i.id+'/pedido',venta); }
-    if(newC) r.lotes=newC.map(x=>({...x}));
+    if(newC){ r.lotes=newC.map(x=>({...x})); if(!slI) r.lotesOdoo=true; }   // lotes llenados desde Odoo (no los capturó Cargadores)
     persist(r.id,r);
     if(newB&&b){ const sc=newB.reduce((a,x)=>a+(Number(x.sacos)||0),0), h=Object.assign({},b.hist||{}); h['h'+t]={ts:t,usuario:cuadUser(),accion:slI?'Cuadre vs Odoo (sin tocar lotes)':'Cuadre vs Odoo',detalle:'antes: '+_lin(antes.items)+' → después: '+_lin(newB)};
       cuadSet('bascula/'+i.id,{...CUAD.bascula[i.id],items:newB.map(x=>({...x})),sacos:sc,...(b.estimado?{neto:Math.round(newB.reduce((a,x)=>a+(Number(x.sacos)||0)*(Number(x.kgSaco)||0),0))}:{}),tsEdit:t,editor:cuadUser(),hist:h}); }
