@@ -966,13 +966,13 @@ function enviarVisitas(){var v=getVisitas();var ks=Object.keys(v);if(!ks.length)
 function pfilt(f){return '<button onclick="renderProspectos(PROSPQ,\''+f+'\')" style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;background:'+(PROSPFILT===f?'var(--gold)':'var(--mid)')+';color:'+(PROSPFILT===f?'var(--navy)':'#9fb0cc')+'">';}
 function prospItem(p,i,vis,obs){
   var loc=[p.c,p.e].filter(Boolean).join(', ');var url=mapsUrl(p.la,p.lo,(p.n||'')+' '+loc);var v=vis[p.n];var ob=obs[p.n];
-  var et=ob&&ob.etapa?etapaInfo(ob.etapa):null;
+  var et=etapaInfo((ob&&ob.etapa)||((p.src==='Alta manual'||p._altaId)?'nuevo':''));
   var hoyISO=new Date().toISOString().slice(0,10);
   var venc=ob&&ob.proxima?(ob.proxima<hoyISO):false;
   var altaBadge=p._altaStatus==='pendiente'?' <span style="background:#4a3a1222;color:#f4d58a;border:1px solid #86612a;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">⏳ pendiente de autorización</span>'
     :(p._altaId?' <span style="background:#0f241722;color:#4ade80;border:1px solid #1a7a3f;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">✅ autorizado</span>':'');
   var h='<div class="li" style="flex-direction:column;align-items:stretch;gap:8px'+(v?';background:#0f2417;border-color:#1a7a3f':'')+'">'
-   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b>'+(et?(' <span style="background:'+et.c+'22;color:'+et.c+';border:1px solid '+et.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">'+et.lbl+'</span>'):'')+altaBadge+'<div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src?(' · vende '+p.src):'')+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
+   +'<div><b>'+(p.n||'')+(v?' <span style="color:#22c55e">✓</span>':'')+'</b>'+(et?(' <span style="background:'+et.c+'22;color:'+et.c+';border:1px solid '+et.c+';border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-left:2px">'+et.lbl+'</span>'):'')+altaBadge+'<div style="font-size:11px;color:#9fb0cc">'+(loc||'sin ubicación')+(p.src==='Alta manual'?' · alta manual':(p.src?(' · vende '+p.src):''))+(v?(' · visitado '+v.ts+' ('+v.how+')'):'')+'</div></div>';
   if(ob&&ob.proxima){h+='<div style="font-size:11.5px;font-weight:700;color:'+(venc?'#fca5a5':'#93c5fd')+'">⏰ Próxima acción: '+ob.proxima+(venc?' (vencida)':'')+'</div>';}
   if(ob&&ob.txt&&OBSEDIT!==i){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:7px 10px;font-size:12px;color:#f0d9a0">📝 '+(ob.txt||'').replace(/</g,'&lt;')+' <span style="color:#8a7a52">· '+(ob.ts||'')+'</span></div>';}
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap"><a href="'+url+'" target="_blank" rel="noopener" style="flex:1;min-width:104px;text-align:center;background:var(--gold);color:var(--navy);text-decoration:none;font-weight:800;border-radius:8px;padding:9px">📍 Cómo llegar</a>'

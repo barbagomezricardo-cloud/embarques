@@ -5816,7 +5816,7 @@ function embudoPanel(){
   var etapaCount={}; ETAPAS.forEach(function(e){etapaCount[e.k]=0;}); var sinEtapa=0;
   var vencidos=[]; var hoyISO=new Date().toISOString().slice(0,10);
   prosp.forEach(function(p){var ob=obs[p.n];
-    if(ob&&ob.etapa&&etapaCount.hasOwnProperty(ob.etapa))etapaCount[ob.etapa]++; else sinEtapa++;
+    var _et=(ob&&ob.etapa)||((p.src==='Alta manual'||p.altaId)?'nuevo':''); if(_et&&etapaCount.hasOwnProperty(_et))etapaCount[_et]++; else sinEtapa++;
     if(ob&&ob.proxima&&ob.proxima<hoyISO)vencidos.push({n:p.n,fecha:ob.proxima,v:ob.v||''});
   });
   var h='<div style="background:#10233f;border:1px solid #21406e;border-radius:8px;padding:12px;margin-bottom:12px">';
@@ -5826,7 +5826,7 @@ function embudoPanel(){
   h+='<button onclick="setPEtapa(\''+(PROSPETAPA==='(sin etapa)'?'':'(sin etapa)')+'\')" style="background:'+(PROSPETAPA==='(sin etapa)'?'#94a3b8':'#94a3b822')+';color:'+(PROSPETAPA==='(sin etapa)'?'#0b1628':'#94a3b8')+';border:1px solid #94a3b8;border-radius:14px;padding:5px 10px;font-size:11.5px;font-weight:800;cursor:pointer">(sin etapa) · '+sinEtapa+'</button>';
   h+='</div>';
   if(PROSPETAPA){
-    var filt=prosp.filter(function(p){var ob=obs[p.n];return PROSPETAPA==='(sin etapa)'?!(ob&&ob.etapa):(ob&&ob.etapa===PROSPETAPA);});
+    var filt=prosp.filter(function(p){var ob=obs[p.n];var et=(ob&&ob.etapa)||((p.src==='Alta manual'||p.altaId)?'nuevo':'');return PROSPETAPA==='(sin etapa)'?!et:(et===PROSPETAPA);});
     h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:3px">'+filt.length+' en esta etapa:</div>';
     h+='<div style="font-size:11.5px;color:#cbd5e1;max-height:140px;overflow-y:auto">'+filt.slice(0,150).map(function(p){var ob=obs[p.n];return '<div style="padding:2px 0;border-top:1px solid #1e3a6b">'+(p.n||'').replace(/</g,'&lt;')+' · '+(p.v||'(sin asignar)')+(ob&&ob.proxima?(' · próx: '+ob.proxima):'')+'</div>';}).join('')+'</div>';
   }
@@ -6662,7 +6662,7 @@ function buildVendorPayloads(){
   // se publica igual en cada vendedor para que vendedor.html/maestra.html muestren la descripción vigente.
   var _PROD_NAMES_G=(typeof prodRawNames==='function')?prodRawNames():{};
   Object.keys(byV).forEach(v=>{
-    const vprosp=prospAll.filter(p=>(p.v||'')===v).map(p=>({n:p.n,c:p.c||'',e:p.e||'',tel:p.p||'',la:p.la||0,lo:p.lo||0,src:p.src||''}));
+    const vprosp=prospAll.filter(p=>(p.v||'')===v).map(p=>({n:p.n,c:p.c||'',e:p.e||'',tel:p.p||'',la:p.la||0,lo:p.lo||0,src:p.src||'',altaId:p.altaId||''}));
     const rows=byV[v].map(c=>{
       const cur=Math.round((c.qualMes&&c.qualMes[lastMonth])||0);
       let qtd=0; evalMonths.forEach(m=>{qtd+=(c.qualMes&&c.qualMes[m])||0;});
