@@ -996,6 +996,22 @@ function prospItem(p,i,vis,obs){
   }
   h+='</div>';return h;
 }
+// Re-pinta un contenedor sin perder lo que el usuario está escribiendo en los formularios (inputs con id que cumplan re).
+function setHtmlKeep(el,html,re){
+  var saved={},sts={},aeId='',aeSel=null,sy=window.pageYOffset||0;
+  try{ var ae=document.activeElement;
+    if(ae&&ae.id&&el.contains(ae)&&re.test(ae.id)){ aeId=ae.id; try{ aeSel=[ae.selectionStart,ae.selectionEnd]; }catch(x){} }
+    el.querySelectorAll('input[id],textarea[id],select[id]').forEach(function(n){ if(!re.test(n.id)||n.type==='file')return; saved[n.id]=(n.type==='checkbox'||n.type==='radio')?{c:n.checked}:{v:n.value}; });
+    el.querySelectorAll('[id$="-loc-st"]').forEach(function(n){ if(re.test(n.id))sts[n.id]=n.textContent; });
+  }catch(x){}
+  el.innerHTML=html;
+  try{ Object.keys(saved).forEach(function(id){ var n=document.getElementById(id); if(!n)return; var s=saved[id]; if(s.c!==undefined)n.checked=s.c; else if(n.value!==s.v)n.value=s.v; });
+    Object.keys(sts).forEach(function(id){ var n=document.getElementById(id); if(n)n.textContent=sts[id]; });
+    if(aeId){ var f=document.getElementById(aeId); if(f){ f.focus(); if(aeSel&&aeSel[0]!=null&&f.setSelectionRange){ try{ f.setSelectionRange(aeSel[0],aeSel[1]); }catch(x){} } } }
+    if(sy&&Math.abs((window.pageYOffset||0)-sy)>2)window.scrollTo(0,sy);
+  }catch(x){}
+}
+
 function renderProspectos(q,filt){
   var app=document.getElementById('app');app.style.display='block';q=q||'';PROSPQ=q;if(filt)PROSPFILT=filt;
   var vis=getVisitas(), obs=getObs();
@@ -1016,14 +1032,14 @@ function renderProspectos(q,filt){
   var misPend=misAltas().filter(function(a){return a.status==='pendiente';});
   if(misPend.length){h+='<div style="background:#2a2413;border:1px solid #86612a;border-radius:10px;padding:9px 12px;font-size:12px;color:#f4d58a;margin-bottom:10px">⏳ Tienes '+misPend.length+' prospecto(s) esperando autorización de tu gerente.</div>';}
   if(nVis){ h+= (CLOUD.db&&CLOUD.v) ? ('<div style="background:#0f2417;border:1px solid #1a7a3f;border-radius:10px;padding:9px 12px;font-size:12px;color:#7ee2a8;margin-bottom:10px">✓ Tus visitas y notas se sincronizan solas con el gerente (en vivo).</div>') : ('<button onclick="enviarVisitas()" style="width:100%;background:#1a7a3f;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:800;margin-bottom:10px;cursor:pointer">📤 Enviar mis '+nVis+' visitas al gerente</button>'); }
-  if(!arr.length){h+='<div class="hint">'+(PROSPECTS.length?'Nada en esta vista.':'Aún no hay prospectos cargados. Pídele a tu gerente que los publique.')+'</div>';app.innerHTML=h;var q0=document.getElementById('pq');if(q0&&q){q0.focus();q0.setSelectionRange(q0.value.length,q0.value.length);}return;}
+  if(!arr.length){h+='<div class="hint">'+(PROSPECTS.length?'Nada en esta vista.':'Aún no hay prospectos cargados. Pídele a tu gerente que los publique.')+'</div>';setHtmlKeep(app,h,/^(np|mnp)-/);var q0=document.getElementById('pq');if(q0&&q&&(!document.activeElement||document.activeElement===document.body)){q0.focus();q0.setSelectionRange(q0.value.length,q0.value.length);}return;}
   var groups={}; arr.forEach(function(p){var e=p.e||'(sin estado)';(groups[e]=groups[e]||[]).push(p);});
   Object.keys(groups).sort().forEach(function(e){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 2px 6px"><span style="font-size:13px;font-weight:800;color:#E8A020">📍 '+e+'</span><span style="font-size:11px;color:#9fb0cc">'+groups[e].length+' aquí</span></div><div class="list">';
     groups[e].slice(0,300).forEach(function(p){var i=PROSPECTS.indexOf(p);h+=prospItem(p,i,vis,obs);});
     h+='</div>';
   });
-  app.innerHTML=h;var qi=document.getElementById('pq');if(qi&&q){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
+  setHtmlKeep(app,h,/^(np|mnp)-/);var qi=document.getElementById('pq');if(qi&&q&&(!document.activeElement||document.activeElement===document.body)){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 
 function renderAlertas(){

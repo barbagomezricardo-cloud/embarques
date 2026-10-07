@@ -933,6 +933,23 @@ function prospItemM(p,i,vis,obs){
    +(p.tel?('<a href="tel:'+p.tel+'" style="background:#22304d;color:#dbeafe;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px">📞</a>'):'')
    +'</div></div>';return h;
 }
+// Re-pinta un contenedor sin perder lo que el usuario está escribiendo en los formularios (inputs con id que cumplan re).
+function setHtmlKeep(el,html,re){
+  var saved={},sts={},aeId='',aeSel=null,sy=window.pageYOffset||0;
+  try{ var ae=document.activeElement;
+    if(ae&&ae.id&&el.contains(ae)&&re.test(ae.id)){ aeId=ae.id; try{ aeSel=[ae.selectionStart,ae.selectionEnd]; }catch(x){} }
+    el.querySelectorAll('input[id],textarea[id],select[id]').forEach(function(n){ if(!re.test(n.id)||n.type==='file')return; saved[n.id]=(n.type==='checkbox'||n.type==='radio')?{c:n.checked}:{v:n.value}; });
+    el.querySelectorAll('[id$="-loc-st"]').forEach(function(n){ if(re.test(n.id))sts[n.id]=n.textContent; });
+  }catch(x){}
+  el.innerHTML=html;
+  try{ Object.keys(saved).forEach(function(id){ var n=document.getElementById(id); if(!n)return; var s=saved[id]; if(s.c!==undefined)n.checked=s.c; else if(n.value!==s.v)n.value=s.v; });
+    Object.keys(sts).forEach(function(id){ var n=document.getElementById(id); if(n)n.textContent=sts[id]; });
+    if(aeId){ var f=document.getElementById(aeId); if(f){ f.focus(); if(aeSel&&aeSel[0]!=null&&f.setSelectionRange){ try{ f.setSelectionRange(aeSel[0],aeSel[1]); }catch(x){} } } }
+    if(sy&&Math.abs((window.pageYOffset||0)-sy)>2)window.scrollTo(0,sy);
+  }catch(x){}
+}
+
+const MX_ESTADOS=['AGUASCALIENTES','BAJA CALIFORNIA','BAJA CALIFORNIA SUR','CAMPECHE','CHIAPAS','CHIHUAHUA','CIUDAD DE MEXICO','COAHUILA','COLIMA','DURANGO','GUANAJUATO','GUERRERO','HIDALGO','JALISCO','MEXICO','MICHOACAN','MORELOS','NAYARIT','NUEVO LEON','OAXACA','PUEBLA','QUERETARO','QUINTANA ROO','SAN LUIS POTOSI','SINALOA','SONORA','TABASCO','TAMAULIPAS','TLAXCALA','VERACRUZ','YUCATAN','ZACATECAS'];
 function renderProspectos(q,filt){
   var app=document.getElementById('app');app.style.display='block';q=q||'';PROSPQ=q;if(filt)PROSPFILT=filt;
   applyMFix();
@@ -982,14 +999,14 @@ function renderProspectos(q,filt){
   h+='<select onchange="setPEst(this.value)" style="width:100%;background:var(--mid);border:1px solid #2a3a5c;border-radius:10px;padding:11px 12px;color:#fff;font-size:15px;margin-bottom:8px"><option value="">📍 Todos los estados ('+PROSPECTS.length+')</option>'+estados.map(function(e){return '<option value="'+e.replace(/"/g,'')+'"'+(PROSPEST===e?' selected':'')+'>'+e+' — '+estCount[e].t+' ('+estCount[e].pend+' pend.)</option>';}).join('')+'</select>';
   h+='<input class="search" id="pq" placeholder="Buscar prospecto o ciudad..." value="'+q.replace(/"/g,'')+'" oninput="renderProspectos(this.value)">';
   h+='<div style="font-size:11px;color:#9fb0cc;margin-bottom:8px">📝 Las notas y etapas son las que escriben los vendedores en su app (solo lectura aquí).</div>';
-  if(!arr.length){h+='<div class="hint">'+(PROSPECTS.length?'Nada en esta vista.':'Aún no hay prospectos cargados.')+'</div>';app.innerHTML=h;var q0=document.getElementById('pq');if(q0&&q){q0.focus();q0.setSelectionRange(q0.value.length,q0.value.length);}return;}
+  if(!arr.length){h+='<div class="hint">'+(PROSPECTS.length?'Nada en esta vista.':'Aún no hay prospectos cargados.')+'</div>';setHtmlKeep(app,h,/^(np|mnp)-/);var q0=document.getElementById('pq');if(q0&&q&&(!document.activeElement||document.activeElement===document.body)){q0.focus();q0.setSelectionRange(q0.value.length,q0.value.length);}return;}
   var groups={}; arr.forEach(function(p){var e=p.e||'(sin estado)';(groups[e]=groups[e]||[]).push(p);});
   Object.keys(groups).sort().forEach(function(e){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 2px 6px"><span style="font-size:13px;font-weight:800;color:#E8A020">📍 '+e+'</span><span style="font-size:11px;color:#9fb0cc">'+groups[e].length+' aquí</span></div><div class="list">';
     groups[e].slice(0,300).forEach(function(p){var i=PROSPECTS.indexOf(p);h+=prospItemM(p,i,vis,obs);});
     h+='</div>';
   });
-  app.innerHTML=h;var qi=document.getElementById('pq');if(qi&&q){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
+  setHtmlKeep(app,h,/^(np|mnp)-/);var qi=document.getElementById('pq');if(qi&&q&&(!document.activeElement||document.activeElement===document.body)){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 
 function renderAlertas(){

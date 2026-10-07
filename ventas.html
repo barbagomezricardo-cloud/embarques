@@ -5901,6 +5901,25 @@ function nuevoProspectoFormHtml(prefix){
    +'</div>';
 }
 function altaId(){return 'a'+Date.now()+Math.random().toString(36).slice(2,7);}
+// Re-pinta un contenedor sin perder lo que el usuario está escribiendo en los formularios (inputs con id que cumplan re).
+function setHtmlKeep(el,html,re){
+  var saved={},sts={},aeId='',aeSel=null,sy=window.pageYOffset||0;
+  try{ var ae=document.activeElement;
+    if(ae&&ae.id&&el.contains(ae)&&re.test(ae.id)){ aeId=ae.id; try{ aeSel=[ae.selectionStart,ae.selectionEnd]; }catch(x){} }
+    el.querySelectorAll('input[id],textarea[id],select[id]').forEach(function(n){ if(!re.test(n.id)||n.type==='file')return; saved[n.id]=(n.type==='checkbox'||n.type==='radio')?{c:n.checked}:{v:n.value}; });
+    el.querySelectorAll('[id$="-loc-st"]').forEach(function(n){ if(re.test(n.id))sts[n.id]=n.textContent; });
+  }catch(x){}
+  el.innerHTML=html;
+  try{ Object.keys(saved).forEach(function(id){ var n=document.getElementById(id); if(!n)return; var s=saved[id]; if(s.c!==undefined)n.checked=s.c; else if(n.value!==s.v)n.value=s.v; });
+    Object.keys(sts).forEach(function(id){ var n=document.getElementById(id); if(n)n.textContent=sts[id]; });
+    if(aeId){ var f=document.getElementById(aeId); if(f){ f.focus(); if(aeSel&&aeSel[0]!=null&&f.setSelectionRange){ try{ f.setSelectionRange(aeSel[0],aeSel[1]); }catch(x){} } } }
+    if(sy&&Math.abs((window.pageYOffset||0)-sy)>2)window.scrollTo(0,sy);
+  }catch(x){}
+}
+function limpiarFormProspecto(prefix){
+  try{document.querySelectorAll('input[id^="'+prefix+'-"],textarea[id^="'+prefix+'-"],select[id^="'+prefix+'-"]').forEach(function(n){ if(n.type==='checkbox'||n.type==='radio')n.checked=false; else n.value=''; });
+    document.querySelectorAll('[id^="'+prefix+'-"][id$="-loc-st"]').forEach(function(n){n.textContent='';});}catch(e){}
+}
 function guardarProspectoNuevo(prefix){
   if(!reqSuper())return;
   const nEl=document.getElementById(prefix+'-nombre'); const nombre=(nEl&&nEl.value||'').trim();
@@ -5912,7 +5931,7 @@ function guardarProspectoNuevo(prefix){
     la:parseFloat(g('-la'))||0,lo:parseFloat(g('-lo'))||0,vendedor:g('-vendedor')||'(sin asignar)',
     creadoPor:'Gerencia',creadoEn:now,status:'aprobado',revisadoPor:'Gerencia',revisadoEn:now};
   const url=cfg.db.replace(/\/$/,'')+'/skan/_altas/'+id+'.json';
-  skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){alert('✅ Prospecto guardado y disponible de inmediato.');fetchAltasLive();}).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
+  skFetch(url,{method:'PUT',body:JSON.stringify(body)}).then(function(){limpiarFormProspecto(prefix);alert('✅ Prospecto guardado y disponible de inmediato.');fetchAltasLive();}).catch(function(){alert('No se pudo guardar. Revisa tu conexión.');});
 }
 function aprobarAlta(id){
   if(!reqSuper())return; const cfg=getCloudCfg(); if(!cfg.db)return;
@@ -6313,7 +6332,7 @@ function renderProspec(){
       est.forEach(([e,n])=>{lh+='<tr><td style="padding:1px 0">'+e+'</td><td style="text-align:right;font-weight:700">'+n+'</td></tr>';});
       lh+='</table></div>';}
     lh+='</div>';}
-  const lEl=document.getElementById('prospec-list'); if(lEl)lEl.innerHTML=lh;
+  const lEl=document.getElementById('prospec-list'); if(lEl)setHtmlKeep(lEl,lh,/^(np-|corr-|visimport)/);
 }
 function fetchAltasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_altas.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._altasLive=o||{};renderProspec();}).catch(function(){}); }
 function fetchClienteInfoLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};try{renderClienteTable();}catch(e){}try{renderProspec();}catch(e){}try{renderMapeoTable();}catch(e){}try{renderRiesgo();}catch(e){}}).catch(function(){}); }
