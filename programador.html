@@ -385,7 +385,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <button class="primary" onclick="document.getElementById('concF').click()">📥 Cargar movimientos de Odoo (stock.move.line)</button>
       <input type="file" id="concF" accept=".xlsx,.xls" multiple style="display:none" onchange="concLoad(this.files);this.value=''">
       <button class="ghost" onclick="concSync()" title="Vuelve a comparar con lo ya cargado de Odoo">🔄 Revisar ahora</button>
-      <button class="primary" onclick="concRegularizar()" title="Cuadra contra Odoo todos los meses anteriores y crea la báscula «generada» de lo que ya salió en Odoo; deja pendiente solo lo que no tiene salida en Odoo">🗓️ Cuadrar meses anteriores</button>
+      <button class="primary" style="font-weight:800;box-shadow:0 0 0 3px rgba(59,157,255,.35)" onclick="concRegularizar()" title="Antes de la fecha del control de lotes (Cargadores no registraba): llena los lotes de Cargadores con los de Odoo y crea la báscula «generada». Desde esa fecha se respeta lo de Cargadores.">📲 Cuadrar lotes de Cargadores con Odoo</button>
     </div>
     <div id="concBody"></div>
     <div id="concBtns" style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px"></div>
@@ -591,6 +591,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
         <div id="bascUsersBody" style="margin-bottom:10px"></div>
         <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
           <div class="field"><label>Contraseña compartida de báscula (opcional)</label><input type="text" id="cfgPwdBasc" placeholder="Déjala vacía si usas usuarios"></div>
+          <div class="field"><label>Control de lotes en Cargadores desde</label><input type="date" id="cfgLotesDesde" style="width:150px" title="Antes de esta fecha Cargadores no registraba lotes: se llenan desde Odoo. Desde esta fecha se respeta lo que ellos capturan. Vacío = primer día con lotes capturados."></div>
           <div class="field"><label>Tolerancia báscula (kg)</label><input type="number" id="cfgBascTolKg" min="0" style="width:110px"></div>
           <div class="field"><label>Programado vs cargado (±%)</label><input type="number" id="cfgCuadTolProg" min="0" style="width:110px"></div>
           <div class="field"><label>Tolerancia en sacos</label><input type="number" id="cfgBascTolSacos" min="0" style="width:100px"></div>
@@ -1549,7 +1550,7 @@ function buildCfg(){
   document.getElementById('cfgLotesReq').checked=lotesReq(); document.getElementById('cfgTolLot').value=tolLot();
   document.getElementById('cfgFb').value=CFG.firebase?JSON.stringify(CFG.firebase,null,2):'';
   buildUsers();
-  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgPwdBasc',CFG.pwdBascula||''); buildBascUsers(); S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
+  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgPwdBasc',CFG.pwdBascula||''); S('cfgLotesDesde',CFG.lotesDesde||''); buildBascUsers(); S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
 }
 function buildUsers(){
   const ub=document.getElementById('usersBody'); if(!ub) return;
@@ -1593,7 +1594,7 @@ function saveConfig(){
         if(vistos[pw]){ toast('«'+nm+'» y «'+vistos[pw]+'» tienen la misma contraseña: cada quien necesita la suya'); return; }
         vistos[pw]=nm; bu.push({name:nm,pwd:pw}); }
       CFG.bascUsers=bu; }
-    CFG.pwdBascula=pb; const nn=(i,d)=>{ const v=document.getElementById(i).value; return v===''||isNaN(Number(v))?d:Math.max(0,Number(v)); };
+    CFG.lotesDesde=(document.getElementById('cfgLotesDesde').value||''); CFG.pwdBascula=pb; const nn=(i,d)=>{ const v=document.getElementById(i).value; return v===''||isNaN(Number(v))?d:Math.max(0,Number(v)); };
     CFG.bascTolKg=nn('cfgBascTolKg',50); CFG.cuadreTolProgPct=nn('cfgCuadTolProg',5); CFG.bascTolSacos=nn('cfgBascTolSacos',0); }
   const fbtxt=document.getElementById('cfgFb').value.trim();
   let reinit=false;
@@ -2238,6 +2239,11 @@ function bascBloqueado(b,r){
 // capturado DESPUÉS del corte → cuenta para el mes siguiente (misma regla del HTML de cuadre de báscula).
 function perEmb(fecha,b){ let p=perDe(fecha), g=0; while(g++<24){ const c=CUAD.cierres[p]; if(c&&c.corteTs&&b&&(b.ts||0)>c.corteTs) p=nextPer(p); else break; } return p; }
 const isDesp=r=>r&&(r.despachado===true||r.despachado==='1'||r.despachado===1);
+// Desde esta fecha Cargadores captura lotes (control puesto en su app): se respeta lo que ellos tienen. Antes de esa fecha nadie
+// registraba lotes y se llenan desde Odoo. Por defecto = primer día con lotes capturados; el master puede fijarla en Configuración.
+let _ldC={t:0,v:''};
+function lotesDesde(){ if(CFG.lotesDesde) return CFG.lotesDesde; const n=Date.now(); if(n-_ldC.t<2500) return _ldC.v;
+  let m=''; DATA.forEach(r=>{ if(r&&!r.cancelado&&lotesDe(r).length){ const f=fechaEmb(r); if(f&&(!m||f<m)) m=f; } }); _ldC={t:n,v:m||'2999-01-01'}; return _ldC.v; }
 
 /* ---------- unidades del cuadre: embarques programados + unidades pesadas sin programa ---------- */
 function cuadUnits(){
@@ -2268,7 +2274,7 @@ function cuadUnit(u){
     const lots=[...new Set([...(c?c.lotes.keys():[]),...(x?x.lotes.keys():[])])].map(nl=>({nl,lote:((c&&c.lotes.get(nl))||(x&&x.lotes.get(nl))||{}).lote||nl,c:c&&c.lotes.get(nl)?c.lotes.get(nl).sacos:0,b:x&&x.lotes.get(nl)?x.lotes.get(nl).sacos:0}));
     return {k,prod:(c&&c.prod)||(x&&x.prod)||k,c:c?c.sacos:0,b:x?x.sacos:0,lots}; });
   if(!u.noProg && Pkg>0 && Cef>0){ const pct=(Cef-Pkg)/Pkg*100; if(Math.abs(pct)>cfg.tolProg) flags.push({lvl:'warn',k:'prog',t:'Cargadores cargaron '+fK(Cef)+' kg vs '+fK(Pkg)+' kg programados ('+(pct>0?'+':'')+pct.toFixed(1)+'%, tolerancia ±'+cfg.tolProg+'%)'}); }
-  if(!u.noProg && isDesp(r) && !lotesDe(r).length) flags.push({lvl:'crit',k:'lotes',t:'Despachado sin lotes capturados por Cargadores'});
+  if(!u.noProg && isDesp(r) && !lotesDe(r).length && fechaEmb(r)>=lotesDesde()) flags.push({lvl:'crit',k:'lotes',t:'Despachado sin lotes capturados por Cargadores'});
   if(!b){ if(isDesp(r)) flags.push({lvl:'crit',k:'pend',t:'Despachado sin registro de báscula'}); }
   else {
     const est=!!b.estimado;   // registro generado por el master a partir de Odoo: no hay ticket real, el neto no se puede verificar
@@ -2279,7 +2285,7 @@ function cuadUnit(u){
     if(!est && !u.noProg && Cef>0 && Math.abs(neto-Cef)>cfg.tolKg) flags.push({lvl:'warn',k:'carganeto',t:'Neto de báscula '+fK(neto)+' kg vs '+fK(Cef)+' kg que capturó Cargadores (dif. '+sgn(neto-Cef)+' kg)'});
     if(!u.noProg){
       prods.forEach(p=>{ if(Math.abs(p.c-p.b)>cfg.tolSacos) flags.push({lvl:'crit',k:'sacos',t:p.prod+': Cargadores '+fS(p.c)+' sacos vs Báscula '+fS(p.b)+' ('+sgn(p.b-p.c)+')'});
-        else { const bad=p.lots.filter(l=>Math.abs(l.c-l.b)>cfg.tolSacos); if(bad.length) flags.push({lvl:'crit',k:'lote',t:p.prod+': los lotes no coinciden — '+bad.map(l=>l.lote+' (Carg. '+fS(l.c)+' / Bás. '+fS(l.b)+')').join(', ')}); } });
+        else { const bad=p.lots.filter(l=>Math.abs(l.c-l.b)>cfg.tolSacos); if(bad.length) flags.push({lvl:'info',k:'lote',t:'Lotes (informativo, no afecta el cuadre) · '+p.prod+': los lotes no coinciden — '+bad.map(l=>l.lote+' (Carg. '+fS(l.c)+' / Bás. '+fS(l.b)+')').join(', ')}); } });
     }
   }
   const crit=flags.some(f=>f.lvl==='crit'), warn=flags.some(f=>f.lvl==='warn');
@@ -2377,7 +2383,8 @@ async function cuadOdooFiles(files){
         cuadSet('odoo/'+P+'/'+res.kind,{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:rowsP.length,tot:Math.round(tot*100)/100,formato:(res.info&&res.info.formato)||''});
         delete _odooCache[P+'|'+res.kind]; });
       if(res.kind==='inv'&&res.movs){   // detalle por salida/remisión (para la conciliación del master): solo los últimos 3 meses, que es lo que se revisa
-        const minP=(()=>{ let m=prevPer(prevPer(perDe(TODAY))); const e=DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)).map(r=>perDe(fechaEmb(r))).sort()[0]; if(e){ const e1=prevPer(e); if(e1<m) m=e1; } let lim=perDe(TODAY); for(let i=0;i<8;i++) lim=prevPer(lim); return m<lim?lim:m; })(), byP={};   // desde el mes anterior al primer embarque (máx. 8 meses atrás) res.movs.forEach(m=>{ const P=m.f.slice(0,7); if(P>=minP)(byP[P]=byP[P]||[]).push(m); });
+        const minP=(()=>{ let m=prevPer(prevPer(perDe(TODAY))); const e=DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)).map(r=>perDe(fechaEmb(r))).sort()[0]; if(e){ const e1=prevPer(e); if(e1<m) m=e1; } let lim=perDe(TODAY); for(let i=0;i<8;i++) lim=prevPer(lim); return m<lim?lim:m; })(), byP={};   /* desde el mes anterior al primer embarque (máx. 8 meses atrás) */
+        res.movs.forEach(m=>{ const P=m.f.slice(0,7); if(P>=minP)(byP[P]=byP[P]||[]).push(m); });
         Object.keys(byP).forEach(P=>{ cuadSet('odoodata/'+P+'/mov',JSON.stringify({rows:byP[P],nm:res.nm})); cuadSet('odoo/'+P+'/mov',{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:byP[P].length}); delete _odooCache[P+'|mov']; });
         // lote → producto según Odoo (un lote pertenece a un solo producto): sirve para cachar «producto por otro»
         const lm={}; res.movs.forEach(m=>m.l.forEach(([pk,l])=>{ if(!l)return; if(lm[l]&&lm[l]!==pk) lm[l]='?'; else lm[l]=pk; })); cuadSet('odoodata/_lotes',JSON.stringify(lm)); }
@@ -2647,14 +2654,15 @@ function renderCuadre(){
     const src=CQ.view==='prod'?D.prod:CQ.view==='cli'?D.cli:D.lot;
     const hasF=CQ.view==='lote'?false:(CQ.view==='cli'?D.hasFacCli:D.hasFac);
     head=th(CQ.view==='prod'?'Producto':CQ.view==='cli'?'Cliente':'Producto · lote')+th('Cargadores',1)+th('Báscula',1)+th('Odoo inventario',1)+(hasF?th('Odoo facturado',1):'')+th('Báscula − Inv.',1)+(hasF?th('Inv. − Fact.',1):'')+th('Lectura');
-    const rows=src.map(o=>({o,lec:cuadLec(Object.assign({},o,{fac:hasF?o.fac:null}),D.hasInv,hasF,cfg.tolSacos)})).filter(x=>(!CQ.soloDif||x.lec.some(l=>l[0]!=='info'))&&(!q||normNom((x.o.name||'')+' '+(x.o.lote||'')).includes(q)));
+    const esLote=CQ.view==='lote';   // el reporte por lote es solo informativo: no cuenta como error de productos, cantidades ni pesos
+    const rows=src.map(o=>({o,lec:cuadLec(Object.assign({},o,{fac:hasF?o.fac:null}),D.hasInv,hasF,cfg.tolSacos).map(l=>esLote?['info',l[1]]:l)})).filter(x=>(!CQ.soloDif||(esLote?x.lec.length:x.lec.some(l=>l[0]!=='info')))&&(!q||normNom((x.o.name||'')+' '+(x.o.lote||'')).includes(q)));
     body=rows.map(({o,lec})=>`<tr><td>${escProy(o.name||o.k)}${CQ.view==='lote'?` · <b class="code">${escProy(o.lote||'')}</b>`:''}</td><td class="num">${fS(o.c)}</td><td class="num">${fS(o.b)}</td><td class="num">${oN(o.inv)}</td>${hasF?`<td class="num">${fS(o.fac)}</td>`:''}
       <td class="num ${D.hasInv&&Math.abs(o.b-o.inv)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${D.hasInv&&(o.c||o.b)?sgn(o.b-o.inv):'—'}</td>${hasF?`<td class="num ${Math.abs(o.inv-o.fac)>cfg.tolSacos?'dwarn':''}">${D.hasInv?sgn(o.inv-o.fac):'—'}</td>`:''}<td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
     const T=rows.reduce((t,{o})=>{ t.c+=o.c;t.b+=o.b;t.inv+=o.inv;t.fac+=(hasF?o.fac:0); return t; },{c:0,b:0,inv:0,fac:0});
     if(rows.length) body+=`<tr style="font-weight:700;background:#12202f"><td>Total</td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td><td class="num">${oN(T.inv)}</td>${hasF?`<td class="num">${fS(T.fac)}</td>`:''}<td class="num">${D.hasInv?sgn(T.b-T.inv):'—'}</td>${hasF?`<td class="num">${D.hasInv?sgn(T.inv-T.fac):'—'}</td>`:''}<td></td></tr>`;
     if(CQ.view==='cli'&&!D.hasFacCli&&D.hasFac) body+='<tr><td colspan="9" class="hint" style="white-space:normal">El reporte de ventas facturadas cargado es la tabla mensual (sin cliente). Para ver facturado por cliente carga el pivote por cliente.</td></tr>';
     document.getElementById('cqHint').innerHTML=CQ.view==='prod'?'Producto a producto: lo que cargaron, lo que pesó báscula, lo que salió de inventario en Odoo y lo facturado (sin descuento ni maniobra). Las promociones y bonificaciones cuentan como el mismo producto.'
-      :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto) se empareja con el del programa ignorando acentos y signos.':'Por lote: el lote de Odoo debe coincidir con el que capturaron Cargadores y Báscula (se ignoran espacios y símbolos).';
+      :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto) se empareja con el del programa ignorando acentos y signos.':'Por lote · INFORMATIVO: compara el lote de Cargadores, Báscula y Odoo (se ignoran espacios y símbolos). Las diferencias aquí no cuentan como error: el cuadre se juzga por producto, cantidad y peso.';
   } else {
     head=th('Fecha')+th('Pedido')+th('Cliente')+th('Prog. kg',1)+th('Cargadores kg',1)+th('Cargadores sacos',1)+th('Báscula neto kg',1)+th('Báscula sacos',1)+th('Estatus');
     const qfOk=c=>!CQ.qf||(CQ.qf==='pend'?c.st==='pend':CQ.qf==='dif'?c.st==='dif':CQ.qf==='sinlotes'?c.flags.some(f=>f.k==='lotes'):CQ.qf==='old'?(c.st==='pend'&&c.u.fecha&&c.u.fecha<TODAY):true);
@@ -2676,7 +2684,7 @@ function cuadDet(id){
     document.getElementById('cqDetBody').innerHTML=`<div style="padding:22px 18px"><b>${escProy(r.cliente||'')}</b> · pedido ${escProy(r.pedido||'—')}<p class="hint" style="font-size:12.5px">Registra primero tu pesaje: el cuadre contra lo que capturó Cargadores se muestra al guardar.</p></div>`;
     document.getElementById('cqDetBtns').innerHTML=`<button class="primary" onclick="closeCuadDet();openBasc('${id}')">⚖️ Pesar</button>`; document.getElementById('cqDetOverlay').classList.add('show'); return; }
   const col=(t,lines)=>`<div class="card" style="padding:10px 12px"><h3 style="margin:0 0 6px">${t}</h3>${lines.map(l=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin:2px 0"><span class="muted">${l[0]}</span><b>${l[1]}</b></div>`).join('')}</div>`;
-  const prodRows=cu.prods.map(p=>p.lots.map((l,i)=>`<tr><td>${i===0?escProy(p.prod):''}</td><td class="code"><b>${escProy(l.lote)}</b></td><td class="num">${fS(l.c)}</td><td class="num">${fS(l.b)}</td><td class="num ${Math.abs(l.c-l.b)>cfg.tolSacos?'dcrit':''}">${sgn(l.b-l.c)}</td></tr>`).join('')).join('');
+  const prodRows=cu.prods.map(p=>p.lots.map((l,i)=>`<tr><td>${i===0?escProy(p.prod):''}</td><td class="code"><b>${escProy(l.lote)}</b></td><td class="num">${fS(l.c)}</td><td class="num">${fS(l.b)}</td><td class="num ${Math.abs(l.c-l.b)>cfg.tolSacos?'dwarn':''}">${sgn(l.b-l.c)}</td></tr>`).join('')).join('');
   const hist=cuadHistAll(id,b);
   const can=!isBasc&&bascPuede()&&b;   // el usuario de báscula ve el cuadre, no lo edita (su captura va en la pestaña Báscula)
   document.getElementById('cqDetBody').innerHTML=`
@@ -2684,7 +2692,7 @@ function cuadDet(id){
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:15px">${escProy(r.cliente||'')}</b><span class="muted">pedido ${escProy(r.pedido||'—')} · ${cu.u.fecha||''} · ${escProy(r.eco||(b&&b.eco)||'')}</span>${cuadStChip(cu.st,cu.crit)}${cu.u.noProg?'<span class="pill p-warn">sin programa</span>':''}</div>
       ${cuadPasosHtml(cu,r,b,id)}
       ${cu.flags.length?'<div style="margin-bottom:12px">'+cu.flags.map(f=>`<div style="padding:6px 9px;margin-bottom:4px;border-left:3px solid var(--${f.lvl==='crit'?'late':f.lvl==='warn'?'warn':'proc'});background:#101c29;border-radius:6px;font-size:12px">${escProy(f.t)}</div>`).join('')+'</div>':'<div class="pill p-ok" style="margin-bottom:12px">✓ Las fuentes cuadran dentro de la tolerancia</div>'}
-      ${prodRows?`<div class="tablewrap" style="max-height:260px;margin-bottom:12px"><table><thead><tr><th>Producto</th><th>Lote</th><th style="text-align:right">Cargadores sacos</th><th style="text-align:right">Báscula sacos</th><th style="text-align:right">Dif.</th></tr></thead><tbody>${prodRows}</tbody></table></div>`:''}
+      ${prodRows?`<div class="tablewrap" style="max-height:260px;margin-bottom:12px"><table><thead><tr><th>Producto</th><th>Lote <span class="muted" style="font-weight:400">(informativo)</span></th><th style="text-align:right">Cargadores sacos</th><th style="text-align:right">Báscula sacos</th><th style="text-align:right">Dif.</th></tr></thead><tbody>${prodRows}</tbody></table></div>`:''}
       ${b&&b.obs?`<div class="hint" style="margin-bottom:8px">Observaciones de báscula: <b>${escProy(b.obs)}</b></div>`:''}
       ${b?`<div class="field" style="margin-bottom:10px"><label>🔎 Análisis de la diferencia ${b.analisis?'· '+escProy(b.analisis.usuario||'')+' · '+ttsStr(b.analisis.ts):''}</label><textarea id="cq_ana" rows="2" ${can?'':'disabled'} placeholder="Qué pasó y cómo se resolvió (ej. merma por humedad, sacos rotos, error de captura corregido…)">${escProy(b.analisis?b.analisis.txt:'')}</textarea>${can?`<div style="margin-top:6px"><button class="primary" onclick="cuadSaveAna('${id}')">Guardar análisis</button></div>`:''}</div>`:''}
       ${obsHtml(id)}
@@ -2879,15 +2887,30 @@ function difLineas(cap,od,tol){
   C.forEach(c=>out.push({t:'sobra',c})); O.forEach(o=>out.push({t:'falta',o}));
   return out;
 }
+// Comparación por PRODUCTO (suma de sacos de todos sus lotes). Los lotes NO cuentan como error: solo se reportan aparte, como información.
+function prodAgg(m){ const a=new Map(); [...m.values()].forEach(x=>{ const o=a.get(x.pk)||{pk:x.pk,lote:'',nl:'',q:0}; o.q+=x.q; a.set(x.pk,o); }); return a; }
+function difProd(cap,od,tol){
+  const C=prodAgg(cap), O=prodAgg(od), out=[];
+  [...C.keys()].forEach(k=>{ if(!O.has(k))return; const c=C.get(k), o=O.get(k); if(Math.abs(c.q-o.q)>tol) out.push({t:'cant',c,o}); C.delete(k); O.delete(k); });
+  [...C.entries()].forEach(([k,c])=>{ const ok=[...O.keys()].find(x=>Math.abs(O.get(x).q-c.q)<=tol); if(!ok)return; out.push({t:'prod',c,o:O.get(ok)}); C.delete(k); O.delete(ok); });   // un producto por otro (misma cantidad)
+  C.forEach(c=>out.push({t:'sobra',c})); O.forEach(o=>out.push({t:'falta',o}));
+  return out;
+}
+// diferencias SOLO de lote (el producto y la cantidad total sí cuadran): información aparte
+function lotInfo(cap,od,tol,src){
+  const bad=new Set(); difProd(cap,od,tol).forEach(d=>{ if(d.c)bad.add(d.c.pk); if(d.o)bad.add(d.o.pk); });
+  return difLineas(cap,od,tol).filter(d=>{ const x=d.c||d.o; return !bad.has(x.pk)&&!(d.o&&bad.has(d.o.pk)); }).map(d=>dTxt(d,src));
+}
 const dKind=d=>({cant:'cant',prod:'prod',prodcant:'prod',lote:'lote',sobra:'extra',falta:'extra'}[d.t]||'cant');
 function dTxt(d,src){
   const pn=k=>prodNameByKey(k,k), c=d.c, o=d.o;
-  if(d.t==='cant') return `${pn(c.pk)} lote ${c.lote}: ${src} registró ${fS(c.q)} sacos y Odoo sacó ${fS(o.q)}`;
-  if(d.t==='prod') return `Producto cambiado en el lote ${c.lote}: ${src} registró «${pn(c.pk)}» y Odoo sacó «${pn(o.pk)}» (${fS(c.q)} sacos)`;
-  if(d.t==='prodcant') return `Producto y cantidad distintos en el lote ${c.lote}: ${src} registró «${pn(c.pk)}» × ${fS(c.q)} y Odoo sacó «${pn(o.pk)}» × ${fS(o.q)}`;
+  const L=x=>x&&x.lote?' lote '+x.lote:'';
+  if(d.t==='cant') return `${pn(c.pk)}${L(c)}: ${src} registró ${fS(c.q)} sacos y Odoo sacó ${fS(o.q)}`;
+  if(d.t==='prod') return `Producto cambiado${c.lote?' en el lote '+c.lote:''}: ${src} registró «${pn(c.pk)}» y Odoo sacó «${pn(o.pk)}» (${fS(c.q)} sacos)`;
+  if(d.t==='prodcant') return `Producto y cantidad distintos${c.lote?' en el lote '+c.lote:''}: ${src} registró «${pn(c.pk)}» × ${fS(c.q)} y Odoo sacó «${pn(o.pk)}» × ${fS(o.q)}`;
   if(d.t==='lote') return `Lote distinto en ${pn(c.pk)}: ${src} registró ${c.lote} y Odoo sacó ${o.lote} (${fS(c.q)} sacos)`;
-  if(d.t==='sobra') return `${src} registró ${pn(c.pk)} lote ${c.lote} × ${fS(c.q)} y Odoo no lo sacó`;
-  return `Odoo sacó ${pn(o.pk)} lote ${o.lote} × ${fS(o.q)} y ${src} no lo registró`;
+  if(d.t==='sobra') return `${src} registró ${pn(c.pk)}${L(c)} × ${fS(c.q)} y Odoo no lo sacó`;
+  return `Odoo sacó ${pn(o.pk)}${L(o)} × ${fS(o.q)} y ${src} no lo registró`;
 }
 function concPicks(P){ const out=[]; [prevPer(P),P,nextPer(P)].forEach(p=>{ const x=odooRows(p,'mov'); if(x&&x.rows) out.push(...x.rows); }); return out; }
 const lineasCat=od=>[...od.values()].map(o=>{ const pr=bascProductos().find(p=>pkey(p.cod)===o.pk); return {cod:pr?pr.cod:o.pk,prod:pr?pr.name:prodNameByKey(o.pk,o.pk),lote:o.lote,sacos:o.q,kgSaco:pr?(Number(pr.kg)||0):0}; });
@@ -2923,11 +2946,11 @@ function conciliar(P){
     if(vs.length){ const okRem=remDig(ped).some(x=>vs.some(v=>remDig(v).includes(x)));
       if(!ped){ hall.push({who:'P',k:'rem',t:`Sin remisión capturada; Odoo salió con ${vs.join(', ')}`}); fixes.add('pedido'); }
       else if(!okRem){ hall.push({who:'P',k:'rem',t:`Remisión capturada «${ped}» ≠ Odoo ${vs.join(', ')}`}); fixes.add('pedido'); } }
-    const dC=difLineas(C,od,cfg.tolSacos);
+    const dC=difProd(C,od,cfg.tolSacos), info=lotInfo(C,od,cfg.tolSacos,'Cargadores');
     dC.forEach(d=>hall.push({who:'C',k:dKind(d),t:dTxt(d,'Cargadores')})); if(dC.length) fixes.add('C');
-    if(b){ const dB=difLineas(B,od,cfg.tolSacos); dB.forEach(d=>hall.push({who:'B',k:dKind(d),gen:!!b.generado,t:dTxt(d,b.generado?'Báscula (generada)':'Báscula')})); if(dB.length) fixes.add('B'); }
+    if(b){ lotInfo(B,od,cfg.tolSacos,b.generado?'Báscula (generada)':'Báscula').forEach(t=>info.push(t)); const dB=difProd(B,od,cfg.tolSacos); dB.forEach(d=>hall.push({who:'B',k:dKind(d),gen:!!b.generado,t:dTxt(d,b.generado?'Báscula (generada)':'Báscula')})); if(dB.length) fixes.add('B'); }
     else { hall.push({who:'B',k:'sinb',t:'Sin registro de báscula (el botón crea uno marcado «generado», con los sacos de Odoo)'}); fixes.add('crearB'); }
-    items.push({id:r.id,r,b,picks:m.ps,via:m.via,od,hall,fixes:[...fixes]});
+    items.push({id:r.id,r,b,picks:m.ps,via:m.via,od,hall,fixes:[...fixes],info});
   });
   const odooSolo=picks.filter(p=>!used.has(p.ref)&&p.f>=from&&p.f<=to&&p.l.some(x=>!esSacoVacio(x[0])));
   // bandeja: un renglón por problema
@@ -3030,7 +3053,7 @@ function concRender(){
   const quien={C:'📲 Cargadores',B:'⚖️ Báscula',P:'📋 Programa'}, tipoTxt={emb:'Embarque',sin:'Sin salida en Odoo',odoo:'Salida sin embarque'};
   const nSel=Object.keys(CC.sel).filter(k=>CC.sel[k]).length, fixVis=rows.filter(x=>x.est==='abierto'&&x.fixes.length).length, fixVisSL=rows.filter(x=>x.est==='abierto'&&x.pl&&!x.pl.nada).length, nSelSL=rows.filter(x=>CC.sel[x.key]&&x.est==='abierto'&&x.pl&&!x.pl.nada).length;
   document.getElementById('concBody').innerHTML=
-    `<div class="kpis">${kp.map(k=>`<div class="kpi ${k.c}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="foot">${k.f}</div></div>`).join('')}</div>
+    regBannerHtml()+concLotesInfoHtml(R)+`<div class="kpis">${kp.map(k=>`<div class="kpi ${k.c}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="foot">${k.f}</div></div>`).join('')}</div>
     <div class="hint" style="margin-bottom:8px">Odoo cargado: ${ps.map(p=>perLabel(p)+' ('+ttsStr(CUAD.odoo[p].mov.ts)+')').join(' · ')}. <b>Odoo es la verdad</b>, salvo los lotes si cuadras con <b>«sin lotes»</b> (ahí manda Cargadores y los lotes no se tocan). Se revisa desde el ${R.desde} (cámbialo arriba). Lo que corrijas en el sistema pasa solo a «resuelto» la próxima vez que cargues Odoo (o con 🔄).</div>
     <div class="card" style="margin-bottom:12px"><h3>Errores por persona <span class="hint" style="font-weight:400">· ${rangoTxt()} · cuenta todo lo detectado, aunque ya se haya corregido. Lo que generó el master no se le carga a nadie.</span></h3>${F.persona?`<div class="hint" style="margin:6px 0">Mostrando solo: <b>${escProy((CC.personas.find(p=>p.key===F.persona)||{n:F.persona}).n)}</b> <button class="ghost" onclick="concPersonaSet(-1)">✕ quitar filtro</button></div>`:''}<div class="tablewrap" style="max-height:260px"><table style="min-width:0;width:100%"><thead><tr><th>Persona</th><th style="text-align:right">Embarques</th><th style="text-align:right">Con error</th><th style="text-align:right">%</th><th style="text-align:right">Remisión</th><th style="text-align:right">Producto</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Lote</th><th style="text-align:right">Falta/sobra</th><th style="text-align:right">Abiertos</th><th></th></tr></thead><tbody>${CC.personas.map((p,ix)=>`<tr${F.persona===p.key?' style="background:rgba(120,140,255,.12)"':''}><td>${p.b?'':p.ic+' '}${escProy(p.b?p.n:p.n)}</td><td class="num">${p.b?'—':p.emb}</td><td class="num ${p.err?'dcrit':''}">${p.err}</td><td class="num">${p.b||!p.emb?'—':Math.round(p.err/p.emb*100)+'%'}</td><td class="num">${p.rem||''}</td><td class="num">${p.prod||''}</td><td class="num">${p.cant||''}</td><td class="num">${p.lote||''}</td><td class="num">${p.extra||''}</td><td class="num">${p.ab||''}</td><td style="white-space:nowrap">${p.err?`<button class="ghost" onclick="concPersonaSet(${ix})">Ver</button>${p.b?'':` <button class="ghost" onclick="concAvisar(${ix})">📨 Avisar</button>`}`:''}</td></tr>`).join('')||'<tr><td colspan="11" class="empty">Sin datos</td></tr>'}</tbody></table></div></div>
     <div class="tablewrap"><table style="min-width:980px"><thead><tr><th style="width:28px"><input type="checkbox" onchange="concSelAll(this.checked)"></th><th>Detectado</th><th>Fecha</th><th>Tipo</th><th>Cliente · remisión</th><th>Qué pasó</th><th>Acciones</th></tr></thead><tbody>${rows.map(x=>{ const it=x.item, r=it&&it.r;
@@ -3067,13 +3090,16 @@ function genBasc(r,lineas,refTxt,now){
 // Cargadores manda en los lotes (trazabilidad). Aquí solo se corrige remisión, cantidad y producto de los renglones que YA tienen ese mismo lote.
 // No se agrega, quita ni cambia ningún lote. Lo que requiere tocar lotes se queda abierto en la bandeja.
 function catLinea(pk,base,q){ const pr=bascProductos().find(p=>pkey(p.cod)===pk), o={...base,sacos:q}; if(pr){ o.cod=pr.cod; o.prod=pr.name; o.kgSaco=Number(pr.kg)||0; } return o; }
-function ajusteSinLotes(items,od,tol){
-  const arr=asArr(items).map(x=>({...x})), diffs=difLineas(capLineas(arr),od,tol), quitar=new Set(); let n=0;
-  diffs.forEach(d=>{ if(d.t==='lote'||d.t==='sobra'||d.t==='falta') return;        // esos tocarían lotes
-    const idx=arr.map((x,ix)=>ix).filter(ix=>pkey(arr[ix].cod||arr[ix].prod)===d.c.pk&&normLote(arr[ix].lote)===d.c.nl); if(!idx.length) return;
-    const base=arr[idx[0]]; arr[idx[0]]=d.t==='cant'?{...base,sacos:d.o.q}:catLinea(d.o.pk,base,d.o.q);
-    idx.slice(1).forEach(ix=>quitar.add(ix)); n++; });
-  return {items:arr.filter((x,ix)=>!quitar.has(ix)),n,rest:diffs.filter(d=>d.t==='lote'||d.t==='sobra'||d.t==='falta').length};
+function ajusteSinLotes(items,od,tol){   // corrige PRODUCTO y CANTIDAD sin crear, quitar ni renombrar lotes
+  const arr=asArr(items).map(x=>({...x})), diffs=difProd(capLineas(arr),od,tol), quitar=new Set(); let n=0;
+  diffs.forEach(d=>{ if(d.t==='sobra'||d.t==='falta') return;        // agregar o quitar un producto tocaría lotes
+    const idx=arr.map((x,ix)=>ix).filter(ix=>pkey(arr[ix].cod||arr[ix].prod)===d.c.pk); if(!idx.length) return;
+    if(d.t==='prod'){ idx.forEach(ix=>{ arr[ix]=catLinea(d.o.pk,arr[ix],Number(arr[ix].sacos)||0); }); n++; return; }
+    let delta=d.o.q-d.c.q;   // cantidad: se ajusta sobre el último lote del producto
+    if(delta>0){ const ix=idx[idx.length-1]; arr[ix]={...arr[ix],sacos:(Number(arr[ix].sacos)||0)+delta}; }
+    else for(let j=idx.length-1;j>=0&&delta<0;j--){ const ix=idx[j], s=Number(arr[ix].sacos)||0, t=Math.min(s,-delta); if(t>=s) quitar.add(ix); else arr[ix]={...arr[ix],sacos:s-t}; delta+=t; }
+    n++; });
+  return {items:arr.filter((x,ix)=>!quitar.has(ix)),n,rest:diffs.filter(d=>d.t==='sobra'||d.t==='falta').length};
 }
 // qué haría el botón «sin lotes» en este caso
 function planSinLotes(is){
@@ -3091,21 +3117,40 @@ function planSinLotes(is){
 }
 const plTxt=p=>{ const a=[]; if(p.pedido)a.push('remisión'); if(p.C)a.push('cantidad/producto en Cargadores'); if(p.B)a.push(p.gen?'igualar la báscula generada a Cargadores':'cantidad/producto en Báscula'); if(p.crearB)a.push('crear báscula con los lotes de Cargadores'); return a.join(' · '); };
 function concFixOne(key,sl){ concApplyList([key],!!sl); }
-// ═══ meses anteriores: se cuadran contra Odoo (lotes incluidos) y se crea la báscula «generada» de todo lo que ya salió en Odoo.
-// Se quedan pendientes solo los embarques que el programa marca despachados pero NO tienen salida en Odoo (falta liberar) y los aún sin despachar.
-function regPlan(){
-  const hoy=perDe(TODAY), out=[], sinOdoo=[], sinSal=[];
-  const ps=[...new Set(DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)).map(r=>perDe(fechaEmb(r))))].filter(p=>p<hoy&&!perCerrado(p)).sort();
-  ps.forEach(P=>{ const c=conciliar(P); if(!c){ sinOdoo.push(P); return; } c.issues.forEach(i=>{ if(i.tipo==='emb'&&i.fixes.length&&i.item) out.push(i); }); sinSal.push(...c.sinSalida); });
-  return {ps,out,sinOdoo,sinSal};
+// ═══ ANTES de la fecha del control de lotes (Cargadores no registraba): Odoo llena los lotes de Cargadores y se crea la báscula «generada».
+// DESDE esa fecha se respeta lo que capturó Cargadores. Se quedan pendientes solo los embarques despachados que NO tienen salida en Odoo (falta liberar).
+let _rpC={t:0,v:null};
+function regPlan(force){
+  const n=Date.now(); if(!force&&_rpC.v&&n-_rpC.t<3000) return _rpC.v;
+  const corte=lotesDesde(), out=[], sinOdoo=[], sinSal=[];
+  const ps=[...new Set(DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)&&fechaEmb(r)<corte).map(r=>perDe(fechaEmb(r))))].filter(p=>!perCerrado(p)).sort();
+  ps.forEach(P=>{ const c=conciliar(P); if(!c){ sinOdoo.push(P); return; }
+    c.issues.forEach(i=>{ if(i.tipo==='emb'&&i.fixes.length&&i.item&&i.fecha<corte) out.push(i); });
+    sinSal.push(...c.sinSalida.filter(x=>fechaEmb(x.r)<corte)); });
+  _rpC={t:n,v:{ps,out,sinOdoo,sinSal,corte}}; return _rpC.v;
+}
+const fmtF=f=>{ const [y,m,d]=String(f).split('-'); return d+'/'+m+'/'+y; };
+function regBannerHtml(){
+  if(!isMaster||!Object.keys(CUAD.odoo||{}).length) return '';
+  let pl; try{ pl=regPlan(); }catch(e){ return ''; }
+  const base='margin-bottom:12px;padding:14px 16px;border-radius:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;';
+  const cB=pl.out.filter(i=>i.fixes.includes('crearB')).length;
+  if(pl.out.length) return `<div style="${base}background:linear-gradient(90deg,#14325a,#1c2f55);border:2px solid #3b9dff;box-shadow:0 0 0 4px rgba(59,157,255,.18)"><div style="flex:1;min-width:260px"><div style="font-size:16px;font-weight:800;margin-bottom:3px">📲 Cuadrar los lotes de Cargadores con Odoo</div><div style="font-size:12.5px;color:#cfe0f2"><b>${pl.out.length} embarque(s)</b> anteriores al <b>${fmtF(pl.corte)}</b> no tienen lotes de Cargadores (ahí no se registraban). Odoo sí sabe qué salió: al cuadrar se llenan los lotes de Cargadores y se crean <b>${cB}</b> registros de báscula «generados». Desde el ${fmtF(pl.corte)} <b>se respeta lo que capturó Cargadores</b>. ${pl.sinSal.length?`Se quedan pendientes ${pl.sinSal.length} despachados sin salida en Odoo (falta liberar). `:''}${pl.sinOdoo.length?`Falta cargar el detalle de Odoo de: ${pl.sinOdoo.map(perLabel).join(', ')}.`:''}</div></div><button class="primary" style="font-size:15px;font-weight:800;padding:13px 22px" onclick="concRegularizar()">📲 Cuadrar con Odoo (${pl.out.length})</button></div>`;
+  if(pl.sinOdoo.length) return `<div style="${base}background:#3a2e12;border:1px solid var(--warn)"><div style="flex:1;font-size:13px">📲 <b>Lotes anteriores al ${fmtF(pl.corte)}:</b> falta cargar el detalle de Odoo (movimientos de producto) de <b>${pl.sinOdoo.map(perLabel).join(', ')}</b> para poder cuadrarlos.</div><button class="ghost" onclick="setView('conc')">Ir a Conciliación y cargar Odoo</button></div>`;
+  return `<div style="${base}background:#12301f;border:1px solid var(--ok);padding:9px 14px"><div style="font-size:12.5px">✓ Todo lo anterior al ${fmtF(pl.corte)} ya está cuadrado con Odoo${pl.sinSal.length?` · quedan ${pl.sinSal.length} despachados sin salida en Odoo (pendientes de liberar)`:''}. Desde esa fecha se respeta lo que capturó Cargadores.</div></div>`;
 }
 function concRegularizar(silent){
-  if(!requireMaster())return; const pl=regPlan();
-  if(!pl.out.length){ toast('No hay nada que regularizar en meses anteriores'+(pl.sinOdoo.length?' · falta cargar el detalle de Odoo de: '+pl.sinOdoo.map(perLabel).join(', '):''),5000); return; }
+  if(!requireMaster())return; const pl=regPlan(true);
+  if(!pl.out.length){ toast('No hay nada que cuadrar antes del '+fmtF(pl.corte)+(pl.sinOdoo.length?' · falta cargar el detalle de Odoo de: '+pl.sinOdoo.map(perLabel).join(', '):''),5000); return; }
   const cB=pl.out.filter(i=>i.fixes.includes('crearB')).length;
-  if(!silent&&!confirm('Meses anteriores ('+pl.ps.filter(p=>!pl.sinOdoo.includes(p)).map(perLabel).join(', ')+'):\n· '+pl.out.length+' embarque(s) se cuadran contra Odoo (lotes incluidos)\n· '+cB+' registro(s) de báscula «generados» a crear\n· '+pl.sinSal.length+' embarque(s) despachados SIN salida en Odoo se quedan pendientes'+(pl.sinOdoo.length?'\n· Sin detalle de Odoo (no se tocan): '+pl.sinOdoo.map(perLabel).join(', '):'')+'\n\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return;
-  concApplyList(pl.out.map(i=>i.key),false,pl.out,true);
+  if(!silent&&!confirm('Antes del '+fmtF(pl.corte)+' (Cargadores no registraba lotes):\n· '+pl.out.length+' embarque(s) se cuadran contra Odoo: los lotes de Cargadores se llenan con los de Odoo\n· '+cB+' registro(s) de báscula «generados» a crear\n· '+pl.sinSal.length+' despachados SIN salida en Odoo se quedan pendientes'+(pl.sinOdoo.length?'\n· Sin detalle de Odoo (no se tocan): '+pl.sinOdoo.map(perLabel).join(', '):'')+'\n\nDesde el '+fmtF(pl.corte)+' no se toca nada de Cargadores.\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return;
+  concApplyList(pl.out.map(i=>i.key),false,pl.out,true); _rpC={t:0,v:null};
   return {aplicados:pl.out.length,pendientesSinSalida:pl.sinSal.length,sinOdoo:pl.sinOdoo};
+}
+// lotes distintos a Odoo, solo informativo (no cuenta como error)
+function concLotesInfoHtml(R){
+  const L=R.items.filter(i=>i.info&&i.info.length); if(!L.length) return '';
+  return `<details class="card" style="margin-bottom:12px;padding:10px 14px"><summary style="cursor:pointer"><b>ℹ️ Reporte de lotes (informativo)</b> · ${L.length} embarque(s) con lotes distintos a Odoo, pero con producto y cantidad correctos. <span class="muted">No cuentan como error.</span></summary><div class="tablewrap" style="max-height:260px;margin-top:8px"><table><thead><tr><th>Fecha</th><th>Cliente · remisión</th><th>Diferencias de lote</th></tr></thead><tbody>${L.slice().sort((a,b)=>String(fechaEmb(b.r)).localeCompare(String(fechaEmb(a.r)))).slice(0,80).map(i=>`<tr><td>${fechaEmb(i.r)}</td><td>${escProy(i.r.cliente||'')} · ${escProy(i.r.pedido||'—')}</td><td style="white-space:normal;font-size:12px">${i.info.map(escProy).join('<br>')}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 function concApply(modo,sl){
   if(!requireMaster())return; const R=CC.res; if(!R)return; const F=CC.f, q=normNom(F.q);
@@ -3116,9 +3161,11 @@ function concApply(modo,sl){
 function concApplyList(keys,sl,ov,silent){
   if(!requireMaster())return; const R=CC.res; if(!R&&!ov)return;
   const sel=ov||R.issues.filter(i=>keys.includes(i.key)&&i.fixes.length); if(!sel.length){ toast('No hay nada seleccionado'); return; }
-  const plans=new Map(sel.map(i=>[i.key,sl?planSinLotes(i):null])), todo=sl?sel.filter(i=>!plans.get(i.key).nada):sel, omit=sel.length-todo.length;
+  // desde la fecha del control de lotes en Cargadores se respeta lo que ellos capturaron (solo se corrige producto/cantidad); antes de esa fecha Odoo llena los lotes
+  const respeta=i=>!!(i.item&&fechaEmb(i.item.r)>=lotesDesde()&&lotesDe(i.item.r).length);
+  const plans=new Map(sel.map(i=>[i.key,(sl||respeta(i))?planSinLotes(i):null])), todo=sel.filter(i=>{ const p=plans.get(i.key); return !p||!p.nada; }), omit=sel.length-todo.length;
   if(!todo.length){ toast('Sin tocar lotes no hay nada que corregir en lo seleccionado ('+omit+' caso(s) solo difieren en lotes o requieren crear registros con lotes de Odoo)'); return; }
-  const cnt=f=>todo.filter(i=>sl?(f==='C'?plans.get(i.key).C:f==='B'?plans.get(i.key).B:f==='pedido'?plans.get(i.key).pedido:f==='crearB'?plans.get(i.key).crearB:false):i.fixes.includes(f)).length;
+  const cnt=f=>todo.filter(i=>{ const p=plans.get(i.key); return p?(f==='C'?p.C:f==='B'?p.B:f==='pedido'?p.pedido:f==='crearB'?p.crearB:false):i.fixes.includes(f); }).length;
   const cerr=todo.filter(i=>i.item&&perCerrado(perEmb(i.fecha,i.item.b))).length;
   const msg=sl
     ?'Voy a cuadrar '+todo.length+' caso(s) SIN TOCAR LOTES (los lotes quedan como los capturó Cargadores):\n· remisión: '+cnt('pedido')+' · cantidad/producto en Cargadores: '+cnt('C')+' · en Báscula: '+cnt('B')+'\n· crear báscula con los lotes de Cargadores: '+cnt('crearB')+(omit?'\n· '+omit+' caso(s) se quedan abiertos (solo difieren lotes o habría que crearlos con lotes de Odoo).':'')
@@ -3131,17 +3178,18 @@ function concApplyList(keys,sl,ov,silent){
     const antes={pedido:r.pedido||'',lotes:lotesDe(r).map(x=>({...x})),items:b?bascItems(b).map(x=>({...x})):null,bpedido:b?b.pedido||'':null,bneto:b&&b.estimado?(Number(b.neto)||0):null};
     const venta=[...new Set(i.picks.map(p=>p.v).filter(Boolean))].join(', '), refTxt=i.picks.map(p=>p.ref).join('+');
     // lo que realmente se aplica en este caso
-    const doPed=sl?!!pl.pedido:is.fixes.includes('pedido'), newC=sl?(pl.C||null):(is.fixes.includes('C')?nuevas:null),
-          newB=sl?(pl.B||null):(is.fixes.includes('B')&&b?nuevas:null), newCrB=sl?(pl.crearB||null):(is.fixes.includes('crearB')?nuevas:null);
+    const slI=!!pl;
+    const doPed=slI?!!pl.pedido:is.fixes.includes('pedido'), newC=slI?(pl.C||null):(is.fixes.includes('C')?nuevas:null),
+          newB=slI?(pl.B||null):(is.fixes.includes('B')&&b?nuevas:null), newCrB=slI?(pl.crearB||null):(is.fixes.includes('crearB')?nuevas:null);
     const eff=[]; if(doPed&&venta)eff.push('pedido'); if(newC)eff.push('C'); if(newB&&b)eff.push('B'); if(newCrB)eff.push('crearB');
     if(doPed&&venta){ r.pedido=venta; if(b) cuadSet('bascula/'+i.id+'/pedido',venta); }
     if(newC) r.lotes=newC.map(x=>({...x}));
     persist(r.id,r);
-    if(newB&&b){ const sc=newB.reduce((a,x)=>a+(Number(x.sacos)||0),0), h=Object.assign({},b.hist||{}); h['h'+t]={ts:t,usuario:cuadUser(),accion:sl?'Cuadre vs Odoo (sin tocar lotes)':'Cuadre vs Odoo',detalle:'antes: '+_lin(antes.items)+' → después: '+_lin(newB)};
+    if(newB&&b){ const sc=newB.reduce((a,x)=>a+(Number(x.sacos)||0),0), h=Object.assign({},b.hist||{}); h['h'+t]={ts:t,usuario:cuadUser(),accion:slI?'Cuadre vs Odoo (sin tocar lotes)':'Cuadre vs Odoo',detalle:'antes: '+_lin(antes.items)+' → después: '+_lin(newB)};
       cuadSet('bascula/'+i.id,{...CUAD.bascula[i.id],items:newB.map(x=>({...x})),sacos:sc,...(b.estimado?{neto:Math.round(newB.reduce((a,x)=>a+(Number(x.sacos)||0)*(Number(x.kgSaco)||0),0))}:{}),tsEdit:t,editor:cuadUser(),hist:h}); }
     if(newCrB) cuadSet('bascula/'+i.id,genBasc(r,newCrB,refTxt,t));
-    cuadSet('ajustes/'+keySafe(i.id)+'_'+t,{ts:t,usuario:cuadUser(),id:i.id,cliente:r.cliente||'',pedido:r.pedido||'',srcs:eff,sinLotes:!!sl,antes,despues:{pedido:r.pedido||'',lotes:newC||antes.lotes,items:newB||newCrB||antes.items},creados:newCrB?{basc:i.id}:null,picks:i.picks.map(p=>p.ref)});
-    auditPush({ts:new Date(t).toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'lotes',label:'Cuadre master vs Odoo'+(sl?' SIN tocar lotes':' (con lotes)')+' ('+eff.join('+')+')',from:'Carg.: '+_lin(antes.lotes)+(antes.items?' · Bás.: '+_lin(antes.items):' · sin báscula')+(eff.includes('pedido')?' · pedido '+(antes.pedido||'—'):''),to:(sl?'Carg.: '+_lin(newC||antes.lotes)+(newB||newCrB?' · Bás.: '+_lin(newB||newCrB):''):'Odoo: '+_lin(nuevas))+(venta?' · '+venta:''),maquillaje:true,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
+    cuadSet('ajustes/'+keySafe(i.id)+'_'+t,{ts:t,usuario:cuadUser(),id:i.id,cliente:r.cliente||'',pedido:r.pedido||'',srcs:eff,sinLotes:slI,antes,despues:{pedido:r.pedido||'',lotes:newC||antes.lotes,items:newB||newCrB||antes.items},creados:newCrB?{basc:i.id}:null,picks:i.picks.map(p=>p.ref)});
+    auditPush({ts:new Date(t).toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'lotes',label:'Cuadre master vs Odoo'+(slI?' SIN tocar lotes':' (con lotes)')+' ('+eff.join('+')+')',from:'Carg.: '+_lin(antes.lotes)+(antes.items?' · Bás.: '+_lin(antes.items):' · sin báscula')+(eff.includes('pedido')?' · pedido '+(antes.pedido||'—'):''),to:(slI?'Carg.: '+_lin(newC||antes.lotes)+(newB||newCrB?' · Bás.: '+_lin(newB||newCrB):''):'Odoo: '+_lin(nuevas))+(venta?' · '+venta:''),maquillaje:true,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
     n++; });
   CC.sel={}; const R2=conciliarTodo(); bandejaSync(R2); refreshCuad(); if(curView==='conc') concRender(); toast('✅ '+n+' caso(s) cuadrados'+(sl?' sin tocar lotes'+(omit?' · '+omit+' siguen abiertos por lotes':''):' con Odoo')); }
 // salida de Odoo sin embarque → se crea el embarque (despachado) y su registro de báscula, ambos «generados»
@@ -3446,7 +3494,7 @@ function cuadStepsHtml(D){
   const P=D.P, cus=D.cus, cfg=cuadCfg();
   const progs=DATA.filter(r=>!r.cancelado&&perDe(fechaEmb(r))===P);
   const progRez=progs.filter(r=>!isDesp(r)&&!CUAD.bascula[r.id]&&fechaEmb(r)&&fechaEmb(r)<TODAY);
-  const despCarg=cus.filter(c=>!c.u.noProg&&isDesp(c.u.r));
+  const despCarg=cus.filter(c=>!c.u.noProg&&isDesp(c.u.r)&&fechaEmb(c.u.r)>=lotesDesde());
   const cargOk=despCarg.filter(c=>lotesDe(c.u.r).length), cargPend=despCarg.filter(c=>!lotesDe(c.u.r).length);
   const conB=cus.filter(c=>c.u.b), sinB=cus.filter(c=>!c.u.b&&c.st==='pend');
   const cuadOk=conB.filter(c=>c.st==='ok'||c.st==='ana'), cuadPend=conB.filter(c=>c.st==='dif');
@@ -3462,7 +3510,7 @@ function cuadStepsHtml(D){
       ${pendList.length&&Array.isArray(pendList)&&pendList[0]&&(pendList[0].u||pendList[0].id)?`<div style="margin-top:6px">${lst(pendList,3)}</div>`:''}
       ${(!ok&&btn)?`<div style="margin-top:8px"><button class="${mine===key?'primary':'ghost'}" style="width:100%" onclick="${fn}">${btn}</button></div>`:''}</div>`; };
   const odooState=!D.hasInv?[['x']]:prodMal;
-  return `<div class="card" style="padding:12px 14px;margin-bottom:12px"><h3 style="margin:0 0 4px">⚖️ ¿Están las áreas a la par? · ${perLabel(P)}</h3>
+  return regBannerHtml()+`<div class="card" style="padding:12px 14px;margin-bottom:12px"><h3 style="margin:0 0 4px">⚖️ ¿Están las áreas a la par? · ${perLabel(P)}</h3>
     <div class="hint" style="margin-bottom:8px">Cada área con lo que ya hizo y lo que le falta. «Atender ahora» abre la lista filtrada de pendientes.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
       ${step('prog','📋','Programación',progs.length-progRez.length,progs.length,progRez,progRez.length+' rezagado(s)','Ver rezagados',"cqGoTabla('"+P+"')")}
