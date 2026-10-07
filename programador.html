@@ -554,9 +554,10 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
         <div id="usersBody"></div>
         <hr style="border-color:var(--line);margin:12px 0">
         <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">⚖️ Báscula y cuadre</div>
-        <p class="hint" style="margin-top:0">El usuario de báscula entra con esta contraseña en «🔒 Superusuario / Master»: solo ve su registro de pesaje, el cuadre y el cierre. Deja la contraseña vacía para desactivarlo.</p>
+        <p class="hint" style="margin-top:0">Cada persona de báscula tiene su propio usuario y contraseña (se escribe en «🔒 Superusuario / Master»): solo ve su registro de pesaje, el cuadre y el cierre, y su nombre queda grabado en cada pesaje que captura. Solo el master crea, cambia o quita usuarios.</p>
+        <div id="bascUsersBody" style="margin-bottom:10px"></div>
         <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
-          <div class="field"><label>Contraseña usuario báscula</label><input type="text" id="cfgPwdBasc" placeholder="Contraseña báscula"></div>
+          <div class="field"><label>Contraseña compartida de báscula (opcional)</label><input type="text" id="cfgPwdBasc" placeholder="Déjala vacía si usas usuarios"></div>
           <div class="field"><label>Tolerancia báscula (kg)</label><input type="number" id="cfgBascTolKg" min="0" style="width:110px"></div>
           <div class="field"><label>Programado vs cargado (±%)</label><input type="number" id="cfgCuadTolProg" min="0" style="width:110px"></div>
           <div class="field"><label>Tolerancia en sacos</label><input type="number" id="cfgBascTolSacos" min="0" style="width:100px"></div>
@@ -1476,14 +1477,15 @@ function deleteRow(){
 
 /* ================= SUPERUSUARIO ================= */
 function toggleLock(){
-  if(unlocked||isBasc){ unlocked=false; isMaster=false; isBasc=false; applyLock(); toast('Sesión cerrada'); }
+  if(unlocked||isBasc){ unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); toast('Sesión cerrada'); }
   else { document.getElementById('pwd').value=''; document.getElementById('pwdErr').style.display='none'; document.getElementById('loginOverlay').classList.add('show'); setTimeout(()=>document.getElementById('pwd').focus(),50); }
 }
 function doLogin(){
   const v=document.getElementById('pwd').value;
   if(CFG.masterPwd && v===CFG.masterPwd){ unlocked=true; isMaster=true; isBasc=false; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Acceso master ✓'); }
   else if(v===CFG.pwd){ unlocked=true; isMaster=false; isBasc=false; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Superusuario habilitado ✓'); }
-  else if(CFG.pwdBascula && v===CFG.pwdBascula){ unlocked=false; isMaster=false; isBasc=true; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Usuario de báscula ✓'); setView('bascula'); }
+  else if((CFG.bascUsers||[]).some(u=>u.pwd===v)){ const bu=CFG.bascUsers.find(u=>u.pwd===v); unlocked=false; isMaster=false; isBasc=true; bascName=bu.name; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Báscula: '+bu.name+' ✓'); setView('bascula'); }
+  else if(CFG.pwdBascula && v===CFG.pwdBascula){ unlocked=false; isMaster=false; isBasc=true; bascName=''; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Usuario de báscula ✓'); setView('bascula'); }
   else document.getElementById('pwdErr').style.display='block';
 }
 function applyLock(){
@@ -1492,6 +1494,7 @@ function applyLock(){
   document.body.classList.toggle('basc',isBasc);
   { const tc=document.getElementById('tabConc'); if(tc) tc.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='conc') setView('tabla'); }
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
+  if(isBasc && bascName && !(CFG.bascUsers||[]).some(u=>u.name===bascName)){ unlocked=false; isMaster=false; isBasc=false; bascName=''; toast('Tu usuario de báscula fue dado de baja'); applyLock(); return; }
   // pestaña de auditoría: solo visible para master
   const at=document.getElementById('tabAudit'); if(at) at.style.display=isMaster?'inline-flex':'none';
   const pm=document.getElementById('masterCfg'); if(pm) pm.style.display=isMaster?'block':'none';
@@ -1512,7 +1515,7 @@ function buildCfg(){
   document.getElementById('cfgLotesReq').checked=lotesReq(); document.getElementById('cfgTolLot').value=tolLot();
   document.getElementById('cfgFb').value=CFG.firebase?JSON.stringify(CFG.firebase,null,2):'';
   buildUsers();
-  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgPwdBasc',CFG.pwdBascula||''); S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
+  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgPwdBasc',CFG.pwdBascula||''); buildBascUsers(); S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
 }
 function buildUsers(){
   const ub=document.getElementById('usersBody'); if(!ub) return;
@@ -1523,6 +1526,13 @@ function userRow(name,pin){ return `<div style="display:flex;gap:9px;align-items
   <input value="${(name||'').replace(/"/g,'&quot;')}" class="uName" placeholder="Nombre del cargador" style="flex:1">
   <input value="${(pin||'')}" class="uPin" placeholder="PIN" inputmode="numeric" style="width:90px">
   <button class="ghost" style="color:var(--late);padding:6px 9px" onclick="this.parentElement.remove()">✕</button></div>`; }
+function bascUserRow(name,pwd){ const q=x=>(x||'').replace(/"/g,'&quot;'); return `<div style="display:flex;gap:9px;align-items:center;margin-bottom:7px">
+  <input value="${q(name)}" class="bUName" placeholder="Nombre (ej. Juan – báscula)" style="flex:1">
+  <input value="${q(pwd)}" class="bUPwd" placeholder="Contraseña" style="width:140px">
+  <button class="ghost" title="Quitar" onclick="this.parentNode.remove()">✕</button></div>`; }
+function buildBascUsers(){ const ub=document.getElementById('bascUsersBody'); if(!ub) return;
+  ub.innerHTML=(CFG.bascUsers||[]).map(u=>bascUserRow(u.name,u.pwd)).join('')+`<button class="ghost" onclick="addBascUserRow()">＋ Agregar usuario de báscula</button>`; }
+function addBascUserRow(){ const ub=document.getElementById('bascUsersBody'); const d=document.createElement('div'); d.innerHTML=bascUserRow('',''); ub.insertBefore(d.firstChild, ub.lastChild); }
 function addUserRow(){ const ub=document.getElementById('usersBody'); const d=document.createElement('div'); d.innerHTML=userRow('',''); ub.insertBefore(d.firstChild, ub.lastChild); }
 function addCfgRow(){ const d=document.createElement('div'); d.style.cssText='display:flex;gap:9px;align-items:center;margin-bottom:7px'; d.innerHTML='<input value="" class="cfgKey" placeholder="TIPO" style="flex:1"><input type="number" value="30" class="cfgVal" style="width:80px"><span class="hint">min</span>'; const b=document.getElementById('cfgBody'); b.insertBefore(d,b.lastChild); }
 function saveConfig(){
@@ -1541,6 +1551,14 @@ function saveConfig(){
     // báscula: contraseña (no puede repetir la de superusuario ni master) y tolerancias del cuadre
     const pb=(document.getElementById('cfgPwdBasc').value||'').trim();
     if(pb&&(pb===CFG.pwd||pb===CFG.masterPwd)){ toast('La contraseña de báscula debe ser distinta a la de superusuario y master'); return; }
+    { const bn=[...document.querySelectorAll('.bUName')], bp=[...document.querySelectorAll('.bUPwd')]; const bu=[]; const vistos={};
+      for(let i=0;i<bn.length;i++){ const nm=bn[i].value.trim(), pw=(bp[i].value||'').trim(); if(!nm&&!pw) continue;
+        if(!nm||!pw){ toast('Cada usuario de báscula necesita nombre y contraseña'); return; }
+        if(pw.length<4){ toast('La contraseña de '+nm+' debe tener mínimo 4 caracteres'); return; }
+        if(pw===CFG.pwd||pw===CFG.masterPwd||(pb&&pw===pb)){ toast('La contraseña de '+nm+' debe ser distinta a la de superusuario, master y la compartida'); return; }
+        if(vistos[pw]){ toast('«'+nm+'» y «'+vistos[pw]+'» tienen la misma contraseña: cada quien necesita la suya'); return; }
+        vistos[pw]=nm; bu.push({name:nm,pwd:pw}); }
+      CFG.bascUsers=bu; }
     CFG.pwdBascula=pb; const nn=(i,d)=>{ const v=document.getElementById(i).value; return v===''||isNaN(Number(v))?d:Math.max(0,Number(v)); };
     CFG.bascTolKg=nn('cfgBascTolKg',50); CFG.cuadreTolProgPct=nn('cfgCuadTolProg',5); CFG.bascTolSacos=nn('cfgBascTolSacos',0); }
   const fbtxt=document.getElementById('cfgFb').value.trim();
@@ -2129,7 +2147,7 @@ const MESES_ES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto
 // Catálogo de la hoja "Catalogos" del Excel de báscula (con el código real de Odoo cuando el Excel traía uno distinto)
 const BASC_CATALOGO=[{cod:'04MAS0024',name:'KAN KAN 20 KG (R)',kg:20},{cod:'04MAS009',name:'KAN KAN 20 KGS',kg:20},{cod:'04MAS0013',name:'KAN KAN 25 + 1 KG EXTRA',kg:26},{cod:'04MAS0020',name:'KAN KAN 25 KG',kg:25},{cod:'04MAS0023',name:'KAN KAN 25 KG (R)',kg:25},{cod:'04MAS0012',name:'MI BOOB 20 + 1 KG EXTRA',kg:21},{cod:'04MAS008',name:'MI BOOB 20 KGS',kg:20},{cod:'04MAS010',name:'PET FOOD 20 KG (R)',kg:20},{cod:'04MAS0016',name:'SILVER CAT 15 + 1 KG EXTRA',kg:16},{cod:'04MAS006',name:'SILVER CAT 15 KGS',kg:15},{cod:'04MAS007',name:'SILVER CAT 5 KGS',kg:5},{cod:'04MAS0017',name:'SILVER KAN 18% 25 KG +1 EXTRAS',kg:26},{cod:'04MAS003',name:'SILVER KAN 18% 25 KGS',kg:25},{cod:'04MAS002',name:'SILVER KAN 18% 5 KGS',kg:5},{cod:'04MAS0015',name:'SILVER KAN CACHORRO 20 +1 KG EXTRA',kg:21},{cod:'04MAS004',name:'SILVER KAN CACHORRO 20 KGS',kg:20},{cod:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',kg:5},{cod:'04MAS001',name:'SILVER KAN PREMIUM +22% 25 KG',kg:25},{cod:'04MAS0011',name:'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILOS EXTRAS',kg:27},{cod:'02CROQ037',name:'CABALLO IMPERIAL 15KG',kg:15},{cod:'02GAL43',name:'CRECIMIENTO POLLO EXTRUSADO 20 KGS',kg:20},{cod:'03CAB01',name:'CABALLO FIEL 40 KG',kg:40},{cod:'03CAB02',name:'CABALLO IMPERIAL 40KG',kg:40},{cod:'03GAL14',name:'GALLO MANTENIMIENTO 14% 40KG',kg:40},{cod:'03GAL19',name:'GALLO DE PELEA PELECHA 40 KG',kg:40},{cod:'03GAL22',name:'GALLO DE PELEA GANADOR F19 40 KGS',kg:40},{cod:'03GAL40',name:'PRE-INICIO POLLO 40KGS',kg:40},{cod:'03GAL42',name:'PRE INICIO POLLO 15 KGS (EXTRUSADO)',kg:15},{cod:'03GAL43',name:'CRECIMIENTO POLLO 20 KG EXTRUSADO',kg:20},{cod:'03GAL23',name:'GALLO MANTENIMIENTO SUPER 40 KG',kg:40}];
 
-let CUAD={bascula:{},cierres:{},odoo:{},odoodata:{},ajustes:{},bandeja:{}}, fbCuad=null, isBasc=false;
+let CUAD={bascula:{},cierres:{},odoo:{},odoodata:{},ajustes:{},bandeja:{}}, fbCuad=null, isBasc=false, bascName='';
 const cuadCfg=()=>({ tolKg:(CFG.bascTolKg!=null&&!isNaN(Number(CFG.bascTolKg)))?Math.max(0,Number(CFG.bascTolKg)):50,
   tolProg:(CFG.cuadreTolProgPct!=null&&!isNaN(Number(CFG.cuadreTolProgPct)))?Math.max(0,Number(CFG.cuadreTolProgPct)):5,
   tolSacos:(CFG.bascTolSacos!=null&&!isNaN(Number(CFG.bascTolSacos)))?Math.max(0,Number(CFG.bascTolSacos)):0 });
@@ -2148,7 +2166,7 @@ function cuadSet(path,val){
 }
 // mezcla varios renglones de un nodo (un solo viaje a la nube): cuadMerge('bandeja',{clave:{…}})
 function cuadMerge(nodo,obj){ CUAD[nodo]=Object.assign(CUAD[nodo]||{},obj); cuadSaveLocal(); if(fb&&fbCuad){ try{ fbCuad.child(nodo).update(sanitize(obj)); }catch(e){ console.error(e); } } }
-function cuadUser(){ return isMaster?'master':(isBasc?'báscula':(unlocked?'superusuario':'—')); }
+function cuadUser(){ return isMaster?'master':(isBasc?('báscula'+(bascName?' · '+bascName:'')):(unlocked?'superusuario':'—')); }
 
 /* ---------- utilidades ---------- */
 const normNom=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
@@ -2446,6 +2464,7 @@ function openBasc(id,noProg){
   document.querySelectorAll('.bsnp').forEach(e=>e.style.display=bsNoProg?'flex':'none');
   const S=(f,v)=>{ document.getElementById(f).value=v==null?'':v; };
   S('bs_folio',b&&b.folio); S('bs_oper',b&&b.oper); S('bs_placa',b&&b.placa); S('bs_eco',(b&&b.eco)||(r&&r.eco)||''); S('bs_vehiculo',(b&&b.vehiculo)||(r&&r.tipo)||''); S('bs_hent',b&&b.horaEntrada); S('bs_hsal',b&&b.horaSalida); S('bs_turno',(b&&b.turno)||(r&&r.turno)||'');
+  { const o=document.getElementById('bs_oper'); if(isBasc&&bascName){ if(!(b&&b.oper)) o.value=bascName; o.readOnly=true; o.title='Tu nombre queda registrado automáticamente'; } else { o.readOnly=false; o.title=''; } }
   S('bs_bruto',b&&b.bruto); S('bs_tara',b&&b.tara); S('bs_obs',b&&b.obs);
   S('bs_cli',b&&b.cliente); S('bs_ped',b&&b.pedido); S('bs_fecha',(b&&b.fecha)||TODAY);
   bsLines=bascItems(b).map(x=>({...x}));
@@ -2501,7 +2520,7 @@ function saveBasc(){
   const r=bsNoProg?null:DATA.find(x=>x.id===id); const prev=CUAD.bascula[id]||null;
   const lock=prev?bascBloqueado(prev,r):''; if(lock&&!isMaster){ toast('🔒 '+lock); return; }
   const folio=g('bs_folio').toUpperCase(); if(!folio){ toast('Captura el folio de báscula'); return; }
-  const oper=g('bs_oper'); if(!oper){ toast('Captura el nombre de quien pesa y registra (para saber quién capturó)'); return; }
+  const oper=(isBasc&&bascName&&!(prev&&prev.oper))?bascName:g('bs_oper'); if(!oper){ toast('Captura el nombre de quien pesa y registra (para saber quién capturó)'); return; }
   const dup=Object.entries(CUAD.bascula).find(([k,x])=>k!==id&&x&&String(x.folio||'').toUpperCase()===folio); if(dup){ toast('🚫 El folio '+folio+' ya está en otro pesaje ('+(dup[1].pedido||(DATA.find(x=>x.id===dup[0])||{}).pedido||dup[0])+')',5000); return; }
   const bruto=Number(g('bs_bruto'))||0, tara=Number(g('bs_tara'))||0; if(!(bruto>0&&tara>=0&&bruto>tara)){ toast('Captura peso bruto y tara (el bruto debe ser mayor)'); return; }
   if(bsIncompletas()){ toast('Hay productos a medias: completa producto, lote (mín. 3 caracteres) y sacos, o quítalos'); return; }
