@@ -135,10 +135,18 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   #bascOverlay .modal{max-width:860px}#cqDetOverlay .modal{max-width:980px}#cqImgOverlay .modal{max-width:1180px}
   #cqReport{position:fixed;left:-30000px;top:0}
   /* el usuario de báscula solo ve su registro, el cuadre y el cierre */
-  body.basc .toolbar>button:not(.lock),body.basc #alertBanners,body.basc #mainPeriod,body.basc .tabs button:not([data-basc]){display:none!important}
+  body.basc .toolbar>button:not(.lock):not([data-basc-ok]),body.basc #alertBanners,body.basc .tabs button:not([data-basc]){display:none!important}
+  body.basc:not([data-view="tabla"]) #mainPeriod{display:none!important}
+  /* pantalla de acceso: no se ve nada hasta autenticarse */
+  #gateOverlay{position:fixed;inset:0;z-index:9999;background:var(--bg);display:none;align-items:center;justify-content:center;padding:18px}
+  body.gated #gateOverlay{display:flex}
+  body.gated header,body.gated main,body.gated #alertBanners,body.gated footer{display:none!important}
+  .gatebox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px 24px;width:min(380px,100%);text-align:center}
+  .gatebox h1{font-size:19px;margin:6px 0 4px}.gatebox input{width:100%;margin-top:14px;text-align:center;font-size:16px}
+  .gatebox button{width:100%;margin-top:12px;padding:11px}
 </style>
 </head>
-<body>
+<body class="gated">
 <header>
   <div style="display:flex;align-items:center;gap:11px">
     <div class="logo">🐾</div>
@@ -150,7 +158,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   <div class="toolbar">
     <span class="conn local" id="conn"><span class="d"></span><span id="connTxt">Local</span></span>
     <button class="primary" onclick="openForm()">＋ Programar embarque</button>
-    <button onclick="exportCSV()">⬇ CSV</button>
+    <button data-basc-ok onclick="exportCSV()">⬇ CSV</button>
     <button class="ghost" onclick="copyPuntualidad()" title="Genera un mensaje con el % de entregas a tiempo, listo para compartir">📣 Puntualidad</button>
     <button class="ghost protected" data-prot onclick="exportJSON()">💾 Respaldo</button>
     <button class="ghost protected" data-prot data-master onclick="document.getElementById('impF').click()">📂 Cargar</button>
@@ -187,7 +195,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   </div>
 
   <div class="tabs">
-    <button data-v="tabla" class="active" onclick="setView('tabla')">📋 Programación</button>
+    <button data-v="tabla" data-basc class="active" onclick="setView('tabla')">📋 Programación</button>
     <button data-v="dash" onclick="setView('dash')">📊 Tablero</button>
     <button data-v="arrastre" onclick="setView('arrastre')">⚠️ Arrastres y pendientes <span id="arrCount" class="pill p-warn" style="margin-left:4px"></span></button>
     <button data-v="flota" onclick="setView('flota')">🚚 Flota y mantenimiento <span id="flotaCount" class="pill p-late" style="margin-left:4px"></span></button>
@@ -195,7 +203,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="traza" onclick="setView('traza')">🧾 Trazabilidad <span id="trzCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="bascula" data-basc onclick="setView('bascula')">⚖️ Báscula <span id="bsCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="cuadre" data-basc onclick="setView('cuadre')">🧮 Cuadre</button>
-    <button data-v="cierre" data-basc onclick="setView('cierre')">🗓️ Cierre de mes</button>
+    <button data-v="cierre" onclick="setView('cierre')">🗓️ Cierre de mes</button>
     <button data-v="conc" id="tabConc" style="display:none" onclick="setView('conc')">🕵️ Conciliación <span id="concCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
   </div>
@@ -207,7 +215,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <span><span class="sem" style="background:var(--warn)"></span>Tolerancia</span>
       <span><span class="sem" style="background:var(--late)"></span>Fuera de ventana</span>
       <span><span class="dot" style="background:var(--warn)"></span>Arrastre (cargó otro día)</span>
-      <span class="muted">· Clic en una fila para ver/editar</span>
+      <span class="muted">· Clic en una fila para ver el detalle (editar requiere superusuario)</span>
     </div>
     <div class="tablewrap"><table><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
   </div>
@@ -326,6 +334,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <input type="file" id="cqOdooF" accept=".xlsx,.xls" multiple style="display:none" onchange="cuadOdooFiles(this.files);this.value=''">
       <button class="ghost protected" data-prot data-master onclick="concOpen()" title="Solo master: bandeja de errores contra las salidas reales de Odoo">🕵️ Conciliación con Odoo</button>
       <button class="ghost" id="cqImgBtn" onclick="imagenCuadre()">🖼️ Imagen del cuadre</button>
+      <button class="primary" onclick="cuadXLSX()">⬇ Excel (.xlsx)</button>
       <button class="ghost" onclick="cuadCSV('prod')">⬇ CSV productos</button>
       <button class="ghost" onclick="cuadCSV('emb')">⬇ CSV embarques</button>
     </div>
@@ -426,6 +435,15 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   </div>
 </div>
 
+<!-- PANTALLA DE ACCESO (al abrir) -->
+<div id="gateOverlay"><div class="gatebox">
+  <div style="font-size:34px">🚚</div><h1>Programador de embarques</h1>
+  <div class="hint" style="margin:0">Escribe tu contraseña para entrar</div>
+  <input type="password" id="gatePwd" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')gateGo()">
+  <div id="gateErr" style="color:var(--late);font-size:13px;margin-top:8px;display:none"></div>
+  <button class="primary" id="gateBtn" onclick="gateGo()">Entrar</button>
+</div></div>
+
 <!-- PESAJE DE BÁSCULA -->
 <div class="overlay" id="bascOverlay">
   <div class="modal">
@@ -498,7 +516,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <input type="password" id="pwd" placeholder="Contraseña" style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
       <div id="pwdErr" style="color:var(--late);font-size:12px;margin-top:6px;display:none">Contraseña incorrecta</div>
     </div>
-    <div class="actions"><span class="hint">Por defecto: <b>admin123</b></span>
+    <div class="actions"><span class="hint"></span>
       <button class="primary" onclick="doLogin()">Entrar</button></div>
   </div>
 </div>
@@ -1312,7 +1330,6 @@ function exportAudit(){
 /* ================= FORM ================= */
 let editId=null;
 function openForm(id){
-  if(isBasc){ toast('El usuario de báscula solo registra pesajes'); return; }
   if(!id && !requireUnlock()) return;   // programar requiere sesión
   editId=id||null;
   const rec0 = id? DATA.find(x=>x.id===id) : null;
@@ -1338,6 +1355,8 @@ function openForm(id){
   toggleExec(hasExec);
   servAlertUpd();
   recalc();
+  // sin permiso de superusuario el formulario es de solo lectura (báscula ve la programación pero no la edita)
+  document.querySelectorAll('#overlay input,#overlay select,#overlay textarea').forEach(e=>{ e.disabled=!unlocked; });
   document.getElementById('overlay').classList.add('show');
 }
 function servAlertUpd(){ const el=document.getElementById('f_cliente'); if(!el)return; const w=document.getElementById('servAlertWrap'); const b=servBanner(el.value); if(b){ document.getElementById('servAlert').innerHTML=b; w.style.display=''; } else { w.style.display='none'; } }
@@ -1477,8 +1496,8 @@ function deleteRow(){
 
 /* ================= SUPERUSUARIO ================= */
 function toggleLock(){
-  if(unlocked||isBasc){ unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); toast('Sesión cerrada'); }
-  else { document.getElementById('pwd').value=''; document.getElementById('pwdErr').style.display='none'; document.getElementById('loginOverlay').classList.add('show'); setTimeout(()=>document.getElementById('pwd').focus(),50); }
+  if(unlocked||isBasc){ gateLogout(); return; }
+  else { gateShow(); }
 }
 function doLogin(){
   const v=document.getElementById('pwd').value;
@@ -1494,7 +1513,7 @@ function applyLock(){
   document.body.classList.toggle('basc',isBasc);
   { const tc=document.getElementById('tabConc'); if(tc) tc.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='conc') setView('tabla'); }
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
-  if(isBasc && bascName && !(CFG.bascUsers||[]).some(u=>u.name===bascName)){ unlocked=false; isMaster=false; isBasc=false; bascName=''; toast('Tu usuario de báscula fue dado de baja'); applyLock(); return; }
+  if(isBasc && bascName && typeof _cfgSynced!=='undefined' && _cfgSynced && !(CFG.bascUsers||[]).some(u=>u.name===bascName)){ unlocked=false; isMaster=false; isBasc=false; bascName=''; toast('Tu usuario de báscula fue dado de baja'); applyLock(); return; }
   // pestaña de auditoría: solo visible para master
   const at=document.getElementById('tabAudit'); if(at) at.style.display=isMaster?'inline-flex':'none';
   const pm=document.getElementById('masterCfg'); if(pm) pm.style.display=isMaster?'block':'none';
@@ -1502,7 +1521,7 @@ function applyLock(){
   if(isMaster) renderAudit();
   try{renderBanners();}catch(e){}
 }
-function requireUnlock(){ if(!unlocked){ toast('Requiere superusuario'); toggleLock(); return false; } return true; }
+function requireUnlock(){ if(!unlocked){ toast('Tu usuario no tiene permiso para esta acción'); return false; } return true; }
 
 /* ================= CONFIG ================= */
 function openConfig(){ if(!requireMaster())return; buildCfg(); document.getElementById('cfgOverlay').classList.add('show'); }
@@ -1645,7 +1664,7 @@ function initFirebase(){
         if(!fs.exists() && !cv.flotaSeeded){ const o={}; FLOTA.forEach(r=>o[r.id]=sanitize(r)); fbFlota.set(o); fbCfg.update({flotaSeeded:true}); }
       });
       fbData.on('value', snap=>{ const val=snap.val(); if(val){ DATA=normalize(Object.values(val)); render(); } setConn('online','Nube conectada'); document.getElementById('footer').textContent='Programador de embarques · sincronizado en tiempo real con la app de cargadores (Firebase).'; });
-      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; SERV_OVERRIDES=CFG.servClientes||null;
+      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; try{ gateRevalidate(); }catch(e){} SERV_OVERRIDES=CFG.servClientes||null;
         // la nube todavía no tiene el catálogo de motivos (cuentas ya sembradas antes de este cambio): lo sube ahora
         if(!v.motivos || !v.motivos.length){ CFG.motivos=MOTIVOS_DEFAULT.map(m=>({...m})); persistCfg(); }
         // lo mismo para la trazabilidad: la app de cargadores lee el catálogo de productos y las reglas desde la nube
@@ -1706,7 +1725,7 @@ function fill(id,arr){ const el=document.getElementById(id); if(!el)return; cons
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
 
 /* ================= VISTAS ================= */
-function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='conc')concRender(); }
+function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.body.dataset.view=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='conc')concRender(); }
 
 /* ================================================================
    ================= FLOTA / MANTENIMIENTO ========================
@@ -2637,7 +2656,7 @@ function cuadDet(id){
   const col=(t,lines)=>`<div class="card" style="padding:10px 12px"><h3 style="margin:0 0 6px">${t}</h3>${lines.map(l=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin:2px 0"><span class="muted">${l[0]}</span><b>${l[1]}</b></div>`).join('')}</div>`;
   const prodRows=cu.prods.map(p=>p.lots.map((l,i)=>`<tr><td>${i===0?escProy(p.prod):''}</td><td class="code"><b>${escProy(l.lote)}</b></td><td class="num">${fS(l.c)}</td><td class="num">${fS(l.b)}</td><td class="num ${Math.abs(l.c-l.b)>cfg.tolSacos?'dcrit':''}">${sgn(l.b-l.c)}</td></tr>`).join('')).join('');
   const hist=b&&b.hist?Object.values(b.hist).sort((x,y)=>x.ts-y.ts):[];
-  const can=bascPuede()&&b;
+  const can=!isBasc&&bascPuede()&&b;   // el usuario de báscula ve el cuadre, no lo edita (su captura va en la pestaña Báscula)
   document.getElementById('cqDetBody').innerHTML=`
     <div style="padding:14px 18px">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:15px">${escProy(r.cliente||'')}</b><span class="muted">pedido ${escProy(r.pedido||'—')} · ${cu.u.fecha||''} · ${escProy(r.eco||(b&&b.eco)||'')}</span>${cuadStChip(cu.st,cu.crit)}${cu.u.noProg?'<span class="pill p-warn">sin programa</span>':''}</div>
@@ -2652,25 +2671,32 @@ function cuadDet(id){
       ${b?`<div class="field" style="margin-bottom:10px"><label>🔎 Análisis de la diferencia ${b.analisis?'· '+escProy(b.analisis.usuario||'')+' · '+ttsStr(b.analisis.ts):''}</label><textarea id="cq_ana" rows="2" ${can?'':'disabled'} placeholder="Qué pasó y cómo se resolvió (ej. merma por humedad, sacos rotos, error de captura corregido…)">${escProy(b.analisis?b.analisis.txt:'')}</textarea>${can?`<div style="margin-top:6px"><button class="primary" onclick="cuadSaveAna('${id}')">Guardar análisis</button></div>`:''}</div>`:''}
       ${hist.length?`<div class="hint"><b>Historial del pesaje</b><br>${hist.map(h=>ttsStr(h.ts)+' · '+escProy(h.usuario||'')+' · '+escProy(h.accion||'')+' — '+escProy(h.detalle||'')).join('<br>')}</div>`:''}
     </div>`;
-  document.getElementById('cqDetBtns').innerHTML=(b&&bascPuede()?`<button class="ghost" onclick="closeCuadDet();openBasc('${id}')">✏️ Editar pesaje</button>`:(!b&&bascPuede()?`<button class="primary" onclick="closeCuadDet();openBasc('${id}')">⚖️ Pesar</button>`:''))+(!isBasc&&r.id&&!cu.u.noProg?`<button class="ghost" onclick="closeCuadDet();openForm('${id}')">📋 Abrir embarque</button>`:'');
+  document.getElementById('cqDetBtns').innerHTML=(b&&bascPuede()&&!isBasc?`<button class="ghost" onclick="closeCuadDet();openBasc('${id}')">✏️ Editar pesaje</button>`:(!b&&bascPuede()&&!isBasc?`<button class="primary" onclick="closeCuadDet();openBasc('${id}')">⚖️ Pesar</button>`:''))+(!isBasc&&r.id&&!cu.u.noProg?`<button class="ghost" onclick="closeCuadDet();openForm('${id}')">📋 Abrir embarque</button>`:'');
   document.getElementById('cqDetOverlay').classList.add('show');
 }
 function closeCuadDet(){ document.getElementById('cqDetOverlay').classList.remove('show'); }
-function cuadSaveAna(id){ if(!bascPuede())return; const b=CUAD.bascula[id]; if(!b)return; const lock=bascBloqueado(b,DATA.find(x=>x.id===id)); if(perCerrado(perDe(b.fecha))&&!isMaster){ toast('🔒 Mes cerrado'); return; }
+function cuadSaveAna(id){ if(!bascPuede()||isBasc)return; const b=CUAD.bascula[id]; if(!b)return; const lock=bascBloqueado(b,DATA.find(x=>x.id===id)); if(perCerrado(perDe(b.fecha))&&!isMaster){ toast('🔒 Mes cerrado'); return; }
   const txt=document.getElementById('cq_ana').value.trim(); const now=Date.now();
   cuadSet('bascula/'+id+'/analisis',txt?{txt,usuario:cuadUser(),ts:now}:null);
   cuadSet('bascula/'+id+'/hist/h'+now,{ts:now,usuario:cuadUser(),accion:'Análisis',detalle:txt||'(borrado)'});
   toast('Análisis guardado ✓'); closeCuadDet(); refreshCuad(); }
 
 /* ---- exportar CSV del cuadre ---- */
+function cuadTabla(kind,D){
+  if(kind==='emb') return {H:['Fecha','Pedido','Cliente','ProgramadoKg','CargadoresKg','CargadoresSacos','BasculaNetoKg','BasculaSacos','FolioBascula','Estatus','Diferencias','Analisis'],
+    rows:D.cus.map(c=>[c.u.fecha,c.u.r.pedido,c.u.r.cliente,Math.round(c.Pkg),Math.round(c.Cef),c.Csc,Math.round(c.neto),c.Bsc,c.u.b&&c.u.b.folio,c.st,c.flags.filter(f=>f.lvl!=='info').map(f=>f.t).join(' | '),c.u.b&&c.u.b.analisis&&c.u.b.analisis.txt])};
+  return {H:['Producto','Cargadores','Bascula','OdooInventario','OdooFacturadoNeto','Bascula-Inv','Inv-Fact'],
+    rows:D.prod.map(o=>[o.name,o.c,o.b,D.hasInv?o.inv:'',D.hasFac?o.fac:'',D.hasInv?o.b-o.inv:'',D.hasInv&&D.hasFac?o.inv-o.fac:''])};
+}
 function cuadCSV(kind){
   const D=cuadCompute(CQ.per); const q=v=>{ v=v==null?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
-  let H,rows;
-  if(kind==='emb'){ H=['Fecha','Pedido','Cliente','ProgramadoKg','CargadoresKg','CargadoresSacos','BasculaNetoKg','BasculaSacos','FolioBascula','Estatus','Diferencias','Analisis'];
-    rows=D.cus.map(c=>[c.u.fecha,c.u.r.pedido,c.u.r.cliente,Math.round(c.Pkg),Math.round(c.Cef),c.Csc,Math.round(c.neto),c.Bsc,c.u.b&&c.u.b.folio,c.st,c.flags.filter(f=>f.lvl!=='info').map(f=>f.t).join(' | '),c.u.b&&c.u.b.analisis&&c.u.b.analisis.txt]); }
-  else { H=['Producto','Cargadores','Bascula','OdooInventario','OdooFacturadoNeto','Bascula-Inv','Inv-Fact'];
-    rows=D.prod.map(o=>[o.name,o.c,o.b,D.hasInv?o.inv:'',D.hasFac?o.fac:'',D.hasInv?o.b-o.inv:'',D.hasInv&&D.hasFac?o.inv-o.fac:'']); }
-  dlBlob(new Blob(['﻿'+[H.join(',')].concat(rows.map(r=>r.map(q).join(','))).join('\n')],{type:'text/csv;charset=utf-8'}),'cuadre_'+(kind==='emb'?'embarques':'productos')+'_'+CQ.per+'.csv'); toast('CSV descargado'); }
+  const {H,rows}=cuadTabla(kind,D);
+  dlBlob(new Blob(['\ufeff'+[H.join(',')].concat(rows.map(r=>r.map(q).join(','))).join('\n')],{type:'text/csv;charset=utf-8'}),'cuadre_'+(kind==='emb'?'embarques':'productos')+'_'+CQ.per+'.csv'); toast('CSV descargado'); }
+async function cuadXLSX(){
+  try{ await ensureXLSX(); }catch(e){ toast('No se pudo cargar el generador de Excel; descargo CSV'); cuadCSV('prod'); return; }
+  const D=cuadCompute(CQ.per); const wb=XLSX.utils.book_new();
+  [['prod','Productos'],['emb','Embarques']].forEach(([k,n])=>{ const t=cuadTabla(k,D); const ws=XLSX.utils.aoa_to_sheet([t.H].concat(t.rows)); ws['!cols']=t.H.map((h,i)=>({wch:i===0||h==='Cliente'||h==='Diferencias'||h==='Analisis'?32:14})); XLSX.utils.book_append_sheet(wb,ws,n); });
+  XLSX.writeFile(wb,'cuadre_'+CQ.per+'.xlsx'); toast('Excel descargado'); }
 
 /* ---- imagen del cuadre (evidencia para anexar / mandar) ---- */
 let _h2cP=null;
@@ -2799,7 +2825,7 @@ function cuadRenderHook(){ if(curView==='bascula')renderBascula(); else if(curVi
   try{ const tc=document.getElementById('concCount'); if(tc&&curView!=='conc'){ const n=Object.values(CUAD.bandeja||{}).filter(x=>x.estado==='abierto').length; tc.textContent=n; tc.style.display=n?'inline-flex':'none'; } }catch(e){}
   // contador de pendientes de pesar en la pestaña Báscula
   try{ const n=DATA.filter(r=>!r.cancelado&&isDesp(r)&&!CUAD.bascula[r.id]).length; const e=document.getElementById('bsCount'); if(e){ e.textContent=n; e.style.display=n?'inline-flex':'none'; } }catch(e){} }
-const BASC_VIEWS=['bascula','cuadre','cierre'];
+const BASC_VIEWS=['tabla','bascula','cuadre'];
 
 /* ================= CONCILIACIÓN MAESTRA CON ODOO · BANDEJA DE ERRORES (solo master) =================
    Cada vez que se cargan las salidas de inventario de Odoo (cada una con su folio PT/SAL y su remisión R#####), esta pestaña
@@ -3110,6 +3136,61 @@ function concCSV(){
 // carga el Excel de Odoo y deja la bandeja al día (aquí nacen los «nuevos hoy»)
 async function concLoad(files){ if(!requireMaster())return; await cuadOdooFiles(files); const R=conciliarTodo(); bandejaSync(R); CC.sel={}; refreshCuad(); concRender(); }
 
+/* ===== ACCESO AL ABRIR (pantalla de entrada) y perfiles ===== */
+let _cfgSynced=false;
+const GATE_KEY='prog_sess_v1';
+function _hx(s){ let h=5381; s=String(s); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return String(h); }
+function gateCreds(){   // todas las credenciales vigentes y el perfil que da cada una
+  const L=[]; const add=(pw,r,n)=>{ if(pw) L.push({pw:String(pw),r,n:n||''}); };
+  add(CFG.masterPwd,'master'); add(CFG.pwd,'su'); (CFG.bascUsers||[]).forEach(u=>add(u.pwd,'basc',u.name)); add(CFG.pwdBascula,'basc','');
+  return L;
+}
+function gateApply(p){
+  unlocked=(p.r==='master'||p.r==='su'); isMaster=(p.r==='master'); isBasc=(p.r==='basc'); bascName=p.n||'';
+  document.body.classList.remove('gated'); applyLock();
+  if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
+}
+function gateShow(msg){
+  document.body.classList.add('gated'); const i=document.getElementById('gatePwd'); if(i){ i.value=''; setTimeout(()=>i.focus(),50); }
+  const e=document.getElementById('gateErr'); if(e){ e.style.display=msg?'block':'none'; e.textContent=msg||''; }
+}
+let _gateBusy=false;
+function gateGo(){
+  if(_gateBusy) return; const v=document.getElementById('gatePwd').value; if(!v) return;
+  const e=document.getElementById('gateErr'), b=document.getElementById('gateBtn');
+  _gateBusy=true; b.disabled=true; e.style.display='none'; let t=0;
+  const need=()=>CFG.firebase&&CFG.firebase.databaseURL&&!_cfgSynced&&t<32;   // espera a bajar los usuarios de la nube (máx. ~8 s)
+  const step=()=>{
+    if(need()){ b.textContent='Verificando…'; t++; return setTimeout(step,250); }
+    const hit=gateCreds().find(c=>c.pw===v);
+    b.textContent='Entrar'; b.disabled=false; _gateBusy=false;
+    if(!hit){ e.textContent='Contraseña incorrecta'; e.style.display='block'; document.getElementById('gatePwd').select(); return; }
+    try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:_hx(v),r:hit.r,n:hit.n})); }catch(x){}
+    document.getElementById('gatePwd').value='';
+    gateApply(hit); setView(hit.r==='basc'?'bascula':'tabla');
+    toast(hit.r==='master'?'Acceso master ✓':hit.r==='su'?'Superusuario habilitado ✓':'Báscula: '+(hit.n||'usuario')+' ✓');
+  };
+  step();
+}
+function gateLogout(){
+  try{ sessionStorage.removeItem(GATE_KEY); }catch(x){}
+  unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); gateShow(); toast('Sesión cerrada');
+}
+// al abrir: si ya entraste en esta pestaña, se restaura; si no, se pide acceso antes de mostrar nada
+function gateInit(){
+  let s=null; try{ s=JSON.parse(sessionStorage.getItem(GATE_KEY)||'null'); }catch(x){}
+  if(s&&s.r){ gateApply({r:s.r,n:s.n}); } else gateShow();
+}
+// cuando llegan los usuarios de la nube: si cambiaron o quitaron tus credenciales, se cierra la sesión
+function gateRevalidate(){
+  _cfgSynced=true;
+  let s=null; try{ s=JSON.parse(sessionStorage.getItem(GATE_KEY)||'null'); }catch(x){}
+  if(!s||!s.h) return;
+  const hit=gateCreds().find(c=>_hx(c.pw)===s.h);
+  if(!hit){ try{ sessionStorage.removeItem(GATE_KEY); }catch(x){} unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); gateShow('Tu acceso cambió: vuelve a entrar'); return; }
+  if(hit.r!==s.r||hit.n!==s.n){ try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:s.h,r:hit.r,n:hit.n})); }catch(x){} gateApply(hit); }
+}
+
 
 /* ================= INIT ================= */
 loadLocal();
@@ -3118,6 +3199,7 @@ applyHardcodedFb();
 SERV_OVERRIDES=(typeof CFG!=='undefined'&&CFG.servClientes)?CFG.servClientes:null;
 setPreset('semana');
 applyLock();
+gateInit();
 initFirebase();
 render();
 
