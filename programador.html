@@ -385,6 +385,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <button class="primary" onclick="document.getElementById('concF').click()">📥 Cargar movimientos de Odoo (stock.move.line)</button>
       <input type="file" id="concF" accept=".xlsx,.xls" multiple style="display:none" onchange="concLoad(this.files);this.value=''">
       <button class="ghost" onclick="concSync()" title="Vuelve a comparar con lo ya cargado de Odoo">🔄 Revisar ahora</button>
+      <button class="primary" onclick="concRegularizar()" title="Cuadra contra Odoo todos los meses anteriores y crea la báscula «generada» de lo que ya salió en Odoo; deja pendiente solo lo que no tiene salida en Odoo">🗓️ Cuadrar meses anteriores</button>
     </div>
     <div id="concBody"></div>
     <div id="concBtns" style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px"></div>
@@ -2376,7 +2377,7 @@ async function cuadOdooFiles(files){
         cuadSet('odoo/'+P+'/'+res.kind,{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:rowsP.length,tot:Math.round(tot*100)/100,formato:(res.info&&res.info.formato)||''});
         delete _odooCache[P+'|'+res.kind]; });
       if(res.kind==='inv'&&res.movs){   // detalle por salida/remisión (para la conciliación del master): solo los últimos 3 meses, que es lo que se revisa
-        const minP=prevPer(prevPer(perDe(TODAY))), byP={}; res.movs.forEach(m=>{ const P=m.f.slice(0,7); if(P>=minP)(byP[P]=byP[P]||[]).push(m); });
+        const minP=(()=>{ let m=prevPer(prevPer(perDe(TODAY))); const e=DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)).map(r=>perDe(fechaEmb(r))).sort()[0]; if(e){ const e1=prevPer(e); if(e1<m) m=e1; } let lim=perDe(TODAY); for(let i=0;i<8;i++) lim=prevPer(lim); return m<lim?lim:m; })(), byP={};   // desde el mes anterior al primer embarque (máx. 8 meses atrás) res.movs.forEach(m=>{ const P=m.f.slice(0,7); if(P>=minP)(byP[P]=byP[P]||[]).push(m); });
         Object.keys(byP).forEach(P=>{ cuadSet('odoodata/'+P+'/mov',JSON.stringify({rows:byP[P],nm:res.nm})); cuadSet('odoo/'+P+'/mov',{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:byP[P].length}); delete _odooCache[P+'|mov']; });
         // lote → producto según Odoo (un lote pertenece a un solo producto): sirve para cachar «producto por otro»
         const lm={}; res.movs.forEach(m=>m.l.forEach(([pk,l])=>{ if(!l)return; if(lm[l]&&lm[l]!==pk) lm[l]='?'; else lm[l]=pk; })); cuadSet('odoodata/_lotes',JSON.stringify(lm)); }
@@ -3090,15 +3091,31 @@ function planSinLotes(is){
 }
 const plTxt=p=>{ const a=[]; if(p.pedido)a.push('remisión'); if(p.C)a.push('cantidad/producto en Cargadores'); if(p.B)a.push(p.gen?'igualar la báscula generada a Cargadores':'cantidad/producto en Báscula'); if(p.crearB)a.push('crear báscula con los lotes de Cargadores'); return a.join(' · '); };
 function concFixOne(key,sl){ concApplyList([key],!!sl); }
+// ═══ meses anteriores: se cuadran contra Odoo (lotes incluidos) y se crea la báscula «generada» de todo lo que ya salió en Odoo.
+// Se quedan pendientes solo los embarques que el programa marca despachados pero NO tienen salida en Odoo (falta liberar) y los aún sin despachar.
+function regPlan(){
+  const hoy=perDe(TODAY), out=[], sinOdoo=[], sinSal=[];
+  const ps=[...new Set(DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)).map(r=>perDe(fechaEmb(r))))].filter(p=>p<hoy&&!perCerrado(p)).sort();
+  ps.forEach(P=>{ const c=conciliar(P); if(!c){ sinOdoo.push(P); return; } c.issues.forEach(i=>{ if(i.tipo==='emb'&&i.fixes.length&&i.item) out.push(i); }); sinSal.push(...c.sinSalida); });
+  return {ps,out,sinOdoo,sinSal};
+}
+function concRegularizar(silent){
+  if(!requireMaster())return; const pl=regPlan();
+  if(!pl.out.length){ toast('No hay nada que regularizar en meses anteriores'+(pl.sinOdoo.length?' · falta cargar el detalle de Odoo de: '+pl.sinOdoo.map(perLabel).join(', '):''),5000); return; }
+  const cB=pl.out.filter(i=>i.fixes.includes('crearB')).length;
+  if(!silent&&!confirm('Meses anteriores ('+pl.ps.filter(p=>!pl.sinOdoo.includes(p)).map(perLabel).join(', ')+'):\n· '+pl.out.length+' embarque(s) se cuadran contra Odoo (lotes incluidos)\n· '+cB+' registro(s) de báscula «generados» a crear\n· '+pl.sinSal.length+' embarque(s) despachados SIN salida en Odoo se quedan pendientes'+(pl.sinOdoo.length?'\n· Sin detalle de Odoo (no se tocan): '+pl.sinOdoo.map(perLabel).join(', '):'')+'\n\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return;
+  concApplyList(pl.out.map(i=>i.key),false,pl.out,true);
+  return {aplicados:pl.out.length,pendientesSinSalida:pl.sinSal.length,sinOdoo:pl.sinOdoo};
+}
 function concApply(modo,sl){
   if(!requireMaster())return; const R=CC.res; if(!R)return; const F=CC.f, q=normNom(F.q);
   const vis=concRows(R).filter(x=>x.est==='abierto'&&x.fixes.length&&(!F.det||(x.b&&esHoy(x.b.ts)))&&(!F.tipo||x.cats.includes(F.tipo))&&(!F.persona||personasDe(x).includes(F.persona))&&(!q||normNom(x.cliente+' '+x.hall.map(h=>h.t).join(' ')).includes(q)));
   concApplyList(modo==='all'?vis.map(x=>x.key):Object.keys(CC.sel).filter(k=>CC.sel[k]),!!sl);
 }
 // sl=true → «sin tocar lotes»; sl=false → cuadra todo con Odoo, lotes incluidos
-function concApplyList(keys,sl){
-  if(!requireMaster())return; const R=CC.res; if(!R)return;
-  const sel=R.issues.filter(i=>keys.includes(i.key)&&i.fixes.length); if(!sel.length){ toast('No hay nada seleccionado'); return; }
+function concApplyList(keys,sl,ov,silent){
+  if(!requireMaster())return; const R=CC.res; if(!R&&!ov)return;
+  const sel=ov||R.issues.filter(i=>keys.includes(i.key)&&i.fixes.length); if(!sel.length){ toast('No hay nada seleccionado'); return; }
   const plans=new Map(sel.map(i=>[i.key,sl?planSinLotes(i):null])), todo=sl?sel.filter(i=>!plans.get(i.key).nada):sel, omit=sel.length-todo.length;
   if(!todo.length){ toast('Sin tocar lotes no hay nada que corregir en lo seleccionado ('+omit+' caso(s) solo difieren en lotes o requieren crear registros con lotes de Odoo)'); return; }
   const cnt=f=>todo.filter(i=>sl?(f==='C'?plans.get(i.key).C:f==='B'?plans.get(i.key).B:f==='pedido'?plans.get(i.key).pedido:f==='crearB'?plans.get(i.key).crearB:false):i.fixes.includes(f)).length;
@@ -3106,7 +3123,7 @@ function concApplyList(keys,sl){
   const msg=sl
     ?'Voy a cuadrar '+todo.length+' caso(s) SIN TOCAR LOTES (los lotes quedan como los capturó Cargadores):\n· remisión: '+cnt('pedido')+' · cantidad/producto en Cargadores: '+cnt('C')+' · en Báscula: '+cnt('B')+'\n· crear báscula con los lotes de Cargadores: '+cnt('crearB')+(omit?'\n· '+omit+' caso(s) se quedan abiertos (solo difieren lotes o habría que crearlos con lotes de Odoo).':'')
     :'Voy a cuadrar '+todo.length+' caso(s) con Odoo, LOTES INCLUIDOS (Cargadores y Báscula quedan con los lotes de Odoo):\n· corregir Cargadores: '+cnt('C')+' · corregir Báscula: '+cnt('B')+' · remisión: '+cnt('pedido')+'\n· CREAR registro de báscula: '+cnt('crearB')+' · CREAR embarque + báscula: '+cnt('crearE');
-  if(!confirm(msg+'\nLo creado queda marcado «generado» (no es un pesaje real).'+(cerr?'\n⚠️ '+cerr+' pertenecen a un mes ya cerrado.':'')+'\nQueda respaldo y Auditoría, y se puede deshacer. ¿Continuar?')) return;
+  if(!silent&&!confirm(msg+'\nLo creado queda marcado «generado» (no es un pesaje real).'+(cerr?'\n⚠️ '+cerr+' pertenecen a un mes ya cerrado.':'')+'\nQueda respaldo y Auditoría, y se puede deshacer. ¿Continuar?')) return;
   const now=Date.now(); let n=0;
   todo.forEach((is,ix)=>{ const t=now+ix;
     if(is.tipo==='odoo'){ n+=crearEmbarque(is,t)?1:0; return; }
@@ -3126,7 +3143,7 @@ function concApplyList(keys,sl){
     cuadSet('ajustes/'+keySafe(i.id)+'_'+t,{ts:t,usuario:cuadUser(),id:i.id,cliente:r.cliente||'',pedido:r.pedido||'',srcs:eff,sinLotes:!!sl,antes,despues:{pedido:r.pedido||'',lotes:newC||antes.lotes,items:newB||newCrB||antes.items},creados:newCrB?{basc:i.id}:null,picks:i.picks.map(p=>p.ref)});
     auditPush({ts:new Date(t).toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'lotes',label:'Cuadre master vs Odoo'+(sl?' SIN tocar lotes':' (con lotes)')+' ('+eff.join('+')+')',from:'Carg.: '+_lin(antes.lotes)+(antes.items?' · Bás.: '+_lin(antes.items):' · sin báscula')+(eff.includes('pedido')?' · pedido '+(antes.pedido||'—'):''),to:(sl?'Carg.: '+_lin(newC||antes.lotes)+(newB||newCrB?' · Bás.: '+_lin(newB||newCrB):''):'Odoo: '+_lin(nuevas))+(venta?' · '+venta:''),maquillaje:true,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
     n++; });
-  CC.sel={}; const R2=conciliarTodo(); bandejaSync(R2); refreshCuad(); concRender(); toast('✅ '+n+' caso(s) cuadrados'+(sl?' sin tocar lotes'+(omit?' · '+omit+' siguen abiertos por lotes':''):' con Odoo')); }
+  CC.sel={}; const R2=conciliarTodo(); bandejaSync(R2); refreshCuad(); if(curView==='conc') concRender(); toast('✅ '+n+' caso(s) cuadrados'+(sl?' sin tocar lotes'+(omit?' · '+omit+' siguen abiertos por lotes':''):' con Odoo')); }
 // salida de Odoo sin embarque → se crea el embarque (despachado) y su registro de báscula, ambos «generados»
 function crearEmbarque(is,t){
   const p=is.pick, lineas=lineasCat(is.od); if(!lineas.length) return false;
@@ -3322,12 +3339,14 @@ function avisosCalc(){
   const misPend=mias.filter(x=>x.estado==='pendiente');
   return {sinPesar,viejas,difs,sol,cierres,otras,resueltas,misPend,area};
 }
+function irA(sel,msg){ setTimeout(()=>{ const e=document.querySelector(sel); if(e) e.scrollIntoView({behavior:'smooth',block:'start'}); },60); if(msg) toast(msg,2600); }
 function bsFiltro(fil){
   setView('bascula');
   const pend=cuadUnits().map(cuadUnit).filter(c=>c.st==='pend'&&!perCerrado(c.u.per)).map(c=>c.u.fecha).filter(Boolean).sort();
   const f=document.getElementById('bsFrom'); if(f&&pend.length&&(!f.value||f.value>pend[0])) f.value=pend[0];
   const t=document.getElementById('bsTo'); if(t) t.value=iso(new Date());
   document.getElementById('bsFil').value=fil; document.getElementById('bsQ').value=''; renderBascula();
+  irA('#v-bascula .tablewrap',fil==='pend'?'Mostrando las unidades pendientes de pesar':'');
 }
 function cqFiltro(qf,per){
   setView('cuadre'); CQ.view='emb'; CQ.qf=qf||''; CQ.q=''; document.getElementById('cqQ').value=''; CQ.soloDif=false;
@@ -3336,6 +3355,7 @@ function cqFiltro(qf,per){
     if(ps.length) CQ.per=ps[ps.length-1];
   }
   renderCuadre();
+  const n=document.querySelectorAll('#tbodyCq tr').length; irA('#v-cuadre .tablewrap','Filtro: '+(QF_TXT[qf]||qf)+' · '+n+' embarque(s) · baja a la tabla');
 }
 function cqQfClear(){ CQ.qf=''; renderCuadre(); }
 const QF_TXT={pend:'Falta báscula',dif:'Con diferencia sin analizar',sinlotes:'Despachado sin lotes',old:'Sin pesar de días anteriores'};
@@ -3449,13 +3469,13 @@ function cuadStepsHtml(D){
       ${step('carg','📲','Cargadores',cargOk.length,despCarg.length,cargPend,cargPend.length+' sin lotes','Atender ahora',"cqFiltro('sinlotes','"+P+"')")}
       ${step('bascula','⚖️','Báscula',conB.length,cus.length,sinB,sinB.length+' sin pesar',isBasc?'Ir a pesar':'Atender ahora',isBasc?"bsFiltro('pend')":"cqFiltro('pend','"+P+"')")}
       ${step('cuadre','🔎','Cuadre',cuadOk.length,conB.length,cuadPend,cuadPend.length+' con diferencia','Atender ahora',"cqFiltro('dif','"+P+"')")}
-      ${step('odoo','🧾','Odoo',prodN-(D.hasInv?prodMal.length:prodN),prodN,D.hasInv?[]:[],D.hasInv?(prodMal.length+' producto(s) no cuadran'):'sin cargar','Ver productos',"CQ.view='prod';CQ.qf='';CQ.soloDif=true;renderCuadre()",D.hasInv?(prodMal.length?'warn':''):'warn')}
+      ${step('odoo','🧾','Odoo',prodN-(D.hasInv?prodMal.length:prodN),prodN,D.hasInv?[]:[],D.hasInv?(prodMal.length+' producto(s) no cuadran'):'sin cargar','Ver productos',"CQ.view='prod';CQ.qf='';CQ.soloDif=true;renderCuadre();irA('#v-cuadre .tablewrap','Productos con diferencia contra Odoo')",D.hasInv?(prodMal.length?'warn':''):'warn')}
     </div></div>`;
 }
 function cqGoTabla(P){
   setView('tabla'); const [y,m]=P.split('-').map(Number); const last=new Date(y,m,0).getDate();
   document.getElementById('pFrom').value=P+'-01'; document.getElementById('pTo').value=P+'-'+String(last).padStart(2,'0');
-  try{ markCustom(); }catch(e){} const f=document.getElementById('fest'); if(f) f.value='PENDIENTE'; render();
+  try{ markCustom(); }catch(e){} const f=document.getElementById('fest'); if(f) f.value='PENDIENTE'; render(); toast('Programación de '+perLabel(P)+' · solo pendientes (aún sin despachar)',2600);
 }
 
 /* ================= ALERTAS AUTOMÁTICAS ADICIONALES DEL PERIODO ================= */
