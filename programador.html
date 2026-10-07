@@ -140,10 +140,17 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   /* pantalla de acceso: no se ve nada hasta autenticarse */
   #gateOverlay{position:fixed;inset:0;z-index:9999;background:var(--bg);display:none;align-items:center;justify-content:center;padding:18px}
   body.gated #gateOverlay{display:flex}
-  body.gated header,body.gated main,body.gated #alertBanners,body.gated footer{display:none!important}
+  body.gated header,body.gated main,body.gated #alertBanners,body.gated #roleBar,body.gated footer{display:none!important}
   .gatebox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px 24px;width:min(380px,100%);text-align:center}
   .gatebox h1{font-size:19px;margin:6px 0 4px}.gatebox input{width:100%;margin-top:14px;text-align:center;font-size:16px}
   .gatebox button{width:100%;margin-top:12px;padding:11px}
+  /* barra de avisos por rol */
+  #roleBar{display:flex;flex-direction:column;gap:6px;padding:0 18px}
+  #roleBar:empty{display:none}
+  #roleBar .rbar{display:flex;align-items:center;gap:10px;padding:9px 13px;border-radius:10px;background:#3a1620;border:1px solid var(--late);font-size:13.5px;margin-top:8px}
+  #roleBar .rbar.warn{background:#3a2e12;border-color:var(--warn)}#roleBar .rbar.info{background:#10283b;border-color:var(--accent)}#roleBar .rbar.ok{background:#12301f;border-color:var(--ok)}
+  #roleBar .rbar .big{font-size:18px}#roleBar .rbar .sp{flex:1}#roleBar .rbar button{padding:6px 12px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
+  #roleBar .rbar>span:nth-child(2){min-width:0}@media(max-width:640px){#roleBar{padding:0 10px}#roleBar .rbar{font-size:12.5px;gap:8px}#roleBar .rbar button{padding:5px 9px}}
 </style>
 </head>
 <body class="gated">
@@ -169,6 +176,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 </header>
 
 <div id="alertBanners"></div>
+<div id="roleBar"></div>
 <main>
   <!-- PERIOD BAR -->
   <div class="periodbar" id="mainPeriod">
@@ -202,8 +210,9 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="proyeccion" onclick="setView('proyeccion')">🏭 Proyección</button>
     <button data-v="traza" onclick="setView('traza')">🧾 Trazabilidad <span id="trzCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="bascula" data-basc onclick="setView('bascula')">⚖️ Báscula <span id="bsCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
-    <button data-v="cuadre" data-basc onclick="setView('cuadre')">🧮 Cuadre</button>
+    <button data-v="cuadre" data-basc onclick="setView('cuadre')">🧮 Cuadre <span id="cqCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="cierre" data-basc onclick="setView('cierre')">🗓️ Corte de mes <span id="ciCount" class="pill p-warn" style="margin-left:4px;display:none"></span></button>
+    <button data-v="sol" id="tabSol" style="display:none" onclick="setView('sol')">✋ Solicitudes <span id="solCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="conc" id="tabConc" style="display:none" onclick="setView('conc')">🕵️ Conciliación <span id="concCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
   </div>
@@ -324,6 +333,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 
   <!-- CUADRE: tablero Programado ↔ Cargadores ↔ Báscula ↔ Odoo -->
   <div class="view" id="v-cuadre">
+    <div id="cqSteps"></div>
     <div class="periodbar" style="margin-bottom:10px">
       <div class="f"><label>Periodo</label><select id="cqPer" onchange="cqSet('per',this.value)"></select></div>
       <div class="f"><label>Vista</label><select id="cqView" onchange="cqSet('view',this.value)"><option value="prod">Por producto</option><option value="lote">Por producto y lote</option><option value="cli">Por cliente</option><option value="emb">Por embarque</option></select></div>
@@ -358,6 +368,9 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <div class="card" style="margin-top:12px"><h3>📚 Meses cerrados</h3><div class="tablewrap" style="margin-top:8px" id="ciHist"></div></div>
   </div>
 
+
+  <!-- SOLICITUDES (master): ediciones de pesaje pedidas por Báscula + cierres por autorizar -->
+  <div class="view" id="v-sol"><div id="solBox"></div></div>
 
   <!-- CONCILIACIÓN CON ODOO · bandeja de errores (solo master) -->
   <div class="view" id="v-conc">
@@ -473,6 +486,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
         <div class="field full" style="padding:0"><button type="button" class="ghost" onclick="bsAddLine()">＋ Agregar producto / lote</button></div>
         <div class="field full"><div id="bsChk" style="display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px"></div></div>
         <div class="field full"><label>Observaciones <span id="bsObsReq" style="display:none;color:var(--late)">(obligatorias: la diferencia pasa de la tolerancia)</span></label><textarea id="bs_obs" rows="2"></textarea></div>
+        <div class="field full" id="bsMotWrap" style="display:none"><label>Motivo del cambio * (se envía al master)</label><textarea id="bs_motivo" rows="2" placeholder="¿Qué se corrige y por qué?"></textarea></div>
       </div>
     </div>
     <div class="actions"><button class="ghost" id="bsDelBtn" style="display:none;color:var(--late)" onclick="deleteBasc()">🗑 Borrar (master)</button>
@@ -1511,7 +1525,7 @@ function applyLock(){
   document.querySelectorAll('[data-prot]').forEach(el=>{ const m=el.hasAttribute('data-master'); el.classList.toggle('show', m?isMaster:unlocked); });
   const b=document.getElementById('lockBtn'); b.classList.toggle('open',unlocked||isBasc); b.textContent=unlocked?(isMaster?'🕵️ Master activo':'🔓 Superusuario activo'):(isBasc?'⚖️ Báscula activa · salir':'🔒 Superusuario / Master');
   document.body.classList.toggle('basc',isBasc);
-  { const tc=document.getElementById('tabConc'); if(tc) tc.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='conc') setView('tabla'); }
+  { const tc=document.getElementById('tabConc'); if(tc) tc.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='conc') setView('tabla'); const ts=document.getElementById('tabSol'); if(ts) ts.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='sol') setView('tabla'); try{ _avCounts=null; refreshAvisos(); }catch(e){} }
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
   if(isBasc && bascName && typeof _cfgSynced!=='undefined' && _cfgSynced && !(CFG.bascUsers||[]).some(u=>u.name===bascName)){ unlocked=false; isMaster=false; isBasc=false; bascName=''; toast('Tu usuario de báscula fue dado de baja'); applyLock(); return; }
   // pestaña de auditoría: solo visible para master
@@ -1684,7 +1698,7 @@ function initFirebase(){
         err=>{ console.error('proyedit:',err&&err.message); });
       // Báscula / Cuadre / Cierre: tres escuchas separadas (el dato pesado de Odoo, odoodata, se baja solo cuando se necesita).
       // Si la nube está vacía y este equipo ya traía registros (trabajó sin internet), los sube en vez de borrarlos.
-      ['bascula','cierres','odoo','ajustes','bandeja'].forEach(nodo=>{ let first=true;
+      ['bascula','cierres','odoo','ajustes','bandeja','solicitudes','obs'].forEach(nodo=>{ let first=true;
         fbCuad.child(nodo).on('value', snap=>{ const v=snap.val();
           if(first&&v==null&&Object.keys(CUAD[nodo]||{}).length){ first=false; try{ fbCuad.child(nodo).set(sanitize(CUAD[nodo])); }catch(e){} return; }
           first=false; CUAD[nodo]=v||{}; if(nodo==='odoo'){ Object.keys(_odooCache).forEach(k=>delete _odooCache[k]); } cuadSaveLocal(); try{ render(); }catch(e){} },
@@ -1725,7 +1739,7 @@ function fill(id,arr){ const el=document.getElementById(id); if(!el)return; cons
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
 
 /* ================= VISTAS ================= */
-function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.body.dataset.view=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='conc')concRender(); }
+function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(v==='sol'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.body.dataset.view=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='conc')concRender(); if(v==='sol')renderSol(); }
 
 /* ================================================================
    ================= FLOTA / MANTENIMIENTO ========================
@@ -2166,15 +2180,15 @@ const MESES_ES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto
 // Catálogo de la hoja "Catalogos" del Excel de báscula (con el código real de Odoo cuando el Excel traía uno distinto)
 const BASC_CATALOGO=[{cod:'04MAS0024',name:'KAN KAN 20 KG (R)',kg:20},{cod:'04MAS009',name:'KAN KAN 20 KGS',kg:20},{cod:'04MAS0013',name:'KAN KAN 25 + 1 KG EXTRA',kg:26},{cod:'04MAS0020',name:'KAN KAN 25 KG',kg:25},{cod:'04MAS0023',name:'KAN KAN 25 KG (R)',kg:25},{cod:'04MAS0012',name:'MI BOOB 20 + 1 KG EXTRA',kg:21},{cod:'04MAS008',name:'MI BOOB 20 KGS',kg:20},{cod:'04MAS010',name:'PET FOOD 20 KG (R)',kg:20},{cod:'04MAS0016',name:'SILVER CAT 15 + 1 KG EXTRA',kg:16},{cod:'04MAS006',name:'SILVER CAT 15 KGS',kg:15},{cod:'04MAS007',name:'SILVER CAT 5 KGS',kg:5},{cod:'04MAS0017',name:'SILVER KAN 18% 25 KG +1 EXTRAS',kg:26},{cod:'04MAS003',name:'SILVER KAN 18% 25 KGS',kg:25},{cod:'04MAS002',name:'SILVER KAN 18% 5 KGS',kg:5},{cod:'04MAS0015',name:'SILVER KAN CACHORRO 20 +1 KG EXTRA',kg:21},{cod:'04MAS004',name:'SILVER KAN CACHORRO 20 KGS',kg:20},{cod:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',kg:5},{cod:'04MAS001',name:'SILVER KAN PREMIUM +22% 25 KG',kg:25},{cod:'04MAS0011',name:'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILOS EXTRAS',kg:27},{cod:'02CROQ037',name:'CABALLO IMPERIAL 15KG',kg:15},{cod:'02GAL43',name:'CRECIMIENTO POLLO EXTRUSADO 20 KGS',kg:20},{cod:'03CAB01',name:'CABALLO FIEL 40 KG',kg:40},{cod:'03CAB02',name:'CABALLO IMPERIAL 40KG',kg:40},{cod:'03GAL14',name:'GALLO MANTENIMIENTO 14% 40KG',kg:40},{cod:'03GAL19',name:'GALLO DE PELEA PELECHA 40 KG',kg:40},{cod:'03GAL22',name:'GALLO DE PELEA GANADOR F19 40 KGS',kg:40},{cod:'03GAL40',name:'PRE-INICIO POLLO 40KGS',kg:40},{cod:'03GAL42',name:'PRE INICIO POLLO 15 KGS (EXTRUSADO)',kg:15},{cod:'03GAL43',name:'CRECIMIENTO POLLO 20 KG EXTRUSADO',kg:20},{cod:'03GAL23',name:'GALLO MANTENIMIENTO SUPER 40 KG',kg:40}];
 
-let CUAD={bascula:{},cierres:{},odoo:{},odoodata:{},ajustes:{},bandeja:{}}, fbCuad=null, isBasc=false, bascName='';
+let CUAD={bascula:{},cierres:{},odoo:{},odoodata:{},ajustes:{},bandeja:{},solicitudes:{},obs:{}}, fbCuad=null, isBasc=false, bascName='';
 const cuadCfg=()=>({ tolKg:(CFG.bascTolKg!=null&&!isNaN(Number(CFG.bascTolKg)))?Math.max(0,Number(CFG.bascTolKg)):50,
   tolProg:(CFG.cuadreTolProgPct!=null&&!isNaN(Number(CFG.cuadreTolProgPct)))?Math.max(0,Number(CFG.cuadreTolProgPct)):5,
   tolSacos:(CFG.bascTolSacos!=null&&!isNaN(Number(CFG.bascTolSacos)))?Math.max(0,Number(CFG.bascTolSacos)):0 });
 function cuadLoadLocal(){
-  try{ const c=localStorage.getItem(CUAD_KEY); if(c){ const o=JSON.parse(c); CUAD.bascula=o.bascula||{}; CUAD.cierres=o.cierres||{}; CUAD.odoo=o.odoo||{}; CUAD.ajustes=o.ajustes||{}; CUAD.bandeja=o.bandeja||{}; } }catch(e){}
+  try{ const c=localStorage.getItem(CUAD_KEY); if(c){ const o=JSON.parse(c); CUAD.bascula=o.bascula||{}; CUAD.cierres=o.cierres||{}; CUAD.odoo=o.odoo||{}; CUAD.ajustes=o.ajustes||{}; CUAD.bandeja=o.bandeja||{}; CUAD.solicitudes=o.solicitudes||{}; CUAD.obs=o.obs||{}; } }catch(e){}
   try{ const c=localStorage.getItem(CUADODOO_KEY); if(c) CUAD.odoodata=JSON.parse(c)||{}; }catch(e){}
 }
-function cuadSaveLocal(){ try{ localStorage.setItem(CUAD_KEY,JSON.stringify({bascula:CUAD.bascula,cierres:CUAD.cierres,odoo:CUAD.odoo,ajustes:CUAD.ajustes,bandeja:CUAD.bandeja})); }catch(e){} }
+function cuadSaveLocal(){ try{ localStorage.setItem(CUAD_KEY,JSON.stringify({bascula:CUAD.bascula,cierres:CUAD.cierres,odoo:CUAD.odoo,ajustes:CUAD.ajustes,bandeja:CUAD.bandeja,solicitudes:CUAD.solicitudes,obs:CUAD.obs})); }catch(e){} }
 function cuadSaveOdooLocal(){ try{ localStorage.setItem(CUADODOO_KEY,JSON.stringify(CUAD.odoodata)); }catch(e){ console.warn('odoodata no cabe en localStorage'); } }
 // escribe en memoria + localStorage + nube. path = 'bascula/ID' · 'cierres/2026-09' · 'cierres/2026-09/areas/bascula' …
 function cuadSet(path,val){
@@ -2489,10 +2503,14 @@ function openBasc(id,noProg){
   bsLines=bascItems(b).map(x=>({...x}));
   if(!bsLines.length) bsLines.push({cod:'',prod:'',lote:'',sacos:'',kgSaco:0});
   document.getElementById('bascTitle').textContent=b?('Pesaje · folio '+(b.folio||'')):'Registrar pesaje';
-  const can=!lock||isMaster;
-  document.getElementById('bsSaveBtn').style.display=can?'inline-flex':'none';
+  const pendSol=b?Object.values(CUAD.solicitudes||{}).find(x=>x&&x.tipo==='pesaje'&&x.embId===id&&x.estado==='pendiente'):null;
+  const can=(!lock||isMaster||isBasc)&&!(isBasc&&pendSol);
+  const sb=document.getElementById('bsSaveBtn'); sb.style.display=can?'inline-flex':'none'; sb.textContent=(isBasc&&b)?'✋ Enviar solicitud al master':'Guardar pesaje';
+  { const mw=document.getElementById('bsMotWrap'); if(mw){ mw.style.display=(isBasc&&b&&!pendSol)?'':'none'; document.getElementById('bs_motivo').value=''; } }
   document.getElementById('bsDelBtn').style.display=(b&&isMaster)?'inline-flex':'none';
-  document.getElementById('bsLockMsg').innerHTML=lock?`<div class="serv-banner chalan" style="animation:none;text-transform:none;font-size:12px">🔒 ${escProy(lock)}${isMaster?' · como master todavía puedes corregirlo':' · solo el master puede modificarlo'}</div>`:'';
+  document.getElementById('bsLockMsg').innerHTML=(pendSol?`<div class="serv-banner chalan" style="animation:none;text-transform:none;font-size:12px">✋ Ya hay una solicitud de edición de este pesaje esperando al master (${escProy(pendSol.usuario||'')} · ${ttsStr(pendSol.ts)}). Cuando la resuelva podrás pedir otra.</div>`:'')
+    +(lock?`<div class="serv-banner chalan" style="animation:none;text-transform:none;font-size:12px">🔒 ${escProy(lock)}${isMaster?' · como master todavía puedes corregirlo':isBasc?' · tus cambios se envían como solicitud al master':' · solo el master puede modificarlo'}</div>`
+      :((isBasc&&b&&!pendSol)?'<div class="hint" style="margin-bottom:8px">✋ Para corregir un pesaje ya guardado, haz los cambios, escribe el motivo y se envía como solicitud: el master la autoriza o la rechaza.</div>':''));
   bascEmbChange(true); renderBascLines(); bascRecalc();
   document.getElementById('bascOverlay').classList.add('show');
 }
@@ -2506,7 +2524,7 @@ function bascEmbChange(keep){
   if(!keep){ const S=(f,v)=>{ const e=document.getElementById(f); if(e&&!e.value) e.value=v||''; }; S('bs_eco',r.eco); S('bs_vehiculo',r.tipo); S('bs_turno',r.turno); }
 }
 function renderBascLines(){
-  const prods=bascProductos(); const lock=bsEdit&&bascBloqueado(CUAD.bascula[bsEdit],DATA.find(x=>x.id===bsEdit))&&!isMaster;
+  const prods=bascProductos(); const lock=bsEdit&&bascBloqueado(CUAD.bascula[bsEdit],DATA.find(x=>x.id===bsEdit))&&!isMaster&&!isBasc;
   const box=document.getElementById('bs_lineas');
   box.innerHTML=bsLines.map((x,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
     <select ${lock?'disabled':''} onchange="bsSetLine(${i},'cod',this.value)" style="flex:2;min-width:220px"><option value="">— producto —</option>${prods.map(p=>`<option value="${escProy(p.cod)}" ${pkey(p.cod)===pkey(x.cod)&&x.cod?'selected':''}>${escProy(p.name)}</option>`).join('')}</select>
@@ -2537,7 +2555,7 @@ function saveBasc(){
   const id=bsEdit||(bsNoProg?('bz'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)):document.getElementById('bs_emb').value);
   if(!id){ toast('Elige el pedido programado (o usa «Unidad no programada»)'); return; }
   const r=bsNoProg?null:DATA.find(x=>x.id===id); const prev=CUAD.bascula[id]||null;
-  const lock=prev?bascBloqueado(prev,r):''; if(lock&&!isMaster){ toast('🔒 '+lock); return; }
+  const lock=prev?bascBloqueado(prev,r):''; if(lock&&!isMaster&&!isBasc){ toast('🔒 '+lock); return; }
   const folio=g('bs_folio').toUpperCase(); if(!folio){ toast('Captura el folio de báscula'); return; }
   const oper=(isBasc&&bascName&&!(prev&&prev.oper))?bascName:g('bs_oper'); if(!oper){ toast('Captura el nombre de quien pesa y registra (para saber quién capturó)'); return; }
   const dup=Object.entries(CUAD.bascula).find(([k,x])=>k!==id&&x&&String(x.folio||'').toUpperCase()===folio); if(dup){ toast('🚫 El folio '+folio+' ya está en otro pesaje ('+(dup[1].pedido||(DATA.find(x=>x.id===dup[0])||{}).pedido||dup[0])+')',5000); return; }
@@ -2553,6 +2571,7 @@ function saveBasc(){
     fecha:bsNoProg?(g('bs_fecha')||TODAY):(fechaEmb(r)||TODAY),
     cliente:bsNoProg?g('bs_cli'):(r&&r.cliente)||'',pedido:bsNoProg?g('bs_ped'):(r&&r.pedido)||'',
     usuario:prev?prev.usuario:cuadUser(),ts:prev?prev.ts:now,tsEdit:now,editor:cuadUser(),generado:false,estimado:false};   // si alguien captura un pesaje real sobre un registro generado, deja de ser «generado»
+  if(isBasc&&prev){ solicitarEdicionPesaje(id,prev,rec); return; }   // báscula no edita directo un pesaje ya guardado: lo solicita al master
   // historial de cambios: quién, cuándo y qué (el registro original no se pierde)
   const h=Object.assign({},prev&&prev.hist||{});
   if(prev){ const ch=[]; [['folio','folio'],['bruto','bruto'],['tara','tara'],['placa','placa'],['obs','obs']].forEach(([k,l])=>{ if(String(prev[k]??'')!==String(rec[k]??'')) ch.push(l+': '+(prev[k]??'—')+' → '+(rec[k]??'—')); });
@@ -2572,7 +2591,7 @@ function refreshCuad(){ try{ render(); }catch(e){ console.error(e); } }
 
 
 /* ================= PESTAÑA CUADRE (dashboard) ================= */
-const CQ={per:'',view:'prod',q:'',soloDif:false};
+const CQ={per:'',view:'prod',q:'',soloDif:false,qf:''};
 function cuadPeriodos(){
   const s=new Set(); cuadUnits().forEach(u=>{ if(u.per)s.add(u.per); }); Object.keys(CUAD.odoo).forEach(p=>s.add(p)); Object.keys(CUAD.cierres).forEach(p=>s.add(p));
   s.add(perDe(TODAY)); return [...s].filter(Boolean).sort().reverse();
@@ -2590,6 +2609,7 @@ function renderCuadre(){
   const ps=document.getElementById('cqPer'); ps.innerHTML=pers.map(p=>`<option value="${p}">${perLabel(p)}${perCerrado(p)?' · 🔒 cerrado':''}</option>`).join(''); ps.value=CQ.per;
   document.getElementById('cqView').value=CQ.view; document.getElementById('cqSoloDif').checked=CQ.soloDif;
   const D=cuadCompute(CQ.per), K=D.k, cfg=cuadCfg();
+  { const st=document.getElementById('cqSteps'); if(st) st.innerHTML=cuadStepsHtml(D); }
   const mi=D.invMeta, mf=D.facMeta;
   document.getElementById('cqOdoo').innerHTML=
     `<span class="pill ${mi?'p-ok':'p-warn'}">📦 Inventario Odoo: ${mi?('cargado · '+ttsStr(mi.ts)+' · '+escProy(mi.usuario||'')):'sin cargar'}</span> `+
@@ -2611,12 +2631,12 @@ function renderCuadre(){
   const top=D.prod.slice().sort((a,b)=>Math.max(b.c,b.b,b.inv,b.fac)-Math.max(a.c,a.b,a.inv,a.fac)).slice(0,8);
   document.getElementById('cqChProd').innerHTML=grpBars(top,D.hasInv,D.hasFac);
   // alertas
-  const al=[]; D.cus.filter(c=>c.st==='pend').slice(0,6).forEach(c=>al.push(['late','Falta báscula: '+(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—')+' · '+c.u.fecha,c.u.id]));
-  D.cus.filter(c=>c.st==='dif').slice(0,8).forEach(c=>al.push(['late',(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—')+': '+c.flags.filter(f=>f.lvl!=='info').map(f=>f.t)[0],c.u.id]));
+  const al=[]; cuadAlertasExtra(D).forEach(a=>al.push(a)); D.cus.filter(c=>c.st==='pend'&&!(c.u.fecha&&c.u.fecha<TODAY)).slice(0,4).forEach(c=>al.push(['late','Falta báscula: '+(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—')+' · '+c.u.fecha,c.u.id,'⚖️']));
+  D.cus.filter(c=>c.st==='dif').slice(0,8).forEach(c=>al.push(['late',(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—')+': '+c.flags.filter(f=>f.lvl!=='info').map(f=>f.t)[0],c.u.id,'🔎']));
   const dupF={}; Object.values(CUAD.bascula).forEach(b=>{ if(b&&b.folio&&perEmb(b.fecha,b)===CQ.per){ const k=String(b.folio).toUpperCase(); dupF[k]=(dupF[k]||0)+1; } }); Object.entries(dupF).filter(([k,n])=>n>1).forEach(([k,n])=>al.push(['late','Folio de báscula '+k+' repetido '+n+' veces','']));
   if(D.hasInv&&D.hasFac&&dInvFac>0.5) al.push(['warn','Salieron '+fS(dInvFac)+' unidades de inventario que aún no se facturan en Odoo','']);
   if(D.hasInv&&D.hasFac&&dInvFac<-0.5) al.push(['late','Hay '+fS(-dInvFac)+' facturadas sin salida de inventario (falta liberar)','']);
-  document.getElementById('cqAl').innerHTML=al.length?al.map(a=>`<div style="padding:6px 8px;margin-bottom:5px;border-left:3px solid var(--${a[0]==='late'?'late':'warn'});background:#101c29;border-radius:6px;font-size:12px;${a[2]?'cursor:pointer':''}" ${a[2]?`onclick="cuadDet('${a[2]}')"`:''}>${escProy(a[1])}</div>`).join(''):'<div class="empty" style="padding:18px">Sin alertas en el periodo ✓</div>';
+  document.getElementById('cqAl').innerHTML=al.length?al.map(a=>`<div style="padding:6px 8px;margin-bottom:5px;border-left:3px solid var(--${a[0]==='late'?'late':'warn'});background:#101c29;border-radius:6px;font-size:12px;${a[2]?'cursor:pointer':''}" ${a[2]?`onclick="cuadDet('${a[2]}')"`:''}>${a[3]?a[3]+' ':''}${escProy(a[1])}</div>`).join(''):'<div class="empty" style="padding:18px">Sin alertas en el periodo ✓</div>';
   // tabla
   const q=normNom(CQ.q); const th=(t,num)=>`<th ${num?'style="text-align:right"':''}>${t}</th>`;
   const chips=lec=>lec.length?lec.map(l=>`<span class="pill ${l[0]==='crit'?'p-late':l[0]==='warn'?'p-warn':'p-proc'}" style="margin:1px 3px 1px 0;white-space:normal">${escProy(l[1])}</span>`).join(''):'<span class="pill p-ok">✓ Cuadra</span>';
@@ -2636,14 +2656,15 @@ function renderCuadre(){
       :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto) se empareja con el del programa ignorando acentos y signos.':'Por lote: el lote de Odoo debe coincidir con el que capturaron Cargadores y Báscula (se ignoran espacios y símbolos).';
   } else {
     head=th('Fecha')+th('Pedido')+th('Cliente')+th('Prog. kg',1)+th('Cargadores kg',1)+th('Cargadores sacos',1)+th('Báscula neto kg',1)+th('Báscula sacos',1)+th('Estatus');
-    const rows=D.cus.filter(c=>(!CQ.soloDif||c.st!=='ok')&&(!q||normNom((c.u.r.cliente||'')+' '+(c.u.r.pedido||'')+' '+(c.u.b&&c.u.b.folio||'')).includes(q))).sort((a,b)=>String(b.u.fecha).localeCompare(String(a.u.fecha)));
+    const qfOk=c=>!CQ.qf||(CQ.qf==='pend'?c.st==='pend':CQ.qf==='dif'?c.st==='dif':CQ.qf==='sinlotes'?c.flags.some(f=>f.k==='lotes'):CQ.qf==='old'?(c.st==='pend'&&c.u.fecha&&c.u.fecha<TODAY):true);
+    const rows=D.cus.filter(c=>qfOk(c)&&(!CQ.soloDif||c.st!=='ok')&&(!q||normNom((c.u.r.cliente||'')+' '+(c.u.r.pedido||'')+' '+(c.u.b&&c.u.b.folio||'')).includes(q))).sort((a,b)=>String(b.u.fecha).localeCompare(String(a.u.fecha)));
     body=rows.map(c=>`<tr style="cursor:pointer" onclick="cuadDet('${c.u.id}')"><td>${c.u.fecha}</td><td>${escProy(c.u.r.pedido||'')}</td><td>${escProy(c.u.r.cliente||'')}${c.u.noProg?' <span class="pill p-warn">sin programa</span>':''}</td><td class="num">${c.u.noProg?'—':fK(c.Pkg)}</td><td class="num">${c.u.noProg||(isBasc&&!c.u.b)?'—':fK(c.Cef)}</td><td class="num">${c.u.noProg||(isBasc&&!c.u.b)?'—':fS(c.Csc)}</td><td class="num">${c.u.b?fK(c.neto):'—'}</td><td class="num">${c.u.b?fS(c.Bsc):'—'}</td><td>${cuadStChip(c.st,c.crit)}</td></tr>`).join('');
-    document.getElementById('cqHint').textContent='Doble validación por embarque: Programado ↔ Cargadores ↔ Báscula. Clic en un renglón para ver el detalle por producto y lote y analizar la diferencia.';
+    document.getElementById('cqHint').innerHTML=(CQ.qf?`<span class="pill p-warn" style="margin-right:8px">Filtro: ${QF_TXT[CQ.qf]||CQ.qf} <a href="#" onclick="cqQfClear();return false" style="color:inherit;margin-left:6px">✕ quitar</a></span>`:'')+'Doble validación por embarque: Programado ↔ Cargadores ↔ Báscula. Clic en un renglón para ver el detalle por producto y lote y analizar la diferencia.';
   }
   document.getElementById('theadCq').innerHTML=head; document.getElementById('tbodyCq').innerHTML=body||`<tr><td colspan="10" class="empty">Sin datos en ${perLabel(CQ.per)}.</td></tr>`;
   document.getElementById('cqImgBtn').disabled=false;
 }
-function cqSet(k,v){ CQ[k]=v; renderCuadre(); }
+function cqSet(k,v){ CQ[k]=v; if(k==='view'&&v!=='emb') CQ.qf=''; renderCuadre(); }
 
 /* ---- detalle de un embarque ---- */
 function cuadDet(id){
@@ -2655,23 +2676,20 @@ function cuadDet(id){
     document.getElementById('cqDetBtns').innerHTML=`<button class="primary" onclick="closeCuadDet();openBasc('${id}')">⚖️ Pesar</button>`; document.getElementById('cqDetOverlay').classList.add('show'); return; }
   const col=(t,lines)=>`<div class="card" style="padding:10px 12px"><h3 style="margin:0 0 6px">${t}</h3>${lines.map(l=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin:2px 0"><span class="muted">${l[0]}</span><b>${l[1]}</b></div>`).join('')}</div>`;
   const prodRows=cu.prods.map(p=>p.lots.map((l,i)=>`<tr><td>${i===0?escProy(p.prod):''}</td><td class="code"><b>${escProy(l.lote)}</b></td><td class="num">${fS(l.c)}</td><td class="num">${fS(l.b)}</td><td class="num ${Math.abs(l.c-l.b)>cfg.tolSacos?'dcrit':''}">${sgn(l.b-l.c)}</td></tr>`).join('')).join('');
-  const hist=b&&b.hist?Object.values(b.hist).sort((x,y)=>x.ts-y.ts):[];
+  const hist=cuadHistAll(id,b);
   const can=!isBasc&&bascPuede()&&b;   // el usuario de báscula ve el cuadre, no lo edita (su captura va en la pestaña Báscula)
   document.getElementById('cqDetBody').innerHTML=`
     <div style="padding:14px 18px">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:15px">${escProy(r.cliente||'')}</b><span class="muted">pedido ${escProy(r.pedido||'—')} · ${cu.u.fecha||''} · ${escProy(r.eco||(b&&b.eco)||'')}</span>${cuadStChip(cu.st,cu.crit)}${cu.u.noProg?'<span class="pill p-warn">sin programa</span>':''}</div>
-      <div class="charts" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:12px">
-        ${col('📋 Programado',[['Kg programados',cu.u.noProg?'—':fK(cu.Pkg)],['Cita',escProy(r.horaProg||'—')]])}
-        ${col('📲 Cargadores',[['Kg capturados',fK(r.kilos||0)],['Sacos (lotes)',fS(cu.Csc)],['Peso de lotes',fK(lotesKg(r))+' kg'],['Lotes',lotesDe(r).length]])}
-        ${col('⚖️ Báscula',b?[['Folio',escProy(b.folio||'')],['Bruto / tara',fK(b.bruto)+' / '+fK(b.tara)],['Neto',fK(cu.neto)+' kg'],['Sacos',fS(cu.Bsc)],['Peso de lo registrado',fK(cu.Bkg)+' kg'],['Capturó',escProy(b.oper||b.usuario||'')+' · '+ttsStr(b.ts)]]:[['Estatus','sin pesar']])}
-      </div>
+      ${cuadPasosHtml(cu,r,b,id)}
       ${cu.flags.length?'<div style="margin-bottom:12px">'+cu.flags.map(f=>`<div style="padding:6px 9px;margin-bottom:4px;border-left:3px solid var(--${f.lvl==='crit'?'late':f.lvl==='warn'?'warn':'proc'});background:#101c29;border-radius:6px;font-size:12px">${escProy(f.t)}</div>`).join('')+'</div>':'<div class="pill p-ok" style="margin-bottom:12px">✓ Las fuentes cuadran dentro de la tolerancia</div>'}
       ${prodRows?`<div class="tablewrap" style="max-height:260px;margin-bottom:12px"><table><thead><tr><th>Producto</th><th>Lote</th><th style="text-align:right">Cargadores sacos</th><th style="text-align:right">Báscula sacos</th><th style="text-align:right">Dif.</th></tr></thead><tbody>${prodRows}</tbody></table></div>`:''}
       ${b&&b.obs?`<div class="hint" style="margin-bottom:8px">Observaciones de báscula: <b>${escProy(b.obs)}</b></div>`:''}
       ${b?`<div class="field" style="margin-bottom:10px"><label>🔎 Análisis de la diferencia ${b.analisis?'· '+escProy(b.analisis.usuario||'')+' · '+ttsStr(b.analisis.ts):''}</label><textarea id="cq_ana" rows="2" ${can?'':'disabled'} placeholder="Qué pasó y cómo se resolvió (ej. merma por humedad, sacos rotos, error de captura corregido…)">${escProy(b.analisis?b.analisis.txt:'')}</textarea>${can?`<div style="margin-top:6px"><button class="primary" onclick="cuadSaveAna('${id}')">Guardar análisis</button></div>`:''}</div>`:''}
-      ${hist.length?`<div class="hint"><b>Historial del pesaje</b><br>${hist.map(h=>ttsStr(h.ts)+' · '+escProy(h.usuario||'')+' · '+escProy(h.accion||'')+' — '+escProy(h.detalle||'')).join('<br>')}</div>`:''}
+      ${obsHtml(id)}
+      ${hist.length?`<div class="hint"><b>Historial del embarque y del pesaje</b><br>${hist.map(h=>ttsStr(h.ts)+' · '+escProy(h.usuario||'')+' · '+escProy(h.accion||'')+' — '+escProy(h.detalle||'')).join('<br>')}</div>`:''}
     </div>`;
-  document.getElementById('cqDetBtns').innerHTML=(b&&bascPuede()&&!isBasc?`<button class="ghost" onclick="closeCuadDet();openBasc('${id}')">✏️ Editar pesaje</button>`:(!b&&bascPuede()&&!isBasc?`<button class="primary" onclick="closeCuadDet();openBasc('${id}')">⚖️ Pesar</button>`:''))+(!isBasc&&r.id&&!cu.u.noProg?`<button class="ghost" onclick="closeCuadDet();openForm('${id}')">📋 Abrir embarque</button>`:'');
+  document.getElementById('cqDetBtns').innerHTML='';
   document.getElementById('cqDetOverlay').classList.add('show');
 }
 function closeCuadDet(){ document.getElementById('cqDetOverlay').classList.remove('show'); }
@@ -2821,7 +2839,7 @@ function reabrirCierre(P){ if(!requireMaster())return; const m=prompt('Reabrir '
   toast(perLabel(P)+' reabierto'); refreshCuad(); }
 
 /* ================= ENGANCHE CON render() Y CON LOS PERFILES ================= */
-function cuadRenderHook(){ if(curView==='bascula')renderBascula(); else if(curView==='cuadre')renderCuadre(); else if(curView==='cierre')renderCierre(); else if(curView==='conc')concRender();
+function cuadRenderHook(){ try{ refreshAvisos(); }catch(e){ console.error('avisos:',e); } if(curView==='sol')renderSol(); else if(curView==='bascula')renderBascula(); else if(curView==='cuadre')renderCuadre(); else if(curView==='cierre')renderCierre(); else if(curView==='conc')concRender();
   try{ const tc=document.getElementById('concCount'); if(tc&&curView!=='conc'){ const n=Object.values(CUAD.bandeja||{}).filter(x=>x.estado==='abierto').length; tc.textContent=n; tc.style.display=n?'inline-flex':'none'; } }catch(e){}
   // pestaña Corte de mes: al master le avisa cuántos cierres esperan su autorización; a cada área, en cuántos meses falta su corte
   try{ const e=document.getElementById('ciCount'); if(e){ let n=0;
@@ -3152,7 +3170,7 @@ function gateCreds(){   // todas las credenciales vigentes y el perfil que da ca
 }
 function gateApply(p){
   unlocked=(p.r==='master'||p.r==='su'); isMaster=(p.r==='master'); isBasc=(p.r==='basc'); bascName=p.n||'';
-  document.body.classList.remove('gated'); applyLock();
+  document.body.classList.remove('gated'); _avCounts=null; applyLock(); try{ refreshAvisos(); }catch(e){}
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
 }
 function gateShow(msg){
@@ -3172,6 +3190,7 @@ function gateGo(){
     if(!hit){ e.textContent='Contraseña incorrecta'; e.style.display='block'; document.getElementById('gatePwd').select(); return; }
     try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:_hx(v),r:hit.r,n:hit.n})); }catch(x){}
     document.getElementById('gatePwd').value='';
+    try{ askNotif(); unlockAudio(); }catch(e){}
     gateApply(hit); setView(hit.r==='basc'?'bascula':'tabla');
     toast(hit.r==='master'?'Acceso master ✓':hit.r==='su'?'Superusuario habilitado ✓':'Báscula: '+(hit.n||'usuario')+' ✓');
   };
@@ -3194,6 +3213,263 @@ function gateRevalidate(){
   const hit=gateCreds().find(c=>_hx(c.pw)===s.h);
   if(!hit){ try{ sessionStorage.removeItem(GATE_KEY); }catch(x){} unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); gateShow('Tu acceso cambió: vuelve a entrar'); return; }
   if(hit.r!==s.r||hit.n!==s.n){ try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:s.h,r:hit.r,n:hit.n})); }catch(x){} gateApply(hit); }
+}
+
+/* ================================================================
+   ===== AVISOS POR ROL · SOLICITUDES DE EDICIÓN · TABLERO DE ÁREAS =====
+   Inspirado en el «Cuadre de Báscula»: cada área ve al instante qué le toca (barra roja + sonido +
+   notificación del navegador + contador en la pestaña), báscula solicita las correcciones al master,
+   y el cuadre se lee como pasos por área («Hecho / Pendiente»).
+   ================================================================ */
+
+/* ---------- utilidades ---------- */
+const diasDesde=f=>{ if(!f) return 0; const d=Math.floor((Date.parse(TODAY)-Date.parse(f))/864e5); return isNaN(d)?0:Math.max(0,d); };
+const ackKey='prog_sol_ack_v1';
+function ackGet(){ try{ return JSON.parse(localStorage.getItem(ackKey)||'{}')||{}; }catch(e){ return {}; } }
+function ackSol(id){ const a=ackGet(); a[id]=1; try{ localStorage.setItem(ackKey,JSON.stringify(a)); }catch(e){} refreshAvisos(); }
+
+/* ================= SOLICITUDES DE EDICIÓN DE PESAJE (báscula → master) ================= */
+const PES_CAMPOS=[['folio','Folio'],['oper','Quién registra'],['placa','Placa'],['eco','Eco / unidad'],['vehiculo','Vehículo'],['horaEntrada','Hora entrada'],['horaSalida','Hora salida'],['turno','Turno'],['bruto','Peso bruto (kg)'],['tara','Tara (kg)'],['obs','Observaciones']];
+const itemsSig=a=>asArr(a).map(x=>pkey(x.cod)+'/'+normLote(x.lote)+'/'+(Number(x.sacos)||0)).sort().join(',');
+const itemsTxt=a=>asArr(a).map(x=>(x.prod||x.cod||'')+' · lote '+(x.lote||'—')+' × '+(x.sacos||0)).join(' | ')||'—';
+function solCambios(s){   // [[etiqueta, antes, después]]
+  const out=[]; const A=s.antes||{}, D=s.despues||{};
+  PES_CAMPOS.forEach(([k,l])=>{ if(k in D) out.push([l,A[k]===''||A[k]==null?'—':A[k],D[k]===''||D[k]==null?'—':D[k]]); });
+  if('items' in D) out.push(['Productos · lotes · sacos',itemsTxt(A.items),itemsTxt(D.items)]);
+  return out;
+}
+const solTxt=s=>solCambios(s).map(c=>c[0]+': '+c[1]+' → '+c[2]).join(' · ');
+function solicitarEdicionPesaje(id,prev,rec){
+  const mot=(document.getElementById('bs_motivo').value||'').trim();
+  if(!mot){ toast('Escribe el motivo del cambio para el master'); document.getElementById('bs_motivo').focus(); return; }
+  if(Object.values(CUAD.solicitudes||{}).some(x=>x&&x.tipo==='pesaje'&&x.embId===id&&x.estado==='pendiente')){ toast('Ya hay una solicitud pendiente de este pesaje'); return; }
+  const antes={}, despues={};
+  const dr=DATA.find(x=>x.id===id)||{}, dflt={eco:dr.eco,vehiculo:dr.tipo,turno:dr.turno};   // el formulario precarga eco/vehículo/turno del programa: eso no es un cambio de báscula
+  const pv=k=>{ const v=prev[k]; return (v==null||v==='')?(dflt[k]==null?'':dflt[k]):v; };
+  const nz=(k,v)=>['eco','placa','folio'].includes(k)?String(v==null?'':v).toUpperCase():String(v==null?'':v);
+  PES_CAMPOS.forEach(([k])=>{ if((prev[k]==null||prev[k]==='')&&(rec[k]==null||rec[k]==='')) return; if(nz(k,pv(k))!==nz(k,rec[k])){ antes[k]=prev[k]==null?'':prev[k]; despues[k]=rec[k]==null?'':rec[k]; } });
+  if(itemsSig(prev.items)!==itemsSig(rec.items)){ antes.items=bascItems(prev).map(x=>({...x})); despues.items=asArr(rec.items).map(x=>({...x})); }
+  if(!Object.keys(despues).length){ toast('No cambiaste ningún dato'); return; }
+  const sid='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  cuadSet('solicitudes/'+sid,{id:sid,tipo:'pesaje',embId:id,folio:prev.folio||'',pedido:rec.pedido||prev.pedido||'',cliente:rec.cliente||prev.cliente||'',antes,despues,motivo:mot,usuario:cuadUser(),ts:Date.now(),estado:'pendiente'});
+  closeBasc(); refreshCuad(); toast('✋ Solicitud enviada al master. Te avisamos cuando la resuelva',4500);
+}
+function aprobarSolicitud(sid){
+  if(!requireMaster()) return; const s=(CUAD.solicitudes||{})[sid]; if(!s||s.estado!=='pendiente') return;
+  const prev=CUAD.bascula[s.embId]; if(!prev){ toast('Ese pesaje ya no existe'); return; }
+  const A=s.antes||{}, D=s.despues||{};
+  const moved=Object.keys(D).filter(k=>k==='items'?itemsSig(prev.items)!==itemsSig(A.items):String(prev[k]==null?'':prev[k])!==String(A[k]==null?'':A[k]));
+  if(moved.length&&!confirm('El pesaje cambió después de la solicitud ('+moved.join(', ')+'). ¿Aplicar el cambio de todos modos?')) return;
+  if(D.folio){ const f=String(D.folio).toUpperCase(); const dup=Object.entries(CUAD.bascula).find(([k,x])=>k!==s.embId&&x&&String(x.folio||'').toUpperCase()===f); if(dup){ toast('🚫 El folio '+f+' ya está en otro pesaje'); return; } }
+  if(!confirm('¿Aplicar este cambio al pesaje (folio '+(prev.folio||'')+')?\n\n'+solTxt(s))) return;
+  const now=Date.now(); const rec={...prev};
+  Object.entries(D).forEach(([k,v])=>{ rec[k]=(k==='items')?asArr(v).map(x=>({...x})):v; });
+  rec.neto=Math.max(0,(Number(rec.bruto)||0)-(Number(rec.tara)||0)); if('items' in D) rec.sacos=bascItems(rec).reduce((a,x)=>a+(Number(x.sacos)||0),0);
+  rec.tsEdit=now; rec.editor='master (solicitó '+s.usuario+')';
+  const h=Object.assign({},prev.hist||{}); h['h'+now]={ts:now,usuario:cuadUser(),accion:'Edición autorizada',detalle:solTxt(s)+' · Solicitó: '+s.usuario+' · Motivo: '+s.motivo}; rec.hist=h;
+  const lock=bascBloqueado(prev,DATA.find(x=>x.id===s.embId)||null);
+  cuadSet('bascula/'+s.embId,rec);
+  cuadSet('solicitudes/'+sid,{...s,estado:'aprobada',resueltaPor:cuadUser(),resueltaTs:now});
+  auditPush({ts:new Date(now).toISOString(),id:s.embId,pedido:s.pedido||'',cliente:s.cliente||'',field:'bascula',label:'Edición de pesaje autorizada (solicitó '+s.usuario+')',from:solCambios(s).map(c=>c[0]+': '+c[1]).join(' · '),to:solCambios(s).map(c=>c[0]+': '+c[2]).join(' · ')+' · Motivo: '+s.motivo,maquillaje:!!lock,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
+  toast('✅ Cambio aplicado al pesaje'); refreshCuad();
+}
+function rechazarSolicitud(sid){
+  if(!requireMaster()) return; const s=(CUAD.solicitudes||{})[sid]; if(!s||s.estado!=='pendiente') return;
+  const m=prompt('Motivo del rechazo (lo verá '+s.usuario+'):',''); if(m===null) return;
+  cuadSet('solicitudes/'+sid,{...s,estado:'rechazada',resueltaPor:cuadUser(),resueltaTs:Date.now(),motivoRechazo:(m||'').trim()||'(sin motivo)'});
+  toast('Solicitud rechazada'); refreshCuad();
+}
+function renderSol(){
+  const box=document.getElementById('solBox'); if(!box) return;
+  const L=Object.values(CUAD.solicitudes||{}).filter(Boolean);
+  const pend=L.filter(x=>x.estado==='pendiente').sort((a,b)=>a.ts-b.ts);
+  const hist=L.filter(x=>x.estado!=='pendiente').sort((a,b)=>(b.resueltaTs||0)-(a.resueltaTs||0)).slice(0,60);
+  const cier=Object.entries(CUAD.cierres||{}).filter(([p,x])=>x&&x.solicitud&&!x.cerrado).map(([p])=>p).sort();
+  const tabla=s=>`<table style="min-width:520px;margin-top:6px"><thead><tr><th>Campo</th><th>Antes</th><th>Después</th></tr></thead><tbody>${solCambios(s).map(c=>`<tr><td>${escProy(c[0])}</td><td style="white-space:normal;color:var(--muted)">${escProy(String(c[1]))}</td><td style="white-space:normal"><b>${escProy(String(c[2]))}</b></td></tr>`).join('')}</tbody></table>`;
+  const card=s=>`<div class="card" style="padding:12px 14px;margin-bottom:10px;border-color:var(--warn)">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div><b>${escProy(s.cliente||'')}</b> · pedido ${escProy(s.pedido||'—')} · folio <b class="code">${escProy(s.folio||'')}</b></div><div class="hint">${escProy(s.usuario||'')} · ${ttsStr(s.ts)}</div></div>
+    <div class="hint" style="margin:6px 0 0">Motivo: <b>${escProy(s.motivo||'')}</b></div>${tabla(s)}
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="primary" onclick="aprobarSolicitud('${s.id}')">✅ Aprobar y aplicar</button><button class="ghost" style="color:var(--late)" onclick="rechazarSolicitud('${s.id}')">✕ Rechazar</button><button class="ghost" onclick="cuadDet('${s.embId}')">🔎 Ver embarque</button></div></div>`;
+  box.innerHTML=
+    `<div class="card" style="padding:12px 16px;margin-bottom:12px"><h3 style="margin:0 0 6px;font-size:15px">✋ Esperando tu autorización</h3>
+      ${cier.length?cier.map(p=>`<div style="padding:8px 10px;margin-bottom:8px;border-left:3px solid var(--warn);background:#101c29;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>🗓️ <b>Cierre de ${perLabel(p)}</b>: las dos áreas ya hicieron su corte</span><button class="primary" onclick="CI.per='${p}';setView('cierre')">Revisar y autorizar</button></div>`).join(''):''}
+      ${pend.length?pend.map(card).join(''):'<div class="empty" style="padding:16px">No hay solicitudes de edición pendientes ✓</div>'}</div>
+    <div class="card" style="padding:12px 16px"><h3 style="margin:0 0 6px;font-size:15px">📚 Resueltas recientes</h3>
+      ${hist.length?`<div class="tablewrap"><table style="min-width:760px"><thead><tr><th>Resuelta</th><th>Pesaje</th><th>Solicitó</th><th>Cambio</th><th>Resultado</th></tr></thead><tbody>${hist.map(s=>`<tr style="cursor:pointer" onclick="cuadDet('${s.embId}')"><td>${ttsStr(s.resueltaTs)}</td><td>${escProy(s.cliente||'')} · ${escProy(s.pedido||'—')}<br><span class="code">${escProy(s.folio||'')}</span></td><td>${escProy(s.usuario||'')}</td><td style="white-space:normal;font-size:12px">${escProy(solTxt(s))}<br><span class="muted">Motivo: ${escProy(s.motivo||'')}</span></td><td>${s.estado==='aprobada'?'<span class="pill p-ok">Aprobada</span>':'<span class="pill p-late">Rechazada</span>'}<br><span class="hint">${escProy(s.resueltaPor||'')}${s.motivoRechazo?' · '+escProy(s.motivoRechazo):''}</span></td></tr>`).join('')}</tbody></table></div>`:'<div class="hint">Aún no hay solicitudes resueltas.</div>'}</div>`;
+}
+
+/* ================= AVISOS: barra por rol, sonido, notificación, contadores ================= */
+let _avCounts=null, _audioCtx=null;
+function unlockAudio(){ try{ _audioCtx=_audioCtx||new (window.AudioContext||window.webkitAudioContext)(); if(_audioCtx.state==='suspended') _audioCtx.resume(); }catch(e){} }
+document.addEventListener('click',unlockAudio);
+function beep(n){ try{ unlockAudio(); const c=_audioCtx; if(!c) return; let t=c.currentTime; for(let i=0;i<(n||2);i++){ const o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=i%2?740:988; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.28,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+.26); o.start(t); o.stop(t+.3); t+=.34; } }catch(e){} }
+function askNotif(){ try{ if('Notification' in window&&Notification.permission==='default') Notification.requestPermission(); }catch(e){} }
+function notifyBrowser(t,b){ try{ if('Notification' in window&&Notification.permission==='granted'&&document.hidden) new Notification(t,{body:b}); }catch(e){} }
+
+function avisosCalc(){
+  const all=cuadUnits().filter(u=>!perCerrado(u.per)).map(cuadUnit);
+  const sinPesar=all.filter(c=>c.st==='pend');
+  const viejas=sinPesar.filter(c=>c.u.fecha&&c.u.fecha<TODAY);
+  const difs=all.filter(c=>c.st==='dif');
+  const sol=Object.values(CUAD.solicitudes||{}).filter(x=>x&&x.estado==='pendiente');
+  const cierres=Object.entries(CUAD.cierres||{}).filter(([p,x])=>x&&x.solicitud&&!x.cerrado).map(([p])=>p).sort();
+  const area=isBasc?'bascula':((unlocked&&!isMaster)?'embarques':'');
+  const otras=[];
+  if(area) Object.entries(CUAD.cierres||{}).forEach(([p,x])=>{ if(!x||x.cerrado||x.corteTs) return; const A=x.areas||{};
+    CI_AREAS.forEach(([k,ic,lab])=>{ if(k!==area&&A[k]&&!A[area]) otras.push({p,lab,area}); }); });
+  const mias=isBasc?Object.values(CUAD.solicitudes||{}).filter(x=>x&&x.usuario===cuadUser()):[];
+  const ack=ackGet(); const resueltas=mias.filter(x=>x.estado!=='pendiente'&&!ack[x.id]);
+  const misPend=mias.filter(x=>x.estado==='pendiente');
+  return {sinPesar,viejas,difs,sol,cierres,otras,resueltas,misPend,area};
+}
+function bsFiltro(fil){
+  setView('bascula');
+  const pend=cuadUnits().map(cuadUnit).filter(c=>c.st==='pend'&&!perCerrado(c.u.per)).map(c=>c.u.fecha).filter(Boolean).sort();
+  const f=document.getElementById('bsFrom'); if(f&&pend.length&&(!f.value||f.value>pend[0])) f.value=pend[0];
+  const t=document.getElementById('bsTo'); if(t) t.value=iso(new Date());
+  document.getElementById('bsFil').value=fil; document.getElementById('bsQ').value=''; renderBascula();
+}
+function cqFiltro(qf,per){
+  setView('cuadre'); CQ.view='emb'; CQ.qf=qf||''; CQ.q=''; document.getElementById('cqQ').value=''; CQ.soloDif=false;
+  if(per) CQ.per=per; else {
+    const ps=cuadUnits().map(cuadUnit).filter(c=>!perCerrado(c.u.per)&&(qf==='dif'?c.st==='dif':qf==='sinlotes'?c.flags.some(f=>f.k==='lotes'):c.st==='pend')).map(c=>c.u.per).sort();
+    if(ps.length) CQ.per=ps[ps.length-1];
+  }
+  renderCuadre();
+}
+function cqQfClear(){ CQ.qf=''; renderCuadre(); }
+const QF_TXT={pend:'Falta báscula',dif:'Con diferencia sin analizar',sinlotes:'Despachado sin lotes',old:'Sin pesar de días anteriores'};
+
+function refreshAvisos(){
+  const bar=document.getElementById('roleBar'); if(!bar) return;
+  if(document.body.classList.contains('gated')||(!unlocked&&!isBasc)){ bar.innerHTML=''; document.title='Programador de embarques'; _avCounts=null; return; }
+  const A=avisosCalc(); const rows=[]; const cnt={};
+  const row=(ic,cls,txt,btn,fn)=>rows.push({ic,cls,txt,btn,fn});
+  if(isBasc){
+    cnt.pes=A.sinPesar.length; cnt.res=A.resueltas.length; cnt.otr=A.otras.length;
+    if(A.sinPesar.length) row('⚖️','',`${A.sinPesar.length} ${A.sinPesar.length===1?'unidad despachada espera':'unidades despachadas esperan'} pesaje en báscula`+(A.viejas.length?` · ${A.viejas.length} de días anteriores`:''),'Atender ahora',"bsFiltro('pend')");
+    A.resueltas.forEach(s=>row(s.estado==='aprobada'?'✅':'⛔',s.estado==='aprobada'?'ok':'warn',`Tu solicitud de edición del folio ${escProy(s.folio||'')} fue ${s.estado==='aprobada'?'APROBADA':'RECHAZADA'}${s.motivoRechazo?': '+escProy(s.motivoRechazo):''}`,'Entendido',`ackSol('${s.id}')`));
+    A.otras.forEach(o=>row('✂️','info',`${o.lab} ya hizo su corte de ${perLabel(o.p)}: falta el de Báscula`,'Hacer corte',"setView('cierre')"));
+    if(A.misPend.length) row('✋','info',`${A.misPend.length} solicitud(es) tuya(s) esperan al master`,'',"");
+  } else if(isMaster){
+    cnt.sol=A.sol.length; cnt.cie=A.cierres.length; cnt.dif=A.difs.length; cnt.vie=A.viejas.length;
+    if(A.sol.length) row('✋','',`${A.sol.length} ${A.sol.length===1?'solicitud de edición espera':'solicitudes de edición esperan'} tu autorización`,'Revisar',"setView('sol')");
+    if(A.cierres.length) row('🗓️','',`${A.cierres.length} ${A.cierres.length===1?'cierre de mes espera':'cierres de mes esperan'} tu autorización (${A.cierres.map(perLabel).join(', ')})`,'Revisar',"CI.per='"+A.cierres[0]+"';setView('cierre')");
+    if(A.difs.length) row('⚠️','warn',`${A.difs.length} embarque(s) con diferencia sin analizar`,'Ver',"cqFiltro('dif')");
+    if(A.viejas.length) row('⏳','warn',`${A.viejas.length} unidad(es) despachada(s) sin pesar de días anteriores`,'Ver',"cqFiltro('old')");
+  } else {
+    cnt.dif=A.difs.length; cnt.vie=A.viejas.length; cnt.otr=A.otras.length;
+    if(A.difs.length) row('⚠️','',`${A.difs.length} ${A.difs.length===1?'embarque con diferencia entre Cargadores y Báscula':'embarques con diferencia entre Cargadores y Báscula'} · hay que revisarlos`,'Atender ahora',"cqFiltro('dif')");
+    if(A.viejas.length) row('⏳','warn',`${A.viejas.length} ${A.viejas.length===1?'unidad despachada lleva':'unidades despachadas llevan'} días sin pesarse en báscula`,'Ver',"cqFiltro('old')");
+    A.otras.forEach(o=>row('✂️','info',`${o.lab} ya hizo su corte de ${perLabel(o.p)}: falta el de Programación`,'Hacer corte',"setView('cierre')"));
+  }
+  bar.innerHTML=rows.slice(0,4).map(r=>`<div class="rbar ${r.cls}"><span class="big">${r.ic}</span><span>${r.txt}</span><span class="sp"></span>${r.btn?`<button onclick="${r.fn}">${r.btn}</button>`:''}</div>`).join('');
+  const total=Object.values(cnt).reduce((a,b)=>a+b,0);
+  document.title=(total?'('+total+') ':'')+'Programador de embarques';
+  // sonido + notificación cuando aumenta algo que me toca
+  if(_avCounts){
+    const up=k=>cnt[k]!=null&&_avCounts[k]!=null&&cnt[k]>_avCounts[k];
+    if(isBasc){
+      if(up('pes')){ beep(3); notifyBrowser('⚖️ Unidad por pesar','Hay '+cnt.pes+' unidades esperando báscula.'); toast('⚖️ Nueva unidad por pesar',3000); }
+      if(up('res')){ beep(2); notifyBrowser('Solicitud resuelta','El master respondió tu solicitud de edición.'); }
+      if(up('otr')){ beep(2); notifyBrowser('✂️ Corte de mes','Otra área ya hizo su corte.'); }
+    } else if(isMaster){
+      if(up('sol')||up('cie')){ beep(2); notifyBrowser('✋ Por autorizar','Tienes solicitudes o cierres esperando tu autorización.'); toast('✋ Algo espera tu autorización',3000); }
+    } else {
+      if(up('dif')){ beep(2); notifyBrowser('⚠️ Diferencia en báscula','Hay embarques con diferencia por revisar.'); toast('⚠️ Nueva diferencia en báscula',3000); }
+      if(up('otr')){ beep(2); notifyBrowser('✂️ Corte de mes','Báscula ya hizo su corte.'); }
+    }
+  }
+  _avCounts=cnt;
+  // contadores en pestañas
+  const bd=(id,n)=>{ const e=document.getElementById(id); if(e){ e.textContent=n; e.style.display=n?'inline-flex':'none'; } };
+  bd('solCount',isMaster?A.sol.length:0); bd('cqCount',isBasc?0:A.difs.length);
+}
+setInterval(()=>{ try{ refreshAvisos(); }catch(e){} },60000);
+
+/* ================= OBSERVACIONES ENTRE ÁREAS (por embarque) ================= */
+const obsList=id=>Object.values((CUAD.obs||{})[id]||{}).filter(Boolean).sort((a,b)=>a.ts-b.ts);
+function obsHtml(id){
+  const L=obsList(id);
+  return `<div class="card" style="padding:10px 12px;margin-bottom:12px"><h3 style="margin:0 0 6px">💬 Observaciones de las áreas</h3>
+    ${L.length?L.map(o=>`<div style="padding:6px 9px;margin-bottom:4px;background:#101c29;border-radius:6px;font-size:12px"><b>${escProy(o.usuario||'')}</b> <span class="muted">· ${ttsStr(o.ts)}</span><br>${escProy(o.txt||'')}</div>`).join(''):'<div class="hint" style="margin-bottom:6px">Sin observaciones. Úsalo para dejar un aviso a las otras áreas sobre este embarque.</div>'}
+    <div style="display:flex;gap:8px;margin-top:6px"><input id="cq_obs" placeholder="Escribe una observación para las demás áreas…" style="flex:1" onkeydown="if(event.key==='Enter')cuadAddObs('${id}')"><button class="ghost" onclick="cuadAddObs('${id}')">Enviar</button></div></div>`;
+}
+function cuadAddObs(id){ const e=document.getElementById('cq_obs'); const txt=(e&&e.value||'').trim(); if(!txt) return; const now=Date.now();
+  cuadSet('obs/'+id+'/o'+now,{ts:now,usuario:cuadUser(),txt}); toast('Observación enviada ✓'); cuadDet(id); }
+function cuadHistAll(id,b){
+  const h=b&&b.hist?Object.values(b.hist):[];
+  const au=(typeof AUDIT!=='undefined'&&Array.isArray(AUDIT))?AUDIT.filter(a=>a&&a.id===id&&a.field!=='bascula').map(a=>({ts:Date.parse(a.ts)||0,usuario:a.by||'',accion:'Embarque · '+(a.label||a.field||''),detalle:(a.from!=null?a.from+' → ':'')+(a.to!=null?a.to:'')})):[];
+  return h.concat(au).sort((x,y)=>(x.ts||0)-(y.ts||0));
+}
+
+/* ================= DETALLE DEL EMBARQUE EN PASOS POR ÁREA ================= */
+function cuadPasosHtml(cu,r,b,id){
+  const sec=(ic,t,done,body,acts,warn)=>`<div class="card" style="padding:10px 12px;${done?'':'border-color:'+(warn?'var(--late)':'var(--warn)')}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><h3 style="margin:0">${ic} ${t}</h3>${done?'<span class="pill p-ok">Hecho</span>':`<span class="pill ${warn?'p-late':'p-warn'}">Pendiente</span>`}</div>${body}${acts?`<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${acts}</div>`:''}</div>`;
+  const kv=lines=>lines.map(l=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin:2px 0"><span class="muted">${l[0]}</span><b>${l[1]}</b></div>`).join('');
+  const carg=[r.cargador,r.cargador2].filter(Boolean).join(' / ');
+  const cDone=!!(lotesDe(r).length||(Number(r.kilos)||0)>0);
+  const pend=Object.values(CUAD.solicitudes||{}).filter(x=>x&&x.embId===id&&x.estado==='pendiente');
+  const pesar=!b&&bascPuede()?`<button class="primary" onclick="closeCuadDet();openBasc('${id}')">⚖️ Pesar</button>`:'';
+  const editB=b&&bascPuede()?`<button class="ghost" onclick="closeCuadDet();openBasc('${id}')">${isBasc?'✋ Solicitar edición':'✏️ Editar pesaje'}</button>`:'';
+  return (pend.length?`<div class="card" style="padding:8px 12px;margin-bottom:10px;border-color:var(--warn)">✋ Hay ${pend.length} solicitud(es) de edición de este pesaje esperando al master${isMaster?` · <a href="#" onclick="closeCuadDet();setView('sol');return false" style="color:var(--accent)">revisarlas</a>`:''}.</div>`:'')
+  +`<div class="charts" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-bottom:12px">`
+  +sec('📋','Programación',!cu.u.noProg,cu.u.noProg?'<div class="hint">Unidad pesada sin pedido programado.</div>':kv([['Kg programados',fK(cu.Pkg)],['Cita',escProy(r.horaProg||'—')],['Vehículo',escProy(r.tipo||'—')],['Destino',escProy(r.destino||'—')]]),(!isBasc&&r.id&&!cu.u.noProg)?`<button class="ghost" onclick="closeCuadDet();openForm('${id}')">📋 Abrir embarque</button>`:'')
+  +sec('📲','Cargadores',cDone,cDone?kv([['Kg capturados',fK(r.kilos||0)],['Sacos (lotes)',fS(cu.Csc)],['Peso de lotes',fK(lotesKg(r))+' kg'],['Lotes',lotesDe(r).length],['Capturó',escProy(carg||'—')]]):`<div class="hint">${isDesp(r)?'Despachado sin lotes capturados.':'Aún no capturan lotes.'}</div>`,'',isDesp(r)&&!cDone)
+  +sec('⚖️','Báscula',!!b,b?kv([['Folio',escProy(b.folio||'')],['Bruto / tara',fK(b.bruto)+' / '+fK(b.tara)],['Neto',fK(cu.neto)+' kg'],['Sacos',fS(cu.Bsc)],['Peso de lo registrado',fK(cu.Bkg)+' kg'],['Capturó',escProy(b.oper||b.usuario||'')+' · '+ttsStr(b.ts)]]):'<div class="hint">Aún sin pesar.</div>',pesar+editB,!b&&isDesp(r))
+  +sec('🔎','Cuadre',cu.st==='ok'||cu.st==='ana',`<div style="margin-bottom:4px">${cuadStChip(cu.st,cu.crit)}</div><div class="hint" style="margin:0">${cu.st==='ok'?'Las fuentes cuadran dentro de la tolerancia.':cu.st==='ana'?'La diferencia ya tiene análisis.':cu.st==='dif'?'Hay diferencias por revisar y analizar.':'Falta la báscula para poder cuadrar.'}</div>`,'',cu.st==='dif'&&cu.crit)
+  +`</div>`;
+}
+
+/* ================= TABLERO «¿ESTÁN LAS ÁREAS A LA PAR?» ================= */
+function cuadStepsHtml(D){
+  const P=D.P, cus=D.cus, cfg=cuadCfg();
+  const progs=DATA.filter(r=>!r.cancelado&&perDe(fechaEmb(r))===P);
+  const progRez=progs.filter(r=>!isDesp(r)&&!CUAD.bascula[r.id]&&fechaEmb(r)&&fechaEmb(r)<TODAY);
+  const despCarg=cus.filter(c=>!c.u.noProg&&isDesp(c.u.r));
+  const cargOk=despCarg.filter(c=>lotesDe(c.u.r).length), cargPend=despCarg.filter(c=>!lotesDe(c.u.r).length);
+  const conB=cus.filter(c=>c.u.b), sinB=cus.filter(c=>!c.u.b&&c.st==='pend');
+  const cuadOk=conB.filter(c=>c.st==='ok'||c.st==='ana'), cuadPend=conB.filter(c=>c.st==='dif');
+  const prodMal=D.hasInv?D.prod.filter(o=>(o.c||o.b)&&Math.abs(o.b-o.inv)>cfg.tolSacos):[];
+  const prodN=D.prod.filter(o=>o.c||o.b).length;
+  const mine=isBasc?'bascula':(isMaster?'':'prog');
+  const lst=(arr,n)=>arr.slice(0,n).map(c=>`<div style="padding:3px 0;font-size:11.5px;cursor:pointer;border-top:1px solid var(--line)" onclick="cuadDet('${c.u?c.u.id:c.id}')">${escProy((c.u?c.u.r:c).cliente||'')} · <span class="muted">${escProy((c.u?c.u.r:c).pedido||'—')} · ${c.u?c.u.fecha:fechaEmb(c)}</span></div>`).join('')+(arr.length>n?`<div class="hint" style="margin-top:3px">… y ${arr.length-n} más</div>`:'');
+  const step=(key,ic,t,done,base,pendList,pendTxt,btn,fn,extra)=>{ const pct=base?Math.round(done/base*100):100; const ok=!pendList.length&&(extra!=='warn');
+    return `<div class="card" style="padding:10px 12px;border-color:${ok?'var(--ok)':'var(--warn)'};${mine===key?'box-shadow:0 0 0 1px var(--accent) inset':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><b>${ic} ${t}</b>${ok?'<span class="pill p-ok">✓ a la par</span>':'<span class="pill p-warn">'+pendTxt+'</span>'}</div>
+      <div style="font-size:22px;font-weight:800;margin:4px 0 2px">${fS(done)}<span class="muted" style="font-size:13px;font-weight:600"> / ${fS(base)}</span></div>
+      <div class="bar" style="height:5px;background:var(--line);border-radius:3px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:${ok?'var(--ok)':'var(--warn)'}"></i></div>
+      ${pendList.length&&Array.isArray(pendList)&&pendList[0]&&(pendList[0].u||pendList[0].id)?`<div style="margin-top:6px">${lst(pendList,3)}</div>`:''}
+      ${(!ok&&btn)?`<div style="margin-top:8px"><button class="${mine===key?'primary':'ghost'}" style="width:100%" onclick="${fn}">${btn}</button></div>`:''}</div>`; };
+  const odooState=!D.hasInv?[['x']]:prodMal;
+  return `<div class="card" style="padding:12px 14px;margin-bottom:12px"><h3 style="margin:0 0 4px">⚖️ ¿Están las áreas a la par? · ${perLabel(P)}</h3>
+    <div class="hint" style="margin-bottom:8px">Cada área con lo que ya hizo y lo que le falta. «Atender ahora» abre la lista filtrada de pendientes.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
+      ${step('prog','📋','Programación',progs.length-progRez.length,progs.length,progRez,progRez.length+' rezagado(s)','Ver rezagados',"cqGoTabla('"+P+"')")}
+      ${step('carg','📲','Cargadores',cargOk.length,despCarg.length,cargPend,cargPend.length+' sin lotes','Atender ahora',"cqFiltro('sinlotes','"+P+"')")}
+      ${step('bascula','⚖️','Báscula',conB.length,cus.length,sinB,sinB.length+' sin pesar',isBasc?'Ir a pesar':'Atender ahora',isBasc?"bsFiltro('pend')":"cqFiltro('pend','"+P+"')")}
+      ${step('cuadre','🔎','Cuadre',cuadOk.length,conB.length,cuadPend,cuadPend.length+' con diferencia','Atender ahora',"cqFiltro('dif','"+P+"')")}
+      ${step('odoo','🧾','Odoo',prodN-(D.hasInv?prodMal.length:prodN),prodN,D.hasInv?[]:[],D.hasInv?(prodMal.length+' producto(s) no cuadran'):'sin cargar','Ver productos',"CQ.view='prod';CQ.qf='';CQ.soloDif=true;renderCuadre()",D.hasInv?(prodMal.length?'warn':''):'warn')}
+    </div></div>`;
+}
+function cqGoTabla(P){
+  setView('tabla'); const [y,m]=P.split('-').map(Number); const last=new Date(y,m,0).getDate();
+  document.getElementById('pFrom').value=P+'-01'; document.getElementById('pTo').value=P+'-'+String(last).padStart(2,'0');
+  try{ markCustom(); }catch(e){} const f=document.getElementById('fest'); if(f) f.value='PENDIENTE'; render();
+}
+
+/* ================= ALERTAS AUTOMÁTICAS ADICIONALES DEL PERIODO ================= */
+function cuadAlertasExtra(D){
+  const out=[];
+  D.cus.filter(c=>c.st==='pend'&&c.u.fecha&&c.u.fecha<TODAY).sort((a,b)=>String(a.u.fecha).localeCompare(String(b.u.fecha))).slice(0,6)
+    .forEach(c=>out.push(['late','Lleva '+diasDesde(c.u.fecha)+' día(s) sin báscula: '+(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—'),c.u.id,'⚖️']));
+  D.cus.filter(c=>c.flags.some(f=>f.k==='lotes')).slice(0,6).forEach(c=>out.push(['late','Despachado sin lotes de Cargadores: '+(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—'),c.u.id,'📲']));
+  D.cus.filter(c=>(!isBasc||c.u.b)&&c.flags.some(f=>f.k==='prog')).slice(0,4).forEach(c=>out.push(['warn',c.flags.find(f=>f.k==='prog').t+' — '+(c.u.r.cliente||''),c.u.id,'📋']));
+  D.cus.filter(c=>(!isBasc||c.u.b)&&c.flags.some(f=>f.k==='carganeto')).slice(0,4).forEach(c=>out.push(['warn',c.flags.find(f=>f.k==='carganeto').t+' — '+(c.u.r.cliente||''),c.u.id,'⚖️']));
+  const sol=Object.values(CUAD.solicitudes||{}).filter(x=>x&&x.estado==='pendiente'&&perEmb((CUAD.bascula[x.embId]||{}).fecha||'',CUAD.bascula[x.embId])===D.P);
+  if(sol.length&&isMaster) out.push(['warn',sol.length+' solicitud(es) de edición de este periodo esperan tu autorización','', '✋']);
+  const cc=cierreDe(D.P); if(!cc.cerrado&&!cc.corteTs&&cc.areas) CI_AREAS.forEach(([k,ic,lab])=>{ if(cc.areas[k]) out.push(['warn',lab+' ya hizo su corte de '+perLabel(D.P)+': faltan las demás áreas','', '✂️']); });
+  return out;
 }
 
 
