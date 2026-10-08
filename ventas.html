@@ -896,7 +896,7 @@ function processExcel(buf,fname){
     document.getElementById('load-msg').textContent='Procesando movimientos...';
     const mapping=getMapping();
     const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoMesTon={},yearCount={},diaMes={},diaMesCli={};
-    let esDiarioX=false,filasLeidas=0,filasFiltradas=0;
+    let esDiarioX=false,filasLeidas=0,filasFiltradas=0;window.__lineasL=[];
 
     for(let i=1;i<rows.length;i++){
       const row=rows[i];
@@ -943,7 +943,7 @@ function processExcel(buf,fname){
         mesesCliente[contacto][claveMes]=true;
         if(!lastDate[contacto]||fdate>lastDate[contacto])lastDate[contacto]=fdate;
       }
-      if(mes>0)mesTotal[mes]=(mesTotal[mes]||0)+cant;
+      if(mes>0){mesTotal[mes]=(mesTotal[mes]||0)+cant;(window.__lineasL||(window.__lineasL=[])).push([contacto,prodName,fdate?(fdate.getFullYear()*10000+(fdate.getMonth()+1)*100+fdate.getDate()):mes*100,cant]);}
       if(fdate){const _mm=fdate.getMonth()+1,_dd=fdate.getDate();if(_dd!==1)esDiarioX=true;(diaMes[_mm]=diaMes[_mm]||new Array(31).fill(0))[_dd-1]+=cant;const _dc=diaMesCli[contacto]||(diaMesCli[contacto]={});(_dc[_mm]=_dc[_mm]||new Array(31).fill(0))[_dd-1]+=cant;}
     }
 
@@ -953,7 +953,7 @@ function processExcel(buf,fname){
     }
 
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiarioX;
-    window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND={};
+    window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND={};window.LAST_LINEAS=window.__lineasL||[];window.__lineasL=null;
     LAST_PROMO_PROD={};
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,{},promoMesTon,fname);
   }catch(err){
@@ -969,6 +969,7 @@ function processPivot(rows,fname){
     document.getElementById('load-msg').textContent='Procesando ventas facturadas...';
     const byClienteMes={},byClienteProd={},byClienteProdMes={},mesTotal={},lastDate={},mesesCliente={},sacosCliente={},promoCliente={},promoMesTon={},promoCliProd={},promoCliProdMes={};
     const byClienteProdMesVal={},mesTotalVal={};
+    const lineasDet=[];   // detalle cliente|producto|día (misma regla que mesTotal) para el reporte de «qué se movió» en un mes cerrado
     const byClienteProdMesValSinIva={},mesTotalValSinIva={};
     const excluidaProd={};   // $ de cotizaciones aún no facturadas (Cant. facturada=0), solo por producto — para informarlo en el Excel descargable de Rentabilidad
     // "Todos los productos": réplica cruda del pivote de Odoo, SIN el filtro 04MAS y SIN la regla de
@@ -1065,6 +1066,7 @@ function processPivot(rows,fname){
       if(!byClienteProdMes[cli][prodName])byClienteProdMes[cli][prodName]={};
       byClienteProdMes[cli][prodName][mes]=(byClienteProdMes[cli][prodName][mes]||0)+val;
       sacosCliente[cli]+=val;mesTotal[mes]=(mesTotal[mes]||0)+val;filas++;
+      lineasDet.push([cli,prodName,fd?(fd.getFullYear()*10000+(fd.getMonth()+1)*100+fd.getDate()):mes*100,val]);
       if(monto>0){
         if(!byClienteProdMesVal[cli])byClienteProdMesVal[cli]={};
         if(!byClienteProdMesVal[cli][prodName])byClienteProdMesVal[cli][prodName]={};
@@ -1190,7 +1192,7 @@ function processPivot(rows,fname){
     if(filas===0){alert('No se encontraron ventas 04MAS en el archivo pivote.');resetDash();return;}
     for(const c in lastReal){const f=lastReal[c];lastDate[c]=esDiario?f:new Date(f.getFullYear(),f.getMonth()+1,0);}
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiario;
-    window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND=clienteVend;
+    window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND=clienteVend;window.LAST_LINEAS=lineasDet;
     LAST_PROMO_PROD=promoCliProd; window.LAST_PROMO_PM=promoCliProdMes;
     window.LAST_VAL_PM=byClienteProdMesVal; window.LAST_VAL_MES=mesTotalVal; window.LAST_TIENE_MONTO=(colMonto>=0);
     window.LAST_VAL_PM_SINIVA=byClienteProdMesValSinIva; window.LAST_VAL_MES_SINIVA=mesTotalValSinIva; window.LAST_TIENE_SUBTOTAL=(colSubtotal>=0);
@@ -1326,7 +1328,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     }
 
     const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
-    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},todosMesSacos:window.LAST_TODOS_MES_SACOS||{},todosMesVal:window.LAST_TODOS_MES_VAL||{},todosMesValSinIva:window.LAST_TODOS_MES_VALSINIVA||{},todosProdMesSacos:window.LAST_TODOS_PROD_MES_SACOS||{},todosProdMesValSinIva:window.LAST_TODOS_PROD_MES_VALSINIVA||{},todosMesCot:window.LAST_TODOS_MES_COT||{},todosMesDesc:window.LAST_TODOS_MES_DESC||{},dupList:window.LAST_DUP_LIST||[],dupMes:window.LAST_DUP_MES||{},fname:fname};
+    DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},todosMesSacos:window.LAST_TODOS_MES_SACOS||{},todosMesVal:window.LAST_TODOS_MES_VAL||{},todosMesValSinIva:window.LAST_TODOS_MES_VALSINIVA||{},todosProdMesSacos:window.LAST_TODOS_PROD_MES_SACOS||{},todosProdMesValSinIva:window.LAST_TODOS_PROD_MES_VALSINIVA||{},todosMesCot:window.LAST_TODOS_MES_COT||{},todosMesDesc:window.LAST_TODOS_MES_DESC||{},dupList:window.LAST_DUP_LIST||[],dupMes:window.LAST_DUP_MES||{},lineas:window.LAST_LINEAS||[],fname:fname};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
       if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
@@ -6845,6 +6847,94 @@ function corteDiffVend(){
   for(v in snap.vendMes){for(m2 in snap.vendMes[v]){if(meses.indexOf(Number(m2))<0)continue;if(((c.vendMes[v]||{})[m2])==null){var bb2=Math.round(snap.vendMes[v][m2]||0);if(bb2>=1){vs[v]=vs[v]||{v:v,dif:0,det:[]};vs[v].dif+=bb2;vs[v].det.push(mesL(Number(m2))+': 0→'+fmt(bb2));}}}}
   return Object.keys(vs).map(function(k){return vs[k];}).sort(function(a,b){return Math.abs(b.dif)-Math.abs(a.dif);});
 }
+// ── Foto DETALLADA del corte: cliente|producto|día → sacos (para el reporte de «qué se movió» en un mes cerrado) ──
+const CORTE_DET_KEY='corteDet04mas';
+function _clienteVend(){var m={};((DATA&&DATA.clients)||[]).forEach(function(c){m[c.nombre]=c.vendedor||'(sin asignar)';});return m;}
+function snapLineas(mesCorte){
+  var yr=(DATA&&DATA.dataYear)||0,agg={},cv=_clienteVend();
+  ((DATA&&DATA.lineas)||[]).forEach(function(l){var d=l[2],m=Math.floor(d/100)%100,y=Math.floor(d/10000);if(m>mesCorte)return;if(y&&yr&&y!==yr)return;var k=l[0]+'\u0001'+l[1]+'\u0001'+d;agg[k]=(agg[k]||0)+l[3];});
+  var cli=[],prod=[],vend=[],ci={},pi={},vi={},rows=[];
+  Object.keys(agg).forEach(function(k){var p=k.split('\u0001'),q=Math.round(agg[k]*100)/100;if(Math.abs(q)<0.005)return;
+    if(ci[p[0]]==null){ci[p[0]]=cli.length;cli.push(p[0]);}if(pi[p[1]]==null){pi[p[1]]=prod.length;prod.push(p[1]);}
+    var v=cv[p[0]]||'(sin asignar)';if(vi[v]==null){vi[v]=vend.length;vend.push(v);}
+    rows.push([ci[p[0]],pi[p[1]],Number(p[2]),q,vi[v]]);});
+  return {v:2,cli:cli,prod:prod,vend:vend,rows:rows};
+}
+function guardarCorteDet(mes,anio,ts){
+  try{var o=snapLineas(mes);o.mes=mes;o.anio=anio;o.ts=ts;localStorage.setItem(CORTE_DET_KEY,JSON.stringify(o));return o.rows.length;}
+  catch(e){try{localStorage.removeItem(CORTE_DET_KEY);}catch(e2){}return -1;}
+}
+// Compara la foto detallada del corte contra el reporte cargado ahora (solo meses ya cerrados). null = no hay corte; {sinDetalle:true} = el corte no guardó detalle.
+function corteDetCompare(){
+  var c=corteVigente();if(!c||!DATA)return null;
+  var raw=null,s=null;try{raw=localStorage.getItem(CORTE_DET_KEY);s=raw?JSON.parse(raw):null;}catch(e){}
+  if(!s||s.mes!==c.mes||(s.anio&&c.anio&&s.anio!==c.anio))return {sinDetalle:true};
+  var yr=(DATA.dataYear)||0,cv=_clienteVend(),old={},cur={},oldV={};
+  s.rows.forEach(function(r){var k=s.cli[r[0]]+'\u0001'+s.prod[r[1]]+'\u0001'+r[2];old[k]=(old[k]||0)+r[3];oldV[s.cli[r[0]]]=s.vend[r[4]];});
+  (DATA.lineas||[]).forEach(function(l){var d=l[2],m=Math.floor(d/100)%100,y=Math.floor(d/10000);if(m>c.mes)return;if(y&&yr&&y!==yr)return;var k=l[0]+'\u0001'+l[1]+'\u0001'+d;cur[k]=(cur[k]||0)+l[3];});
+  var out=[],seen={},k;
+  function add(k){if(seen[k])return;seen[k]=1;var a=Math.round((old[k]||0)*100)/100,b=Math.round((cur[k]||0)*100)/100;if(Math.abs(b-a)<0.01)return;
+    var p=k.split('\u0001'),d=Number(p[2]);
+    out.push({mes:Math.floor(d/100)%100,dia:d,cliente:p[0],producto:p[1],vendedor:cv[p[0]]||oldV[p[0]]||'(sin asignar)',vendedorCorte:oldV[p[0]]||'',antes:a,ahora:b,dif:Math.round((b-a)*100)/100,tipo:a===0?'Línea nueva (no estaba al cierre)':(b===0?'Línea que ya no aparece':'Cambió la cantidad')});}
+  for(k in old)add(k);for(k in cur)add(k);
+  out.sort(function(x,y){return Math.abs(y.dif)-Math.abs(x.dif);});
+  return {sinDetalle:false,rows:out,ts:s.ts};
+}
+function _diaTxt(d){var y=Math.floor(d/10000),m=Math.floor(d/100)%100,dd=d%100;return dd?(('0'+dd).slice(-2)+'/'+('0'+m).slice(-2)+(y?('/'+y):'')):mesL(m);}
+// Filas numéricas vendedor × mes de lo que se movió (usa la foto de totales por vendedor del corte)
+function corteDiffVendRows(){
+  var c=corteVigente();if(!c||!c.vendMes)return[];var meses=corteDiffs().map(function(d){return d.mes;});if(!meses.length)return[];
+  var snap=snapTotales(),out=[],vs={};
+  Object.keys(c.vendMes).forEach(function(v){vs[v]=1;});Object.keys(snap.vendMes).forEach(function(v){vs[v]=1;});
+  Object.keys(vs).forEach(function(v){meses.forEach(function(m){var a=Math.round(((c.vendMes[v]||{})[m])||0),b=Math.round(((snap.vendMes[v]||{})[m])||0);if(Math.abs(b-a)>=1)out.push({vendedor:v,mes:m,antes:a,ahora:b,dif:b-a});});});
+  out.sort(function(x,y){return Math.abs(y.dif)-Math.abs(x.dif);});return out;
+}
+function toggleCorteLineas(){var d=document.getElementById('corte-lineas');if(!d)return;d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none';}
+function _esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function corteLineasHtml(){
+  var C=corteDetCompare();
+  if(!C)return '';
+  if(C.sinDetalle)return '<div style="margin-top:7px;font-size:.73rem;color:#7f1d1d"><b>Detalle por línea no disponible:</b> este corte se hizo antes de que el programa guardara la foto detallada (cliente · producto · día), así que solo se pueden ver totales por mes y por vendedor. Para tener el detalle: carga el reporte con el que cerraste el mes y usa «↻ Rehacer corte» (guarda la foto detallada); después, cuando cargues el reporte nuevo, aquí saldrán las remisiones/líneas, productos, cantidades y vendedor que se movieron. Los cortes nuevos ya la guardan solos.</div>';
+  if(!C.rows.length)return '<div style="margin-top:7px;font-size:.73rem;color:#7f1d1d">Comparado línea por línea contra la foto del corte: no hay diferencias de cantidad (la diferencia viene de otro tipo de renglón).</div>';
+  var tot=C.rows.reduce(function(a,r){return a+r.dif;},0),top=C.rows.slice(0,150);
+  return '<div style="margin-top:7px;font-size:.73rem;color:#7f1d1d"><b>'+C.rows.length+' línea(s) cliente · producto · día se movieron</b> ('+(tot>=0?'+':'')+fmt(tot)+' sacos netos). Se muestran las '+top.length+' de mayor impacto; el Excel trae todas.'
+    +'<div style="max-height:300px;overflow:auto;margin-top:5px;background:#fff;border:1px solid #fecaca;border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:.71rem"><tr style="text-align:left;color:#991b1b;position:sticky;top:0;background:#fef2f2"><th style="padding:3px 6px">Mes</th><th style="padding:3px 6px">Fecha</th><th style="padding:3px 6px">Vendedor</th><th style="padding:3px 6px">Cliente</th><th style="padding:3px 6px">Producto</th><th style="padding:3px 6px;text-align:right">Antes</th><th style="padding:3px 6px;text-align:right">Ahora</th><th style="padding:3px 6px;text-align:right">Δ</th><th style="padding:3px 6px">Movimiento</th></tr>'
+    +top.map(function(r){return '<tr style="border-top:1px solid #fee2e2"><td style="padding:2px 6px">'+_esc(mesL(r.mes))+'</td><td style="padding:2px 6px">'+_diaTxt(r.dia)+'</td><td style="padding:2px 6px;font-weight:700">'+_esc(r.vendedor)+'</td><td style="padding:2px 6px">'+_esc(r.cliente)+'</td><td style="padding:2px 6px">'+_esc(r.producto)+'</td><td style="padding:2px 6px;text-align:right">'+fmt(r.antes)+'</td><td style="padding:2px 6px;text-align:right">'+fmt(r.ahora)+'</td><td style="padding:2px 6px;text-align:right;font-weight:800">'+(r.dif>=0?'+':'')+fmt(r.dif)+'</td><td style="padding:2px 6px">'+_esc(r.tipo)+'</td></tr>';}).join('')
+    +'</table></div></div>';
+}
+// Excel: reporte detallado de lo que se movió en meses ya cerrados (resumen por mes, por vendedor, por producto y línea por línea)
+function descargarReporteMovimiento(){
+  if(!DATA||!corteVigente()){alert('No hay un corte vigente contra el cual comparar.');return;}
+  if(typeof XLSX==='undefined'||!XLSX.utils){alert('No se pudo cargar el motor de Excel. Revisa tu conexión e intenta de nuevo.');return;}
+  try{
+    var c=corteVigente(),ds=corteDiffs(),vr=corteDiffVendRows(),C=corteDetCompare(),hoy=new Date(),tot=ds.reduce(function(a,d){return a+d.dif;},0);
+    function wsFrom(aoa,cols){var w=XLSX.utils.aoa_to_sheet(aoa);if(cols)w['!cols']=cols.map(function(x){return {wch:x};});return w;}
+    var res=[['Reporte detallado: qué se movió en meses ya cerrados'],[],
+      ['Generado',hoy.toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})+' '+hoy.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})],
+      ['Corte vigente',mesL(c.mes)+' '+(c.anio||'')+' (hecho el '+c.fecha+')'],['Archivo del corte',c.archivo||'(sin nombre)'],['Archivo cargado ahora',DATA.fname||'(sin nombre)'],
+      ['Sacos netos movidos',Math.round(tot)],[],
+      ['Mes','Se cerró con (sacos)','Ahora calcula (sacos)','Diferencia (sacos)']];
+    ds.forEach(function(d){res.push([mesL(d.mes),d.antes,d.ahora,d.dif]);});
+    res.push([],['Nota','El reporte de ventas de Odoo (pivote) no trae el número de remisión: el detalle se identifica por cliente + producto + día + vendedor. Solo cuenta venta facturada 04MAS (misma regla del cierre de mes).']);
+    if(C&&C.sinDetalle)res.push(['Detalle por línea','No disponible: este corte se hizo antes de guardar la foto detallada. Rehaz el corte con el reporte que cerraba el mes para tener el detalle en los próximos movimientos.']);
+    var wb=XLSX.utils.book_new();
+    var w1=wsFrom(res,[26,26,26,22]);XLSX.utils.book_append_sheet(wb,w1,'Resumen');
+    var v=[['Vendedor','Mes','Se cerró con','Ahora calcula','Diferencia']];vr.forEach(function(r){v.push([r.vendedor,mesL(r.mes),r.antes,r.ahora,r.dif]);});
+    XLSX.utils.book_append_sheet(wb,wsFrom(v,[34,14,14,14,14]),'Por vendedor');
+    if(C&&!C.sinDetalle&&C.rows.length){
+      var pm={};C.rows.forEach(function(r){var k=r.producto+'\u0001'+r.mes;pm[k]=pm[k]||{p:r.producto,m:r.mes,a:0,b:0,n:0};pm[k].a+=r.antes;pm[k].b+=r.ahora;pm[k].n++;});
+      var p=[['Producto','Mes','Antes','Ahora','Diferencia','Líneas movidas']];Object.keys(pm).map(function(k){return pm[k];}).sort(function(x,y){return Math.abs(y.b-y.a)-Math.abs(x.b-x.a);}).forEach(function(r){p.push([r.p,mesL(r.m),Math.round(r.a*100)/100,Math.round(r.b*100)/100,Math.round((r.b-r.a)*100)/100,r.n]);});
+      XLSX.utils.book_append_sheet(wb,wsFrom(p,[48,14,12,12,12,14]),'Por producto');
+      var vp={};C.rows.forEach(function(r){var k=r.vendedor+'\u0001'+r.producto;vp[k]=vp[k]||{v:r.vendedor,p:r.producto,d:0,n:0};vp[k].d+=r.dif;vp[k].n++;});
+      var q=[['Vendedor','Producto','Diferencia (sacos)','Líneas movidas']];Object.keys(vp).map(function(k){return vp[k];}).sort(function(x,y){return x.v.localeCompare(y.v)||Math.abs(y.d)-Math.abs(x.d);}).forEach(function(r){q.push([r.v,r.p,Math.round(r.d*100)/100,r.n]);});
+      XLSX.utils.book_append_sheet(wb,wsFrom(q,[34,48,18,14]),'Vendedor x producto');
+      var d=[['Mes','Fecha','Vendedor (hoy)','Vendedor (al corte)','Cliente','Producto','Antes (sacos)','Ahora (sacos)','Diferencia','Movimiento']];
+      C.rows.forEach(function(r){d.push([mesL(r.mes),_diaTxt(r.dia),r.vendedor,r.vendedorCorte,r.cliente,r.producto,r.antes,r.ahora,r.dif,r.tipo]);});
+      var wd=wsFrom(d,[12,12,30,30,40,48,13,13,12,32]);wd['!autofilter']={ref:'A1:J'+d.length};XLSX.utils.book_append_sheet(wb,wd,'Detalle por línea');
+    }
+    XLSX.writeFile(wb,'Movimiento_mes_cerrado_'+(c.anio||hoy.getFullYear())+'_'+hoy.toISOString().slice(0,10)+'.xlsx');
+  }catch(err){console.error(err);alert('No se pudo generar el Excel:\n'+err.message);}
+}
 function doCorte(){
   if(!reqSuper())return;                       // configuración delicada: solo super-usuario
   if(!DATA){alert('Carga primero el reporte de Odoo.');return;}
@@ -6866,6 +6956,8 @@ function doCorte(){
     fecha:p(now.getDate())+'/'+p(now.getMonth()+1)+'/'+now.getFullYear()+' '+p(now.getHours())+':'+p(now.getMinutes()),
     archivo:((document.getElementById('file-badge')||{}).textContent||''),
     mesTot:snap.mesTot,vendMes:snap.vendMes});
+  var _nDet=guardarCorteDet(dd,(DATA.dataYear||now.getFullYear()),now.getTime());
+  if(_nDet<0)alert('Aviso: el corte quedó guardado, pero la foto detallada (cliente · producto · día) no cupo en la memoria del navegador, así que el reporte detallado de movimientos no estará disponible.');
   renderCorteBar();
   try{if(typeof refreshMapDependientes==='function')refreshMapDependientes();}catch(e){}
   try{if(typeof publishCloud==='function')publishCloud();}catch(e){}
@@ -6874,7 +6966,7 @@ function deshacerCorte(){
   if(!reqSuper())return;
   var c=getCorte();if(!c)return;
   if(!confirm('¿Deshacer el corte de '+mesL(c.mes)+'?\n\nEl programa volverá a decidir el mes evaluado solo con lo que traiga el reporte, como antes.'))return;
-  try{localStorage.removeItem(CORTE_KEY);}catch(e){}
+  try{localStorage.removeItem(CORTE_KEY);localStorage.removeItem(CORTE_DET_KEY);}catch(e){}
   renderCorteBar();
 }
 function toggleCorteDet(){var d=document.getElementById('corte-det');if(!d)return;d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none';}
@@ -6920,7 +7012,10 @@ function renderCorteBar(){
       +'<div style="font-size:.75rem;color:#7f1d1d;margin-top:2px;line-height:1.45">Este reporte trae facturas con fecha de un mes que ya se había cortado. El descuento vigente NO cambió (sigue congelado con la foto del corte), pero conviene revisar en Odoo por qué se movió.</div>'
       +'<div style="font-size:.75rem;color:#7f1d1d;margin-top:5px">'
       +diffs.map(function(d){return '<b>'+mesL(d.mes)+'</b>: se cerró con '+fmt(d.antes)+' → ahora calcula '+fmt(d.ahora)+' <b>('+(d.dif>=0?'+':'')+fmt(d.dif)+')</b>';}).join(' · ')+'</div>'
-      +'<div style="margin-top:6px"><button onclick="toggleCorteDet()" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-weight:700;font-size:.71rem;cursor:pointer">Ver a qué vendedor le cambió</button></div>'
+      +'<div style="margin-top:6px"><button onclick="toggleCorteDet()" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-weight:700;font-size:.71rem;cursor:pointer">Ver a qué vendedor le cambió</button>'
+      +'<button onclick="toggleCorteLineas()" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;font-weight:700;font-size:.71rem;cursor:pointer;margin-left:6px">Ver líneas, productos y cantidades</button>'
+      +'<button onclick="descargarReporteMovimiento()" style="background:#991b1b;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-weight:800;font-size:.71rem;cursor:pointer;margin-left:6px">📄 Reporte detallado (Excel)</button></div>'
+      +'<div id="corte-lineas" style="display:none">'+corteLineasHtml()+'</div>'
       +'<div id="corte-det" style="display:none;margin-top:7px;font-size:.73rem;color:#7f1d1d">'
       +(function(){var vv=corteDiffVend();if(!vv.length)return '<i>Sin diferencias atribuibles a un vendedor.</i>';
         return '<table style="width:100%;border-collapse:collapse"><tr style="text-align:left;color:#991b1b"><th style="padding:2px 6px">Vendedor</th><th style="padding:2px 6px;text-align:right">Δ sacos</th><th style="padding:2px 6px">Detalle</th></tr>'
