@@ -1532,6 +1532,7 @@ function deleteRow(){
   const entry={ ts:new Date().toISOString(), id:editId, pedido:rec.pedido||'', cliente:rec.cliente||'', field:'borrado', label:'Borrado permanente', from:'existía', to:'BORRADO', maquillaje:true, estatusAntes:calc(rec).estatus, estatusDespues:'BORRADO', by:'master', origen:'programador' };
   AUDIT.push(entry); if(fbAudit){ try{ fbAudit.push(sanitize(entry)); }catch(e){} } try{ localStorage.setItem(AUDIT_KEY, JSON.stringify(AUDIT.slice(-2000))); }catch(e){}
   const removed=editId; DATA=DATA.filter(x=>x.id!==editId);
+  try{ const bb=CUAD.bascula[removed]; if(bb&&(bb.generado||bb.estimado)){ cuadSet('bascula/'+removed,null); } }catch(e){}   /* báscula generada para este pedido: se va con él (si no, queda huérfana y duplica) */
   persistDelete(removed); closeForm(); render(); toast('Pedido borrado');
 }
 
@@ -2365,6 +2366,7 @@ function parseOdooFac(rows){
     if(t==='d') desc+=q; else if(t==='m') man+=q;
     const key=mes+'|'+cli+'|'+pk+'|'+t; const o=agg.get(key); if(o) o[3]+=q; else agg.set(key,[mes,cli,pk,q,t]); leafs++; };
   const hasMonthLabels=rows.some(r=>monthRe.test(String(r[0]||'')));
+  if(hasMonthLabels&&rows.some(r=>/^\s*R\d{4,}\s*$/.test(String(r[0]||'')))) return {kind:'facrem',rows:[],nm:{},info:{}};   // facturado por remisión (sin productos): no se carga como producto
   if(hasMonthLabels && !(String(rows[0][0])==='Column0')){
     // tabla dinámica mensual (sale.report): mes → producto (sin cliente)
     let cur=''; rows.forEach(r=>{ const a=String(r[0]||''); const m=a.match(monthRe);
@@ -2396,6 +2398,7 @@ async function cuadOdooFiles(files){
     try{ const buf=await f.arrayBuffer(); const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
       const res=parseOdooInv(rows)||parseOdooFac(rows);
+      if(res&&res.kind==='facrem'){ out.push('✗ '+f.name+': es facturado por remisión (sin productos); para el cuadre sube el de ventas por producto'); continue; }
       if(!res||!res.rows.length){ out.push('✗ '+f.name+': no reconocí el formato (movimientos de inventario o ventas facturadas)'); continue; }
       const byMes={}; res.rows.forEach(r=>{ (byMes[r[0]]=byMes[r[0]]||[]).push(r); });
       const prev=Object.keys(byMes);
@@ -2407,11 +2410,11 @@ async function cuadOdooFiles(files){
         cuadSet('odoodata/'+P+'/'+res.kind,JSON.stringify(dat));
         const tot=rowsP.reduce((a,r)=>a+(res.kind==='fac'&&(r[3]==='d'||r[3]==='m')?0:(res.kind==='inv'?r[3]:r[2])),0);
         cuadSet('odoo/'+P+'/'+res.kind,{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:rowsP.length,tot:Math.round(tot*100)/100,formato:(res.info&&res.info.formato)||''});
-        delete _odooCache[P+'|'+res.kind]; });
+        delete _odooCache[P+'|'+res.kind]; odTsSet(P,res.kind); });
       if(res.kind==='inv'&&res.movs){   // detalle por salida/remisión (para la conciliación del master): solo los últimos 3 meses, que es lo que se revisa
         const minP=(()=>{ let m=prevPer(prevPer(perDe(TODAY))); const e=DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)).map(r=>perDe(fechaEmb(r))).sort()[0]; if(e){ const e1=prevPer(e); if(e1<m) m=e1; } let lim=perDe(TODAY); for(let i=0;i<8;i++) lim=prevPer(lim); return m<lim?lim:m; })(), byP={};   /* desde el mes anterior al primer embarque (máx. 8 meses atrás) */
         res.movs.forEach(m=>{ const P=m.f.slice(0,7); if(P>=minP)(byP[P]=byP[P]||[]).push(m); });
-        Object.keys(byP).forEach(P=>{ cuadSet('odoodata/'+P+'/mov',JSON.stringify({rows:byP[P],nm:res.nm})); cuadSet('odoo/'+P+'/mov',{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:byP[P].length}); delete _odooCache[P+'|mov']; });
+        Object.keys(byP).forEach(P=>{ cuadSet('odoodata/'+P+'/mov',JSON.stringify({rows:byP[P],nm:res.nm})); cuadSet('odoo/'+P+'/mov',{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:byP[P].length}); delete _odooCache[P+'|mov']; odTsSet(P,'mov'); });
         // lote → producto según Odoo (un lote pertenece a un solo producto): sirve para cachar «producto por otro»
         const lm={}; res.movs.forEach(m=>m.l.forEach(([pk,l])=>{ if(!l)return; if(lm[l]&&lm[l]!==pk) lm[l]='?'; else lm[l]=pk; })); cuadSet('odoodata/_lotes',JSON.stringify(lm)); }
       out.push('✓ '+f.name+': '+(res.kind==='inv'?'salidas de inventario':'ventas facturadas')+' · '+prev.map(perLabel).join(', '));
@@ -2425,12 +2428,16 @@ const _odooCache={};
 function odooRows(P,kind){
   const meta=CUAD.odoo[P]&&CUAD.odoo[P][kind]; const raw=CUAD.odoodata[P]&&CUAD.odoodata[P][kind];
   if(meta&&!raw){ cuadFetchOdoo(P); return null; }
+  /* copia local más vieja que la de la nube (otro equipo subió un reporte nuevo) → bajarla otra vez */
+  if(meta&&raw&&meta.ts&&odTsGet(P,kind)<meta.ts&&fb&&fbCuad){ delete _odooCache[P+'|'+kind]; cuadFetchOdoo(P); return null; }
   if(!raw) return null; const k=P+'|'+kind; if(_odooCache[k]) return _odooCache[k];
   const d=safeJSON(raw); if(!d) return null; _odooCache[k]=d; return d;
 }
 const _fetching={};
+function odTsGet(P,kind){ const t=CUAD.odoodata._ts; return (t&&t[P+'|'+kind])||0; }
+function odTsSet(P,kind){ const m=CUAD.odoo[P]&&CUAD.odoo[P][kind]; if(!CUAD.odoodata._ts||typeof CUAD.odoodata._ts!=='object') CUAD.odoodata._ts={}; CUAD.odoodata._ts[P+'|'+kind]=(m&&m.ts)||Date.now(); cuadSaveOdooLocal(); }
 function cuadFetchOdoo(P){ if(_fetching[P]||!fb||!fbCuad) return; _fetching[P]=true;
-  fbCuad.child('odoodata/'+P).once('value').then(s=>{ const v=s.val(); if(v){ CUAD.odoodata[P]=v; cuadSaveOdooLocal(); } _fetching[P]=false; try{ refreshCuad(); }catch(e){} },()=>{ _fetching[P]=false; }); }
+  Promise.all([fbCuad.child('odoodata/'+P).once('value'),fbCuad.child('odoodata/_lotes').once('value')]).then(([s,sl])=>{ const v=s.val(); if(v){ CUAD.odoodata[P]=v; ['inv','fac','mov'].forEach(k=>{ delete _odooCache[P+'|'+k]; if(v[k]) odTsSet(P,k); }); } const l=sl.val(); if(l) CUAD.odoodata._lotes=l; cuadSaveOdooLocal(); _fetching[P]=false; try{ refreshCuad(); }catch(e){} },()=>{ _fetching[P]=false; }); }
 
 
 /* ---------- cálculo del cuadre de un periodo contable ---------- */
