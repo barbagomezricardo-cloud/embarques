@@ -593,7 +593,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
           <div class="field"><label>Contraseña compartida de báscula (opcional)</label><input type="text" id="cfgPwdBasc" placeholder="Déjala vacía si usas usuarios"></div>
           <div class="field"><label>Control de lotes en Cargadores desde</label><input type="date" id="cfgLotesDesde" style="width:150px" title="Antes de esta fecha Cargadores no registraba lotes: se llenan desde Odoo. Desde esta fecha se respeta lo que ellos capturan. Vacío = primer día con lotes capturados."></div>
           <div class="field"><label>Tolerancia báscula (kg)</label><input type="number" id="cfgBascTolKg" min="0" style="width:110px"></div>
-          <div class="field"><label>Programado vs cargado (±%)</label><input type="number" id="cfgCuadTolProg" min="0" style="width:110px"></div>
+          <div class="field"><label>Programado vs cargado, informativo (±%)</label><input type="number" id="cfgCuadTolProg" min="0" style="width:110px"></div>
           <div class="field"><label>Tolerancia en sacos</label><input type="number" id="cfgBascTolSacos" min="0" style="width:100px"></div>
         </div>
       </div>
@@ -2273,9 +2273,9 @@ function cuadUnit(u){
   const prods=[...new Set([...Cm.keys(),...Bm.keys()])].map(k=>{ const c=Cm.get(k), x=Bm.get(k);
     const lots=[...new Set([...(c?c.lotes.keys():[]),...(x?x.lotes.keys():[])])].map(nl=>({nl,lote:((c&&c.lotes.get(nl))||(x&&x.lotes.get(nl))||{}).lote||nl,c:c&&c.lotes.get(nl)?c.lotes.get(nl).sacos:0,b:x&&x.lotes.get(nl)?x.lotes.get(nl).sacos:0}));
     return {k,prod:(c&&c.prod)||(x&&x.prod)||k,c:c?c.sacos:0,b:x?x.sacos:0,lots}; });
-  if(!u.noProg && Pkg>0 && Cef>0){ const pct=(Cef-Pkg)/Pkg*100; if(Math.abs(pct)>cfg.tolProg) flags.push({lvl:'warn',k:'prog',t:'Cargadores cargaron '+fK(Cef)+' kg vs '+fK(Pkg)+' kg programados ('+(pct>0?'+':'')+pct.toFixed(1)+'%, tolerancia ±'+cfg.tolProg+'%)'}); }
+  if(!u.noProg && Pkg>0 && Cef>0){ const pct=(Cef-Pkg)/Pkg*100; if(Math.abs(Cef-Pkg)>=1 && Math.abs(pct)>cfg.tolProg) flags.push({lvl:'info',k:'prog',t:'Programado vs cargado (informativo, no afecta el cuadre): Cargadores cargaron '+fK(Cef)+' kg vs '+fK(Pkg)+' kg programados ('+(pct>0?'+':'')+pct.toFixed(1)+'%)'}); }
   if(!u.noProg && isDesp(r) && !lotesDe(r).length && fechaEmb(r)>=lotesDesde()) flags.push({lvl:'crit',k:'lotes',t:'Despachado sin lotes capturados por Cargadores'});
-  if(!b){ if(isDesp(r)) flags.push({lvl:'crit',k:'pend',t:'Despachado sin registro de báscula'}); }
+  if(!b){ if(isDesp(r)) flags.push({lvl:'crit',k:'pend',t:(!u.noProg&&fechaEmb(r)<lotesDesde()&&!lotesDe(r).length)?'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión está mal capturada)':'Despachado sin registro de báscula'}); }
   else {
     const est=!!b.estimado;   // registro generado por el master a partir de Odoo: no hay ticket real, el neto no se puede verificar
     if(est) flags.push({lvl:'info',k:'gen',t:'Registro generado por conciliación con Odoo (neto estimado, no es un pesaje real)'});
@@ -3123,10 +3123,11 @@ let _rpC={t:0,v:null};
 function regPlan(force){
   const n=Date.now(); if(!force&&_rpC.v&&n-_rpC.t<3000) return _rpC.v;
   const corte=lotesDesde(), out=[], sinOdoo=[], sinSal=[];
-  const ps=[...new Set(DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)&&fechaEmb(r)<corte).map(r=>perDe(fechaEmb(r))))].filter(p=>!perCerrado(p)).sort();
+  const antes=r=>fechaEmb(r)<corte||!lotesDe(r).length;   // antes del control, o sin lotes de Cargadores (nadie los registró): Odoo los llena
+  const ps=[...new Set(DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)&&antes(r)).map(r=>perDe(fechaEmb(r))))].filter(p=>!perCerrado(p)).sort();
   ps.forEach(P=>{ const c=conciliar(P); if(!c){ sinOdoo.push(P); return; }
-    c.issues.forEach(i=>{ if(i.tipo==='emb'&&i.fixes.length&&i.item&&i.fecha<corte) out.push(i); });
-    sinSal.push(...c.sinSalida.filter(x=>fechaEmb(x.r)<corte)); });
+    c.issues.forEach(i=>{ if(i.tipo==='emb'&&i.fixes.length&&i.item&&antes(i.item.r)) out.push(i); });
+    sinSal.push(...c.sinSalida.filter(x=>antes(x.r))); });
   _rpC={t:n,v:{ps,out,sinOdoo,sinSal,corte}}; return _rpC.v;
 }
 const fmtF=f=>{ const [y,m,d]=String(f).split('-'); return d+'/'+m+'/'+y; };
@@ -3533,7 +3534,6 @@ function cuadAlertasExtra(D){
   D.cus.filter(c=>c.st==='pend'&&c.u.fecha&&c.u.fecha<TODAY).sort((a,b)=>String(a.u.fecha).localeCompare(String(b.u.fecha))).slice(0,6)
     .forEach(c=>out.push(['late','Lleva '+diasDesde(c.u.fecha)+' día(s) sin báscula: '+(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—'),c.u.id,'⚖️']));
   D.cus.filter(c=>c.flags.some(f=>f.k==='lotes')).slice(0,6).forEach(c=>out.push(['late','Despachado sin lotes de Cargadores: '+(c.u.r.cliente||'')+' · pedido '+(c.u.r.pedido||'—'),c.u.id,'📲']));
-  D.cus.filter(c=>(!isBasc||c.u.b)&&c.flags.some(f=>f.k==='prog')).slice(0,4).forEach(c=>out.push(['warn',c.flags.find(f=>f.k==='prog').t+' — '+(c.u.r.cliente||''),c.u.id,'📋']));
   D.cus.filter(c=>(!isBasc||c.u.b)&&c.flags.some(f=>f.k==='carganeto')).slice(0,4).forEach(c=>out.push(['warn',c.flags.find(f=>f.k==='carganeto').t+' — '+(c.u.r.cliente||''),c.u.id,'⚖️']));
   const sol=Object.values(CUAD.solicitudes||{}).filter(x=>x&&x.estado==='pendiente'&&perEmb((CUAD.bascula[x.embId]||{}).fecha||'',CUAD.bascula[x.embId])===D.P);
   if(sol.length&&isMaster) out.push(['warn',sol.length+' solicitud(es) de edición de este periodo esperan tu autorización','', '✋']);
