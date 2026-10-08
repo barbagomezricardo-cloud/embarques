@@ -249,6 +249,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   <!-- CARRYOVER VIEW -->
   <div class="view" id="v-arrastre">
     <div class="legend"><span class="muted">Camiones programados en el periodo (o antes) que siguen <b>pendientes</b>, y unidades que se <b>cargaron en fecha distinta</b> a la programada. Así no pierdes de vista un carro que se arrastró de un día a otro.</span></div>
+    <div id="arrBar"></div>
     <div class="tablewrap"><table><thead><tr id="theadA"></tr></thead><tbody id="tbodyA"></tbody></table></div>
   </div>
 
@@ -257,8 +258,9 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <div class="kpis" id="auditKpis"></div>
     <div class="legend"><span class="muted">Registro confidencial de <b>ediciones</b> hechas en el programador después de que el dato se capturó. Las filas en <b style="color:var(--late)">rojo</b> son posibles maquillajes: cambios que redujeron el tiempo de carga, bajaron los kilos, o convirtieron un RETRASADO en A TIEMPO.</span></div>
     <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><input type="checkbox" id="onlyMaq" onchange="renderAudit()" style="width:auto"> Solo posibles maquillajes</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><input type="checkbox" id="onlyMaq" onchange="renderAudit()" style="width:auto"> Solo las que faltan por revisar</label>
       <div class="spacer"></div>
+      <button class="primary" id="audRevAll" onclick="audRevisarTodo()">✓ Marcar todo como revisado</button>
       <button class="ghost" onclick="exportAudit()">⬇ Exportar auditoría (CSV)</button>
     </div>
     <div class="tablewrap"><table style="min-width:1000px"><thead><tr id="theadAu"></tr></thead><tbody id="tbodyAu"></tbody></table></div>
@@ -1002,7 +1004,7 @@ function renderBanners(){
   try{
     if(typeof isMaster!=='undefined' && isMaster && Array.isArray(AUDIT)){
       const haceDias=(iso,n)=>{ try{ return (Date.now()-new Date(iso).getTime()) <= n*86400000; }catch(e){ return false; } };
-      const recientes=AUDIT.filter(a=>a.maquillaje && haceDias(a.ts,14));
+      const recientes=AUDIT.filter(a=>a.maquillaje && !a.revisado && haceDias(a.ts,14));
       if(recientes.length>0){
         html+=`<div onclick="setView('audit')" style="cursor:pointer;background:#3a1414;border:1px solid var(--late);color:var(--late);border-radius:10px;padding:10px 14px;margin:0 0 10px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px">
           🕵️ ${recientes.length} posible(s) maquillaje(s) detectado(s) en los últimos 14 días — toca para revisar Auditoría
@@ -1288,24 +1290,31 @@ function hBars(data, color){
 /* ================= ARRASTRES / PENDIENTES ================= */
 const COLSA=[{k:'estado2',t:'Situación'},{k:'fechaProg',t:'Programado'},{k:'fechaCarga',t:'Cargó'},{k:'pedido',t:'Pedido'},{k:'cliente',t:'Cliente'},{k:'destino',t:'Destino'},{k:'tipo',t:'Unidad'},{k:'eco',t:'Eco'},{k:'anden',t:'Andén'},{k:'motivo',t:'Motivo'}];
 function carryList(){
-  const to=document.getElementById('pTo').value || TODAY;
+  const to=document.getElementById('pTo').value || TODAY, from=(document.getElementById('pFrom')||{}).value||'';
+  const idx=(typeof odooIdxRem==='function')?odooIdxRem():null;
   return DATA.map(r=>({r,cv:calc(r)})).filter(({r,cv})=>{
+    if(r.cancelado||cv.cancelado) return false;                      // lo cancelado ya no es pendiente ni arrastre
     const pendPast = !cv.despachado && r.fechaProg && r.fechaProg<=to; // programado y aún no sale
-    return cv.carry || pendPast;
-  }).map(o=>{ o.situ = o.cv.carry?'ARRASTRE':(o.r.fechaProg<TODAY?'PENDIENTE (vencido)':'PENDIENTE'); return o; })
+    const arr = cv.carry && (!from || (r.fechaProg||'')>=from);       // los arrastres (ya cargados otro día) solo del periodo elegido
+    return arr || pendPast;
+  }).map(o=>{ o.situ = o.cv.carry?'ARRASTRE':(o.r.fechaProg<TODAY?'PENDIENTE (vencido)':'PENDIENTE');
+    if(o.situ!=='ARRASTRE'&&idx){ const ds=(typeof remDig==='function')?remDig(o.r.pedido):[]; const pk=ds.map(d=>idx.get(d)).find(Boolean); if(pk){ o.pickOdoo=pk; o.situ='SALIÓ EN ODOO'; } }
+    return o; })
     .sort((a,b)=>(a.r.fechaProg||'').localeCompare(b.r.fechaProg||''));
 }
 function renderCarry(){
   const list=carryList();
-  document.getElementById('arrCount').textContent=list.length||'';
-  document.getElementById('theadA').innerHTML=COLSA.map(c=>`<th>${c.t}</th>`).join('');
+  const nPend=list.filter(o=>o.situ!=='ARRASTRE').length, nOdoo=list.filter(o=>o.situ==='SALIÓ EN ODOO').length;
+  document.getElementById('arrCount').textContent=nPend||'';   // el contador solo cuenta pendientes reales; los arrastres son informativos
+  const bar=document.getElementById('arrBar'); if(bar){ bar.innerHTML=(nOdoo&&typeof isMaster!=='undefined'&&isMaster?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:10px 14px;border-radius:10px;background:#12301f;border:1px solid var(--ok)"><div style="flex:1;font-size:12.5px"><b>${nOdoo}</b> pendiente(s) <b>ya salieron en Odoo</b> (misma remisión) pero el programa no los marca como despachados. Al marcarlos se pone la fecha de Odoo y se genera su báscula con los lotes de Odoo.</div><button class="primary" onclick="marcarDespPendientes()">✓ Marcar despachados los ${nOdoo}</button></div>`:'')+`<div class="hint" style="margin:0 0 8px">${nPend} pendiente(s)${nOdoo?' ('+nOdoo+' ya salieron en Odoo)':''} · ${list.length-nPend} arrastre(s) del periodo (ya cargados otro día, solo informativo). Los pedidos cancelados no se cuentan.</div>`; }
+  document.getElementById('theadA').innerHTML=COLSA.map(c=>`<th>${c.t}</th>`).join('')+'<th></th>';
   const tb=document.getElementById('tbodyA');
-  tb.innerHTML = list.length? list.map(({r,situ})=>{
-    const cls = situ==='ARRASTRE'?'p-warn':(situ.includes('vencido')?'p-late':'p-proc');
+  tb.innerHTML = list.length? list.map(({r,situ,pickOdoo})=>{
+    const cls = situ==='ARRASTRE'?'p-warn':situ==='SALIÓ EN ODOO'?'p-ok':(situ.includes('vencido')?'p-late':'p-proc');
     return `<tr class="${situ==='ARRASTRE'?'carry':''}" onclick="openForm('${r.id}')">`+
       `<td><span class="pill ${cls}">${situ}</span></td>`+
-      COLSA.slice(1).map(c=>{let v=r[c.k]; if(c.k==='motivo'&&v) v=`<span title="${motivoFull(v)}">${motivoDesc(v)}</span>`; return `<td>${v||'<span class=muted>—</span>'}</td>`}).join('')+`</tr>`;
-  }).join('') : `<tr><td colspan="${COLSA.length}" class="empty">Sin arrastres ni pendientes. 👍</td></tr>`;
+      COLSA.slice(1).map(c=>{let v=r[c.k]; if(c.k==='motivo'&&v) v=`<span title="${motivoFull(v)}">${motivoDesc(v)}</span>`; return `<td>${v||'<span class=muted>—</span>'}</td>`}).join('')+`<td>${pickOdoo&&typeof isMaster!=='undefined'&&isMaster?`<button class="ghost" title="Odoo ${pickOdoo.ref} · ${pickOdoo.f}" onclick="event.stopPropagation();marcarDespPendientes('${r.id}')">✓ Marcar despachado</button>`:''}</td></tr>`;
+  }).join('') : `<tr><td colspan="${COLSA.length+1}" class="empty">Sin arrastres ni pendientes. 👍</td></tr>`;
 }
 
 /* ================= VISTA AUDITORÍA (master) ================= */
@@ -1314,31 +1323,47 @@ function fmtTs(iso){ try{ const d=new Date(iso); return d.toLocaleString('es-MX'
 function renderAudit(){
   const onlyMaq=document.getElementById('onlyMaq') && document.getElementById('onlyMaq').checked;
   let list=[...AUDIT].reverse();
-  if(onlyMaq) list=list.filter(a=>a.maquillaje);
-  const maqTotal=AUDIT.filter(a=>a.maquillaje).length;
+  if(onlyMaq) list=list.filter(a=>a.maquillaje&&!a.revisado);
+  const maqTotal=AUDIT.filter(a=>a.maquillaje&&!a.revisado).length, nRev=AUDIT.filter(a=>a.maquillaje&&a.revisado).length;
+  const rb=document.getElementById('audRevAll'); if(rb){ rb.textContent='✓ Marcar todo como revisado ('+maqTotal+')'; rb.disabled=!maqTotal; }
   const ac=document.getElementById('audCount'); if(ac) ac.textContent=maqTotal||'';
   // KPIs de auditoría
   const editsTiempo=AUDIT.filter(a=>a.field==='finCarga'||a.field==='inicioCarga').length;
   const editsKilos=AUDIT.filter(a=>a.field==='kilos').length;
   document.getElementById('auditKpis').innerHTML=[
     {lbl:'Ediciones totales',val:AUDIT.length,cls:'blue'},
-    {lbl:'Posibles maquillajes',val:maqTotal,cls:'late'},
+    {lbl:'Por revisar',val:maqTotal,cls:'late'},
+    {lbl:'Ya revisados',val:nRev,cls:'ok'},
     {lbl:'Ediciones de tiempos',val:editsTiempo,cls:'warn'},
     {lbl:'Ediciones de kilos',val:editsKilos,cls:'warn'},
   ].map(k=>`<div class="kpi ${k.cls}"><div class="lbl">${k.lbl}</div><div class="val">${k.val}</div></div>`).join('');
   document.getElementById('theadAu').innerHTML=COLSAU.map(c=>`<th>${c.t}</th>`).join('');
   const tb=document.getElementById('tbodyAu');
   tb.innerHTML = list.length? list.map(a=>{ const org=a.origen==='app'?'<span class="pill p-proc">App</span>':'<span class="pill p-warn">Program.</span>';
-    return `<tr ${a.maquillaje?'style="background:#2a1010"':''}>`+
+    const pendR=a.maquillaje&&!a.revisado, ix=AUDIT.indexOf(a);
+    return `<tr ${pendR?'style="background:#2a1010"':''}>`+
     `<td class="muted">${fmtTs(a.ts)}</td><td>${org}</td><td>${a.by||'—'}</td><td>${a.pedido||'—'}</td><td>${a.cliente||'—'}</td>`+
     `<td>${a.label}</td><td class="muted">${a.from||'(vacío)'}</td><td><b>${a.to||'(vacío)'}</b></td>`+
-    `<td>${a.maquillaje?'<span class="pill p-late">⚠ REVISAR</span>':(a.estatusAntes&&a.estatusAntes!==a.estatusDespues?`<span class="pill p-warn">${a.estatusAntes}→${a.estatusDespues}</span>`:'<span class="muted">—</span>')}</td></tr>`;
+    `<td style="white-space:nowrap">${pendR?`<span class="pill p-late">⚠ REVISAR</span> <button class="ghost" title="Ya lo revisé: quita la alerta" onclick="audRevisar(${ix})">✓ Revisado</button>`:(a.maquillaje&&a.revisado?`<span class="pill p-ok" title="${a.revisadoPor||''} · ${a.revisado}">✓ revisado ${fmtTs(a.revisado)}</span>`:(a.estatusAntes&&a.estatusAntes!==a.estatusDespues?`<span class="pill p-warn">${a.estatusAntes}→${a.estatusDespues}</span>`:'<span class="muted">—</span>'))}</td></tr>`;
   }).join('') : `<tr><td colspan="${COLSAU.length}" class="empty">Sin movimientos registrados. Todo limpio. ✅</td></tr>`;
 }
+function audGuardar(){ try{ localStorage.setItem(AUDIT_KEY, JSON.stringify(AUDIT.slice(-2000))); }catch(e){} }
+function audRevisar(i){
+  if(!requireMaster())return; const a=AUDIT[i]; if(!a||a.revisado)return; const ts=new Date().toISOString();
+  a.revisado=ts; a.revisadoPor='master'; if(fbAudit&&a._k){ try{ fbAudit.child(a._k).update({revisado:ts,revisadoPor:'master'}); }catch(e){} }
+  audGuardar(); renderAudit(); try{renderBanners();}catch(e){}
+}
+function audRevisarTodo(){
+  if(!requireMaster())return; const L=AUDIT.filter(a=>a.maquillaje&&!a.revisado); if(!L.length){ toast('No hay alertas por revisar'); return; }
+  if(!confirm('Marcar como REVISADAS las '+L.length+' alertas pendientes de Auditoría. Siguen en el historial (con la marca de revisado), pero dejan de alertar. ¿Continuar?'))return;
+  const ts=new Date().toISOString(), up={}; L.forEach(a=>{ a.revisado=ts; a.revisadoPor='master'; if(a._k){ up[a._k+'/revisado']=ts; up[a._k+'/revisadoPor']='master'; } });
+  if(fbAudit&&Object.keys(up).length){ try{ fbAudit.update(up); }catch(e){} }
+  audGuardar(); renderAudit(); try{renderBanners();}catch(e){} toast('✓ '+L.length+' alertas marcadas como revisadas');
+}
 function exportAudit(){
-  const H=['FechaHora','Pedido','Cliente','Campo','ValorOriginal','NuevoValor','PosibleMaquillaje','EstatusAntes','EstatusDespues'];
+  const H=['FechaHora','Pedido','Cliente','Campo','ValorOriginal','NuevoValor','PosibleMaquillaje','EstatusAntes','EstatusDespues','Revisado'];
   const L=[H.join(',')];
-  AUDIT.forEach(a=>{ const row=[a.ts,a.pedido,a.cliente,a.label,a.from,a.to,a.maquillaje?'SI':'',a.estatusAntes,a.estatusDespues]
+  AUDIT.forEach(a=>{ const row=[a.ts,a.pedido,a.cliente,a.label,a.from,a.to,a.maquillaje?'SI':'',a.estatusAntes,a.estatusDespues,a.revisado||'']
     .map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}); L.push(row.join(',')); });
   dlBlob(new Blob(['﻿'+L.join('\n')],{type:'text/csv;charset=utf-8'}),'auditoria_embarques.csv'); toast('Auditoría exportada');
 }
@@ -1687,7 +1712,7 @@ function initFirebase(){
         if(!asArr(v.productos).length || !('lotesObligatorios' in v)){ if(!asArr(CFG.productos).length)CFG.productos=PRODUCTOS_DEFAULT.map(p=>({...p})); if(!('lotesObligatorios' in v))CFG.lotesObligatorios=true; if(v.tolLotesPct==null)CFG.tolLotesPct=5; persistCfg(); }
         rebuildMotivoMap();
         try{render();}catch(e){} } });
-      fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.values(v).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster){ renderAudit(); renderBanners(); } } });
+      fbAudit.on('value', snap=>{ const v=snap.val(); if(v){ AUDIT=Object.entries(v).map(([k,a])=>Object.assign({_k:k},a)).sort((a,b)=>(a.ts||'').localeCompare(b.ts||'')); if(isMaster){ renderAudit(); renderBanners(); } } });
       fbFlota.on('value', snap=>{ const v=snap.val(); if(v){ FLOTA=normalize(Object.values(v)); try{ localStorage.setItem(FLOTA_KEY,JSON.stringify(FLOTA)); }catch(e){} } renderFlota(); },
         err=>{ console.error('flota:',err&&err.message); if(err&&/permission/i.test(err.message||'')) toast('Falta permitir "flota" en las reglas de Firebase'); });
       // Proyección de producción: la publica ventas.html (solo lectura aquí, el pace/venta real).
@@ -2920,7 +2945,7 @@ const quienDe=(r,b)=>({C:[r.cargador,r.cargador2].map(x=>String(x||'').trim()).f
 const detDe=hall=>hall.map(h=>({w:h.who,k:h.k||'',t:String(h.t||'').slice(0,170)}));
 function conciliar(P){
   if(!(CUAD.odoo[P]&&CUAD.odoo[P].mov)) return null;
-  const ultimo=new Date(+P.slice(0,4),+P.slice(5,7),0).getDate(), from=P+'-01', to=P+'-'+String(ultimo).padStart(2,'0'), lo=addDias(from,-4), hi=addDias(to,4);
+  const ultimo=new Date(+P.slice(0,4),+P.slice(5,7),0).getDate(), from=P+'-01', to=P+'-'+String(ultimo).padStart(2,'0'), lo=addDias(from,-7), hi=addDias(to,7);
   if(!odooRows(P,'mov')) return null;                      // el detalle del mes aún se está bajando de la nube
   const picks=concPicks(P).filter(p=>p.f>=lo&&p.f<=hi);
   const embs=DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)>=lo&&fechaEmb(r)<=hi);
@@ -2934,9 +2959,19 @@ function conciliar(P){
       .map(p=>({p,sc:p.l.filter(x=>ls.has(normLote(x[1]))).length,dd:difDias(p.f,fechaEmb(r))})).sort((a,b)=>b.sc-a.sc||a.dd-b.dd);
     if(!cand.length)return; const best=cand[0]; const ps=[best.p].concat(cand.slice(1).filter(c=>c.sc>0&&c.dd===best.dd).map(c=>c.p));
     match.set(r.id,{ps,via:'cliente'}); ps.forEach(p=>used.add(p.ref)); });
+  // 3) por cantidad exacta de sacos y fecha cercana (Odoo se libera días después y la remisión/cliente se capturó distinto); solo si es el único candidato
+  const pkTot=p=>[...odLineas([p]).values()].reduce((a,x)=>a+(Number(x.q)||0),0), embTot=r=>{ const b=CUAD.bascula[r.id]; return b?bascSacos(b):lotesSacos(r); };
+  const rest=embs.filter(r=>!match.has(r.id)&&embTot(r)>=20).sort((a,b)=>String(fechaEmb(a)).localeCompare(String(fechaEmb(b))));
+  rest.forEach(r=>{ const t=embTot(r); const cand=picks.filter(p=>!used.has(p.ref)&&Math.abs(pkTot(p)-t)<=cfg.tolSacos&&difDias(p.f,fechaEmb(r))<=7);
+    if(!cand.length)return; const rivales=rest.filter(o=>o.id!==r.id&&!match.has(o.id)&&Math.abs(embTot(o)-t)<=cfg.tolSacos);
+    const dd=Math.min(...cand.map(p=>difDias(p.f,fechaEmb(r)))), best=cand.filter(p=>difDias(p.f,fechaEmb(r))===dd);
+    if(best.length!==1||rivales.some(o=>difDias(best[0].f,fechaEmb(o))<=dd))return;    // ambiguo: no se liga
+    match.set(r.id,{ps:[best[0]],via:'cantidad'}); used.add(best[0].ref); });
+  const odooHasta=picks.reduce((m,p)=>p.f>m?p.f:m,'');   // hasta dónde llega el detalle de Odoo cargado: Odoo libera con rezago, lo posterior aún no se puede juzgar
   const items=[], sinSalida=[];
   embs.filter(r=>fechaEmb(r)>=from&&fechaEmb(r)<=to).forEach(r=>{
     const b=CUAD.bascula[r.id]||null, m=match.get(r.id), hall=[], fixes=new Set();
+    if(!m&&!(b&&b.sinOdoo)&&odooHasta&&fechaEmb(r)>addDias(odooHasta,-4)) return;   // Odoo aún no llega a esa fecha (se libera con rezago): no se marca como «sin salida»
     if(!m){ const cerr=!!(b&&b.sinOdoo);   // cerrado por el master «sin salida en Odoo»: queda como nota, ya no es pendiente
       if(!cerr){ sinSalida.push({r,b}); hall.push({who:'P',k:'sinsal',t:'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión/cliente está mal capturado)',sin:true}); }
       // aun sin salida en Odoo se puede cachar un producto que no corresponde al lote (según el histórico de Odoo)
@@ -2953,14 +2988,18 @@ function conciliar(P){
     else { hall.push({who:'B',k:'sinb',t:'Sin registro de báscula (el botón crea uno marcado «generado», con los sacos de Odoo)'}); fixes.add('crearB'); }
     items.push({id:r.id,r,b,picks:m.ps,via:m.via,od,hall,fixes:[...fixes],info});
   });
-  const odooSolo=picks.filter(p=>!used.has(p.ref)&&p.f>=from&&p.f<=to&&p.l.some(x=>!esSacoVacio(x[0])));
+  const odooSolo0=picks.filter(p=>!used.has(p.ref)&&p.f>=from&&p.f<=to&&p.l.some(x=>!esSacoVacio(x[0]))), odooSolo=[], nodesp=[];
+  // salida de Odoo cuyo embarque SÍ existe en el programa pero no está marcado como despachado
+  odooSolo0.forEach(p=>{ const ds=remDig(p.v), r=ds.length?DATA.find(x=>!x.cancelado&&!isDesp(x)&&remDig(x.pedido).some(d=>ds.includes(d))):null; if(r&&!nodesp.some(n=>n.r.id===r.id)) nodesp.push({p,r}); else odooSolo.push(p); });
   // bandeja: un renglón por problema
   const issues=[]; const mkKey=(t,x)=>t+'_'+keySafe(x);
   items.forEach(i=>{ if(!i.hall.length)return; const tipo=i.sinSalida?'sin':'emb'; const cats=new Set(i.hall.map(h=>h.who)); if(i.hall.some(h=>/Producto cambiado|Producto y cantidad|ese lote es/.test(h.t))) cats.add('prod'); if(i.sinSalida) cats.add('sin');
     issues.push({key:mkKey(tipo,i.id),tipo,per:P,fecha:fechaEmb(i.r),cliente:i.r.cliente||'',id:i.id,hall:i.hall,fixes:i.fixes,item:i,cats:[...cats],sig:hash(i.hall.map(h=>h.t).join('|')),quien:quienDe(i.r,i.b),det:detDe(i.hall)}); });
+  nodesp.forEach(({p,r})=>{ const od=odLineas([p]), u=[...od.values()].reduce((a,x)=>a+x.q,0), t=`Salió de inventario (${p.ref} · ${p.v||'s/remisión'} · ${fS(u)} u.) pero el embarque del programa sigue sin marcarse como despachado`;
+    issues.push({key:mkKey('nodesp',p.ref),tipo:'nodesp',per:P,fecha:p.f,cliente:r.cliente||p.cli,id:r.id,hall:[{who:'P',k:'nodesp',t}],fixes:['desp'],item:{id:r.id,r,b:null,picks:[p],od,hall:[],fixes:['desp']},pick:p,od,cats:['P'],sig:hash(p.ref+'|nd'),quien:{},det:[{w:'P',k:'nodesp',t}]}); });
   odooSolo.forEach(p=>{ const od=odLineas([p]), u=[...od.values()].reduce((a,x)=>a+x.q,0);
     issues.push({key:mkKey('odoo',p.ref),tipo:'odoo',per:P,fecha:p.f,cliente:p.cli,hall:[{who:'P',k:'odoo',t:`Salió de inventario (${p.ref} · ${p.v||'s/remisión'} · ${fS(u)} u.) y no hay embarque en el programa`}],fixes:['crearE'],pick:p,od,cats:['odoo'],sig:hash(p.ref+'|'+u),quien:{},det:[{w:'P',k:'odoo',t:`Salió de inventario ${p.ref} · ${p.v||'s/remisión'} y no hay embarque en el programa`}]}); });
-  return {P,items,sinSalida,odooSolo,issues};
+  return {P,items,sinSalida,odooSolo,nodesp,issues};
 }
 function concPeriodos(){ return Object.keys(CUAD.odoo).filter(p=>CUAD.odoo[p]&&CUAD.odoo[p].mov).sort().reverse(); }
 // fecha desde la que se revisa (para no inundar la bandeja con meses anteriores al arranque); por defecto el 1.º del mes en curso
@@ -3051,21 +3090,21 @@ function concRender(){
     .sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
   // errores por persona (todo lo detectado en el rango, corregido o no)
   CC.rowsAll=rowsAll; CC.personas=concPersonas(R,rowsAll);
-  const quien={C:'📲 Cargadores',B:'⚖️ Báscula',P:'📋 Programa'}, tipoTxt={emb:'Embarque',sin:'Sin salida en Odoo',odoo:'Salida sin embarque'};
-  const nSel=Object.keys(CC.sel).filter(k=>CC.sel[k]).length, fixVis=rows.filter(x=>x.est==='abierto'&&x.fixes.length).length, fixVisSL=rows.filter(x=>x.est==='abierto'&&x.pl&&!x.pl.nada).length, nSelSL=rows.filter(x=>CC.sel[x.key]&&x.est==='abierto'&&x.pl&&!x.pl.nada).length;
+  const quien={C:'📲 Cargadores',B:'⚖️ Báscula',P:'📋 Programa'}, tipoTxt={emb:'Embarque',sin:'Sin salida en Odoo',odoo:'Salida sin embarque',nodesp:'Salió en Odoo, falta marcar despachado'};
+  const nSel=Object.keys(CC.sel).filter(k=>CC.sel[k]).length, fixVis=rows.filter(x=>x.est==='abierto'&&x.fixes.length).length, fixVisSL=rows.filter(x=>x.est==='abierto'&&x.pl&&!x.pl.nada).length, nSelSL=rows.filter(x=>CC.sel[x.key]&&x.est==='abierto'&&x.pl&&!x.pl.nada).length, sinVis=rows.filter(x=>x.est==='abierto'&&x.tipo==='sin').map(x=>x.key), nSinVis=sinVis.length;
   document.getElementById('concBody').innerHTML=
     regBannerHtml()+concLotesInfoHtml(R)+`<div class="kpis">${kp.map(k=>`<div class="kpi ${k.c}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="foot">${k.f}</div></div>`).join('')}</div>
     <div class="hint" style="margin-bottom:8px">Odoo cargado: ${ps.map(p=>perLabel(p)+' ('+ttsStr(CUAD.odoo[p].mov.ts)+')').join(' · ')}. <b>Odoo es la verdad</b>, salvo los lotes si cuadras con <b>«sin lotes»</b> (ahí manda Cargadores y los lotes no se tocan). Se revisa desde el ${R.desde} (cámbialo arriba). Lo que corrijas en el sistema pasa solo a «resuelto» la próxima vez que cargues Odoo (o con 🔄).</div>
     <div class="card" style="margin-bottom:12px"><h3>Errores por persona <span class="hint" style="font-weight:400">· ${rangoTxt()} · cuenta todo lo detectado, aunque ya se haya corregido. Lo que generó el master no se le carga a nadie.</span></h3>${F.persona?`<div class="hint" style="margin:6px 0">Mostrando solo: <b>${escProy((CC.personas.find(p=>p.key===F.persona)||{n:F.persona}).n)}</b> <button class="ghost" onclick="concPersonaSet(-1)">✕ quitar filtro</button></div>`:''}<div class="tablewrap" style="max-height:260px"><table style="min-width:0;width:100%"><thead><tr><th>Persona</th><th style="text-align:right">Embarques</th><th style="text-align:right">Con error</th><th style="text-align:right">%</th><th style="text-align:right">Remisión</th><th style="text-align:right">Producto</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Lote</th><th style="text-align:right">Falta/sobra</th><th style="text-align:right">Abiertos</th><th></th></tr></thead><tbody>${CC.personas.map((p,ix)=>`<tr${F.persona===p.key?' style="background:rgba(120,140,255,.12)"':''}><td>${p.b?'':p.ic+' '}${escProy(p.b?p.n:p.n)}</td><td class="num">${p.b?'—':p.emb}</td><td class="num ${p.err?'dcrit':''}">${p.err}</td><td class="num">${p.b||!p.emb?'—':Math.round(p.err/p.emb*100)+'%'}</td><td class="num">${p.rem||''}</td><td class="num">${p.prod||''}</td><td class="num">${p.cant||''}</td><td class="num">${p.lote||''}</td><td class="num">${p.extra||''}</td><td class="num">${p.ab||''}</td><td style="white-space:nowrap">${p.err?`<button class="ghost" onclick="concPersonaSet(${ix})">Ver</button>${p.b?'':` <button class="ghost" onclick="concAvisar(${ix})">📨 Avisar</button>`}`:''}</td></tr>`).join('')||'<tr><td colspan="11" class="empty">Sin datos</td></tr>'}</tbody></table></div></div>
     <div class="tablewrap"><table style="min-width:980px"><thead><tr><th style="width:28px"><input type="checkbox" onchange="concSelAll(this.checked)"></th><th>Detectado</th><th>Fecha</th><th>Tipo</th><th>Cliente · remisión</th><th>Qué pasó</th><th>Acciones</th></tr></thead><tbody>${rows.map(x=>{ const it=x.item, r=it&&it.r;
-      const rem=it?(escProy(r.pedido||'—')+' → '+(it.picks.length?escProy([...new Set(it.picks.map(p=>p.v||p.ref))].join(', ')):'<span class="muted">sin salida</span>')+(it.via==='cliente'?' <span class="pill p-warn" title="Ligado por cliente y fecha, no por remisión">por cliente</span>':'')):(x.pick?escProy(x.pick.v||x.pick.ref):'');
-      const fx=x.fixes.map(f=>f==='C'?'dejar Cargadores como Odoo':f==='B'?'dejar Báscula como Odoo':f==='pedido'?'poner la remisión de Odoo':f==='crearB'?'crear registro de báscula':'crear embarque + báscula').join(' · ');
-      const acc=x.est==='abierto'?`${x.fixes.length?`${x.pl&&!x.pl.nada?`<button class="primary" title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concFixOne('${x.key}',true)">✅ Sin lotes</button> `:''}<button class="ghost" title="Cuadra todo con Odoo, lotes incluidos" onclick="concFixOne('${x.key}',false)">🔁 Con lotes</button> `:''}${r&&!(it&&it.sinSalida&&false)?`<button class="ghost" onclick="concOpenEmb('${x.id}')">📋 Embarque</button> `:''}${r&&CUAD.bascula[x.id]?`<button class="ghost" onclick="concOpenPes('${x.id}')">⚖️ Pesaje</button> `:''}<button class="ghost" onclick="concIgnore('${x.key}')">🙈 Ignorar</button>`
+      const rem=it?(escProy(r.pedido||'—')+' → '+(it.picks.length?escProy([...new Set(it.picks.map(p=>p.v||p.ref))].join(', ')):'<span class="muted">sin salida</span>')+(it.via==='cliente'?' <span class="pill p-warn" title="Ligado por cliente y fecha, no por remisión">por cliente</span>':it.via==='cantidad'?' <span class="pill p-warn" title="Ligado por cantidad exacta de sacos y fecha cercana: remisión y cliente no coinciden">por cantidad</span>':'')):(x.pick?escProy(x.pick.v||x.pick.ref):'');
+      const fx=x.fixes.map(f=>f==='C'?'dejar Cargadores como Odoo':f==='B'?'dejar Báscula como Odoo':f==='pedido'?'poner la remisión de Odoo':f==='crearB'?'crear registro de báscula':f==='desp'?'marcar despachado + báscula con lotes de Odoo':'crear embarque + báscula').join(' · ');
+      const acc=x.est==='abierto'?`${x.fixes.length?`${x.pl&&!x.pl.nada?`<button class="primary" title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concFixOne('${x.key}',true)">✅ Sin lotes</button> `:''}<button class="ghost" title="Cuadra todo con Odoo, lotes incluidos" onclick="concFixOne('${x.key}',false)">🔁 Con lotes</button> `:''}${r&&!(it&&it.sinSalida&&false)?`<button class="ghost" onclick="concOpenEmb('${x.id}')">📋 Embarque</button> `:''}${r&&CUAD.bascula[x.id]?`<button class="ghost" onclick="concOpenPes('${x.id}')">⚖️ Pesaje</button> `:''}${x.tipo==='sin'?`<button class="primary" title="Cierra el embarque con una nota «sin salida en Odoo» (peso programado): deja de ser pendiente" onclick="concCerrarSinOdoo(false,['${x.key}'])">🔒 Cerrar sin salida en Odoo</button> `:''}<button class="ghost" onclick="concIgnore('${x.key}')">🙈 Ignorar</button>`
         :x.est==='ignorado'?`<button class="ghost" onclick="concReopen('${x.key}')">↩ Reabrir</button> <span class="hint">${escProy(x.b.nota||'')}</span>`:`<span class="hint">resuelto ${ttsStr(x.b.resTs)}</span>`;
       return `<tr><td>${x.fixes.length&&x.est==='abierto'?`<input type="checkbox" ${CC.sel[x.key]?'checked':''} onchange="concSel('${x.key}',this.checked)">`:''}</td><td class="muted" style="white-space:nowrap">${x.b?ttsStr(x.b.ts):'nuevo'}</td><td>${x.fecha||''}</td><td>${tipoTxt[x.tipo]||x.tipo}</td><td>${escProy(x.cliente||'')}<div class="code">${rem}</div></td>
       <td style="white-space:normal">${(x.hall||[]).map(h=>`<div style="margin:2px 0">${h.who?`<span class="pill p-late" style="margin-right:5px">${quien[h.who]}</span>`:''}${escProy(h.t)}</div>`).join('')}${fx&&x.est==='abierto'?`<div class="hint">Con lotes: ${fx}</div>`:''}${x.pl&&x.est==='abierto'?(x.pl.nada?`<div class="hint">${x.tipo==='odoo'?'':'<span class="pill p-warn">solo lotes</span> '}Sin tocar lotes no se hace nada aquí: ${escProy(x.pl.motivo)}.</div>`:`<div class="hint">Sin tocar lotes: ${plTxt(x.pl)}${(x.pl.restoC||x.pl.restoB)?' · los lotes distintos se quedan como están':''}</div>`):''}</td><td style="white-space:nowrap">${acc}</td></tr>`; }).join('')||`<tr><td colspan="7" class="empty">${F.estado==='abierto'?'No hay errores abiertos ✓':'Nada en este filtro'}.</td></tr>`}</tbody></table></div>
     ${concAjustesHTML()}`;
-  document.getElementById('concBtns').innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="hint">Seleccionados:</span><button class="primary" ${nSelSL?'':'disabled'} title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concApply(null,true)">✅ sin lotes (${nSelSL})</button><button class="ghost" ${nSel?'':'disabled'} title="Cuadra todo con Odoo, lotes incluidos" onclick="concApply(null,false)">🔁 con lotes (${nSel})</button><span class="hint" style="margin-left:8px">Todo lo visible:</span><button class="primary" ${fixVisSL?'':'disabled'} title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concApply('all',true)">⚡ sin lotes (${fixVisSL})</button><button class="ghost" ${fixVis?'':'disabled'} title="Cuadra todo con Odoo, lotes incluidos" onclick="concApply('all',false)">⚡ con lotes (${fixVis})</button><button class="ghost" onclick="concCSV()">⬇ CSV</button></div>`;
+  document.getElementById('concBtns').innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="hint">Seleccionados:</span><button class="primary" ${nSelSL?'':'disabled'} title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concApply(null,true)">✅ sin lotes (${nSelSL})</button><button class="ghost" ${nSel?'':'disabled'} title="Cuadra todo con Odoo, lotes incluidos" onclick="concApply(null,false)">🔁 con lotes (${nSel})</button><span class="hint" style="margin-left:8px">Todo lo visible:</span><button class="primary" ${fixVisSL?'':'disabled'} title="Corrige remisión, cantidad y producto; NO toca los lotes" onclick="concApply('all',true)">⚡ sin lotes (${fixVisSL})</button><button class="ghost" ${fixVis?'':'disabled'} title="Cuadra todo con Odoo, lotes incluidos" onclick="concApply('all',false)">⚡ con lotes (${fixVis})</button>${nSinVis?`<button class="primary" title="Cierra con nota «sin salida en Odoo» todos los despachados sin salida que se ven" onclick="concCerrarSinOdoo(false,${JSON.stringify(sinVis).replace(/"/g,'&quot;')})">🔒 cerrar sin salida en Odoo (${nSinVis})</button>`:''}<button class="ghost" onclick="concCSV()">⬇ CSV</button></div>`;
   document.getElementById('concDesde').value=concDesde(); document.getElementById('concEstado').value=F.estado; document.getElementById('concTipo').value=F.tipo; document.getElementById('concRango').value=F.rango||'todo'; document.getElementById('concDet').checked=!!F.det;
   const tc=document.getElementById('concCount'); if(tc){ const n=Object.values(CUAD.bandeja).filter(b=>b.estado==='abierto').length; tc.textContent=n; tc.style.display=n?'inline-flex':'none'; }
 }
@@ -3077,7 +3116,7 @@ function concOpenEmb(id){ if(!requireMaster())return; setView('tabla'); openForm
 function concOpenPes(id){ if(!requireMaster())return; openBasc(id); }
 function concAjustesHTML(){
   const L=Object.entries(CUAD.ajustes||{}).map(([k,a])=>({k,...a})).sort((a,b)=>b.ts-a.ts).slice(0,25); if(!L.length) return '';
-  return `<div class="card" style="margin-top:12px"><h3>Cuadres hechos (respaldo para deshacer)</h3><div class="tablewrap" style="max-height:220px"><table><thead><tr><th>Cuándo</th><th>Cliente</th><th>Qué se hizo</th><th></th></tr></thead><tbody>${L.map(a=>`<tr><td>${ttsStr(a.ts)}</td><td>${escProy(a.cliente||'')}</td><td>${escProy((a.srcs||[]).map(s=>({C:'Cargadores',B:'Báscula',pedido:'Remisión',crearB:'Báscula creada',crearE:'Embarque + báscula creados',sinOdoo:'Cerrado sin salida en Odoo'}[s]||s)).join(' + '))}${a.sinLotes?' · <span class="pill p-ok">sin tocar lotes</span>':''}${a.deshecho?' · <span class="pill p-proc">deshecho '+ttsStr(a.deshecho)+'</span>':''}</td><td>${a.deshecho?'':`<button class="ghost" onclick="concUndo('${a.k}')">↩ Deshacer</button>`}</td></tr>`).join('')}</tbody></table></div></div>`;
+  return `<div class="card" style="margin-top:12px"><h3>Cuadres hechos (respaldo para deshacer)</h3><div class="tablewrap" style="max-height:220px"><table><thead><tr><th>Cuándo</th><th>Cliente</th><th>Qué se hizo</th><th></th></tr></thead><tbody>${L.map(a=>`<tr><td>${ttsStr(a.ts)}</td><td>${escProy(a.cliente||'')}</td><td>${escProy((a.srcs||[]).map(s=>({C:'Cargadores',B:'Báscula',pedido:'Remisión',crearB:'Báscula creada',crearE:'Embarque + báscula creados',sinOdoo:'Cerrado sin salida en Odoo',desp:'Marcado despachado'}[s]||s)).join(' + '))}${a.sinLotes?' · <span class="pill p-ok">sin tocar lotes</span>':''}${a.deshecho?' · <span class="pill p-proc">deshecho '+ttsStr(a.deshecho)+'</span>':''}</td><td>${a.deshecho?'':`<button class="ghost" onclick="concUndo('${a.k}')">↩ Deshacer</button>`}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 const _lin=ls=>asArr(ls).map(x=>(x.lote||'')+'×'+(x.sacos||0)).join(' | ')||'(vacío)';
 // registro de báscula «generado»: no es un pesaje real (sin ticket, bruto/tara en 0, neto estimado con los sacos de Odoo)
@@ -3104,7 +3143,7 @@ function ajusteSinLotes(items,od,tol){   // corrige PRODUCTO y CANTIDAD sin crea
 }
 // qué haría el botón «sin lotes» en este caso
 function planSinLotes(is){
-  const p={nada:true,motivo:''}; if(is.tipo==='odoo'){ p.motivo='Es un embarque que no existe: se tendría que crear con los lotes de Odoo'; return p; }
+  const p={nada:true,motivo:''}; if(is.tipo==='nodesp'){ p.motivo='Marca el embarque como despachado y crea la báscula con los lotes de Odoo'; return p; } if(is.tipo==='odoo'){ p.motivo='Es un embarque que no existe: se tendría que crear con los lotes de Odoo'; return p; }
   const i=is.item, r=i.r, b=i.b, tol=cuadCfg().tolSacos; let cL=lotesDe(r);
   if(is.fixes.includes('pedido')){ p.pedido=true; p.nada=false; }
   if(is.fixes.includes('C')){ const a=ajusteSinLotes(cL,i.od,tol); if(a.n){ p.C=a.items; cL=a.items; p.nada=false; } p.restoC=a.rest; }
@@ -3148,9 +3187,10 @@ function cierreSinOdoo(r,now){
     obs:nota,items:[],sacos:0,fecha,cliente:r.cliente||'',pedido:r.pedido||'',usuario:'master',oper:'(cerrado por master)',ts,tsEdit:now,editor:cuadUser(),generado:true,estimado:true,sinOdoo:true,
     hist:{['h'+now]:{ts:now,usuario:cuadUser(),accion:'Cerrado sin salida en Odoo',detalle:nota}}};
 }
-function concCerrarSinOdoo(silent){
-  if(!requireMaster())return; const pl=regPlan(true); if(!pl.sinSal.length){ toast('No hay despachados sin salida en Odoo por cerrar'); return 0; }
-  if(!silent&&!confirm('Hay '+pl.sinSal.length+' embarque(s) despachados anteriores al '+fmtF(pl.corte)+' sin salida en Odoo.\nSe cierran con una nota «sin salida en Odoo» (peso programado, registro generado) y dejan de contar como pendientes.\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return 0;
+function concCerrarSinOdoo(silent,ids){
+  if(!requireMaster())return; let pl=regPlan(true); if(ids){ const R=conciliarTodo(); pl={...pl,sinSal:(R?R.issues:[]).filter(i=>i.tipo==='sin'&&ids.includes(i.key)).map(i=>({r:i.item.r,b:i.item.b}))}; }
+  if(!pl.sinSal.length){ if(!silent) toast('No hay despachados sin salida en Odoo por cerrar'); return 0; }
+  if(!silent&&!confirm('Hay '+pl.sinSal.length+' embarque(s) despachados'+(ids?'':' anteriores al '+fmtF(pl.corte))+' sin salida en Odoo.\nSe cierran con una nota «sin salida en Odoo» (peso programado, registro generado) y dejan de contar como pendientes.\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return 0;
   const now=Date.now(); let n=0;
   pl.sinSal.forEach((x,ix)=>{ const r=DATA.find(d=>d.id===x.r.id); if(!r||CUAD.bascula[r.id]) return; const t=now+ix;
     cuadSet('bascula/'+r.id,cierreSinOdoo(r,t));
@@ -3184,7 +3224,7 @@ function concApplyList(keys,sl,ov,silent){
   const sel=ov||R.issues.filter(i=>keys.includes(i.key)&&i.fixes.length); if(!sel.length){ toast('No hay nada seleccionado'); return; }
   // desde la fecha del control de lotes en Cargadores se respeta lo que ellos capturaron (solo se corrige producto/cantidad); antes de esa fecha Odoo llena los lotes
   const respeta=i=>!!(i.item&&fechaEmb(i.item.r)>=lotesDesde()&&lotesDe(i.item.r).length);
-  const plans=new Map(sel.map(i=>[i.key,(sl||respeta(i))?planSinLotes(i):null])), todo=sel.filter(i=>{ const p=plans.get(i.key); return !p||!p.nada; }), omit=sel.length-todo.length;
+  const plans=new Map(sel.map(i=>[i.key,((sl||respeta(i))&&i.tipo!=='nodesp')?planSinLotes(i):null])), todo=sel.filter(i=>{ const p=plans.get(i.key); return !p||!p.nada; }), omit=sel.length-todo.length;
   if(!todo.length){ toast('Sin tocar lotes no hay nada que corregir en lo seleccionado ('+omit+' caso(s) solo difieren en lotes o requieren crear registros con lotes de Odoo)'); return; }
   const cnt=f=>todo.filter(i=>{ const p=plans.get(i.key); return p?(f==='C'?p.C:f==='B'?p.B:f==='pedido'?p.pedido:f==='crearB'?p.crearB:false):i.fixes.includes(f); }).length;
   const cerr=todo.filter(i=>i.item&&perCerrado(perEmb(i.fecha,i.item.b))).length;
@@ -3195,6 +3235,7 @@ function concApplyList(keys,sl,ov,silent){
   const now=Date.now(); let n=0;
   todo.forEach((is,ix)=>{ const t=now+ix;
     if(is.tipo==='odoo'){ n+=crearEmbarque(is,t)?1:0; return; }
+    if(is.tipo==='nodesp'){ n+=marcarDesp(is,t)?1:0; return; }
     const i=is.item, r=DATA.find(x=>x.id===i.id); if(!r)return; const b=CUAD.bascula[i.id]||null, pl=plans.get(is.key); const nuevas=lineasCat(i.od);
     const antes={pedido:r.pedido||'',lotes:lotesDe(r).map(x=>({...x})),items:b?bascItems(b).map(x=>({...x})):null,bpedido:b?b.pedido||'':null,bneto:b&&b.estimado?(Number(b.neto)||0):null};
     const venta=[...new Set(i.picks.map(p=>p.v).filter(Boolean))].join(', '), refTxt=i.picks.map(p=>p.ref).join('+');
@@ -3213,6 +3254,16 @@ function concApplyList(keys,sl,ov,silent){
     auditPush({ts:new Date(t).toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'lotes',label:'Cuadre master vs Odoo'+(slI?' SIN tocar lotes':' (con lotes)')+' ('+eff.join('+')+')',from:'Carg.: '+_lin(antes.lotes)+(antes.items?' · Bás.: '+_lin(antes.items):' · sin báscula')+(eff.includes('pedido')?' · pedido '+(antes.pedido||'—'):''),to:(slI?'Carg.: '+_lin(newC||antes.lotes)+(newB||newCrB?' · Bás.: '+_lin(newB||newCrB):''):'Odoo: '+_lin(nuevas))+(venta?' · '+venta:''),maquillaje:true,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
     n++; });
   CC.sel={}; const R2=conciliarTodo(); bandejaSync(R2); refreshCuad(); if(curView==='conc') concRender(); toast('✅ '+n+' caso(s) cuadrados'+(sl?' sin tocar lotes'+(omit?' · '+omit+' siguen abiertos por lotes':''):' con Odoo')); }
+// el embarque existe pero no estaba marcado despachado y Odoo ya registró su salida → se marca despachado (con la fecha de Odoo) y se genera su báscula
+function marcarDesp(is,t){
+  const p=is.pick, r=DATA.find(x=>x.id===is.item.r.id); if(!r||isDesp(r)) return false; const lineas=lineasCat(is.od||odLineas([p]));
+  const antes={pedido:r.pedido||'',despachado:r.despachado,fechaCarga:r.fechaCarga||'',lotes:lotesDe(r).map(x=>({...x})),items:null};
+  r.despachado=true; if(!r.fechaCarga) r.fechaCarga=p.f; if(lineas.length&&!lotesDe(r).length){ r.lotes=lineas.map(x=>({...x})); r.lotesOdoo=true; }
+  persist(r.id,r); if(lineas.length&&!CUAD.bascula[r.id]) cuadSet('bascula/'+r.id,genBasc(r,lineas,p.ref,t));
+  cuadSet('ajustes/'+keySafe(r.id)+'_'+t,{ts:t,usuario:cuadUser(),id:r.id,cliente:r.cliente||'',pedido:r.pedido||'',srcs:['desp'],antes,despues:{lotes:lineas},creados:CUAD.bascula[r.id]?null:{basc:r.id},picks:[p.ref]});
+  auditPush({ts:new Date(t).toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'despachado',label:'Marcado despachado por conciliación con Odoo',from:'No despachado',to:p.ref+' · '+(p.v||'')+' · '+p.f,maquillaje:false,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
+  return true;
+}
 // salida de Odoo sin embarque → se crea el embarque (despachado) y su registro de báscula, ambos «generados»
 function crearEmbarque(is,t){
   const p=is.pick, lineas=lineasCat(is.od); if(!lineas.length) return false;
@@ -3230,7 +3281,7 @@ function concUndo(key){
   const now=Date.now();
   if(a.creados){ if(a.creados.emb){ const i=DATA.findIndex(x=>x.id===a.creados.emb); if(i>=0)DATA.splice(i,1); persistDelete(a.creados.emb); } if(a.creados.basc) cuadSet('bascula/'+a.creados.basc,null); }
   if(a.antes){ const r=DATA.find(x=>x.id===a.id);                                   // lo que se corrigió (pedido / lotes) regresa a como estaba
-    if(r){ r.pedido=a.antes.pedido; if(a.srcs.includes('C')) r.lotes=asArr(a.antes.lotes).map(x=>({...x})); persist(r.id,r); }
+    if(r){ r.pedido=a.antes.pedido; if(a.srcs.includes('C')) r.lotes=asArr(a.antes.lotes).map(x=>({...x})); if(a.srcs.includes('desp')){ r.despachado=a.antes.despachado||false; r.fechaCarga=a.antes.fechaCarga||''; r.lotes=asArr(a.antes.lotes).map(x=>({...x})); delete r.lotesOdoo; } persist(r.id,r); }
     const b=!(a.creados&&a.creados.basc)&&CUAD.bascula[a.id];
     if(b){ const h=Object.assign({},b.hist||{}); h['h'+now]={ts:now,usuario:cuadUser(),accion:'Deshacer cuadre',detalle:'regresa: '+_lin(a.antes.items)};
       const rec={...b,tsEdit:now,editor:cuadUser(),hist:h}; if(a.srcs.includes('B')&&a.antes.items){ rec.items=a.antes.items.map(x=>({...x})); rec.sacos=rec.items.reduce((s,x)=>s+(Number(x.sacos)||0),0); } if(a.antes.bpedido!=null) rec.pedido=a.antes.bpedido; if(a.antes.bneto!=null&&b.estimado) rec.neto=a.antes.bneto; cuadSet('bascula/'+a.id,rec); } }
@@ -3244,6 +3295,15 @@ function concCSV(){
   dlBlob(new Blob(['﻿'+[H.join(',')].concat(rows.map(r=>r.map(q).join(','))).join('\n')],{type:'text/csv;charset=utf-8'}),'bandeja_conciliacion_'+TODAY+'.csv'); toast('CSV descargado'); }
 // carga el Excel de Odoo y deja la bandeja al día (aquí nacen los «nuevos hoy»)
 async function concLoad(files){ if(!requireMaster())return; await cuadOdooFiles(files); const R=conciliarTodo(); bandejaSync(R); CC.sel={}; refreshCuad(); concRender(); }
+
+// salidas de Odoo por remisión (todos los meses cargados): para detectar pendientes del programa que ya salieron
+function odooIdxRem(){ const m=new Map(); try{ concPeriodos().forEach(P=>{ const x=odooRows(P,'mov'); if(x&&x.rows) x.rows.forEach(p=>{ if(!p.l||!p.l.some(l=>!esSacoVacio(l[0]))) return; remDig(p.v).forEach(d=>{ if(!m.has(d)) m.set(d,p); }); }); }); }catch(e){} return m; }
+function marcarDespPendientes(id){
+  if(!requireMaster())return; const L=carryList().filter(o=>o.pickOdoo&&(!id||o.r.id===id));
+  if(!L.length){ toast('No hay pendientes que ya hayan salido en Odoo'); return; }
+  if(!id&&!confirm('Voy a marcar como DESPACHADOS '+L.length+' pendiente(s) que ya salieron en Odoo (misma remisión).\nSe pone la fecha de Odoo como fecha de carga y se genera su báscula con los lotes de Odoo (queda como «generado»).\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?'))return;
+  const now=Date.now(); let n=0; L.forEach((o,ix)=>{ if(marcarDesp({pick:o.pickOdoo,item:{r:o.r},od:odLineas([o.pickOdoo])},now+ix)) n++; });
+  _rpC={t:0,v:null}; try{ bandejaSync(conciliarTodo()); }catch(e){} render(); refreshCuad(); toast('✅ '+n+' marcado(s) como despachados'); }
 
 /* ===== ACCESO AL ABRIR (pantalla de entrada) y perfiles ===== */
 let _cfgSynced=false;
