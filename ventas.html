@@ -6860,14 +6860,22 @@ function snapLineas(mesCorte){
     rows.push([ci[p[0]],pi[p[1]],Number(p[2]),q,vi[v]]);});
   return {v:2,cli:cli,prod:prod,vend:vend,rows:rows};
 }
+// La foto detallada se guarda en IndexedDB (localStorage de este sitio ya está casi lleno con el programador de embarques y no cabía).
+var CORTE_DET_MEM=null;
+function _idb(){return new Promise(function(ok,ko){try{var q=indexedDB.open('ventas04mas',1);q.onupgradeneeded=function(){q.result.createObjectStore('kv');};q.onsuccess=function(){ok(q.result);};q.onerror=function(){ko(q.error);};}catch(e){ko(e);}});}
+function _idbSet(k,v){return _idb().then(function(db){return new Promise(function(ok,ko){var t=db.transaction('kv','readwrite');if(v==null)t.objectStore('kv').delete(k);else t.objectStore('kv').put(v,k);t.oncomplete=function(){ok(true);};t.onerror=function(){ko(t.error);};t.onabort=function(){ko(t.error);};});});}
+function _idbGet(k){return _idb().then(function(db){return new Promise(function(ok,ko){var r=db.transaction('kv').objectStore('kv').get(k);r.onsuccess=function(){ok(r.result);};r.onerror=function(){ko(r.error);};});});}
+function cargarCorteDetMem(){_idbGet(CORTE_DET_KEY).then(function(v){CORTE_DET_MEM=v||null;try{renderCorteBar();}catch(e){}}).catch(function(){});}
 function guardarCorteDet(mes,anio,ts){
-  try{var o=snapLineas(mes);o.mes=mes;o.anio=anio;o.ts=ts;localStorage.setItem(CORTE_DET_KEY,JSON.stringify(o));return o.rows.length;}
-  catch(e){try{localStorage.removeItem(CORTE_DET_KEY);}catch(e2){}return -1;}
+  var o;try{o=snapLineas(mes);o.mes=mes;o.anio=anio;o.ts=ts;}catch(e){return Promise.resolve(-1);}
+  CORTE_DET_MEM=o;
+  return _idbSet(CORTE_DET_KEY,o).then(function(){return o.rows.length;}).catch(function(){return -1;});
 }
+setTimeout(cargarCorteDetMem,0);
 // Compara la foto detallada del corte contra el reporte cargado ahora (solo meses ya cerrados). null = no hay corte; {sinDetalle:true} = el corte no guardó detalle.
 function corteDetCompare(){
   var c=corteVigente();if(!c||!DATA)return null;
-  var raw=null,s=null;try{raw=localStorage.getItem(CORTE_DET_KEY);s=raw?JSON.parse(raw):null;}catch(e){}
+  var s=CORTE_DET_MEM;
   if(!s||s.mes!==c.mes||(s.anio&&c.anio&&s.anio!==c.anio))return {sinDetalle:true};
   var yr=(DATA.dataYear)||0,cv=_clienteVend(),old={},cur={},oldV={};
   s.rows.forEach(function(r){var k=s.cli[r[0]]+'\u0001'+s.prod[r[1]]+'\u0001'+r[2];old[k]=(old[k]||0)+r[3];oldV[s.cli[r[0]]]=s.vend[r[4]];});
@@ -6956,8 +6964,11 @@ function doCorte(){
     fecha:p(now.getDate())+'/'+p(now.getMonth()+1)+'/'+now.getFullYear()+' '+p(now.getHours())+':'+p(now.getMinutes()),
     archivo:((document.getElementById('file-badge')||{}).textContent||''),
     mesTot:snap.mesTot,vendMes:snap.vendMes});
-  var _nDet=guardarCorteDet(dd,(DATA.dataYear||now.getFullYear()),now.getTime());
-  if(_nDet<0)alert('Aviso: el corte quedó guardado, pero la foto detallada (cliente · producto · día) no cupo en la memoria del navegador, así que el reporte detallado de movimientos no estará disponible.');
+  guardarCorteDet(dd,(DATA.dataYear||now.getFullYear()),now.getTime()).then(function(n){
+    if(n<0)alert('Aviso: el corte quedó guardado, pero NO se pudo guardar la foto detallada (cliente · producto · día) en este navegador, así que el reporte detallado de movimientos no estará disponible.');
+    else alert('✅ Corte guardado con foto detallada ('+fmt(n)+' líneas cliente · producto · día). Cuando cargues un reporte que mueva un mes cerrado, el aviso rojo traerá el reporte detallado.');
+    try{renderCorteBar();}catch(e){}
+  });
   renderCorteBar();
   try{if(typeof refreshMapDependientes==='function')refreshMapDependientes();}catch(e){}
   try{if(typeof publishCloud==='function')publishCloud();}catch(e){}
@@ -6967,6 +6978,7 @@ function deshacerCorte(){
   var c=getCorte();if(!c)return;
   if(!confirm('¿Deshacer el corte de '+mesL(c.mes)+'?\n\nEl programa volverá a decidir el mes evaluado solo con lo que traiga el reporte, como antes.'))return;
   try{localStorage.removeItem(CORTE_KEY);localStorage.removeItem(CORTE_DET_KEY);}catch(e){}
+  CORTE_DET_MEM=null;try{_idbSet(CORTE_DET_KEY,null);}catch(e){}
   renderCorteBar();
 }
 function toggleCorteDet(){var d=document.getElementById('corte-det');if(!d)return;d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none';}
