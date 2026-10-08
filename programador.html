@@ -2278,7 +2278,8 @@ function cuadUnit(u){
   if(!b){ if(isDesp(r)) flags.push({lvl:'crit',k:'pend',t:(!u.noProg&&fechaEmb(r)<lotesDesde()&&!lotesDe(r).length)?'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión está mal capturada)':'Despachado sin registro de báscula'}); }
   else {
     const est=!!b.estimado;   // registro generado por el master a partir de Odoo: no hay ticket real, el neto no se puede verificar
-    if(est) flags.push({lvl:'info',k:'gen',t:'Registro generado por conciliación con Odoo (neto estimado, no es un pesaje real)'});
+    if(b.sinOdoo) flags.push({lvl:'info',k:'gen',t:'Cerrado sin salida en Odoo: el embarque salió en el programa pero no se encontró su salida de inventario. Se cierra con el peso programado (nota para análisis futuros, no es un pesaje real)'});
+    else if(est) flags.push({lvl:'info',k:'gen',t:'Registro generado por conciliación con Odoo (neto estimado, no es un pesaje real)'});
     const dif=Bkg-neto, ad=est?0:Math.abs(dif);
     if(ad>cfg.tolKg) flags.push({lvl:'crit',k:'neto',t:'Báscula: lo registrado pesa '+fK(Bkg)+' kg y el neto es '+fK(neto)+' kg ('+(dif<0?'FALTANTE':'EXCEDENTE')+' CRÍTICO de '+fK(ad)+' kg, tolerancia '+cfg.tolKg+' kg)'});
     else if(ad>0) flags.push({lvl:'info',k:'neto',t:'Báscula: '+(dif<0?'faltante':'excedente')+' menor de '+fK(ad)+' kg entre lo registrado y el neto'});
@@ -2936,8 +2937,8 @@ function conciliar(P){
   const items=[], sinSalida=[];
   embs.filter(r=>fechaEmb(r)>=from&&fechaEmb(r)<=to).forEach(r=>{
     const b=CUAD.bascula[r.id]||null, m=match.get(r.id), hall=[], fixes=new Set();
-    if(!m){ sinSalida.push({r,b});
-      hall.push({who:'P',k:'sinsal',t:'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión/cliente está mal capturado)',sin:true});
+    if(!m){ const cerr=!!(b&&b.sinOdoo);   // cerrado por el master «sin salida en Odoo»: queda como nota, ya no es pendiente
+      if(!cerr){ sinSalida.push({r,b}); hall.push({who:'P',k:'sinsal',t:'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión/cliente está mal capturado)',sin:true}); }
       // aun sin salida en Odoo se puede cachar un producto que no corresponde al lote (según el histórico de Odoo)
       [['Cargadores',lotesDe(r)],['Báscula',b?bascItems(b):[]]].forEach(([src,ls])=>ls.forEach(x=>{ const pk=pkey(x.cod||x.prod), l=normLote(x.lote); if(lm[l]&&lm[l]!=='?'&&lm[l]!==pk) hall.push({who:src==='Cargadores'?'C':'B',k:'prod',t:`Lote ${l}: ${src} registró «${prodNameByKey(pk,pk)}» pero en Odoo ese lote es «${prodNameByKey(lm[l],lm[l])}»`}); }));
       items.push({id:r.id,r,b,picks:[],hall,fixes:[],sinSalida:true}); return; }
@@ -3076,7 +3077,7 @@ function concOpenEmb(id){ if(!requireMaster())return; setView('tabla'); openForm
 function concOpenPes(id){ if(!requireMaster())return; openBasc(id); }
 function concAjustesHTML(){
   const L=Object.entries(CUAD.ajustes||{}).map(([k,a])=>({k,...a})).sort((a,b)=>b.ts-a.ts).slice(0,25); if(!L.length) return '';
-  return `<div class="card" style="margin-top:12px"><h3>Cuadres hechos (respaldo para deshacer)</h3><div class="tablewrap" style="max-height:220px"><table><thead><tr><th>Cuándo</th><th>Cliente</th><th>Qué se hizo</th><th></th></tr></thead><tbody>${L.map(a=>`<tr><td>${ttsStr(a.ts)}</td><td>${escProy(a.cliente||'')}</td><td>${escProy((a.srcs||[]).map(s=>({C:'Cargadores',B:'Báscula',pedido:'Remisión',crearB:'Báscula creada',crearE:'Embarque + báscula creados'}[s]||s)).join(' + '))}${a.sinLotes?' · <span class="pill p-ok">sin tocar lotes</span>':''}${a.deshecho?' · <span class="pill p-proc">deshecho '+ttsStr(a.deshecho)+'</span>':''}</td><td>${a.deshecho?'':`<button class="ghost" onclick="concUndo('${a.k}')">↩ Deshacer</button>`}</td></tr>`).join('')}</tbody></table></div></div>`;
+  return `<div class="card" style="margin-top:12px"><h3>Cuadres hechos (respaldo para deshacer)</h3><div class="tablewrap" style="max-height:220px"><table><thead><tr><th>Cuándo</th><th>Cliente</th><th>Qué se hizo</th><th></th></tr></thead><tbody>${L.map(a=>`<tr><td>${ttsStr(a.ts)}</td><td>${escProy(a.cliente||'')}</td><td>${escProy((a.srcs||[]).map(s=>({C:'Cargadores',B:'Báscula',pedido:'Remisión',crearB:'Báscula creada',crearE:'Embarque + báscula creados',sinOdoo:'Cerrado sin salida en Odoo'}[s]||s)).join(' + '))}${a.sinLotes?' · <span class="pill p-ok">sin tocar lotes</span>':''}${a.deshecho?' · <span class="pill p-proc">deshecho '+ttsStr(a.deshecho)+'</span>':''}</td><td>${a.deshecho?'':`<button class="ghost" onclick="concUndo('${a.k}')">↩ Deshacer</button>`}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 const _lin=ls=>asArr(ls).map(x=>(x.lote||'')+'×'+(x.sacos||0)).join(' | ')||'(vacío)';
 // registro de báscula «generado»: no es un pesaje real (sin ticket, bruto/tara en 0, neto estimado con los sacos de Odoo)
@@ -3127,7 +3128,7 @@ function regPlan(force){
   const ps=[...new Set(DATA.filter(r=>!r.cancelado&&isDesp(r)&&fechaEmb(r)&&antes(r)).map(r=>perDe(fechaEmb(r))))].filter(p=>!perCerrado(p)).sort();
   ps.forEach(P=>{ const c=conciliar(P); if(!c){ sinOdoo.push(P); return; }
     c.issues.forEach(i=>{ if(i.tipo==='emb'&&i.fixes.length&&i.item&&antes(i.item.r)) out.push(i); });
-    sinSal.push(...c.sinSalida.filter(x=>antes(x.r))); });
+    sinSal.push(...c.sinSalida.filter(x=>fechaEmb(x.r)<corte)); });
   _rpC={t:n,v:{ps,out,sinOdoo,sinSal,corte}}; return _rpC.v;
 }
 const fmtF=f=>{ const [y,m,d]=String(f).split('-'); return d+'/'+m+'/'+y; };
@@ -3136,18 +3137,36 @@ function regBannerHtml(){
   let pl; try{ pl=regPlan(); }catch(e){ return ''; }
   const base='margin-bottom:12px;padding:14px 16px;border-radius:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;';
   const cB=pl.out.filter(i=>i.fixes.includes('crearB')).length;
-  if(pl.out.length) return `<div style="${base}background:linear-gradient(90deg,#14325a,#1c2f55);border:2px solid #3b9dff;box-shadow:0 0 0 4px rgba(59,157,255,.18)"><div style="flex:1;min-width:260px"><div style="font-size:16px;font-weight:800;margin-bottom:3px">📲 Cuadrar los lotes de Cargadores con Odoo</div><div style="font-size:12.5px;color:#cfe0f2"><b>${pl.out.length} embarque(s)</b> anteriores al <b>${fmtF(pl.corte)}</b> no tienen lotes de Cargadores (ahí no se registraban). Odoo sí sabe qué salió: al cuadrar se llenan los lotes de Cargadores y se crean <b>${cB}</b> registros de báscula «generados». Desde el ${fmtF(pl.corte)} <b>se respeta lo que capturó Cargadores</b>. ${pl.sinSal.length?`Se quedan pendientes ${pl.sinSal.length} despachados sin salida en Odoo (falta liberar). `:''}${pl.sinOdoo.length?`Falta cargar el detalle de Odoo de: ${pl.sinOdoo.map(perLabel).join(', ')}.`:''}</div></div><button class="primary" style="font-size:15px;font-weight:800;padding:13px 22px" onclick="concRegularizar()">📲 Cuadrar con Odoo (${pl.out.length})</button></div>`;
+  if(pl.out.length) return `<div style="${base}background:linear-gradient(90deg,#14325a,#1c2f55);border:2px solid #3b9dff;box-shadow:0 0 0 4px rgba(59,157,255,.18)"><div style="flex:1;min-width:260px"><div style="font-size:16px;font-weight:800;margin-bottom:3px">📲 Cuadrar los lotes de Cargadores con Odoo</div><div style="font-size:12.5px;color:#cfe0f2"><b>${pl.out.length} embarque(s)</b> anteriores al <b>${fmtF(pl.corte)}</b> no tienen lotes de Cargadores (ahí no se registraban). Odoo sí sabe qué salió: al cuadrar se llenan los lotes de Cargadores y se crean <b>${cB}</b> registros de báscula «generados». Desde el ${fmtF(pl.corte)} <b>se respeta lo que capturó Cargadores</b>. ${pl.sinSal.length?`${pl.sinSal.length} despachados sin salida en Odoo se cierran con una nota. `:''}${pl.sinOdoo.length?`Falta cargar el detalle de Odoo de: ${pl.sinOdoo.map(perLabel).join(', ')}.`:''}</div></div><button class="primary" style="font-size:15px;font-weight:800;padding:13px 22px" onclick="concRegularizar()">📲 Cuadrar con Odoo (${pl.out.length})</button></div>`;
   if(pl.sinOdoo.length) return `<div style="${base}background:#3a2e12;border:1px solid var(--warn)"><div style="flex:1;font-size:13px">📲 <b>Lotes anteriores al ${fmtF(pl.corte)}:</b> falta cargar el detalle de Odoo (movimientos de producto) de <b>${pl.sinOdoo.map(perLabel).join(', ')}</b> para poder cuadrarlos.</div><button class="ghost" onclick="setView('conc')">Ir a Conciliación y cargar Odoo</button></div>`;
-  return `<div style="${base}background:#12301f;border:1px solid var(--ok);padding:9px 14px"><div style="font-size:12.5px">✓ Todo lo anterior al ${fmtF(pl.corte)} ya está cuadrado con Odoo${pl.sinSal.length?` · quedan ${pl.sinSal.length} despachados sin salida en Odoo (pendientes de liberar)`:''}. Desde esa fecha se respeta lo que capturó Cargadores.</div></div>`;
+  return `<div style="${base}background:#12301f;border:1px solid var(--ok);padding:9px 14px"><div style="font-size:12.5px">✓ Todo lo anterior al ${fmtF(pl.corte)} ya está cuadrado con Odoo${pl.sinSal.length?` · hay ${pl.sinSal.length} despachados sin salida en Odoo por cerrar con nota`:''}. Desde esa fecha se respeta lo que capturó Cargadores.</div>${pl.sinSal.length?`<button class="primary" onclick="concCerrarSinOdoo()">Cerrar ${pl.sinSal.length} sin salida en Odoo</button>`:''}</div>`;
+}
+// despachados ANTERIORES al control sin salida en Odoo: se cierran con una nota (registro «generado» con el peso programado), ya no quedan pendientes
+function cierreSinOdoo(r,now){
+  const fecha=fechaEmb(r)||TODAY, ts=Math.min(now,new Date(fecha+'T12:00:00').getTime()), nota='Cerrado por el master sin salida en Odoo: el embarque salió en el programa pero no se encontró su salida de inventario (falta liberar en Odoo o la remisión/cliente está mal capturado). Se cierra con el peso programado; no es un pesaje real.';
+  return {id:r.id,emb:r.id,noProg:false,folio:'SINODOO-'+String(r.pedido||r.id).slice(0,14),placa:'',eco:r.eco||'',vehiculo:r.tipo||'',horaEntrada:'',horaSalida:'',turno:'',bruto:0,tara:0,neto:Math.round(Number(r.kilos)||Number(r.peso)||0),
+    obs:nota,items:[],sacos:0,fecha,cliente:r.cliente||'',pedido:r.pedido||'',usuario:'master',oper:'(cerrado por master)',ts,tsEdit:now,editor:cuadUser(),generado:true,estimado:true,sinOdoo:true,
+    hist:{['h'+now]:{ts:now,usuario:cuadUser(),accion:'Cerrado sin salida en Odoo',detalle:nota}}};
+}
+function concCerrarSinOdoo(silent){
+  if(!requireMaster())return; const pl=regPlan(true); if(!pl.sinSal.length){ toast('No hay despachados sin salida en Odoo por cerrar'); return 0; }
+  if(!silent&&!confirm('Hay '+pl.sinSal.length+' embarque(s) despachados anteriores al '+fmtF(pl.corte)+' sin salida en Odoo.\nSe cierran con una nota «sin salida en Odoo» (peso programado, registro generado) y dejan de contar como pendientes.\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return 0;
+  const now=Date.now(); let n=0;
+  pl.sinSal.forEach((x,ix)=>{ const r=DATA.find(d=>d.id===x.r.id); if(!r||CUAD.bascula[r.id]) return; const t=now+ix;
+    cuadSet('bascula/'+r.id,cierreSinOdoo(r,t));
+    cuadSet('ajustes/'+keySafe(r.id)+'_'+t,{ts:t,usuario:cuadUser(),id:r.id,cliente:r.cliente||'',pedido:r.pedido||'',srcs:['sinOdoo'],antes:null,despues:{},creados:{basc:r.id},picks:[]});
+    auditPush({ts:new Date(t).toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'lotes',label:'Cerrado sin salida en Odoo',from:'(sin registro de báscula)',to:'Cierre con el peso programado · sin salida en Odoo',maquillaje:true,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
+    n++; });
+  _rpC={t:0,v:null}; bandejaSync(conciliarTodo()); refreshCuad(); if(curView==='conc') concRender(); if(!silent) toast('✅ '+n+' embarque(s) cerrados sin salida en Odoo (con nota)'); return n;
 }
 function concRegularizar(silent){
   if(!requireMaster())return; const pl=regPlan(true);
   if(!CFG.lotesDesde&&pl.corte<'2999'){ CFG.lotesDesde=pl.corte; persistCfg(); }   // fija la fecha del control para que no se mueva al llenar lotes
-  if(!pl.out.length){ toast('No hay nada que cuadrar antes del '+fmtF(pl.corte)+(pl.sinOdoo.length?' · falta cargar el detalle de Odoo de: '+pl.sinOdoo.map(perLabel).join(', '):''),5000); return; }
+  if(!pl.out.length){ if(pl.sinSal.length){ const c=concCerrarSinOdoo(silent)||0; return {aplicados:0,cerradosSinOdoo:c}; } toast('No hay nada que cuadrar antes del '+fmtF(pl.corte)+(pl.sinOdoo.length?' · falta cargar el detalle de Odoo de: '+pl.sinOdoo.map(perLabel).join(', '):''),5000); return; }
   const cB=pl.out.filter(i=>i.fixes.includes('crearB')).length;
-  if(!silent&&!confirm('Antes del '+fmtF(pl.corte)+' (Cargadores no registraba lotes):\n· '+pl.out.length+' embarque(s) se cuadran contra Odoo: los lotes de Cargadores se llenan con los de Odoo\n· '+cB+' registro(s) de báscula «generados» a crear\n· '+pl.sinSal.length+' despachados SIN salida en Odoo se quedan pendientes'+(pl.sinOdoo.length?'\n· Sin detalle de Odoo (no se tocan): '+pl.sinOdoo.map(perLabel).join(', '):'')+'\n\nDesde el '+fmtF(pl.corte)+' no se toca nada de Cargadores.\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return;
-  concApplyList(pl.out.map(i=>i.key),false,pl.out,true); _rpC={t:0,v:null};
-  return {aplicados:pl.out.length,pendientesSinSalida:pl.sinSal.length,sinOdoo:pl.sinOdoo};
+  if(!silent&&!confirm('Antes del '+fmtF(pl.corte)+' (Cargadores no registraba lotes):\n· '+pl.out.length+' embarque(s) se cuadran contra Odoo: los lotes de Cargadores se llenan con los de Odoo\n· '+cB+' registro(s) de báscula «generados» a crear\n· '+pl.sinSal.length+' despachados SIN salida en Odoo se cierran con una nota (peso programado)'+(pl.sinOdoo.length?'\n· Sin detalle de Odoo (no se tocan): '+pl.sinOdoo.map(perLabel).join(', '):'')+'\n\nDesde el '+fmtF(pl.corte)+' no se toca nada de Cargadores.\nQueda respaldo, Auditoría y se puede deshacer. ¿Continuar?')) return;
+  concApplyList(pl.out.map(i=>i.key),false,pl.out,true); _rpC={t:0,v:null}; const cerrados=concCerrarSinOdoo(true)||0;
+  return {aplicados:pl.out.length,cerradosSinOdoo:cerrados,sinOdoo:pl.sinOdoo};
 }
 // lotes distintos a Odoo, solo informativo (no cuenta como error)
 function concLotesInfoHtml(R){
