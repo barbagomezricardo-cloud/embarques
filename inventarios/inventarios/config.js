@@ -35,7 +35,7 @@
 
   /* 4) Llave pública para notificaciones push (Firebase → Configuración del
         proyecto → Cloud Messaging → Certificados push web → Par de claves). */
-  VAPID_KEY: "",
+  VAPID_KEY: "BCVwQ7uI3qBDSZv-kRqJSnYIBoSolXxjeMp5VQE3zC2JGsva25M4Qn_YMo1NGv692CfMf4DGseTO1_QluBU5PCw",
 
   EMPRESA: "Leche 19 Diecinueve Hermanos · División Pet Food"
 };
