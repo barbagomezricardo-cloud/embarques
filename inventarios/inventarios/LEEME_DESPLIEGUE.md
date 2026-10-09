@@ -90,3 +90,11 @@ Sin este paso, la app de producción igual muestra el recordatorio en pantalla y
 - `sw.js`, `manifest-*.json`, `icons/` — instalación como app y notificaciones.
 - `firebase/database.rules.json` — reglas (las mismas que copia el Panel).
 - `firebase/functions/` — funciones de Firebase (las tuyas + inventarios).
+
+## Cambios 9-oct-2026
+- **Transferencias a PT en 3 pasos:** almacén entrega → producción confirma lo recibido (app producción, pestaña "Recibir") → jefe de inventarios acepta. Excepción: "Aceptar sin confirmación" con motivo obligatorio.
+- **Pacas = informativas.** Lo que mueve inventario son los sacos/piezas.
+- **Silos:** motivos de calidad editables en Configuración (OK, Contaminado, Cuarentena, Pegado, Humedad alta, Plaga, Mezcla, Fuera de especificación, Rancidez, Pendiente de análisis, Otro). Todo lo distinto de OK pide nota.
+- **Conteos cíclicos:** incluyen materias de silo (se captura el vacío del láser y el sistema calcula kg); alcance por familias o artículos; "Ajustar alcance", "Terminar con lo capturado" y "Cancelar conteo".
+- **Catálogo:** columnas 📋 Contar (app almacén) y 🏭 Solicitar (app producción), con cambio masivo para lo filtrado.
+- **Usuario Compras:** ve Tablero, Silos, Proyección y Alertas; puede registrar OC colocadas (entran como fincadas) y agregar notas/estatus de seguimiento. No edita existencias.

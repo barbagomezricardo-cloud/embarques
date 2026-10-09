@@ -181,3 +181,4 @@ tr.sel td{background:rgba(232,160,32,.08)}
   th,td{padding:6px 7px}
 }
 .app-ui #inv-toast{bottom:92px}
+.tabs-bottom button{position:relative}

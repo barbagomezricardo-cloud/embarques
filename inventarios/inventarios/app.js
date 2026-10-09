@@ -9,19 +9,19 @@
   try { await I.start({ appKey: 'principal' }); } catch (e) { return; }
   const DB = I.DB, AUTH = I.AUTH;
 
-  const S = { catalogo: {}, fisico: {}, pt: {}, silos: {}, silosLect: {}, densidades: {}, llegadas: {}, odoo: null, conteos: {}, entregas: {}, solicitudes: {}, movimientos: {}, ptCortes: {}, usuarios: {}, config: {}, meta: {} };
+  const S = { catalogo: {}, fisico: {}, pt: {}, silos: {}, silosLect: {}, densidades: {}, llegadas: {}, odoo: null, conteos: {}, entregas: {}, solicitudes: {}, movimientos: {}, ptCortes: {}, usuarios: {}, config: {}, meta: {}, notasCompra: {} };
   let USER = null, offs = [], TAB = null;
   const UI = { proyFam: 'EMPAQUE', proyMeses: 15, proyPC: true, proyQ: '', proyItem: null, alFam: '', alSt: 'todos', alQ: '', fisFam: '', fisQ: '', fisSub: 'fis', conteoSel: null, catFam: '', catQ: '', catAct: 'act', bitTipo: '', bitQ: '', bitDesde: '', bitHasta: '', histQ: '', histDesde: '', iaModelo: 'haiku', odooQ: '', rev: {} };
   const ROLES_PRINCIPAL = ['master', 'jefe', 'compras'];
 
   /* ---------------- Pestañas ---------------- */
   const TABS = [
-    { id: 'tablero', t: '📊 Tablero', roles: ['master', 'jefe'] },
+    { id: 'tablero', t: '📊 Tablero', roles: ['master', 'jefe', 'compras'] },
     { id: 'entradas', t: '📥 Entradas MDE', roles: ['master', 'jefe'] },
-    { id: 'transfer', t: '🔁 Transferencias a PT', roles: ['master', 'jefe'], cnt: () => vals(S.entregas).filter(e => e.estado === 'por_validar').length },
+    { id: 'transfer', t: '🔁 Transferencias a PT', roles: ['master', 'jefe'], cnt: () => vals(S.entregas).filter(e => I.estadoEntrega(e) === 'recibida').length },
     { id: 'pt', t: '🏭 Almacén PT', roles: ['master', 'jefe'] },
     { id: 'fisico', t: '📋 Físico y conteos', roles: ['master', 'jefe'], cnt: () => vals(S.conteos).filter(c => c.estado === 'confirmado').length },
-    { id: 'silos', t: '🛢️ Silos', roles: ['master', 'jefe'] },
+    { id: 'silos', t: '🛢️ Silos', roles: ['master', 'jefe', 'compras'] },
     { id: 'proyeccion', t: '📈 Proyección', roles: ['master', 'jefe', 'compras'] },
     { id: 'alertas', t: '🚨 Alertas de compra', roles: ['master', 'jefe', 'compras'] },
     { id: 'odoo', t: '🔄 Odoo', roles: ['master', 'jefe'] },
@@ -60,6 +60,7 @@
       sub('densidades', 'densidades'); sub('odoo', 'odoo'); sub('conteos', 'conteos', 60); sub('entregas', 'entregas', 600); sub('solicitudes', 'solicitudes', 400); sub('movimientos', 'movimientos', 2500); sub('ptCortes', 'ptCortes', 60);
     }
     if (can('master')) sub('usuarios', 'usuarios');
+    sub('notasCompra', 'notasCompra');
   }
 
   function shell() {
@@ -142,9 +143,11 @@
   /* ---------- TABLERO ---------- */
   VIEWS.tablero = {
     update(el) {
+      if (can('compras')) return tableroCompras(el);
       const al = alertas();
       const oc = al.filter(a => a.status === 'COLOCAR OC'), cr = al.filter(a => a.crit === 'CRÍTICO');
-      const porVal = vals(S.entregas).filter(e => e.estado === 'por_validar');
+      const porVal = vals(S.entregas).filter(e => I.estadoEntrega(e) === 'recibida');
+      const porConf = vals(S.entregas).filter(e => I.estadoEntrega(e) === 'por_recibir');
       const hoy = hoyISO();
       const solHoy = vals(S.solicitudes).filter(s => s.fecha === hoy);
       const conteo = vals(S.conteos).filter(c => c.estado === 'en_captura').sort((a, b) => b.inicio - a.inicio)[0];
@@ -158,7 +161,7 @@
       el.innerHTML = (vacio ? `<div class="card" style="border-color:var(--acc);margin-bottom:12px"><h2>👋 Primer arranque</h2><p>La base está vacía. ${can('master') ? 'Carga el catálogo, las existencias, consumos, lead times, silos, pedidos fincados y el reporte de Odoo que vienen de tus archivos de Excel.' : 'Pide al master que haga la carga inicial.'}</p>${can('master') ? '<button class="btn pri" id="seed-go">Cargar datos iniciales de mis archivos</button>' : ''}</div>` : '') + `
       <div class="grid g4">
         <div class="kpi red"><div class="l">Colocar OC</div><div class="v">${oc.length}</div><div class="s">${cr.length} críticos</div></div>
-        <div class="kpi ${porVal.length ? 'amb' : 'grn'}"><div class="l">Entregas a PT por validar</div><div class="v">${porVal.length}</div><div class="s">reportadas por almacén</div></div>
+        <div class="kpi ${porVal.length ? 'amb' : 'grn'}"><div class="l">Transferencias a PT por aceptar</div><div class="v">${porVal.length}</div><div class="s">${porConf.length} esperando confirmación de producción</div></div>
         <div class="kpi blu"><div class="l">Solicitudes de producción hoy</div><div class="v">${solHoy.length}</div><div class="s">${solHoy.filter(s => s.estado === 'pendiente').length} sin surtir</div></div>
         <div class="kpi ${conteo ? 'amb' : ''}"><div class="l">Conteo cíclico</div><div class="v">${conteo ? avance : (confirmados.length ? confirmados.length + ' por revisar' : '—')}</div><div class="s">${conteo ? 'en captura · ' + esc(conteo.almacenista && conteo.almacenista.nombre) : 'sin conteo activo'}</div></div>
         <div class="kpi"><div class="l">Valor del inventario físico</div><div class="v">${money(valor)}</div><div class="s">a costo promedio Odoo</div></div>
@@ -170,8 +173,8 @@
         <div class="card"><div class="card-h"><h3>🚨 Alertas críticas</h3><span class="sp"></span><button class="btn sm" data-go="alertas">Ver todas</button></div>
           ${(() => { const L = al.filter(a => a.status !== 'SUFICIENTE').sort((a, b) => critOrder[a.crit] - critOrder[b.crit] || a.alcance - b.alcance).slice(0, 10); return L.length ? `<div class="tw" style="max-height:none;border:0"><table><tbody>${L.map(a => `<tr><td><span class="b ${I.critClass(a.crit)}">${a.crit}</span></td><td>${esc(a.it.nombre)}<div class="tiny muted">${esc(a.it.codigo)}</div></td><td class="num small">${isFinite(a.alcance) ? fmt(a.alcance, 0) + ' días' : ''}</td><td><span class="b ${I.statusClass(a.status)}">${a.status}</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin alertas 🎉</div>'; })()}
         </div>
-        <div class="card"><div class="card-h"><h3>🔁 Entregas a producción por validar</h3><span class="sp"></span><button class="btn sm" data-go="transfer">Ir a validar</button></div>
-          ${porVal.sort((a, b) => a.ts - b.ts).slice(0, 8).map(e => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(e.por && e.por.nombre)}</b> <span class="muted small">${fFecha(e.ts)}</span><div class="small">${lineasTxt(e.lineas)}</div></div>`).join('') || '<div class="empty">Nada pendiente</div>'}
+        <div class="card"><div class="card-h"><h3>🔁 Recibidas por producción · por aceptar</h3><span class="sp"></span><button class="btn sm" data-go="transfer">Ir a aceptar</button></div>
+          ${porVal.sort((a, b) => a.ts - b.ts).slice(0, 8).map(e => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(e.por && e.por.nombre)}</b> → ${esc(e.recepcion ? e.recepcion.nombre : '')} <span class="muted small">${fFecha(e.ts)}</span><div class="small">${lineasTxt(e.lineas)}</div></div>`).join('') || '<div class="empty">Nada pendiente</div>'}
         </div>
         <div class="card"><div class="card-h"><h3>🏭 Solicitudes de producción de hoy</h3></div>
           ${solHoy.sort((a, b) => b.ts - a.ts).map(s => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="b ${solCls(s.estado)}">${solTxt(s.estado)}</span> <b>${esc(s.por && s.por.nombre)}</b> <span class="muted small">${fFecha(s.ts)}</span><div class="small">${lineasTxt(s.lineas)}</div></div>`).join('') || '<div class="empty">Aún no hay solicitudes hoy</div>'}
@@ -182,9 +185,47 @@
       const sg = $('#seed-go', el); if (sg) sg.onclick = async () => { sg.disabled = true; try { await I.cargarSemilla(true); I.toast('Carga inicial lista ✔', 'ok'); } catch (e) { I.toast('Error: ' + e.message, 'err'); sg.disabled = false; } };
     }
   };
-  const lineasTxt = l => vals(l).map(x => `${esc(item(x.itemId).nombre)}: <b>${fmt(x.cantValidada != null ? x.cantValidada : x.cant)}</b>${x.pacas ? ' (' + fmt(x.pacas) + ' pacas)' : ''}`).join(' · ');
-  const solTxt = s => ({ pendiente: 'Pendiente', surtida: 'Surtida', validada: 'Validada', rechazada: 'Rechazada', cancelada: 'Cancelada' }[s] || s);
-  const solCls = s => ({ pendiente: 'b-amb', surtida: 'b-blu', validada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' }[s] || 'b-gry');
+  const lineasTxt = l => vals(l).map(x => `${esc(item(x.itemId).nombre)}: <b>${fmt(x.cantValidada != null ? x.cantValidada : x.cantRecibida != null ? x.cantRecibida : x.cant)}</b>${x.pacas ? ' <span class="muted">(' + fmt(x.pacas) + ' pacas, info)</span>' : ''}`).join(' · ');
+  const solTxt = s => ({ pendiente: 'Pendiente', surtida: 'Entregada', recibida: 'Recibida por producción', validada: 'Aceptada', rechazada: 'Rechazada', cancelada: 'Cancelada' }[s] || s);
+  const solCls = s => ({ pendiente: 'b-amb', surtida: 'b-blu', recibida: 'b-blu', validada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' }[s] || 'b-gry');
+
+  /* ---------- TABLERO DE COMPRAS (solo consulta + seguimiento de compras) ---------- */
+  function tableroCompras(el) {
+    const al = alertas();
+    const mias = vals(S.llegadas).filter(l => l.origen === 'compras' && l.estado === 'fincado').sort((a, b) => String(a.mes).localeCompare(b.mes));
+    const prox = vals(S.llegadas).filter(l => l.estado === 'fincado' || l.estado === 'por_comprar').sort((a, b) => String(a.mes).localeCompare(b.mes)).slice(0, 12);
+    const L = al.filter(a => a.status !== 'SUFICIENTE').sort((a, b) => critOrder[a.crit] - critOrder[b.crit] || a.alcance - b.alcance).slice(0, 12);
+    el.innerHTML = `<div class="grid g4">
+      <div class="kpi red"><div class="l">Colocar OC</div><div class="v">${al.filter(a => a.status === 'COLOCAR OC').length}</div><div class="s">${al.filter(a => a.crit === 'CRÍTICO').length} críticos</div></div>
+      <div class="kpi blu"><div class="l">Cubiertos con OC</div><div class="v">${al.filter(a => a.status === 'CUBIERTO CON OC').length}</div></div>
+      <div class="kpi amb"><div class="l">Mis OC en tránsito</div><div class="v">${mias.length}</div><div class="s">registradas por compras</div></div>
+      <div class="kpi"><div class="l">Físico actualizado</div><div class="v" style="font-size:16px">${fFecha(ultimaAct())}</div></div></div>
+      <div class="grid g2" style="margin-top:12px">
+        <div class="card"><div class="card-h"><h3>🚨 Lo que hay que comprar</h3><span class="sp"></span><button class="btn sm" data-go="alertas">Ver todas</button></div>
+          ${L.length ? `<div class="tw" style="max-height:none;border:0"><table><tbody>${L.map(a => `<tr><td><span class="b ${I.critClass(a.crit)}">${a.crit}</span></td><td>${esc(a.it.nombre)}<div class="tiny muted">${a.sugerido > 0 ? 'sugerido ' + fmt(a.sugerido) + ' ' + esc(a.it.unidad) : ''}${segTxt(a.it.id)}</div></td><td class="num small">${isFinite(a.alcance) ? fmt(a.alcance, 0) + ' días' : ''}</td><td>${botonesCompra(a.it.id)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin alertas 🎉</div>'}
+        </div>
+        <div class="card"><div class="card-h"><h3>🚚 Próximas llegadas</h3><span class="sp"></span><button class="btn sm" data-go="proyeccion">Proyección</button></div>
+          ${prox.length ? `<div class="tw" style="max-height:none;border:0"><table><tbody>${prox.map(l => `<tr><td>${mesLabel(l.mes)}</td><td>${esc(lbl(l.itemId))}<div class="tiny muted">${esc(l.proveedor || '')} ${l.oc ? '· OC ' + esc(l.oc) : ''}</div></td><td class="num">${fmt(l.cant)}</td><td><span class="b ${l.estado === 'fincado' ? 'b-blu' : 'b-amb'}">${l.estado === 'fincado' ? 'fincado' : 'por comprar'}</span>${l.origen === 'compras' ? ' <span class="b b-gry">compras</span>' : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin llegadas programadas</div>'}
+        </div>
+        <div class="card"><div class="card-h"><h3>🛢️ Silos</h3><span class="sp"></span><button class="btn sm" data-go="silos">Detalle</button></div><div class="mini">${silosGrid(true)}</div></div>
+      </div>`;
+    $$('[data-go]', el).forEach(b => b.onclick = () => { TAB = b.dataset.go; mounted = null; render(true); });
+    bindCompra(el);
+  }
+  /* Seguimiento de compras: registrar OC (entra a la proyección como fincado) y notas por artículo */
+  const notasDe = id => vals(S.notasCompra && S.notasCompra[id]).sort((a, b) => b.ts - a.ts);
+  const segTxt = id => { const n = notasDe(id); const est = n.find(x => x.estatus); const oc = vals(S.llegadas).filter(l => l.itemId === id && l.origen === 'compras' && l.estado === 'fincado'); return (est ? ` · <span class="b b-blu">${esc(I.ESTATUS_COMPRA[est.estatus] || est.estatus)}</span>` : '') + (oc.length ? ` · ${oc.length} OC` : '') + (n.length ? ` · 💬 ${n.length}` : ''); };
+  const puedeComprar = () => can('master', 'jefe', 'compras');
+  const botonesCompra = id => puedeComprar() ? `<span style="white-space:nowrap"><button class="btn sm" data-buy="${id}" title="Registrar orden de compra">🛒</button> <button class="btn sm" data-nt="${id}" title="Notas y estatus">💬${notasDe(id).length ? ' ' + notasDe(id).length : ''}</button></span>` : '';
+  function bindCompra(el) {
+    $$('[data-buy]', el).forEach(b => b.onclick = () => editarLlegada(null, b.dataset.buy, true));
+    $$('[data-nt]', el).forEach(b => b.onclick = () => notasCompra(b.dataset.nt));
+  }
+  async function notasCompra(id) {
+    const n = notasDe(id);
+    await I.modal('Seguimiento de compra · ' + item(id).nombre, `<div style="max-height:40vh;overflow:auto;margin-bottom:10px">${n.map(x => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row"><b>${esc(x.por)}</b><span class="muted small">${fFecha(x.ts)}</span>${x.estatus ? `<span class="b b-blu">${esc(I.ESTATUS_COMPRA[x.estatus] || x.estatus)}</span>` : ''}</div><div>${esc(x.texto || '')}</div></div>`).join('') || '<div class="empty small">Sin notas todavía</div>'}</div>
+      <label>Estatus<select id="nc-e"><option value="">— sin cambio —</option>${Object.keys(I.ESTATUS_COMPRA).map(k => `<option value="${k}">${I.ESTATUS_COMPRA[k]}</option>`).join('')}</select></label><label>Nota<textarea id="nc-t" placeholder="Proveedor, fecha comprometida, precio, motivo de retraso…"></textarea></label>`, [{ t: 'Cerrar' }, { t: 'Agregar nota', c: 'pri', antes: async ov => { const t = $('#nc-t', ov).value.trim(), e = $('#nc-e', ov).value; if (!t && !e) { I.toast('Escribe una nota o elige un estatus', 'err'); return false; } await DB.push('notasCompra/' + id, { texto: t, estatus: e || null, por: USER.nombre, rol: USER.rol, ts: Date.now() }); I.toast('Nota guardada ✔', 'ok'); } }]);
+  }
 
   /* ---------- ENTRADAS AL MDE ---------- */
   VIEWS.entradas = {
@@ -241,19 +282,24 @@
   };
   const entradasList = () => { const d = $('#en-d') && $('#en-d').value; return vals(S.movimientos).filter(m => m.tipo === 'entrada' && (!d || m.fecha >= d)).sort((a, b) => b.ts - a.ts); };
 
-  /* ---------- TRANSFERENCIAS A PT ---------- */
+  /* ---------- TRANSFERENCIAS A PT ----------
+     Flujo: almacén entrega → producción confirma lo que recibió → el jefe acepta
+     (hasta la aceptación se mueve el inventario MDE → PT). */
+  const est = e => I.estadoEntrega(e);
   VIEWS.transfer = {
     mount(el) {
       el.innerHTML = `
-      <div class="card"><div class="card-h"><h2>🔁 Entregas reportadas por el almacenista — por validar</h2></div><div id="tr-pend"></div></div>
+      <div class="card"><div class="card-h"><h2>✅ Recibidas por producción — por aceptar</h2></div><p class="muted small">Producción ya confirmó lo que recibió. Al aceptar se descuenta del MDE y entra al almacén de insumos PT. La cantidad que mueve inventario son los sacos/piezas; las pacas son informativas.</p><div id="tr-acept"></div></div>
+      <div class="card"><div class="card-h"><h2>⏳ Entregadas — esperando confirmación de producción</h2></div><div id="tr-pend"></div></div>
       <div class="card"><div class="card-h"><h2>➕ Transferencia directa MDE → almacén de insumos PT</h2></div>
+        <p class="muted small">También pasa por la confirmación de producción antes de que la aceptes.</p>
         <div id="tr-lines"></div>${datalist('dl-tr')}
-        <div class="row" style="margin-top:8px"><button class="btn sm" id="tr-add">+ Agregar renglón</button><input id="tr-nota" class="grow" placeholder="Nota (opcional)" style="max-width:460px"><span class="sp"></span><button class="btn pri" id="tr-go">Transferir a PT</button></div>
+        <div class="row" style="margin-top:8px"><button class="btn sm" id="tr-add">+ Agregar renglón</button><input id="tr-nota" class="grow" placeholder="Nota (opcional)" style="max-width:460px"><span class="sp"></span><button class="btn pri" id="tr-go">Enviar a producción para confirmar</button></div>
       </div>
       <div class="card"><div class="card-h"><h2>🧾 Historial de transferencias a PT</h2><span class="sp"></span><input id="tr-q" placeholder="Buscar artículo / persona" style="max-width:220px"><label style="margin:0">Desde <input type="date" id="tr-d" style="width:auto"></label><button class="btn sm" id="tr-x">Exportar Excel</button></div><div id="tr-hist"></div></div>`;
       const lines = [{}];
       const drawLines = () => {
-        $('#tr-lines').innerHTML = lines.map((l, i) => `<div class="row" style="margin-bottom:6px"><input class="grow" list="dl-tr" data-li="${i}" data-f="it" placeholder="Artículo" value="${esc(l.it || '')}" style="min-width:260px;flex:3"><input class="in-num" data-li="${i}" data-f="pac" placeholder="Pacas" value="${esc(l.pac || '')}" style="max-width:100px"><input class="in-num" data-li="${i}" data-f="q" placeholder="Cantidad" value="${esc(l.q || '')}" style="max-width:140px"><span class="muted small" style="min-width:150px" data-inf="${i}"></span><button class="btn sm ghost" data-del="${i}">✕</button></div>`).join('');
+        $('#tr-lines').innerHTML = lines.map((l, i) => `<div class="row" style="margin-bottom:6px"><input class="grow" list="dl-tr" data-li="${i}" data-f="it" placeholder="Artículo" value="${esc(l.it || '')}" style="min-width:260px;flex:3"><input class="in-num" data-li="${i}" data-f="pac" placeholder="Pacas (info)" value="${esc(l.pac || '')}" style="max-width:110px"><input class="in-num" data-li="${i}" data-f="q" placeholder="Sacos / piezas" value="${esc(l.q || '')}" style="max-width:140px"><span class="muted small" style="min-width:150px" data-inf="${i}"></span><button class="btn sm ghost" data-del="${i}">✕</button></div>`).join('');
         $$('#tr-lines input').forEach(inp => inp.oninput = () => {
           const l = lines[+inp.dataset.li]; l[inp.dataset.f] = inp.value;
           const id = pick(l.it); const it = id && item(id);
@@ -267,33 +313,35 @@
       $('#tr-go').onclick = async () => {
         const ls = lines.map(l => ({ itemId: pick(l.it), cant: num(l.q), pacas: num(l.pac) || null })).filter(l => l.itemId && l.cant > 0);
         if (!ls.length) return I.toast('Agrega al menos un artículo con cantidad', 'err');
-        const neg = ls.filter(l => F(l.itemId).mde - l.cant < 0);
-        if (neg.length && !(await I.confirmar('Existencia insuficiente en MDE', 'Estos artículos quedarían en negativo en MDE: <b>' + neg.map(l => esc(item(l.itemId).nombre)).join(', ') + '</b>. ¿Transferir de todos modos?'))) return;
-        const id = await DB.push('entregas', { fecha: hoyISO(), ts: Date.now(), origen: 'jefe', por: { uid: USER.uid, nombre: USER.nombre }, lineas: Object.assign({}, ls), nota: $('#tr-nota').value.trim(), estado: 'por_validar' });
-        await validarEntrega(id, { lineas: ls, nota: $('#tr-nota').value.trim() }, true);
+        await DB.push('entregas', { fecha: hoyISO(), ts: Date.now(), origen: 'jefe', por: { uid: USER.uid, nombre: USER.nombre }, lineas: Object.assign({}, ls), nota: $('#tr-nota').value.trim(), estado: 'por_recibir' });
         lines.length = 0; lines.push({}); drawLines(); $('#tr-nota').value = '';
+        I.toast('Enviada ✔ — producción debe confirmar la recepción', 'ok');
       };
       $('#tr-q').oninput = I.debounce(() => render(true), 250); $('#tr-d').onchange = () => render(true);
-      $('#tr-x').onclick = () => { const r = histTransfer(); const filas = [['Folio', 'Fecha', 'Artículo', 'Cantidad', 'Pacas', 'Reportó', 'Validó', 'Fecha validación', 'Solicitud de producción', 'Reflejada en Odoo', 'Nota']]; r.forEach(e => vals(e.lineas).forEach(l => filas.push([e._k, e.fecha, lbl(l.itemId), l.cantValidada != null ? l.cantValidada : l.cant, l.pacas || '', e.por && e.por.nombre, e.validado && e.validado.nombre, fFecha(e.valTs), e.solicitudId || '', e.odoo ? 'Sí' : 'No', e.notaVal || e.nota || '']))); I.exportXlsx('Transferencias_PT_' + hoyISO() + '.xlsx', [{ nombre: 'Transferencias', filas }]); };
+      $('#tr-x').onclick = () => { const r = histTransfer(); const filas = [['Folio', 'Fecha', 'Artículo', 'Solicitado', 'Entregado', 'Recibido producción', 'Aceptado', 'Pacas (info)', 'Entregó', 'Recibió', 'Aceptó', 'Fecha aceptación', 'Reflejada en Odoo', 'Nota']]; r.forEach(e => { const sm = solMap(e); vals(e.lineas).forEach(l => filas.push([e._k, e.fecha, lbl(l.itemId), sm[l.itemId] != null ? sm[l.itemId] : '', l.cant, l.cantRecibida != null ? l.cantRecibida : '', l.cantValidada != null ? l.cantValidada : '', l.pacas || '', e.por && e.por.nombre, e.recepcion ? e.recepcion.nombre : '', e.validado && e.validado.nombre, fFecha(e.valTs), e.odoo ? 'Sí' : 'No', [e.recepcion && e.recepcion.nota, e.notaVal || e.nota].filter(Boolean).join(' | ')])); }); I.exportXlsx('Transferencias_PT_' + hoyISO() + '.xlsx', [{ nombre: 'Transferencias', filas }]); };
     },
     update(el) {
-      const pend = vals(S.entregas).filter(e => e.estado === 'por_validar').sort((a, b) => a.ts - b.ts);
-      $('#tr-pend', el).innerHTML = pend.length ? pend.map(e => {
-        const sol = e.solicitudId && S.solicitudes[e.solicitudId];
-        const solMap = {}; if (sol) vals(sol.lineas).forEach(l => solMap[l.itemId] = (solMap[l.itemId] || 0) + num(l.cant));
-        return `<div class="card" style="background:var(--panel2)"><div class="row"><b>${esc(e.por && e.por.nombre)}</b><span class="muted small">${fFecha(e.ts)}</span>${sol ? `<span class="b b-blu">Solicitud de ${esc(sol.por && sol.por.nombre)} · ${fFecha(sol.ts)}</span>` : '<span class="b b-gry">Sin solicitud</span>'}<span class="sp"></span></div>
-        <div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Artículo</th><th class="num">Solicitado</th><th class="num">Entregado (almacén)</th><th class="num">Pacas</th><th class="num">MDE actual</th><th style="width:150px">Cantidad a validar</th></tr></thead><tbody>
-        ${vals(e.lineas).map(l => { const dif = sol && solMap[l.itemId] != null && Math.abs(solMap[l.itemId] - l.cant) > 0.001; return `<tr><td>${esc(lbl(l.itemId))}</td><td class="num">${sol ? fmt(solMap[l.itemId] || 0) : '—'}</td><td class="num ${dif ? 'low' : ''}">${fmt(l.cant)}</td><td class="num">${l.pacas ? fmt(l.pacas) : ''}</td><td class="num">${fmt(F(l.itemId).mde)}</td><td><input class="in-num" data-vq="${e._k}|${l._k}" value="${l.cant}"></td></tr>`; }).join('')}
-        </tbody></table></div>
-        ${e.nota ? `<div class="small muted" style="margin-top:6px">Nota del almacén: ${esc(e.nota)}</div>` : ''}
-        <div class="row" style="margin-top:8px"><input class="grow" placeholder="Nota de validación (obligatoria si cambias cantidades o rechazas)" data-vn="${e._k}"><button class="btn danger" data-rej="${e._k}">Rechazar</button><button class="btn ok" data-val="${e._k}">✔ Validar y transferir</button></div></div>`;
-      }).join('') : '<div class="empty">No hay entregas por validar</div>';
+      const tabla = (e, editable) => {
+        const sm = solMap(e), sol = e.solicitudId && S.solicitudes[e.solicitudId];
+        return `<div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Artículo</th><th class="num">Solicitado</th><th class="num">Entregó almacén</th><th class="num">Recibió producción</th><th class="num">Pacas (info)</th><th class="num">MDE actual</th>${editable ? '<th style="width:150px">Cantidad a aceptar</th>' : ''}</tr></thead><tbody>
+        ${vals(e.lineas).map(l => { const rec = l.cantRecibida; const d1 = sol && sm[l.itemId] != null && Math.abs(sm[l.itemId] - num(l.cant)) > 0.001; const d2 = rec != null && Math.abs(rec - num(l.cant)) > 0.001; return `<tr><td>${esc(lbl(l.itemId))}${sol && sm[l.itemId] == null ? ' <span class="b b-amb">no solicitado</span>' : ''}</td><td class="num">${sol ? (sm[l.itemId] != null ? fmt(sm[l.itemId]) : '—') : '—'}</td><td class="num ${d1 ? 'low' : ''}">${fmt(l.cant)}</td><td class="num ${d2 ? 'neg' : ''}">${rec == null ? '<span class="muted">pendiente</span>' : fmt(rec)}</td><td class="num muted">${l.pacas ? fmt(l.pacas) : ''}</td><td class="num">${fmt(F(l.itemId).mde)}</td>${editable ? `<td><input class="in-num" data-vq="${e._k}|${l._k}" value="${rec != null ? rec : l.cant}"></td>` : ''}</tr>`; }).join('')}
+        </tbody></table></div>`;
+      };
+      const cab = e => { const sol = e.solicitudId && S.solicitudes[e.solicitudId]; return `<div class="row"><b>${esc(e.por && e.por.nombre)}</b><span class="muted small">entregó ${fFecha(e.ts)}</span>${e.origen === 'jefe' ? '<span class="b b-gry">directa</span>' : ''}${sol ? `<span class="b b-blu">Solicitud de ${esc(sol.por && sol.por.nombre)}</span>` : '<span class="b b-amb">Sin solicitud</span>'}${e.recepcion ? `<span class="b b-grn">Recibió ${esc(e.recepcion.nombre)} · ${fFecha(e.recepcion.ts)}</span>` : ''}</div>${e.nota ? `<div class="small muted">Nota de entrega: ${esc(e.nota)}</div>` : ''}${e.recepcion && e.recepcion.nota ? `<div class="small" style="color:var(--amb)">Nota de producción: ${esc(e.recepcion.nota)}</div>` : ''}`; };
+      const acep = vals(S.entregas).filter(e => est(e) === 'recibida').sort((a, b) => a.ts - b.ts);
+      $('#tr-acept', el).innerHTML = acep.length ? acep.map(e => `<div class="card" style="background:var(--panel2)">${cab(e)}${tabla(e, true)}
+        <div class="row" style="margin-top:8px"><input class="grow" placeholder="Nota (obligatoria si cambias cantidades o rechazas)" data-vn="${e._k}"><button class="btn danger" data-rej="${e._k}">Rechazar</button><button class="btn ok" data-val="${e._k}">✔ Aceptar y transferir a PT</button></div></div>`).join('') : '<div class="empty">Nada por aceptar</div>';
+      const pend = vals(S.entregas).filter(e => est(e) === 'por_recibir').sort((a, b) => a.ts - b.ts);
+      $('#tr-pend', el).innerHTML = pend.length ? pend.map(e => `<div class="card" style="background:var(--panel2)">${cab(e)}${tabla(e, false)}
+        <div class="row" style="margin-top:8px"><span class="muted small grow">Producción aún no confirma la recepción en su app.</span><button class="btn sm danger" data-cnl="${e._k}">Cancelar entrega</button><button class="btn sm" data-force="${e._k}">Aceptar sin confirmación…</button></div></div>`).join('') : '<div class="empty">No hay entregas esperando a producción</div>';
       $$('[data-val]', el).forEach(b => b.onclick = async () => {
         const k = b.dataset.val, e = S.entregas[k];
         const ls = vals(e.lineas).map(l => Object.assign({}, l, { cantValidada: num($(`[data-vq="${k}|${l._k}"]`).value) }));
-        const cambio = ls.some(l => Math.abs(l.cantValidada - num(l.cant)) > 0.0001);
+        const cambio = ls.some(l => Math.abs(l.cantValidada - num(l.cantRecibida != null ? l.cantRecibida : l.cant)) > 0.0001);
         const nota = $(`[data-vn="${k}"]`).value.trim();
-        if (cambio && !nota) return I.toast('Cambiaste cantidades: escribe una nota de validación', 'err');
+        if (cambio && !nota) return I.toast('Cambiaste cantidades respecto a lo recibido: escribe una nota', 'err');
+        const neg = ls.filter(l => F(l.itemId).mde - l.cantValidada < 0);
+        if (neg.length && !(await I.confirmar('Existencia insuficiente en MDE', 'Estos artículos quedarían en negativo en MDE: <b>' + neg.map(l => esc(item(l.itemId).nombre)).join(', ') + '</b>. ¿Aceptar de todos modos?'))) return;
         b.disabled = true; await validarEntrega(k, { lineas: ls, nota }); b.disabled = false;
       });
       $$('[data-rej]', el).forEach(b => b.onclick = async () => {
@@ -304,31 +352,47 @@
         if (e.solicitudId) up['solicitudes/' + e.solicitudId + '/estado'] = 'pendiente';
         await DB.update(up); I.toast('Entrega rechazada', 'ok');
       });
-      // Historial
+      $$('[data-cnl]', el).forEach(b => b.onclick = async () => {
+        const k = b.dataset.cnl, e = S.entregas[k];
+        const r = await I.modal('Cancelar entrega', '<label>Motivo<input id="cn-n"></label>', [{ t: 'Volver' }, { t: 'Cancelar entrega', c: 'danger', v: 1, antes: ov => { if (!$('#cn-n', ov).value.trim()) { I.toast('Escribe el motivo', 'err'); return false; } b._n = $('#cn-n', ov).value.trim(); } }]);
+        if (r.v !== 1) return;
+        const up = { ['entregas/' + k + '/estado']: 'cancelada', ['entregas/' + k + '/notaVal']: b._n, ['entregas/' + k + '/validado']: { uid: USER.uid, nombre: USER.nombre }, ['entregas/' + k + '/valTs']: Date.now() };
+        if (e.solicitudId) up['solicitudes/' + e.solicitudId + '/estado'] = 'pendiente';
+        await DB.update(up); I.toast('Entrega cancelada', 'ok');
+      });
+      $$('[data-force]', el).forEach(b => b.onclick = async () => {
+        const k = b.dataset.force, e = S.entregas[k];
+        const r = await I.modal('Aceptar sin confirmación de producción', `<p class="warn">Úsalo solo en casos excepcionales: quedará registrado que se aceptó sin la confirmación de producción.</p>${vals(e.lineas).map(l => `<label>${esc(lbl(l.itemId))}<input class="in-num" data-fq="${l._k}" value="${l.cant}"></label>`).join('')}<label>Motivo (obligatorio)<input id="fz-n"></label>`, [{ t: 'Volver' }, { t: 'Aceptar y transferir', c: 'pri', v: 1, antes: ov => { if (!$('#fz-n', ov).value.trim()) { I.toast('Escribe el motivo', 'err'); return false; } b._n = $('#fz-n', ov).value.trim(); b._q = {}; $$('[data-fq]', ov).forEach(i => b._q[i.dataset.fq] = num(i.value)); } }]);
+        if (r.v !== 1) return;
+        const ls = vals(e.lineas).map(l => Object.assign({}, l, { cantValidada: b._q[l._k] }));
+        await validarEntrega(k, { lineas: ls, nota: 'SIN CONFIRMACIÓN DE PRODUCCIÓN: ' + b._n, sinConfirmar: true });
+      });
       const r = histTransfer();
-      $('#tr-hist', el).innerHTML = r.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Artículos</th><th>Reportó</th><th>Validó</th><th>Estado</th><th>Odoo</th></tr></thead><tbody>${r.slice(0, 250).map(e => `<tr><td>${fDia(e.fecha)}<div class="tiny muted">${fFecha(e.valTs || e.ts)}</div></td><td class="small">${lineasTxt(e.lineas)}${e.notaVal ? `<div class="muted tiny">Nota: ${esc(e.notaVal)}</div>` : ''}</td><td>${esc(e.por && e.por.nombre)}${e.origen === 'jefe' ? ' <span class="b b-gry">directa</span>' : ''}</td><td>${esc(e.validado && e.validado.nombre || '')}</td><td><span class="b ${e.estado === 'validada' ? 'b-grn' : 'b-red'}">${e.estado}</span></td><td>${e.estado === 'validada' ? `<label style="margin:0"><input type="checkbox" data-eo="${e._k}" ${e.odoo ? 'checked' : ''}> reflejada</label>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin transferencias</div>';
+      $('#tr-hist', el).innerHTML = r.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Artículos (aceptado)</th><th>Entregó</th><th>Recibió</th><th>Aceptó</th><th>Estado</th><th>Odoo</th></tr></thead><tbody>${r.slice(0, 250).map(e => `<tr><td>${fDia(e.fecha)}<div class="tiny muted">${fFecha(e.valTs || e.ts)}</div></td><td class="small">${lineasTxt(e.lineas)}${e.notaVal ? `<div class="muted tiny">Nota: ${esc(e.notaVal)}</div>` : ''}${e.recepcion && e.recepcion.nota ? `<div class="muted tiny">Producción: ${esc(e.recepcion.nota)}</div>` : ''}</td><td>${esc(e.por && e.por.nombre)}${e.origen === 'jefe' ? ' <span class="b b-gry">directa</span>' : ''}</td><td>${e.recepcion ? esc(e.recepcion.nombre) : (e.sinConfirmar ? '<span class="b b-amb">sin confirmar</span>' : '')}</td><td>${esc(e.validado && e.validado.nombre || '')}</td><td><span class="b ${I.ENTREGA_CLS[est(e)] || 'b-gry'}">${I.ENTREGA_TXT[est(e)] || e.estado}</span></td><td>${e.estado === 'validada' ? `<label style="margin:0"><input type="checkbox" data-eo="${e._k}" ${e.odoo ? 'checked' : ''}> reflejada</label>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin transferencias</div>';
       $$('[data-eo]', el).forEach(c => c.onchange = () => DB.update({ ['entregas/' + c.dataset.eo + '/odoo']: c.checked, ['entregas/' + c.dataset.eo + '/odooPor']: USER.nombre, ['entregas/' + c.dataset.eo + '/odooTs']: Date.now() }));
     }
   };
-  function histTransfer() { const q = ($('#tr-q') && $('#tr-q').value || '').toLowerCase(), d = $('#tr-d') && $('#tr-d').value; return vals(S.entregas).filter(e => (e.estado === 'validada' || e.estado === 'rechazada') && (!d || e.fecha >= d) && (!q || (lineasTxt(e.lineas) + ' ' + (e.por && e.por.nombre) + ' ' + (e.validado && e.validado.nombre)).toLowerCase().includes(q))).sort((a, b) => (b.valTs || b.ts) - (a.valTs || a.ts)); }
+  const solMap = e => { const sol = e.solicitudId && S.solicitudes[e.solicitudId]; const m = {}; if (sol) vals(sol.lineas).forEach(l => m[l.itemId] = (m[l.itemId] || 0) + num(l.cant)); return m; };
+  function histTransfer() { const q = ($('#tr-q') && $('#tr-q').value || '').toLowerCase(), d = $('#tr-d') && $('#tr-d').value; return vals(S.entregas).filter(e => ['validada', 'rechazada', 'cancelada'].includes(e.estado) && (!d || e.fecha >= d) && (!q || (lineasTxt(e.lineas) + ' ' + (e.por && e.por.nombre) + ' ' + (e.validado && e.validado.nombre) + ' ' + (e.recepcion && e.recepcion.nombre)).toLowerCase().includes(q))).sort((a, b) => (b.valTs || b.ts) - (a.valTs || a.ts)); }
 
-  async function validarEntrega(k, d, directa) {
+  async function validarEntrega(k, d) {
     try {
       const e = S.entregas[k] || {};
-      const ls = d.lineas.map(l => Object.assign({}, l, { cantValidada: l.cantValidada != null ? l.cantValidada : l.cant }));
+      const ls = d.lineas.map(l => Object.assign({}, l, { cantValidada: l.cantValidada != null ? l.cantValidada : (l.cantRecibida != null ? l.cantRecibida : l.cant) }));
       for (const l of ls) {
         if (!(l.cantValidada > 0)) continue;
         const f = F(l.itemId);
         await I.sumar('fisico/' + l.itemId + '/mde', -l.cantValidada);
         await I.sumar('pt/' + l.itemId + '/cant', l.cantValidada);
         await DB.update({ ['pt/' + l.itemId + '/ts']: Date.now(), ['fisico/' + l.itemId + '/ts']: Date.now(), ['fisico/' + l.itemId + '/por']: USER.nombre, ['fisico/' + l.itemId + '/origen']: 'transferencia' });
-        await I.mov({ tipo: 'transferencia_pt', itemId: l.itemId, cant: l.cantValidada, pacas: l.pacas || null, entregaId: k, reporto: (e.por && e.por.nombre) || USER.nombre, mdeAntes: f.mde, mdeDespues: f.mde - l.cantValidada, ptAntes: f.pt, ptDespues: f.pt + l.cantValidada, nota: d.nota || '' });
+        await I.mov({ tipo: 'transferencia_pt', itemId: l.itemId, cant: l.cantValidada, entregado: num(l.cant), recibido: l.cantRecibida != null ? l.cantRecibida : null, pacas: l.pacas || null, entregaId: k, reporto: (e.por && e.por.nombre) || USER.nombre, recibio: e.recepcion ? e.recepcion.nombre : null, mdeAntes: f.mde, mdeDespues: f.mde - l.cantValidada, ptAntes: f.pt, ptDespues: f.pt + l.cantValidada, nota: d.nota || '' });
       }
       const lineasObj = {}; ls.forEach((l, i) => { const kk = l._k != null ? l._k : String(i); const c = Object.assign({}, l); delete c._k; lineasObj[kk] = c; });
       const up = { ['entregas/' + k + '/estado']: 'validada', ['entregas/' + k + '/lineas']: lineasObj, ['entregas/' + k + '/validado']: { uid: USER.uid, nombre: USER.nombre }, ['entregas/' + k + '/valTs']: Date.now(), ['entregas/' + k + '/notaVal']: d.nota || '', ['entregas/' + k + '/odoo']: false };
+      if (d.sinConfirmar) up['entregas/' + k + '/sinConfirmar'] = true;
       if (e.solicitudId) up['solicitudes/' + e.solicitudId + '/estado'] = 'validada';
       await DB.update(up);
-      I.toast(directa ? 'Transferencia registrada ✔ — recuerda reflejarla en Odoo' : 'Entrega validada y transferida a PT ✔', 'ok');
+      I.toast('Transferencia aceptada y aplicada a PT ✔ — recuerda reflejarla en Odoo', 'ok');
     } catch (x) { I.toast('Error: ' + x.message, 'err'); }
   }
 
@@ -394,7 +458,7 @@
   }
 
   /* ---------- FÍSICO Y CONTEOS ---------- */
-  const conteoItems = c => items(true).filter(it => it.fuente !== 'silo' && (!c.familias || c.familias.includes(it.familia)));
+  const conteoItems = c => items(true).filter(it => c.itemsSel ? c.itemsSel.includes(it.id) : ((c.familias || []).includes(it.familia) && I.esContable(it)));
   const conteoTotal = (c, id) => { const x = c.items && c.items[id]; return x ? x.total : null; };
   const conteoCapturado = (c, id) => { const x = c.items && c.items[id]; if (!x || !x.lineas) return false; return vals(x.lineas).every(l => l.q !== '' && l.q != null); };
 
@@ -434,7 +498,7 @@
     const cs = vals(S.conteos).sort((a, b) => b.inicio - a.inicio);
     if (!UI.conteoSel || !S.conteos[UI.conteoSel]) UI.conteoSel = (cs.find(c => c.estado === 'confirmado') || cs.find(c => c.estado === 'en_captura') || cs[0] || {})._k || null;
     if (VIEWS.fisico._m !== 'cont') { body.innerHTML = `<div class="grid" style="grid-template-columns:minmax(240px,320px) 1fr;align-items:start"><div class="card" id="co-list"></div><div id="co-det"></div></div>`; VIEWS.fisico._m = 'cont'; }
-    $('#co-list', body).innerHTML = `<div class="card-h"><h3>Conteos</h3></div>` + (cs.length ? cs.map(c => { const its = conteoItems(c); const cap = its.filter(it => conteoCapturado(c, it.id)).length; return `<div class="item ${c._k === UI.conteoSel ? 'ok' : ''}" data-cs="${c._k}" style="cursor:pointer"><div class="row"><b>${fDia(c.fecha)}</b><span class="sp"></span><span class="b ${c.estado === 'en_captura' ? 'b-amb' : c.estado === 'confirmado' ? 'b-blu' : 'b-grn'}">${c.estado === 'en_captura' ? 'en captura' : c.estado === 'confirmado' ? 'por revisar' : 'aplicado'}</span></div><div class="small muted">${esc(c.almacenista && c.almacenista.nombre)} · ${(c.familias || []).map(f => I.FAM_ICO[f] || f).join(' ')}</div><div class="bar ${cap === its.length ? 'grn' : ''}" style="margin-top:6px"><i style="width:${its.length ? cap / its.length * 100 : 0}%"></i></div><div class="tiny muted">${cap}/${its.length} artículos</div></div>`; }).join('') : '<div class="empty">El almacenista inicia los conteos desde su tablet.</div>');
+    $('#co-list', body).innerHTML = `<div class="card-h"><h3>Conteos</h3></div>` + (cs.length ? cs.map(c => { const its = conteoItems(c); const cap = its.filter(it => conteoCapturado(c, it.id)).length; return `<div class="item ${c._k === UI.conteoSel ? 'ok' : ''}" data-cs="${c._k}" style="cursor:pointer"><div class="row"><b>${fDia(c.fecha)}</b><span class="sp"></span><span class="b ${({ en_captura: 'b-amb', confirmado: 'b-blu', aplicado: 'b-grn', cancelado: 'b-gry' })[c.estado] || 'b-gry'}">${({ en_captura: 'en captura', confirmado: 'por revisar', aplicado: 'aplicado', cancelado: 'cancelado' })[c.estado] || c.estado}</span></div><div class="small muted">${esc(c.almacenista && c.almacenista.nombre)} · ${c.itemsSel ? c.itemsSel.length + ' artículos elegidos' : (c.familias || []).map(f => I.FAM_ICO[f] || f).join(' ')}</div><div class="bar ${cap === its.length ? 'grn' : ''}" style="margin-top:6px"><i style="width:${its.length ? cap / its.length * 100 : 0}%"></i></div><div class="tiny muted">${cap}/${its.length} artículos</div></div>`; }).join('') : '<div class="empty">El almacenista inicia los conteos desde su tablet.</div>');
     $$('[data-cs]', body).forEach(d => d.onclick = () => { UI.conteoSel = d.dataset.cs; render(true); });
     const det = $('#co-det', body);
     const c = UI.conteoSel && S.conteos[UI.conteoSel];
@@ -452,7 +516,7 @@
     });
     const enVivo = c.estado === 'en_captura';
     const tot = rows.reduce((s, r) => s + (r.val || 0), 0), totAbs = rows.reduce((s, r) => s + Math.abs(r.val || 0), 0);
-    det.innerHTML = `<div class="card"><div class="card-h"><h2>Conteo del ${fDia(c.fecha)}</h2><span class="b ${enVivo ? 'b-amb' : 'b-blu'}">${enVivo ? '● EN VIVO' : c.estado === 'confirmado' ? 'Confirmado por almacén' : 'Aplicado'}</span><span class="sp"></span>${!enVivo ? `<button class="btn sm" id="co-x">Exportar ajustes para Odoo</button>` : ''}</div>
+    det.innerHTML = `<div class="card"><div class="card-h"><h2>Conteo del ${fDia(c.fecha)}</h2><span class="b ${enVivo ? 'b-amb' : 'b-blu'}">${enVivo ? '● EN VIVO' : c.estado === 'confirmado' ? 'Confirmado por almacén' : 'Aplicado'}</span><span class="sp"></span>${['en_captura', 'confirmado'].includes(c.estado) ? '<button class="btn sm danger" id="co-cnl">Cancelar conteo</button>' : ''}${!enVivo && c.estado !== 'cancelado' ? `<button class="btn sm" id="co-x">Exportar ajustes para Odoo</button>` : ''}</div>
       <p class="small muted">Almacenista: <b>${esc(c.almacenista && c.almacenista.nombre)}</b> · inició ${fFecha(c.inicio)}${c.confirmadoTs ? ` · confirmó ${fFecha(c.confirmadoTs)} <span class="b b-grn">✔ ${esc(c.firma || '')}</span>` : ''}${c.aplicado ? ` · aplicado por ${esc(c.aplicado.nombre)} ${fFecha(c.aplicado.ts)}` : ''}</p>
       ${od ? `<p class="small muted">Comparado contra Odoo del <b>${fDia(od.fecha)}</b> (${alc === 'mde' ? 'solo almacén MDE → se compara el conteo' : 'todas las ubicaciones → se compara conteo + PT'}). <a href="#" id="co-od">Cargar otro reporte de Odoo</a></p>` : `<div class="warn">Carga el reporte de existencias de Odoo (pestaña Odoo) para comparar contra el teórico.</div>`}
       ${!enVivo ? `<div class="grid g4" style="margin:10px 0"><div class="kpi"><div class="l">Artículos con diferencia</div><div class="v">${rows.filter(r => r.dif && Math.abs(r.dif) > 0.001).length}</div></div><div class="kpi ${tot < 0 ? 'red' : 'grn'}"><div class="l">Diferencia neta valorizada</div><div class="v">${money(tot)}</div></div><div class="kpi amb"><div class="l">Diferencia absoluta</div><div class="v">${money(totAbs)}</div></div><div class="kpi"><div class="l">Marcados para ajustar en Odoo</div><div class="v">${rows.filter(r => r.r.odoo).length}</div></div></div>` : ''}
@@ -468,6 +532,7 @@
     $$('[data-rn]', det).forEach(x => x.oninput = () => R[x.dataset.rn].nota = x.value);
     const od_ = $('#co-od', det); if (od_) od_.onclick = e => { e.preventDefault(); TAB = 'odoo'; mounted = null; render(true); };
     const ex = $('#co-x', det); if (ex) ex.onclick = () => { const filas = [['Código', 'Artículo', 'Unidad', 'Conteo', 'PT', 'Físico', 'Odoo', 'Diferencia (ajuste Odoo)', '%', '$ Diferencia', 'Ajustar en Odoo', 'Nota']]; rows.forEach(r => { const rv = (c.revision && c.revision[r.it.id]) || r.r; filas.push([r.it.codigo, r.it.nombre, r.it.unidad, r.cnt, alc === 'mde' ? '' : r.f.pt, r.fis, r.teo, r.dif, r.pct, r.val, rv.odoo ? 'SÍ' : '', rv.nota || '']); }); I.exportXlsx('Conteo_' + c.fecha + '_ajustes_Odoo.xlsx', [{ nombre: 'Ajustes', filas }]); };
+    const cnl = $('#co-cnl', det); if (cnl) cnl.onclick = async () => { if (await I.confirmar('Cancelar conteo', 'El conteo se descarta y no modifica el físico. El almacenista podrá iniciar uno nuevo.', 'Cancelar conteo')) await DB.update({ ['conteos/' + c._k + '/estado']: 'cancelado', ['conteos/' + c._k + '/canceladoPor']: USER.nombre, ['conteos/' + c._k + '/canceladoTs']: Date.now() }); };
     const rea = $('#co-rea', det); if (rea) rea.onclick = async () => { if (await I.confirmar('Regresar a captura', 'El almacenista podrá corregir su conteo y deberá confirmarlo de nuevo.')) await DB.update({ ['conteos/' + c._k + '/estado']: 'en_captura', ['conteos/' + c._k + '/confirmadoTs']: null, ['conteos/' + c._k + '/devuelto']: { por: USER.nombre, ts: Date.now() } }); };
     const apl = $('#co-apl', det); if (apl) apl.onclick = async () => {
       const sel = rows.filter(r => R[r.it.id].aplicar && r.cnt != null);
@@ -495,6 +560,7 @@
         <p class="muted small">Contenido = (volumen total ÷ altura total) × (altura total − vacío medido con láser) × densidad. El almacenista captura el vacío desde su tablet.</p><div id="si-grid"></div></div>
         <div class="card"><div class="card-h"><h3>Detalle por silo</h3></div><div id="si-tab"></div></div>
         <div class="card"><div class="card-h"><h3>Comparación con el físico registrado</h3></div><div id="si-cmp"></div></div>`;
+      if (!editor()) { ['#si-dens', '#si-new', '#si-apl'].forEach(x => { const b = $(x); if (b) b.remove(); }); return; }
       $('#si-dens').onclick = editarDensidades; $('#si-new').onclick = () => editarSilo(null);
       $('#si-apl').onclick = async () => {
         const t = I.silosPorItem(S.silos, S.silosLect); const ids = Object.keys(t);
@@ -509,7 +575,8 @@
     update(el) {
       $('#si-grid', el).innerHTML = silosGrid(false);
       const ss = vals(S.silos).sort((a, b) => (a.orden || 0) - (b.orden || 0));
-      $('#si-tab', el).innerHTML = `<div class="tw"><table><thead><tr><th>Silo / tanque</th><th>Artículo ligado</th><th class="num">Vacío (m)</th><th class="num">Altura total</th><th class="num">Vol. total m³</th><th class="num">Densidad</th><th class="num">Contenido t</th><th class="num">Capacidad t</th><th class="num">Caben t</th><th>Calidad</th><th>Lectura</th><th></th></tr></thead><tbody>${ss.map(s => { const l = S.silosLect[s._k]; const c = I.calcSilo(s, l); return `<tr><td><b>${esc(s.nombre)}</b><div class="tiny muted">${esc(s.grupo)}</div></td><td class="small">${s.itemId ? esc(lbl(s.itemId)) : '<span class="muted">—</span>'}</td><td class="num">${l && l.vacio != null ? fmt(l.vacio) : '—'}</td><td class="num">${fmt(c.alto)}</td><td class="num">${fmt(num(s.volTotal))}</td><td class="num">${fmt(c.dens)}</td><td class="num"><b>${c.contenido == null ? '—' : fmt(c.contenido)}</b></td><td class="num">${fmt(c.capacidad)}</td><td class="num ${c.caben != null && c.caben < 0 ? 'neg' : ''}">${c.caben == null ? '—' : fmt(c.caben)}</td><td>${l ? `<span class="b ${l.calidad === 'OK' || !l.calidad ? 'b-grn' : 'b-red'}">${esc(l.calidad || 'OK')}</span>` : ''}</td><td class="tiny muted">${l ? fFecha(l.ts) + '<br>' + esc(l.por || '') : ''}</td><td><button class="btn sm" data-sl="${s._k}">Lectura</button> <button class="btn sm ghost" data-se="${s._k}">✎</button></td></tr>`; }).join('')}</tbody></table></div>`;
+      $('#si-tab', el).innerHTML = `<div class="tw"><table><thead><tr><th>Silo / tanque</th><th>Artículo ligado</th><th class="num">Vacío (m)</th><th class="num">Altura total</th><th class="num">Vol. total m³</th><th class="num">Densidad</th><th class="num">Contenido t</th><th class="num">Capacidad t</th><th class="num">Caben t</th><th>Calidad</th><th>Lectura</th><th></th></tr></thead><tbody>${ss.map(s => { const l = S.silosLect[s._k]; const c = I.calcSilo(s, l); return `<tr><td><b>${esc(s.nombre)}</b><div class="tiny muted">${esc(s.grupo)}</div></td><td class="small">${s.itemId ? esc(lbl(s.itemId)) : '<span class="muted">—</span>'}</td><td class="num">${l && l.vacio != null ? fmt(l.vacio) : '—'}</td><td class="num">${fmt(c.alto)}</td><td class="num">${fmt(num(s.volTotal))}</td><td class="num">${fmt(c.dens)}</td><td class="num"><b>${c.contenido == null ? '—' : fmt(c.contenido)}</b></td><td class="num">${fmt(c.capacidad)}</td><td class="num ${c.caben != null && c.caben < 0 ? 'neg' : ''}">${c.caben == null ? '—' : fmt(c.caben)}</td><td>${l ? `<span class="b ${l.calidad === 'OK' || !l.calidad ? 'b-grn' : 'b-red'}">${esc(l.calidad || 'OK')}</span>${l.notaCalidad ? `<div class="tiny muted">${esc(l.notaCalidad)}</div>` : ''}` : ''}</td><td class="tiny muted">${l ? fFecha(l.ts) + '<br>' + esc(l.por || '') : ''}</td><td><button class="btn sm" data-sl="${s._k}">Lectura</button> <button class="btn sm ghost" data-se="${s._k}">✎</button></td></tr>`; }).join('')}</tbody></table></div>`;
+      if (!editor()) $$('[data-sl],[data-se]', el).forEach(b => b.remove());
       $$('[data-sl]', el).forEach(b => b.onclick = () => capturarLectura(b.dataset.sl));
       $$('[data-se]', el).forEach(b => b.onclick = () => editarSilo(b.dataset.se));
       const t = I.silosPorItem(S.silos, S.silosLect);
@@ -518,7 +585,7 @@
   };
   async function capturarLectura(sid) {
     const s = S.silos[sid], l = S.silosLect[sid] || {};
-    await I.modal('Lectura · ' + s.nombre, `<label>Vacío medido con láser (m)<input id="sl-v" class="in-num" inputmode="decimal" value="${l.vacio != null ? l.vacio : ''}"></label><label>Estatus de calidad<select id="sl-c">${['OK', 'AW', 'CONTAMINACION', 'DENSIDAD', 'DEFORMES', 'QUEMADO', 'PRODUCTO PRUEBA', 'TONALIDAD', 'QUEBRADO', 'PRODUCTO PEGADO'].map(x => `<option ${x === (l.calidad || 'OK') ? 'selected' : ''}>${x}</option>`).join('')}</select></label>`, [{ t: 'Cancelar' }, { t: 'Guardar', c: 'pri', antes: async ov => { const v = $('#sl-v', ov).value; if (v === '' || num(v) < 0 || num(v) > num(s.alto) + num(s.cono)) { I.toast('Vacío fuera del rango de la altura del silo', 'err'); return false; } await DB.set('silosLect/' + sid, { vacio: num(v), calidad: $('#sl-c', ov).value, ts: Date.now(), por: USER.nombre }); await DB.push('silosHist/' + sid, { vacio: num(v), calidad: $('#sl-c', ov).value, ts: Date.now(), por: USER.nombre }); I.toast('Lectura guardada ✔', 'ok'); } }]);
+    await I.modal('Lectura · ' + s.nombre, `<label>Vacío medido con láser (m)<input id="sl-v" class="in-num" inputmode="decimal" value="${l.vacio != null ? l.vacio : ''}"></label><label>Estatus de calidad<select id="sl-c">${I.calidades(S.config).map(x => `<option ${x === (l.calidad || 'OK') ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label><label>Nota de calidad (obligatoria si no es OK)<input id="sl-n" value="${esc(l.notaCalidad || '')}"></label>`, [{ t: 'Cancelar' }, { t: 'Guardar', c: 'pri', antes: async ov => { const v = $('#sl-v', ov).value, cq = $('#sl-c', ov).value, nt = $('#sl-n', ov).value.trim(); if (v === '' || num(v) < 0 || num(v) > num(s.alto) + num(s.cono)) { I.toast('Vacío fuera del rango de la altura del silo', 'err'); return false; } if (cq !== 'OK' && !nt) { I.toast('Escribe la nota de calidad', 'err'); return false; } const o = { vacio: num(v), calidad: cq, notaCalidad: cq === 'OK' ? '' : nt, ts: Date.now(), por: USER.nombre }; await DB.set('silosLect/' + sid, o); await DB.push('silosHist/' + sid, o); I.toast('Lectura guardada ✔', 'ok'); } }]);
   }
   async function editarSilo(sid) {
     const s = sid ? S.silos[sid] : { nombre: '', grupo: 'SILO', alto: 0, cono: 0, volCil: 0, volCono: 0, volTotal: 0, densidad: 0, itemId: '' };
@@ -589,17 +656,21 @@
       <div class="grid g4" style="margin-bottom:10px"><div class="kpi"><div class="l">Físico hoy (MDE + PT)</div><div class="v">${fmt(r.f.total)}</div><div class="s">${fmt(r.f.mde)} + ${fmt(r.f.pt)}</div></div><div class="kpi"><div class="l">Consumo mensual</div><div class="v">${fmt(num(r.it.consumo))}</div><div class="s">${fmt(a.consDia)} por día</div></div><div class="kpi"><div class="l">Stock mínimo</div><div class="v">${fmt(a.min)}</div><div class="s">LT ${fmt(a.ltd, 0)} días + seguridad ${fmt(a.ss)}</div></div><div class="kpi ${r.p.quiebre ? 'red' : 'grn'}"><div class="l">Quiebre proyectado</div><div class="v">${r.p.quiebre ? mesLabel(r.p.quiebre) : 'Sin quiebre'}</div><div class="s">${r.p.pedirAntes ? 'pedir a más tardar ' + fDia(hoyISO(r.p.pedirAntes)) : ''}</div></div></div>
       <div class="chart">${chartSVG(r)}</div>
       <div class="card-h" style="margin-top:12px"><h3>Llegadas programadas (pedidos fincados y por comprar)</h3></div>
-      <div class="tw" style="max-height:none"><table><thead><tr><th>Mes de llegada</th><th class="num">Cantidad</th><th>Estado</th><th>Proveedor</th><th>OC</th><th>Nota</th>${editor() ? '<th></th>' : ''}</tr></thead><tbody>${ll.map(l => `<tr><td>${mesLabel(l.mes)}</td><td class="num">${fmt(l.cant)}${l.recibido ? `<div class="tiny muted">recibido ${fmt(l.recibido)}</div>` : ''}</td><td><span class="b ${l.estado === 'fincado' ? 'b-blu' : l.estado === 'por_comprar' ? 'b-amb' : l.estado === 'recibido' ? 'b-grn' : 'b-gry'}">${l.estado === 'por_comprar' ? 'por comprar' : l.estado}</span></td><td>${esc(l.proveedor || '')}</td><td>${esc(l.oc || '')}</td><td class="small">${esc(l.nota || '')}</td>${editor() ? `<td><button class="btn sm" data-le="${l._k}">✎</button></td>` : ''}</tr>`).join('') || '<tr><td colspan="7" class="empty">Sin llegadas programadas</td></tr>'}</tbody></table></div>
-      ${editor() ? `<div class="row" style="margin-top:8px"><button class="btn pri" id="ll-new">+ Registrar pedido / llegada</button>${a.sugerido > 0 ? `<span class="muted small">Sugerido hoy: <b>${fmt(a.sugerido)}</b> ${esc(r.it.unidad)}</span>` : ''}</div>` : ''}
+      <div class="tw" style="max-height:none"><table><thead><tr><th>Mes de llegada</th><th class="num">Cantidad</th><th>Estado</th><th>Proveedor</th><th>OC</th><th>Nota</th>${puedeComprar() ? '<th></th>' : ''}</tr></thead><tbody>${ll.map(l => `<tr><td>${mesLabel(l.mes)}</td><td class="num">${fmt(l.cant)}${l.recibido ? `<div class="tiny muted">recibido ${fmt(l.recibido)}</div>` : ''}</td><td><span class="b ${l.estado === 'fincado' ? 'b-blu' : l.estado === 'por_comprar' ? 'b-amb' : l.estado === 'recibido' ? 'b-grn' : 'b-gry'}">${l.estado === 'por_comprar' ? 'por comprar' : l.estado}</span></td><td>${esc(l.proveedor || '')}</td><td>${esc(l.oc || '')}</td><td class="small">${esc(l.nota || '')}${l.origen === 'compras' ? ' <span class="b b-gry">compras</span>' : ''}</td>${puedeComprar() ? `<td>${editor() || (l.origen === 'compras' && l.estado !== 'recibido') ? `<button class="btn sm" data-le="${l._k}">✎</button>` : ''}</td>` : ''}</tr>`).join('') || '<tr><td colspan="7" class="empty">Sin llegadas programadas</td></tr>'}</tbody></table></div>
+      ${puedeComprar() ? `<div class="row" style="margin-top:8px"><button class="btn pri" id="ll-new">${can('compras') ? '🛒 Registrar orden de compra' : '+ Registrar pedido / llegada'}</button><button class="btn" data-nt="${r.it.id}">💬 Notas y estatus${notasDe(r.it.id).length ? ' (' + notasDe(r.it.id).length + ')' : ''}</button>${a.sugerido > 0 ? `<span class="muted small">Sugerido hoy: <b>${fmt(a.sugerido)}</b> ${esc(r.it.unidad)}</span>` : ''}</div>${notasDe(r.it.id).slice(0, 3).map(x => `<div class="small" style="margin-top:6px"><b>${esc(x.por)}</b> <span class="muted">${fFecha(x.ts)}</span> ${x.estatus ? `<span class="b b-blu">${esc(I.ESTATUS_COMPRA[x.estatus] || x.estatus)}</span>` : ''} ${esc(x.texto || '')}</div>`).join('')}` : ''}
     </div>`;
   }
   function bindProyDet(r) {
     $$('[data-le]').forEach(b => b.onclick = () => editarLlegada(b.dataset.le, r.it.id));
-    const n = $('#ll-new'); if (n) n.onclick = () => editarLlegada(null, r.it.id);
+    const n = $('#ll-new'); if (n) n.onclick = () => editarLlegada(null, r.it.id, can('compras'));
+    $$('[data-nt]').forEach(b => b.onclick = () => notasCompra(b.dataset.nt));
   }
-  async function editarLlegada(k, itemId) {
-    const l = k ? S.llegadas[k] : { itemId, cant: '', mes: I.addMes(mesKey(), Math.max(1, Math.round(num(item(itemId).lt)))), estado: 'por_comprar', proveedor: '', oc: '', nota: '' };
-    await I.modal(k ? 'Editar llegada' : 'Nueva llegada / pedido', `<p><b>${esc(lbl(itemId))}</b></p><div class="form"><label>Cantidad<input id="ll-q" class="in-num" value="${l.cant}"></label><label>Mes en que llega<input id="ll-m" type="month" value="${l.mes}"></label><label>Estado<select id="ll-e">${[['fincado', 'Fincado (OC colocada)'], ['por_comprar', 'Por comprar (planeado)'], ['recibido', 'Recibido'], ['cancelado', 'Cancelado']].map(([v, t]) => `<option value="${v}" ${l.estado === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label>Proveedor<input id="ll-p" value="${esc(l.proveedor || '')}"></label><label>OC<input id="ll-oc" value="${esc(l.oc || '')}"></label><label class="full">Nota<input id="ll-n" value="${esc(l.nota || '')}"></label></div>`, [{ t: 'Cancelar' }].concat(k ? [{ t: 'Eliminar', c: 'danger', antes: async () => { await DB.remove('llegadas/' + k); I.toast('Eliminada', 'ok'); } }] : []).concat([{ t: 'Guardar', c: 'pri', antes: async ov => { const o = { itemId, cant: num($('#ll-q', ov).value), mes: $('#ll-m', ov).value, estado: $('#ll-e', ov).value, proveedor: $('#ll-p', ov).value.trim(), oc: $('#ll-oc', ov).value.trim(), nota: $('#ll-n', ov).value.trim(), ts: Date.now(), por: USER.nombre }; if (!(o.cant > 0) || !o.mes) { I.toast('Cantidad y mes son obligatorios', 'err'); return false; } if (k) await DB.update({ ['llegadas/' + k]: Object.assign({}, l, o) }); else await DB.push('llegadas', o); I.toast('Guardado ✔', 'ok'); } }]));
+  async function editarLlegada(k, itemId, comoCompra) {
+    const esCompras = can('compras') || (!!comoCompra && !k);
+    const it = item(itemId); const a = I.alerta(it, F(itemId), I.transito(itemId, S.llegadas));
+    const l = k ? S.llegadas[k] : { itemId, cant: esCompras && a.sugerido > 0 ? Math.round(a.sugerido) : '', mes: I.addMes(mesKey(), Math.max(1, Math.round(num(it.lt)))), estado: esCompras ? 'fincado' : 'por_comprar', proveedor: '', oc: '', nota: '' };
+    const estados = can('compras') ? [['fincado', 'OC colocada (fincado)'], ['cancelado', 'Cancelada']] : [['fincado', 'Fincado (OC colocada)'], ['por_comprar', 'Por comprar (planeado)'], ['recibido', 'Recibido'], ['cancelado', 'Cancelado']];
+    await I.modal(k ? 'Editar llegada' : (esCompras ? 'Registrar orden de compra' : 'Nueva llegada / pedido'), `<p><b>${esc(lbl(itemId))}</b></p>${esCompras ? '<p class="muted small">Entra a la proyección como pedido fincado y se cierra cuando inventarios registra la entrada del material.</p>' : ''}<div class="form"><label>Cantidad (${esc(it.unidad || '')})<input id="ll-q" class="in-num" value="${l.cant}"></label><label>Mes estimado de llegada<input id="ll-m" type="month" value="${l.mes}"></label><label>Estado<select id="ll-e">${estados.map(([v, t]) => `<option value="${v}" ${l.estado === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label>Proveedor<input id="ll-p" value="${esc(l.proveedor || '')}"></label><label>Número de OC<input id="ll-oc" value="${esc(l.oc || '')}"></label><label class="full">Nota<input id="ll-n" value="${esc(l.nota || '')}"></label></div>`, [{ t: 'Cancelar' }].concat(k && editor() ? [{ t: 'Eliminar', c: 'danger', antes: async () => { await DB.remove('llegadas/' + k); I.toast('Eliminada', 'ok'); } }] : []).concat([{ t: 'Guardar', c: 'pri', antes: async ov => { const o = { itemId, cant: num($('#ll-q', ov).value), mes: $('#ll-m', ov).value, estado: $('#ll-e', ov).value, proveedor: $('#ll-p', ov).value.trim(), oc: $('#ll-oc', ov).value.trim(), nota: $('#ll-n', ov).value.trim(), ts: Date.now(), por: USER.nombre }; if (!(o.cant > 0) || !o.mes) { I.toast('Cantidad y mes son obligatorios', 'err'); return false; } if (esCompras || (l.origen === 'compras')) o.origen = 'compras'; try { if (k) await DB.update({ ['llegadas/' + k]: Object.assign({}, l, o, { _k: null }) }); else await DB.push('llegadas', o); if (esCompras && !k) await DB.push('notasCompra/' + itemId, { texto: 'OC registrada: ' + fmt(o.cant) + ' ' + (it.unidad || '') + (o.oc ? ' · OC ' + o.oc : '') + (o.proveedor ? ' · ' + o.proveedor : '') + ' · llega ' + mesLabel(o.mes), estatus: 'oc', por: USER.nombre, rol: USER.rol, ts: Date.now() }); I.toast('Guardado ✔', 'ok'); } catch (x) { I.toast('Sin permiso: ' + x.message, 'err'); return false; } } }]));
   }
 
   /* ---------- ALERTAS DE COMPRA ---------- */
@@ -617,7 +688,8 @@
       const all = alertas(); const rows = alRows();
       $('#al-info', el).innerHTML = `Calculado sobre la <b>existencia física</b> (MDE + almacén PT) actualizada al ${fFecha(ultimaAct())}. Stock mínimo = consumo diario × lead time + ${fmt(30, 0)}% del consumo mensual como seguridad. La cantidad sugerida descuenta lo ya fincado.`;
       $('#al-k', el).innerHTML = `<div class="kpi red"><div class="l">Colocar OC</div><div class="v">${all.filter(a => a.status === 'COLOCAR OC').length}</div></div><div class="kpi red"><div class="l">Críticos</div><div class="v">${all.filter(a => a.crit === 'CRÍTICO').length}</div><div class="s">se acaban antes de que llegue un pedido nuevo</div></div><div class="kpi blu"><div class="l">Cubiertos con OC</div><div class="v">${all.filter(a => a.status === 'CUBIERTO CON OC').length}</div></div><div class="kpi grn"><div class="l">Suficientes</div><div class="v">${all.filter(a => a.status === 'SUFICIENTE').length}</div></div>`;
-      $('#al-t', el).innerHTML = `<div class="tw"><table><thead><tr><th>Artículo</th><th class="num">Físico</th><th class="num">Consumo/mes</th><th class="num">LT días</th><th class="num">Stock mín.</th><th class="num">Alcance</th><th class="num">Fincado</th><th>Status</th><th>Criticidad</th><th class="num">Sugerido</th><th>Pedir a más tardar</th><th>Quiebre</th><th>Nota</th></tr></thead><tbody>${rows.map(a => `<tr><td><b>${esc(a.it.nombre)}</b><div class="tiny muted">${esc(a.it.codigo)} · ${esc(a.it.familia)}</div></td><td class="num">${fmt(a.fis)} <span class="tiny muted">${esc(a.it.unidad)}</span></td><td class="num">${fmt(a.cons)}</td><td class="num">${fmt(a.ltd, 0)}</td><td class="num">${fmt(a.min)}</td><td class="num ${a.alcance < a.ltd ? 'neg' : ''}">${isFinite(a.alcance) ? fmt(a.alcance, 0) + ' d' : '∞'}</td><td class="num">${a.tr.fincado ? fmt(a.tr.fincado) : ''}${a.tr.porComprar ? `<div class="tiny muted">+${fmt(a.tr.porComprar)} planeado</div>` : ''}</td><td><span class="b ${I.statusClass(a.status)}">${a.status}</span></td><td><span class="b ${I.critClass(a.crit)}">${a.crit}</span></td><td class="num"><b>${a.sugerido > 0 ? fmt(a.sugerido) : ''}</b></td><td>${a.p.pedirAntes ? `<span class="${a.p.pedirAntes < new Date() ? 'b b-red' : ''}">${fDia(hoyISO(a.p.pedirAntes))}</span>` : ''}</td><td>${a.p.quiebre ? `<span class="b b-red">${mesLabel(a.p.quiebre)}</span>` : ''}</td><td class="small muted">${esc(a.it.nota || '')}</td></tr>`).join('') || '<tr><td colspan="13" class="empty">Sin artículos</td></tr>'}</tbody></table></div>`;
+      $('#al-t', el).innerHTML = `<div class="tw"><table><thead><tr><th>Artículo</th><th class="num">Físico</th><th class="num">Consumo/mes</th><th class="num">LT días</th><th class="num">Stock mín.</th><th class="num">Alcance</th><th class="num">Fincado</th><th>Status</th><th>Criticidad</th><th class="num">Sugerido</th><th>Pedir a más tardar</th><th>Quiebre</th><th>Nota</th><th>Seguimiento</th></tr></thead><tbody>${rows.map(a => `<tr><td><b>${esc(a.it.nombre)}</b><div class="tiny muted">${esc(a.it.codigo)} · ${esc(a.it.familia)}${segTxt(a.it.id)}</div></td><td class="num">${fmt(a.fis)} <span class="tiny muted">${esc(a.it.unidad)}</span></td><td class="num">${fmt(a.cons)}</td><td class="num">${fmt(a.ltd, 0)}</td><td class="num">${fmt(a.min)}</td><td class="num ${a.alcance < a.ltd ? 'neg' : ''}">${isFinite(a.alcance) ? fmt(a.alcance, 0) + ' d' : '∞'}</td><td class="num">${a.tr.fincado ? fmt(a.tr.fincado) : ''}${a.tr.porComprar ? `<div class="tiny muted">+${fmt(a.tr.porComprar)} planeado</div>` : ''}</td><td><span class="b ${I.statusClass(a.status)}">${a.status}</span></td><td><span class="b ${I.critClass(a.crit)}">${a.crit}</span></td><td class="num"><b>${a.sugerido > 0 ? fmt(a.sugerido) : ''}</b></td><td>${a.p.pedirAntes ? `<span class="${a.p.pedirAntes < new Date() ? 'b b-red' : ''}">${fDia(hoyISO(a.p.pedirAntes))}</span>` : ''}</td><td>${a.p.quiebre ? `<span class="b b-red">${mesLabel(a.p.quiebre)}</span>` : ''}</td><td class="small muted">${esc(a.it.nota || '')}</td><td>${botonesCompra(a.it.id)}</td></tr>`).join('') || '<tr><td colspan="14" class="empty">Sin artículos</td></tr>'}</tbody></table></div>`;
+      bindCompra(el);
     }
   };
   const alRows = () => { const q = UI.alQ.toLowerCase(); return alertas().filter(a => (!UI.alFam || a.it.familia === UI.alFam) && (!q || I.itemLabel(a.it).toLowerCase().includes(q)) && (UI.alSt === 'todos' || (UI.alSt === 'oc' && a.status === 'COLOCAR OC') || (UI.alSt === 'crit' && a.crit === 'CRÍTICO') || (UI.alSt === 'cub' && a.status === 'CUBIERTO CON OC') || (UI.alSt === 'ok' && a.status === 'SUFICIENTE'))).sort((a, b) => (critOrder[a.crit] - critOrder[b.crit]) || ((a.status === 'COLOCAR OC' ? 0 : 1) - (b.status === 'COLOCAR OC' ? 0 : 1)) || (a.alcance - b.alcance)); };
@@ -659,7 +731,10 @@
   /* ---------- CATÁLOGO ---------- */
   VIEWS.catalogo = {
     mount(el) {
-      el.innerHTML = `<div class="card"><div class="card-h"><h2>🗂️ Catálogo de materiales</h2><span class="sp"></span><select id="ca-f" style="max-width:230px">${famOpts(UI.catFam, true)}</select><select id="ca-a" style="max-width:150px"><option value="act">Activos</option><option value="ina">Inactivos</option><option value="">Todos</option></select><input id="ca-q" placeholder="Buscar…" style="max-width:180px"><button class="btn sm" id="ca-x">Exportar</button><button class="btn pri" id="ca-n">+ Nuevo artículo</button></div><div id="ca-t"></div></div>`;
+      el.innerHTML = `<div class="card"><div class="card-h"><h2>🗂️ Catálogo de materiales</h2><span class="sp"></span><select id="ca-f" style="max-width:230px">${famOpts(UI.catFam, true)}</select><select id="ca-a" style="max-width:150px"><option value="act">Activos</option><option value="ina">Inactivos</option><option value="">Todos</option></select><input id="ca-q" placeholder="Buscar…" style="max-width:180px"><button class="btn sm" id="ca-x">Exportar</button><button class="btn pri" id="ca-n">+ Nuevo artículo</button></div>
+        <div class="row small" style="gap:6px;margin-bottom:8px"><span class="muted">Visibilidad en apps para los artículos filtrados:</span><button class="btn sm" data-bk="contar:1">📋 Contar: todos sí</button><button class="btn sm" data-bk="contar:0">📋 Contar: todos no</button><button class="btn sm" data-bk="solicitar:1">🏭 Solicitar: todos sí</button><button class="btn sm" data-bk="solicitar:0">🏭 Solicitar: todos no</button></div>
+        <div id="ca-t"></div></div>`;
+      $$('[data-bk]', el).forEach(b => b.onclick = async () => { const [campo, v] = b.dataset.bk.split(':'); const rows = catRows(); if (!rows.length) return; if (!await I.confirmar('Cambiar visibilidad', `${campo === 'contar' ? 'Contar en app almacén' : 'Solicitar en app producción'} → <b>${v === '1' ? 'Sí' : 'No'}</b> para ${rows.length} artículo(s) filtrados.`)) return; const u = {}; rows.forEach(it => u['catalogo/' + it.id + '/' + campo] = v === '1'); await DB.update(u); I.toast('Actualizado ✔', 'ok'); });
       $('#ca-a').value = UI.catAct;
       $('#ca-f').onchange = e => { UI.catFam = e.target.value; render(true); };
       $('#ca-a').onchange = e => { UI.catAct = e.target.value; render(true); };
@@ -668,13 +743,14 @@
       $('#ca-x').onclick = () => { const filas = [['ID', 'Código', 'Nombre', 'Familia', 'Tipo', 'Unidad', 'Consumo mensual', 'Lead time (meses)', '% seguridad', 'Pzas por paca', 'Ubicaciones', 'Fuente', 'Planear', 'Activo', 'Nota']]; items(false).forEach(it => filas.push([it.id, it.codigo, it.nombre, it.familia, it.sub, it.unidad, it.consumo, it.lt, it.ss, it.ppp || '', (it.ubic || []).join(', '), it.fuente, it.planear ? 'Sí' : 'No', it.activo !== false ? 'Sí' : 'No', it.nota || ''])); I.exportXlsx('Catalogo_' + hoyISO() + '.xlsx', [{ nombre: 'Catálogo', filas }]); };
     },
     update(el) {
-      const q = UI.catQ.toLowerCase();
-      const rows = items(false).filter(it => (!UI.catFam || it.familia === UI.catFam) && (UI.catAct === '' || (UI.catAct === 'act' ? it.activo !== false : it.activo === false)) && (!q || (I.itemLabel(it) + ' ' + (it.sub || '')).toLowerCase().includes(q)));
+      const rows = catRows();
       let fam = null;
-      $('#ca-t', el).innerHTML = `<p class="muted small">${rows.length} artículos</p><div class="tw"><table><thead><tr><th>Artículo</th><th>Tipo</th><th>Unidad</th><th class="num">Consumo/mes</th><th class="num">LT (meses)</th><th class="num">Pzas/paca</th><th>Ubicaciones</th><th>Fuente</th><th>Planear</th><th></th></tr></thead><tbody>${rows.map(it => { const g = it.familia !== fam ? `<tr class="grp"><td colspan="10">${I.FAM_ICO[it.familia] || ''} ${esc(it.familia)}</td></tr>` : ''; fam = it.familia; return g + `<tr style="${it.activo === false ? 'opacity:.5' : ''}"><td>${esc(I.itemLabel(it))}</td><td class="small muted">${esc(it.sub || '')}</td><td>${esc(it.unidad)}</td><td class="num">${num(it.consumo) ? fmt(it.consumo) : ''}</td><td class="num">${num(it.lt) ? fmt(it.lt) : ''}</td><td class="num">${it.ppp ? fmt(it.ppp) : ''}</td><td class="tiny muted">${esc((it.ubic || []).join(', '))}</td><td>${it.fuente === 'silo' ? '<span class="b b-blu">silo</span>' : 'conteo'}</td><td>${it.planear ? '✔' : ''}</td><td><button class="btn sm" data-ei="${it.id}">Editar</button></td></tr>`; }).join('')}</tbody></table></div>`;
+      $('#ca-t', el).innerHTML = `<p class="muted small">${rows.length} artículos</p><div class="tw"><table><thead><tr><th>Artículo</th><th>Tipo</th><th>Unidad</th><th class="num">Consumo/mes</th><th class="num">LT (meses)</th><th class="num">Pzas/paca</th><th>Ubicaciones</th><th>Fuente</th><th>Planear</th><th title="Aparece en los conteos de la app almacén">📋 Contar</th><th title="Producción lo puede solicitar">🏭 Solicitar</th><th></th></tr></thead><tbody>${rows.map(it => { const g = it.familia !== fam ? `<tr class="grp"><td colspan="12">${I.FAM_ICO[it.familia] || ''} ${esc(it.familia)}</td></tr>` : ''; fam = it.familia; return g + `<tr style="${it.activo === false ? 'opacity:.5' : ''}"><td>${esc(I.itemLabel(it))}</td><td class="small muted">${esc(it.sub || '')}</td><td>${esc(it.unidad)}</td><td class="num">${num(it.consumo) ? fmt(it.consumo) : ''}</td><td class="num">${num(it.lt) ? fmt(it.lt) : ''}</td><td class="num">${it.ppp ? fmt(it.ppp) : ''}</td><td class="tiny muted">${esc((it.ubic || []).join(', '))}</td><td>${it.fuente === 'silo' ? '<span class="b b-blu">silo</span>' : 'conteo'}</td><td>${it.planear ? '✔' : ''}</td><td><input type="checkbox" data-vt="contar" data-id="${it.id}" ${I.esContable(Object.assign({}, it, { activo: true })) ? 'checked' : ''}></td><td><input type="checkbox" data-vt="solicitar" data-id="${it.id}" ${I.esSolicitable(Object.assign({}, it, { activo: true })) ? 'checked' : ''}></td><td><button class="btn sm" data-ei="${it.id}">Editar</button></td></tr>`; }).join('')}</tbody></table></div>`;
       $$('[data-ei]', el).forEach(b => b.onclick = () => editarItem(b.dataset.ei));
+      $$('[data-vt]', el).forEach(c => c.onchange = async () => { await DB.set('catalogo/' + c.dataset.id + '/' + c.dataset.vt, c.checked); I.toast((c.dataset.vt === 'contar' ? 'Conteo' : 'Solicitud') + ': ' + (c.checked ? 'visible' : 'oculto') + ' ✔', 'ok'); });
     }
   };
+  const catRows = () => { const q = UI.catQ.toLowerCase(); return items(false).filter(it => (!UI.catFam || it.familia === UI.catFam) && (UI.catAct === '' || (UI.catAct === 'act' ? it.activo !== false : it.activo === false)) && (!q || (I.itemLabel(it) + ' ' + (it.sub || '')).toLowerCase().includes(q))); };
   async function editarItem(id, pre) {
     const it = id ? item(id) : Object.assign({ codigo: '', nombre: '', familia: UI.catFam || 'EMPAQUE', sub: '', unidad: 'PZA', consumo: 0, lt: 0, ss: 0.3, ppp: '', ubic: [], fuente: 'conteo', planear: false, activo: true, nota: '' }, pre || {});
     await I.modal(id ? 'Editar artículo' : 'Nuevo artículo', `<div class="form">
@@ -692,13 +768,15 @@
       <label class="full">Nota / comentario de compras<input id="it-no" value="${esc(it.nota || '')}"></label>
       <label><input type="checkbox" id="it-pl" ${it.planear ? 'checked' : ''}> Planear compras (proyección y alertas)</label>
       <label><input type="checkbox" id="it-ac" ${it.activo !== false ? 'checked' : ''}> Activo</label>
+      <label><input type="checkbox" id="it-ct" ${I.esContable(Object.assign({}, it, { activo: true })) ? 'checked' : ''}> 📋 Aparece en conteos (app almacén)</label>
+      <label><input type="checkbox" id="it-so" ${I.esSolicitable(Object.assign({}, it, { activo: true })) ? 'checked' : ''}> 🏭 Producción lo puede solicitar</label>
     </div>`, [{ t: 'Cancelar' }, {
       t: 'Guardar', c: 'pri', antes: async ov => {
         const codigo = $('#it-c', ov).value.trim().toUpperCase(), nombre = $('#it-n', ov).value.trim().toUpperCase();
         if (!nombre) { I.toast('El nombre es obligatorio', 'err'); return false; }
         const nid = id || keySafe(codigo || nombre);
         if (!id && S.catalogo[nid]) { I.toast('Ya existe un artículo con ese código', 'err'); return false; }
-        const o = Object.assign({}, id ? S.catalogo[id] : { orden: 900 + items(false).length }, { codigo, nombre, familia: $('#it-f', ov).value, sub: $('#it-s', ov).value.trim().toUpperCase(), unidad: $('#it-u', ov).value.trim(), ppp: num($('#it-p', ov).value) || null, consumo: num($('#it-cm', ov).value), lt: num($('#it-lt', ov).value), ss: num($('#it-ss', ov).value), fuente: $('#it-fu', ov).value, ubic: $('#it-ub', ov).value.split(',').map(x => x.trim()).filter(Boolean), nota: $('#it-no', ov).value.trim(), planear: $('#it-pl', ov).checked, activo: $('#it-ac', ov).checked });
+        const o = Object.assign({}, id ? S.catalogo[id] : { orden: 900 + items(false).length }, { codigo, nombre, familia: $('#it-f', ov).value, sub: $('#it-s', ov).value.trim().toUpperCase(), unidad: $('#it-u', ov).value.trim(), ppp: num($('#it-p', ov).value) || null, consumo: num($('#it-cm', ov).value), lt: num($('#it-lt', ov).value), ss: num($('#it-ss', ov).value), fuente: $('#it-fu', ov).value, ubic: $('#it-ub', ov).value.split(',').map(x => x.trim()).filter(Boolean), nota: $('#it-no', ov).value.trim(), planear: $('#it-pl', ov).checked, activo: $('#it-ac', ov).checked, contar: $('#it-ct', ov).checked, solicitar: $('#it-so', ov).checked });
         if (!o.ubic.length) o.ubic = ['GENERAL'];
         await DB.set('catalogo/' + nid, o);
         if (!id) await I.mov({ tipo: 'catalogo', itemId: nid, nota: 'Alta de artículo en catálogo' });
@@ -780,8 +858,9 @@
     const H = [], now = Date.now();
     items(true).forEach(it => { const f = F(it.id); if (f.mde < 0) H.push({ n: 'alta', t: 'Existencia negativa en MDE: ' + it.nombre, d: 'MDE = ' + fmt(f.mde) + ' ' + esc(it.unidad) + '. Revisa transferencias a PT sin entrada registrada.' }); if (f.pt < 0) H.push({ n: 'alta', t: 'Existencia negativa en PT: ' + it.nombre, d: 'PT = ' + fmt(f.pt) }); });
     if (S.odoo) odRows().filter(r => r.d != null && Math.abs(r.val || 0) > 5000 && Math.abs(r.pct || 0) > 5).sort((a, b) => Math.abs(b.val) - Math.abs(a.val)).slice(0, 8).forEach(r => H.push({ n: Math.abs(r.val) > 50000 ? 'alta' : 'media', t: 'Diferencia vs Odoo: ' + r.it.nombre, d: 'Físico ' + fmt(r.fis) + ' vs teórico ' + fmt(r.q) + ' (' + fmt(r.pct) + '%, ' + money(r.val) + ')' }));
-    vals(S.entregas).filter(e => e.estado === 'por_validar' && now - e.ts > 86400000).forEach(e => H.push({ n: 'media', t: 'Entrega a PT sin validar desde ' + fFecha(e.ts), d: esc(e.por && e.por.nombre) + ': ' + lineasTxt(e.lineas) }));
+    vals(S.entregas).filter(e => ['por_recibir', 'recibida'].includes(I.estadoEntrega(e)) && now - e.ts > 86400000).forEach(e => H.push({ n: 'media', t: (I.estadoEntrega(e) === 'recibida' ? 'Entrega recibida por producción sin aceptar desde ' : 'Entrega sin confirmar por producción desde ') + fFecha(e.ts), d: esc(e.por && e.por.nombre) + ': ' + lineasTxt(e.lineas) }));
     vals(S.entregas).filter(e => e.solicitudId && S.solicitudes[e.solicitudId] && now - e.ts < 14 * 86400000).forEach(e => { const sol = S.solicitudes[e.solicitudId]; const sm = {}; vals(sol.lineas).forEach(l => sm[l.itemId] = (sm[l.itemId] || 0) + num(l.cant)); vals(e.lineas).forEach(l => { const s_ = sm[l.itemId]; if (s_ && Math.abs(num(l.cant) - s_) / s_ > 0.1) H.push({ n: 'baja', t: 'Entrega distinta a lo solicitado: ' + item(l.itemId).nombre, d: 'Solicitó ' + fmt(s_) + ', entregó ' + fmt(l.cant) + ' (' + fFecha(e.ts) + ')' }); }); });
+    vals(S.entregas).filter(e => e.recepcion && e.recepcion.diferencia && now - e.ts < 14 * 86400000).forEach(e => H.push({ n: 'media', t: 'Producción reportó diferencia al recibir (' + fFecha(e.ts) + ')', d: esc(e.recepcion.nombre || '') + ': ' + esc(e.recepcion.nota || '') }));
     const ult = vals(S.ptCortes).sort((a, b) => b.ts - a.ts); if (ult.length >= 1) { const c = ult[0], prev = ult[1]; const dias = prev ? Math.max(1, (c.ts - prev.ts) / 86400000) : 1; vals(c.items).forEach(x => { const it = item(x._k); const esp = num(it.consumo) / 30 * dias; if (esp > 0 && x.salida > esp * 2) H.push({ n: 'media', t: 'Consumo de PT fuera de lo normal: ' + it.nombre, d: 'Salida ' + fmt(x.salida) + ' en ' + fmt(dias, 0) + ' día(s) vs ~' + fmt(esp) + ' esperado' }); if (x.salida < 0) H.push({ n: 'media', t: 'Odoo PT mayor que lo transferido: ' + it.nombre, d: 'Diferencia ' + fmt(x.salida) + '. Posible transferencia no capturada.' }); }); }
     vals(S.silos).forEach(s => { const c = I.calcSilo(s, S.silosLect[s._k]); if (c.contenido != null && c.caben < 0) H.push({ n: 'media', t: 'Lectura de silo fuera de rango: ' + s.nombre, d: 'Contenido mayor a la capacidad.' }); const l = S.silosLect[s._k]; if (l && now - l.ts > 3 * 86400000) H.push({ n: 'baja', t: 'Silo sin lectura reciente: ' + s.nombre, d: 'Última lectura ' + fFecha(l.ts) }); });
     const aj = vals(S.movimientos).filter(m => m.tipo === 'ajuste' && now - m.ts < 7 * 86400000); if (aj.length) H.push({ n: aj.length > 5 ? 'media' : 'baja', t: aj.length + ' ajustes manuales en los últimos 7 días', d: aj.slice(0, 5).map(m => esc(item(m.itemId).nombre) + ' (' + fmt(m.cant) + ', ' + esc(m.por) + ')').join(' · ') });
@@ -810,11 +889,18 @@
         <div class="form"><label>Hora<input id="cf-h" type="time"></label><label><input type="checkbox" id="cf-a"> Activo</label></div>
         <div class="row">${['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((d, i) => `<label style="margin:0"><input type="checkbox" data-dw="${i}"> ${d}</label>`).join('')}</div>
         <div class="row" style="margin-top:10px"><button class="btn pri" id="cf-s">Guardar</button><button class="btn" id="cf-t">Enviar notificación de prueba</button></div></div>
+      <div class="card"><div class="card-h"><h2>🧪 Motivos de calidad de silos</h2></div>
+        <p class="muted small">Uno por renglón. "OK" siempre va primero. Cualquier motivo distinto de OK exige nota.</p>
+        <textarea id="cf-cq" rows="9" style="width:100%"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn pri" id="cf-cqs">Guardar motivos</button><button class="btn" id="cf-cqd">Restaurar sugeridos</button></div></div>
       <div class="card"><div class="card-h"><h2>📦 Catálogo inicial</h2></div><div id="cf-seed"></div></div>
       <div class="card"><div class="card-h"><h2>🔐 Licencia y conexión</h2></div><div id="cf-lic" class="small"></div></div>
       </div>`;
       $('#cf-s').onclick = async () => { await DB.update({ 'config/recordatorio/hora': $('#cf-h').value || '08:00', 'config/recordatorio/activo': $('#cf-a').checked, 'config/recordatorio/dias': $$('[data-dw]').filter(c => c.checked).map(c => +c.dataset.dw) }); I.toast('Guardado ✔', 'ok'); };
       $('#cf-t').onclick = async () => { try { const j = await I.fn('invAdmin', { accion: 'notifPrueba' }); I.toast('Enviada a ' + (j.enviados || 0) + ' dispositivo(s)', 'ok'); } catch (e) { I.toast(e.message, 'err'); } };
+      $('#cf-cq').value = I.calidades(S.config).join('\n');
+      $('#cf-cqs').onclick = async () => { const l = $('#cf-cq').value.split('\n').map(x => x.trim().toUpperCase()).filter(Boolean).filter(x => x !== 'OK'); await DB.set('config/calidadSilo', ['OK'].concat([...new Set(l)])); I.toast('Motivos guardados ✔', 'ok'); };
+      $('#cf-cqd').onclick = () => { $('#cf-cq').value = I.CALIDAD_SILO.join('\n'); };
       const r = S.config.recordatorio || { hora: '08:00', activo: true, dias: [1, 2, 3, 4, 5, 6] };
       $('#cf-h').value = r.hora; $('#cf-a').checked = r.activo !== false; $$('[data-dw]').forEach(c => c.checked = (r.dias || []).includes(+c.dataset.dw));
     },

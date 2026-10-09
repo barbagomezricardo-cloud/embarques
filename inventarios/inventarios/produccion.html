@@ -9,12 +9,12 @@
 <link rel="icon" href="icons/icono-192.png">
 <link rel="apple-touch-icon" href="icons/icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="estilos.css">
+<link rel="stylesheet" href="estilos.css?v=20261009">
 </head>
 <body class="app-ui">
 <div id="app"><div class="login"><div class="muted">Cargando…</div></div></div>
 <script src="config.js"></script>
-<script src="core.js"></script>
+<script src="core.js?v=20261009"></script>
 <script>
 /* =====================================================================
    APP DE PRODUCCIÓN
@@ -31,8 +31,8 @@
   let SW = null;
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').then(r => SW = r).catch(() => { });
 
-  const S = { catalogo: {}, pt: {}, solicitudes: {}, config: {} };
-  let USER = null, offs = [], TAB = 'pedido';
+  const S = { catalogo: {}, pt: {}, solicitudes: {}, entregas: {}, config: {} };
+  let USER = null, offs = [], TAB = 'pedido', tabAuto = true;
   const UI = { fam: 'EMPAQUE', q: '', cart: {}, nota: '' };
   try { UI.cart = JSON.parse(localStorage.getItem('inv_cart') || '{}'); } catch (e) { }
   const saveCart = () => { try { localStorage.setItem('inv_cart', JSON.stringify(UI.cart)); } catch (e) { } };
@@ -44,7 +44,7 @@
     if (!['produccion', 'jefe', 'master'].includes(USER.rol)) { $('#app').innerHTML = `<div class="login"><div class="login-card"><h1>Sin acceso</h1><p class="muted">Esta app es para producción.</p><button class="btn" id="lo">Cerrar sesión</button></div></div>`; $('#lo').onclick = () => AUTH.logout(); return; }
     shell();
     const sub = (p, k, n) => offs.push((n ? DB.onLast(p, n, v => { S[k] = v || {}; render(); }) : DB.on(p, v => { S[k] = v || {}; render(); })));
-    sub('catalogo', 'catalogo'); sub('pt', 'pt'); sub('solicitudes', 'solicitudes', 200); sub('config', 'config');
+    sub('catalogo', 'catalogo'); sub('pt', 'pt'); sub('solicitudes', 'solicitudes', 200); sub('entregas', 'entregas', 200); sub('config', 'config');
     recordatorioLocal();
   });
 
@@ -52,10 +52,10 @@
     $('#app').innerHTML = `${I.DEMO ? '<div class="demo-bar">MODO DEMO</div>' : ''}
       <header class="top"><div class="top-in"><div class="brand"><div class="logo">🏭</div><div>Producción<small>${esc(USER.nombre)}</small></div></div><span class="sp"></span><button class="btn sm" id="ntf" title="Notificaciones">🔔</button><button class="btn sm" id="out">Salir</button></div></header>
       <div class="app-main" id="main"></div>
-      <nav class="tabs-bottom">${[['pedido', '📝', 'Pedido de hoy'], ['pt', '🏭', 'Mi almacén PT'], ['hist', '🕘', 'Historial']].map(([k, i, t]) => `<button data-t="${k}"><span>${i}</span>${t}</button>`).join('')}</nav>`;
+      <nav class="tabs-bottom" style="--x:0">${[['recibir', '📥', 'Recibir'], ['pedido', '📝', 'Pedido de hoy'], ['pt', '🏭', 'Mi almacén PT'], ['hist', '🕘', 'Historial']].map(([k, i, t]) => `<button data-t="${k}"><span>${i}</span>${t}<b class="cnt hide" data-cnt="${k}" style="position:absolute;margin-left:28px;margin-top:-4px;background:var(--red);color:#fff;border-radius:9px;font-size:11px;padding:0 6px"></b></button>`).join('')}</nav>`;
     $('#out').onclick = () => AUTH.logout();
     $('#ntf').onclick = activarNotificaciones;
-    $$('.tabs-bottom button').forEach(b => b.onclick = () => { TAB = b.dataset.t; UI.mounted = null; render(true); window.scrollTo(0, 0); });
+    $$('.tabs-bottom button').forEach(b => b.onclick = () => { tabAuto = false; TAB = b.dataset.t; UI.mounted = null; render(true); window.scrollTo(0, 0); });
     UI.mounted = null; render(true);
   }
 
@@ -64,15 +64,48 @@
     if (!USER || !$('#main')) return;
     if (!now) { clearTimeout(rT); rT = setTimeout(() => render(true), 150); return; }
     $$('.tabs-bottom button').forEach(b => b.classList.toggle('on', b.dataset.t === TAB));
-    ({ pedido: vPedido, pt: vPT, hist: vHist })[TAB]($('#main'));
+    if (tabAuto && porRecibir().length && TAB !== 'recibir') { TAB = 'recibir'; UI.mounted = null; }
+    const nr = porRecibir().length; const bc = $('[data-cnt="recibir"]'); if (bc) { bc.textContent = nr; bc.classList.toggle('hide', !nr); }
+    ({ recibir: vRecibir, pedido: vPedido, pt: vPT, hist: vHist })[TAB]($('#main'));
   }
   const items = () => vals(S.catalogo).map(x => Object.assign({}, x, { id: x._k })).filter(x => x.activo !== false).sort((a, b) => (I.FAMILIAS.indexOf(a.familia) - I.FAMILIAS.indexOf(b.familia)) || ((a.orden || 999) - (b.orden || 999)));
   const item = id => Object.assign({ id, nombre: id, unidad: '' }, S.catalogo[id] || {});
   const ptQ = id => num(S.pt[id] && S.pt[id].cant);
   const misHoy = () => vals(S.solicitudes).filter(s => s.fecha === hoyISO() && s.por && s.por.uid === USER.uid).sort((a, b) => b.ts - a.ts);
-  const estTxt = s => ({ pendiente: '⏳ Pendiente de surtir', surtida: '📦 Surtida por almacén', validada: '✔ Validada por inventarios', rechazada: '✕ Rechazada', cancelada: 'Cancelada' }[s] || s);
-  const estCls = s => ({ pendiente: 'b-amb', surtida: 'b-blu', validada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' }[s] || 'b-gry');
+  const estTxt = s => ({ pendiente: '⏳ Pendiente de surtir', surtida: '📦 Entregada · confirma que la recibiste', recibida: '📥 Recibida · por aceptar inventarios', validada: '✔ Aceptada por inventarios', rechazada: '✕ Rechazada', cancelada: 'Cancelada' }[s] || s);
+  const estCls = s => ({ pendiente: 'b-amb', surtida: 'b-red', recibida: 'b-blu', validada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' }[s] || 'b-gry');
   const horaRec = () => (S.config.recordatorio && S.config.recordatorio.hora) || '08:00';
+
+  /* ---------------- RECIBIR MATERIAL ----------------
+     Producción confirma lo que realmente recibió del almacén (lo que pidió
+     y lo que no pidió). Hasta entonces inventarios puede aceptar la transferencia. */
+  const porRecibir = () => vals(S.entregas).filter(e => I.estadoEntrega(e) === 'por_recibir').sort((a, b) => a.ts - b.ts);
+  function vRecibir(el) {
+    const L = porRecibir();
+    const key = 'rec-' + L.map(e => e._k).join(',');
+    if (UI.mounted === key) return;
+    UI.mounted = key;
+    el.innerHTML = `<h2>Material por recibir</h2><p class="muted small">Revisa físicamente lo que te entregó el almacén y confirma la cantidad real en <b>sacos/piezas</b> (las pacas son solo informativas). Si algo no llegó, pon 0.</p>` + (L.map(e => {
+      const sol = e.solicitudId && S.solicitudes[e.solicitudId];
+      const sm = {}; if (sol) vals(sol.lineas).forEach(l => sm[l.itemId] = (sm[l.itemId] || 0) + num(l.cant));
+      return `<div class="card" style="margin-bottom:12px" data-e="${e._k}"><div class="row"><b class="grow">Entrega de ${esc(e.por && e.por.nombre)}</b><span class="muted small">${fFecha(e.ts)}</span></div>
+        ${sol ? `<div class="small muted">Contra tu solicitud del ${fFecha(sol.ts)}</div>` : '<div class="small"><span class="b b-amb">sin solicitud</span></div>'}
+        ${vals(e.lineas).map(l => { const it = item(l.itemId); const pedido = sm[l.itemId]; return `<div class="item" style="margin-top:8px"><div class="row" style="flex-wrap:nowrap"><div class="grow"><div class="nm">${esc(it.nombre)}${sol && pedido == null ? ' <span class="b b-amb">no solicitado</span>' : ''}</div><div class="cd">${pedido != null ? 'Pediste ' + fmt(pedido) + ' · ' : ''}Almacén entregó <b>${fmt(l.cant)}</b> ${esc(it.unidad)}${l.pacas ? ' (' + fmt(l.pacas) + ' pacas)' : ''}</div></div><label style="margin:0;width:140px">Recibí<input class="in-num" data-r="${e._k}|${l._k}" inputmode="decimal" value="${l.cant}"></label></div></div>`; }).join('')}
+        ${e.nota ? `<div class="small muted" style="margin-top:6px">📝 Almacén: ${esc(e.nota)}</div>` : ''}
+        <input data-rn="${e._k}" placeholder="Nota (obligatoria si lo recibido no coincide)" style="margin-top:8px">
+        <button class="btn ok big" data-ok="${e._k}" style="margin-top:8px">✔ Confirmo lo que recibí</button></div>`;
+    }).join('') || '<div class="empty">No tienes entregas pendientes de confirmar 👍</div>');
+    $$('[data-ok]').forEach(b => b.onclick = async () => {
+      const k = b.dataset.ok, e = S.entregas[k]; const nota = $(`[data-rn="${k}"]`).value.trim();
+      const lineas = {}; let dif = false;
+      vals(e.lineas).forEach(l => { const r = num($(`[data-r="${k}|${l._k}"]`).value); if (Math.abs(r - num(l.cant)) > 0.0001) dif = true; const c = Object.assign({}, l); delete c._k; c.cantRecibida = r; lineas[l._k] = c; });
+      if (dif && !nota) return I.toast('Lo recibido no coincide con lo entregado: escribe una nota', 'err');
+      b.disabled = true;
+      const up = { ['entregas/' + k + '/estado']: 'recibida', ['entregas/' + k + '/lineas']: lineas, ['entregas/' + k + '/recepcion']: { uid: USER.uid, nombre: USER.nombre, ts: Date.now(), nota, diferencia: dif } };
+      if (e.solicitudId && S.solicitudes[e.solicitudId] && S.solicitudes[e.solicitudId].estado === 'surtida') up['solicitudes/' + e.solicitudId + '/estado'] = 'recibida';
+      try { await DB.update(up); I.toast('Recepción confirmada ✔ — inventarios la aceptará', 'ok'); UI.mounted = null; render(true); } catch (x) { b.disabled = false; I.toast('Error: ' + x.message, 'err'); }
+    });
+  }
 
   /* ---------------- PEDIDO DE HOY ---------------- */
   function vPedido(el) {
@@ -83,12 +116,12 @@
     if (UI.mounted !== key) {
       UI.mounted = key;
       const q = UI.q.toLowerCase();
-      const lista = items().filter(it => (!UI.fam || it.familia === UI.fam) && (!q || I.itemLabel(it).toLowerCase().includes(q)));
+      const lista = items().filter(I.esSolicitable).filter(it => (!UI.fam || it.familia === UI.fam) && (!q || I.itemLabel(it).toLowerCase().includes(q)));
       el.innerHTML = `<div id="banner"></div><div id="hoy"></div>
         <h2 style="margin-top:6px">¿Qué vas a necesitar?</h2>
-        <div class="fam-chips">${I.FAMILIAS.map(f => `<button data-f="${f}" class="${f === UI.fam ? 'on' : ''}">${I.FAM_ICO[f]} ${f}</button>`).join('')}</div>
+        <div class="fam-chips">${I.FAMILIAS.filter(f => items().some(it => it.familia === f && I.esSolicitable(it))).map(f => `<button data-f="${f}" class="${f === UI.fam ? 'on' : ''}">${I.FAM_ICO[f]} ${f}</button>`).join('')}</div>
         <input id="q" placeholder="Buscar material…" value="${esc(UI.q)}" style="margin:8px 0">
-        <div id="lst">${lista.map(it => `<div class="item" data-it="${it.id}"><div class="row" style="flex-wrap:nowrap"><div class="grow"><div class="nm">${esc(it.nombre)}</div><div class="cd">${esc(it.codigo || '')} · en PT: <b>${fmt(ptQ(it.id))}</b> ${esc(it.unidad)}${it.ppp ? ' · ' + fmt(it.ppp) + ' pzas/paca' : ''}</div></div>${it.ppp ? `<input class="in-num" data-pac="${it.id}" placeholder="pacas" inputmode="decimal" style="width:90px" value="${UI.cart[it.id] && UI.cart[it.id].pacas || ''}">` : ''}<input class="in-num" data-c="${it.id}" placeholder="cantidad" inputmode="decimal" style="width:130px" value="${UI.cart[it.id] ? UI.cart[it.id].cant : ''}"></div></div>`).join('') || '<div class="empty">Sin materiales</div>'}</div>
+        <div id="lst">${lista.map(it => `<div class="item" data-it="${it.id}"><div class="row" style="flex-wrap:nowrap"><div class="grow"><div class="nm">${esc(it.nombre)}</div><div class="cd">${esc(it.codigo || '')} · en PT: <b>${fmt(ptQ(it.id))}</b> ${esc(it.unidad)}${it.ppp ? ' · ' + fmt(it.ppp) + ' pzas/paca' : ''}</div></div>${it.ppp ? `<input class="in-num" data-pac="${it.id}" placeholder="pacas (info)" title="Pacas: solo informativo, se convierte a piezas" inputmode="decimal" style="width:100px" value="${UI.cart[it.id] && UI.cart[it.id].pacas || ''}">` : ''}<input class="in-num" data-c="${it.id}" placeholder="${esc(it.unidad || 'cantidad')}" inputmode="decimal" style="width:130px" value="${UI.cart[it.id] ? UI.cart[it.id].cant : ''}"></div></div>`).join('') || '<div class="empty">Sin materiales</div>'}</div>
         <div class="sticky-foot"><div class="small muted" id="cart-txt" style="margin-bottom:6px"></div><input id="nt" placeholder="Nota para almacén (turno, línea, urgencia…)" value="${esc(UI.nota)}" style="margin-bottom:8px"><button class="btn pri big" id="env">Enviar solicitud</button></div>`;
       $$('.fam-chips button').forEach(b => b.onclick = () => { UI.fam = b.dataset.f; render(true); });
       $('#q').oninput = I.debounce(() => { UI.q = $('#q').value; render(true); setTimeout(() => { const x = $('#q'); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }, 0); }, 400);

@@ -8,7 +8,7 @@
   'use strict';
   const CFG = W.INV_CONFIG || {};
   const FB_VER = '10.12.0';
-  const DEMO = !CFG.FIREBASE || /[?&]demo=1\b/.test(location.search);
+  const DEMO = !CFG.FIREBASE; /* producción: sin modo demo */
   const ROOT = 'inv';
 
   /* ------------------------------------------------------------------ */
@@ -491,6 +491,21 @@
   };
 
   /* Etiqueta de artículo */
+  /* Motivos de calidad para silos (editable desde Configuración → config/calidadSilo) */
+  INV.CALIDAD_SILO = ['OK', 'CONTAMINADO', 'CUARENTENA', 'PEGADO', 'HUMEDAD ALTA', 'PLAGA / INFESTACIÓN', 'MEZCLA DE PRODUCTO', 'FUERA DE ESPECIFICACIÓN', 'RANCIDEZ / OLOR', 'PENDIENTE DE ANÁLISIS', 'OTRO'];
+  INV.calidades = cfg => { const l = cfg && Array.isArray(cfg.calidadSilo) && cfg.calidadSilo.filter(Boolean); return (l && l.length) ? l : INV.CALIDAD_SILO; };
+  /* Qué artículos aparecen en cada app (se decide en Catálogo) */
+  INV.esContable = it => it && it.activo !== false && it.contar !== false;
+  INV.esSolicitable = it => it && it.activo !== false && (it.solicitar != null ? !!it.solicitar : ['EMPAQUE', 'OTROS INSUMOS', 'CRIBAS'].includes(it.familia));
+  /* Entregas a producción: almacén entrega → producción confirma → jefe acepta */
+  INV.estadoEntrega = e => { const s = e && e.estado; return s === 'por_validar' ? 'por_recibir' : s; };
+  INV.ENTREGA_TXT = { por_recibir: 'Por confirmar producción', recibida: 'Recibida · por aceptar', validada: 'Aceptada', rechazada: 'Rechazada', cancelada: 'Cancelada' };
+  INV.ENTREGA_CLS = { por_recibir: 'b-amb', recibida: 'b-blu', validada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' };
+  /* Silos ligados a un artículo y kg calculados a partir del vacío láser */
+  INV.silosDe = (silos, itemId) => vals(silos).filter(s => s.itemId === itemId).sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  INV.kgSilo = (s, vacio) => { const c = INV.calcSilo(s, { vacio }); return c.contenido == null ? null : Math.round(c.contenido * 1000); };
+  INV.ESTATUS_COMPRA = { cotizando: 'Cotizando', oc: 'OC colocada', transito: 'En tránsito', detenido: 'Detenido' };
+
   INV.itemLabel = it => it ? ((it.codigo ? '[' + it.codigo + '] ' : '') + it.nombre) : '—';
   INV.critClass = c => c === 'CRÍTICO' ? 'b-red' : c === 'RIESGO' ? 'b-amb' : 'b-grn';
   INV.statusClass = s => s === 'COLOCAR OC' ? 'b-red' : s === 'CUBIERTO CON OC' ? 'b-blu' : 'b-grn';
