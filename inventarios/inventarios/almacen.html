@@ -9,12 +9,12 @@
 <link rel="icon" href="icons/icono-192.png">
 <link rel="apple-touch-icon" href="icons/icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="estilos.css?v=20261009">
+<link rel="stylesheet" href="estilos.css?v=20261009b">
 </head>
 <body class="app-ui">
 <div id="app"><div class="login"><div class="muted">Cargando…</div></div></div>
 <script src="config.js"></script>
-<script src="core.js?v=20261009"></script>
+<script src="core.js?v=20261009b"></script>
 <script>
 /* =====================================================================
    APP DEL ALMACENISTA (tablet)
@@ -29,7 +29,7 @@
   const DB = I.DB, AUTH = I.AUTH;
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
 
-  const S = { catalogo: {}, conteos: {}, silos: {}, silosLect: {}, solicitudes: {}, entregas: {}, config: {} };
+  const S = { catalogo: {}, conteos: {}, silos: {}, silosLect: {}, solicitudes: {}, entregas: {}, config: {}, meta: {} };
   let USER = null, offs = [], TAB = 'conteo';
   const UI = { fam: null, q: '', soloPend: false, entrega: null };
 
@@ -40,7 +40,7 @@
     if (!['almacenista', 'jefe', 'master'].includes(USER.rol)) { $('#app').innerHTML = `<div class="login"><div class="login-card"><h1>Sin acceso</h1><p class="muted">Esta app es para el almacenista.</p><button class="btn" id="lo">Cerrar sesión</button></div></div>`; $('#lo').onclick = () => AUTH.logout(); return; }
     shell();
     const sub = (p, k, n) => offs.push((n ? DB.onLast(p, n, v => { S[k] = v || {}; render(); }) : DB.on(p, v => { S[k] = v || {}; render(); })));
-    sub('catalogo', 'catalogo'); sub('conteos', 'conteos', 30); sub('silos', 'silos'); sub('silosLect', 'silosLect'); sub('solicitudes', 'solicitudes', 150); sub('entregas', 'entregas', 150); sub('config', 'config');
+    sub('catalogo', 'catalogo'); sub('conteos', 'conteos', 150); sub('meta', 'meta'); sub('silos', 'silos'); sub('silosLect', 'silosLect'); sub('solicitudes', 'solicitudes', 150); sub('entregas', 'entregas', 150); sub('config', 'config');
   });
 
   function shell() {
@@ -73,13 +73,16 @@
 
   /* Selector de alcance: familias completas o artículos específicos */
   function selectorAlcance(cont, ini) {
-    const st = { modo: ini && ini.itemsSel ? 'items' : 'fam', fams: new Set((ini && ini.familias) || ['EMPAQUE']), sel: new Set((ini && ini.itemsSel) || []), q: '' };
+    const prog = () => I.programaConteo(contables(), S.conteos, S.meta && S.meta.conteoProg).filter(x => x.vencido).sort((a, b) => a.clase.localeCompare(b.clase) || ((b.dias == null ? 1e9 : b.dias) - (a.dias == null ? 1e9 : a.dias)));
+    const pv = ini ? [] : prog();
+    const st = { modo: ini && ini.itemsSel ? 'items' : (pv.length ? 'prog' : 'fam'), psel: new Set(pv.map(x => x.it.id)), fams: new Set((ini && ini.familias) || ['EMPAQUE']), sel: new Set((ini && ini.itemsSel) || []), q: '' };
     const draw = () => {
       const its = contables();
-      cont.innerHTML = `<div class="seg" style="margin-bottom:10px"><button data-m="fam" class="${st.modo === 'fam' ? 'on' : ''}">Por familias</button><button data-m="items" class="${st.modo === 'items' ? 'on' : ''}">Artículos específicos</button></div>
-        ${st.modo === 'fam' ? `<div class="fam-chips" style="flex-wrap:wrap">${I.FAMILIAS.map(f => { const n = its.filter(it => it.familia === f).length; return n ? `<button data-f="${f}" class="${st.fams.has(f) ? 'on' : ''}">${I.FAM_ICO[f]} ${f}<span class="c">${n}</span></button>` : ''; }).join('')}</div>`
+      cont.innerHTML = `<div class="seg" style="margin-bottom:10px">${ini ? '' : `<button data-m="prog" class="${st.modo === 'prog' ? 'on' : ''}">📅 Programados (${prog().length})</button>`}<button data-m="fam" class="${st.modo === 'fam' ? 'on' : ''}">Por familias</button><button data-m="items" class="${st.modo === 'items' ? 'on' : ''}">Artículos específicos</button></div>
+        ${st.modo === 'prog' ? (() => { const l = prog(); return l.length ? `<div class="small muted" style="margin-bottom:6px">Le toca conteo a estos artículos según su clase (A más seguido, C menos). Quita los que hoy no alcances.</div><div style="max-height:46vh;overflow:auto">${l.map(x => `<label style="display:flex;gap:10px;align-items:center;font-size:15px;color:var(--txt);padding:6px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-pi="${x.it.id}" ${st.psel.has(x.it.id) ? 'checked' : ''}> <span class="b ${x.clase === 'A' ? 'b-red' : x.clase === 'B' ? 'b-amb' : 'b-gry'}">${x.clase}</span> ${esc(x.it.nombre)}<span class="tiny muted" style="margin-left:auto">${x.dias == null ? 'nunca contado' : x.dias + ' días'}</span></label>`).join('')}</div>` : '<div class="empty">No hay artículos programados hoy 👍 Elige por familias o artículos.</div>'; })() : st.modo === 'fam' ? `<div class="fam-chips" style="flex-wrap:wrap">${I.FAMILIAS.map(f => { const n = its.filter(it => it.familia === f).length; return n ? `<button data-f="${f}" class="${st.fams.has(f) ? 'on' : ''}">${I.FAM_ICO[f]} ${f}<span class="c">${n}</span></button>` : ''; }).join('')}</div>`
         : `<input id="al-q" placeholder="Buscar artículo…" value="${esc(st.q)}" style="margin-bottom:8px"><div class="small muted" style="margin-bottom:6px">${st.sel.size} seleccionados</div><div style="max-height:46vh;overflow:auto">${I.FAMILIAS.map(f => { const l = its.filter(it => it.familia === f && (!st.q || I.itemLabel(it).toLowerCase().includes(st.q.toLowerCase()))); return l.length ? `<div class="row" style="margin:10px 0 4px"><b class="grow">${I.FAM_ICO[f]} ${f}</b><button class="btn sm ghost" data-all="${f}">todos</button><button class="btn sm ghost" data-none="${f}">ninguno</button></div>` + l.map(it => `<label style="display:flex;gap:10px;align-items:center;font-size:15px;color:var(--txt);padding:6px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-i="${it.id}" ${st.sel.has(it.id) ? 'checked' : ''}> ${esc(it.nombre)}${it.fuente === 'silo' ? ' <span class="b b-blu">silo</span>' : ''}</label>`).join('') : ''; }).join('')}</div>`}`;
       $$('[data-m]', cont).forEach(b => b.onclick = () => { st.modo = b.dataset.m; draw(); });
+      $$('[data-pi]', cont).forEach(c => c.onchange = () => { c.checked ? st.psel.add(c.dataset.pi) : st.psel.delete(c.dataset.pi); });
       $$('[data-f]', cont).forEach(b => b.onclick = () => { st.fams.has(b.dataset.f) ? st.fams.delete(b.dataset.f) : st.fams.add(b.dataset.f); b.classList.toggle('on'); });
       $$('[data-i]', cont).forEach(c => c.onchange = () => { c.checked ? st.sel.add(c.dataset.i) : st.sel.delete(c.dataset.i); $('.small.muted', cont).textContent = st.sel.size + ' seleccionados'; });
       $$('[data-all]', cont).forEach(b => b.onclick = () => { its.filter(it => it.familia === b.dataset.all).forEach(it => st.sel.add(it.id)); draw(); });
@@ -87,15 +90,16 @@
       const q = $('#al-q', cont); if (q) q.oninput = I.debounce(() => { st.q = q.value; draw(); const n = $('#al-q', cont); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300);
     };
     draw();
-    return () => st.modo === 'fam' ? (st.fams.size ? { familias: Array.from(st.fams), itemsSel: null } : null) : (st.sel.size ? { familias: Array.from(new Set(contables().filter(it => st.sel.has(it.id)).map(it => it.familia))), itemsSel: Array.from(st.sel) } : null);
+    return () => st.modo === 'prog' ? (st.psel.size ? { familias: Array.from(new Set(contables().filter(it => st.psel.has(it.id)).map(it => it.familia))), itemsSel: Array.from(st.psel), programado: true } : null) : st.modo === 'fam' ? (st.fams.size ? { familias: Array.from(st.fams), itemsSel: null } : null) : (st.sel.size ? { familias: Array.from(new Set(contables().filter(it => st.sel.has(it.id)).map(it => it.familia))), itemsSel: Array.from(st.sel) } : null);
   }
 
   /* ---------------- CONTEO CÍCLICO ---------------- */
   function vConteo(el) {
     const c = miConteo();
     if (!c) {
-      if (UI.mounted === 'conteo-ini') return;
-      UI.mounted = 'conteo-ini';
+      const kIni = 'conteo-ini-' + I.programaConteo(contables(), S.conteos, S.meta && S.meta.conteoProg).filter(x => x.vencido).length + '-' + contables().length;
+      if (UI.mounted === kIni) return;
+      UI.mounted = kIni;
       const ult = vals(S.conteos).filter(x => x.almacenista && x.almacenista.uid === USER.uid && x.estado !== 'cancelado').sort((a, b) => b.inicio - a.inicio)[0];
       el.innerHTML = `<h2>Conteo cíclico</h2>
         ${ult ? `<div class="note" style="margin-bottom:12px">Tu último conteo (${fDia(ult.fecha)}) está <b>${ult.estado === 'confirmado' ? 'confirmado y en revisión del jefe de inventarios' : ult.estado === 'aplicado' ? 'revisado y aplicado' : ult.estado}</b>.</div>` : ''}

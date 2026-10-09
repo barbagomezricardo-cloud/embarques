@@ -330,7 +330,7 @@
     return r; // toneladas
   };
 
-  /* Existencia física total = almacén (MDE / materias primas) + almacén de insumos PT */
+  /* Existencia física total = almacén de origen (MDE empaque / MP materias primas / insumos otros) + almacén de insumos PT */
   INV.fis = function (id, fisico, pt) {
     const m = num(fisico && fisico[id] && fisico[id].mde);
     const p = num(pt && pt[id] && pt[id].cant);
@@ -504,6 +504,17 @@
   /* Silos ligados a un artículo y kg calculados a partir del vacío láser */
   INV.silosDe = (silos, itemId) => vals(silos).filter(s => s.itemId === itemId).sort((a, b) => (a.orden || 0) - (b.orden || 0));
   INV.kgSilo = (s, vacio) => { const c = INV.calcSilo(s, { vacio }); return c.contenido == null ? null : Math.round(c.contenido * 1000); };
+  /* Material en silos con calidad distinta de OK: no cuenta como disponible (kg por artículo) */
+  INV.silosBloqueados = (silos, lects) => { const r = {}; vals(silos).forEach(s => { if (!s.itemId) return; const l = lects && lects[s._k]; if (!l || !l.calidad || l.calidad === 'OK') return; const c = INV.calcSilo(s, l); if (c.contenido == null) return; r[s.itemId] = (r[s.itemId] || 0) + Math.round(c.contenido * 1000); }); return r; };
+  /* Programa de conteos cíclicos por clasificación ABC */
+  INV.PROG_DEF = { A: 7, B: 15, C: 30, tol: 2, corteA: 80, corteB: 95 };
+  INV.prog = p => Object.assign({}, INV.PROG_DEF, p || {});
+  INV.ultimosConteos = conteos => { const r = {}; vals(conteos).forEach(c => { if (c.estado !== 'confirmado' && c.estado !== 'aplicado') return; Object.keys(c.items || {}).forEach(id => { const x = c.items[id]; if (!x || !x.lineas) return; const t = x.ts || c.confirmadoTs || c.inicio; if (!r[id] || t > r[id]) r[id] = t; }); }); return r; };
+  INV.programaConteo = (items, conteos, p) => { p = INV.prog(p); const u = INV.ultimosConteos(conteos), now = Date.now(); return items.map(it => { const clase = ['A', 'B', 'C'].includes(it.abc) ? it.abc : 'C'; const freq = num(p[clase]) || 30; const ult = u[it.id] || null; const vence = ult ? ult + freq * 86400000 : 0; return { it, clase, freq, ult, dias: ult ? Math.floor((now - ult) / 86400000) : null, vence, vencido: !ult || now >= vence }; }); };
+  /* Exactitud de un conteo: dentro de tolerancia contra el sistema */
+  INV.exacto = (cnt, sis, tolPct) => { cnt = num(cnt); sis = num(sis); const base = Math.max(Math.abs(cnt), Math.abs(sis)); return base === 0 || Math.abs(cnt - sis) <= Math.max(0.5, base * num(tolPct) / 100); };
+  /* Almacén de origen según familia: MDE = empaque, MP = materias primas (macros, micros, grasas), INS = insumos otros (cribas, otros) */
+  INV.almacen = fam => fam === 'EMPAQUE' ? { cod: 'MDE', nombre: 'Almacén de empaque (MDE)' } : (fam === 'CRIBAS' || fam === 'OTROS INSUMOS') ? { cod: 'INS', nombre: 'Insumos otros' } : { cod: 'MP', nombre: 'Almacén de materias primas (MP)' };
   INV.ESTATUS_COMPRA = { cotizando: 'Cotizando', oc: 'OC colocada', transito: 'En tránsito', detenido: 'Detenido' };
 
   INV.itemLabel = it => it ? ((it.codigo ? '[' + it.codigo + '] ' : '') + it.nombre) : '—';
