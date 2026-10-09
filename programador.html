@@ -2202,7 +2202,15 @@ function exportTraza(){ const D=trzData(); const H=['Fecha','Pedido','Cliente','
    así no hay que tocar la consola): bascula/{idEmbarque}, cierres/{AAAA-MM}, odoo/{AAAA-MM} (meta)
    y odoodata/{AAAA-MM} (renglones agregados, se baja solo cuando se necesita).
    ================================================================ */
+/* El localStorage de github.io lo comparten TODAS las apps y está casi lleno: si Firebase no puede escribir su marca
+   «firebase:previous_websocket_failure» truena en pleno reintento y la app se queda en «Conectando…» para siempre. Se ignora el error de cuota solo para llaves de Firebase. */
+try{ if(!Storage.prototype.__fbq){ const _si=Storage.prototype.setItem; Storage.prototype.setItem=function(k,v){ try{ return _si.call(this,k,v); }catch(e){ if(/^firebase:/i.test(String(k))) return; throw e; } }; Storage.prototype.__fbq=1; } }catch(e){}
 const CUAD_KEY='progEmbarques_cuadre_v1', CUADODOO_KEY='progEmbarques_cuadre_odoo_v1';
+/* El detalle de Odoo (1.4 MB) vive en IndexedDB, no en localStorage (que se llena y tumba la conexión). */
+const _odIdb=()=>new Promise((res,rej)=>{ try{ const q=indexedDB.open('progEmbarquesOdoo',1); q.onupgradeneeded=()=>q.result.createObjectStore('kv'); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }catch(e){ rej(e); } });
+function odIdbGet(){ return _odIdb().then(db=>new Promise(res=>{ const r=db.transaction('kv').objectStore('kv').get('odoodata'); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); })).catch(()=>null); }
+let _odIdbT=null;
+function odIdbSet(){ clearTimeout(_odIdbT); _odIdbT=setTimeout(()=>{ _odIdb().then(db=>{ try{ db.transaction('kv','readwrite').objectStore('kv').put(JSON.parse(JSON.stringify(CUAD.odoodata)),'odoodata'); }catch(e){} }).catch(()=>{}); },400); }
 const VEHICULOS=['PICK UP','3.5 TON','RABÓN','TORTON','TRAILER','FULL','CONTENEDOR','PIPA','PLATAFORMA','OTRO'];
 const MESES_ES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 // Catálogo de la hoja "Catalogos" del Excel de báscula (con el código real de Odoo cuando el Excel traía uno distinto)
@@ -2214,10 +2222,11 @@ const cuadCfg=()=>({ tolKg:(CFG.bascTolKg!=null&&!isNaN(Number(CFG.bascTolKg)))?
   tolSacos:(CFG.bascTolSacos!=null&&!isNaN(Number(CFG.bascTolSacos)))?Math.max(0,Number(CFG.bascTolSacos)):0 });
 function cuadLoadLocal(){
   try{ const c=localStorage.getItem(CUAD_KEY); if(c){ const o=JSON.parse(c); CUAD.bascula=o.bascula||{}; CUAD.cierres=o.cierres||{}; CUAD.odoo=o.odoo||{}; CUAD.ajustes=o.ajustes||{}; CUAD.bandeja=o.bandeja||{}; CUAD.solicitudes=o.solicitudes||{}; CUAD.obs=o.obs||{}; } }catch(e){}
-  try{ const c=localStorage.getItem(CUADODOO_KEY); if(c) CUAD.odoodata=JSON.parse(c)||{}; }catch(e){}
+  try{ const c=localStorage.getItem(CUADODOO_KEY); if(c){ CUAD.odoodata=JSON.parse(c)||{}; odIdbSet(); setTimeout(()=>{ try{ localStorage.removeItem(CUADODOO_KEY); }catch(e){} },1500); } }catch(e){}   // migración: lo viejo pasa a IndexedDB y se libera el espacio
+  odIdbGet().then(o=>{ if(!o) return; let ch=false; Object.keys(o).forEach(k=>{ if(CUAD.odoodata[k]==null){ CUAD.odoodata[k]=o[k]; ch=true; } else if(k==='_ts'&&typeof o[k]==='object'){ CUAD.odoodata._ts=Object.assign({},o[k],CUAD.odoodata._ts||{}); } }); if(ch){ try{ refreshCuad(); }catch(e){} } });
 }
 function cuadSaveLocal(){ try{ localStorage.setItem(CUAD_KEY,JSON.stringify({bascula:CUAD.bascula,cierres:CUAD.cierres,odoo:CUAD.odoo,ajustes:CUAD.ajustes,bandeja:CUAD.bandeja,solicitudes:CUAD.solicitudes,obs:CUAD.obs})); }catch(e){} }
-function cuadSaveOdooLocal(){ try{ localStorage.setItem(CUADODOO_KEY,JSON.stringify(CUAD.odoodata)); }catch(e){ console.warn('odoodata no cabe en localStorage'); } }
+function cuadSaveOdooLocal(){ odIdbSet(); }
 // escribe en memoria + localStorage + nube. path = 'bascula/ID' · 'cierres/2026-09' · 'cierres/2026-09/areas/bascula' …
 function cuadSet(path,val){
   const ks=path.split('/'); let o=CUAD; for(let i=0;i<ks.length-1;i++){ if(o[ks[i]]==null||typeof o[ks[i]]!=='object')o[ks[i]]={}; o=o[ks[i]]; }
