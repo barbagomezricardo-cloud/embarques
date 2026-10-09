@@ -870,7 +870,7 @@
   }
 
   /* ---------- BITÁCORA ---------- */
-  const TIPOS = { entrada: 'Entrada a almacén', transferencia_pt: 'Transferencia a PT', salida_pt: 'Salida PT (Odoo)', ajuste: 'Ajuste manual', conteo: 'Conteo aplicado', silo: 'Niveles de silo', odoo: 'Reporte Odoo', catalogo: 'Catálogo', sistema: 'Sistema', usuario: 'Usuarios' };
+  const TIPOS = { carga: 'Carga de existencias', entrada: 'Entrada a almacén', transferencia_pt: 'Transferencia a PT', salida_pt: 'Salida PT (Odoo)', ajuste: 'Ajuste manual', conteo: 'Conteo aplicado', silo: 'Niveles de silo', odoo: 'Reporte Odoo', catalogo: 'Catálogo', sistema: 'Sistema', usuario: 'Usuarios' };
   VIEWS.bitacora = {
     mount(el) {
       el.innerHTML = `<div class="card"><div class="card-h"><h2>🧾 Bitácora de movimientos</h2><span class="sp"></span><select id="bi-t" style="max-width:200px"><option value="">Todos los tipos</option>${Object.keys(TIPOS).map(k => `<option value="${k}">${TIPOS[k]}</option>`).join('')}</select><label style="margin:0">Desde <input type="date" id="bi-d" style="width:auto"></label><label style="margin:0">Hasta <input type="date" id="bi-h" style="width:auto"></label><input id="bi-q" placeholder="Buscar…" style="max-width:180px"><button class="btn sm" id="bi-x">Exportar</button></div><div id="bi-l"></div></div>`;
@@ -1013,7 +1013,8 @@
       const n = Object.keys(S.catalogo).length;
       $('#cf-seed', el).innerHTML = `<p class="small">Artículos en catálogo: <b>${n}</b>${S.meta.seed ? ' · carga inicial ' + fFecha(S.meta.seed.ts) : ''}</p>
         <p class="muted small">La carga inicial trae el catálogo por familias, ubicaciones, consumos y lead times de tu "Control de Empaque", la existencia física y el almacén PT de "Inventario Mascotas", los silos y densidades del SCADA, los pedidos fincados/por comprar de tu Proyección y el reporte de Odoo.</p>
-        <div class="row"><button class="btn ${n ? '' : 'pri'}" id="cf-l1">Cargar catálogo + saldos iniciales</button><button class="btn" id="cf-l2">Solo catálogo</button>${I.DEMO ? '<button class="btn danger" id="cf-rst">Reiniciar datos demo</button>' : ''}</div>`;
+        <div class="row"><button class="btn pri" id="cf-l0">📥 Cargar existencias actuales</button><button class="btn" id="cf-l1">Cargar catálogo + saldos iniciales</button><button class="btn" id="cf-l2">Solo catálogo</button>${I.DEMO ? '<button class="btn danger" id="cf-rst">Reiniciar datos demo</button>' : ''}</div>`;
+      $('#cf-l0', el).onclick = async () => { try { const k = await I.cargarSemilla(true); if (k) I.toast('Existencias cargadas ✔', 'ok'); } catch (e) { I.toast(e.message, 'err'); } };
       $('#cf-l1', el).onclick = async () => { if (await I.confirmar('Carga inicial', n ? 'Ya hay datos. Se <b>sobrescribirán</b> catálogo, físico, PT, silos, llegadas y Odoo con los de tus Excel. ¿Continuar?' : 'Se cargará el catálogo y los saldos de tus Excel.')) { await I.cargarSemilla(true); I.toast('Carga inicial lista ✔', 'ok'); } };
       $('#cf-l2', el).onclick = async () => { if (await I.confirmar('Cargar solo catálogo', 'Se actualizará el catálogo, silos y densidades sin tocar existencias.')) { await I.cargarSemilla(false); I.toast('Catálogo cargado ✔', 'ok'); } };
       const rst = $('#cf-rst', el); if (rst) rst.onclick = async () => { if (await I.confirmar('Reiniciar demo', 'Se borrarán todos los datos de prueba de este navegador.')) { DB._reset(); location.reload(); } };

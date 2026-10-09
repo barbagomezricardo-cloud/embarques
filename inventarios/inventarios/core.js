@@ -284,6 +284,8 @@
   async function cargarSemilla(conSaldos) {
     if (!W.SEED) { if (DEMO) await loadScript('seed.js'); else W.SEED = await pedirArchivoSemilla(); }
     const S = W.SEED, DB = INV.DB, up = {};
+    if (!DEMO) W.SEED = null;
+    if (S.tipo === 'existencias' || !S.catalogo) return cargarExistencias(S);
     Object.keys(S.catalogo).forEach(k => up['catalogo/' + k] = S.catalogo[k]);
     Object.keys(S.silos).forEach(k => up['silos/' + k] = S.silos[k]);
     Object.keys(S.densidades).forEach(k => up['densidades/' + k] = S.densidades[k]);
@@ -299,6 +301,18 @@
     await DB.update(up);
     const k = await DB.push('movimientos', { tipo: 'sistema', ts: Date.now(), fecha: hoyISO(), nota: 'Carga inicial del catálogo' + (conSaldos ? ' y saldos desde los archivos de Excel' : ''), por: (INV.AUTH && INV.AUTH.user && INV.AUTH.user.nombre) || 'Sistema' });
     return k;
+  }
+  /* Carga solo de existencias (físico de almacén + PT): no toca catálogo, silos, OC ni configuración */
+  async function cargarExistencias(S) {
+    const DB = INV.DB, cat = (await DB.get('catalogo')) || {}, fis = (await DB.get('fisico')) || {}, ptAct = (await DB.get('pt')) || {};
+    const ts = Date.now(), por = (INV.AUTH && INV.AUTH.user && INV.AUTH.user.nombre) || 'Sistema', up = {}, det = {}, fuera = [];
+    Object.keys(S.fisico || {}).forEach(k => { if (!cat[k]) { fuera.push(k); return; } const v = num(S.fisico[k].mde); det[k] = { antes: num(fis[k] && fis[k].mde), despues: v }; up['fisico/' + k] = { mde: v, ts, por, origen: 'carga', nota: 'Carga de existencias ' + (S.fecha || '') }; });
+    Object.keys(S.pt || {}).forEach(k => { if (!cat[k]) return; up['pt/' + k + '/cant'] = num(S.pt[k].cant); up['pt/' + k + '/ts'] = ts; up['pt/' + k + '/origen'] = 'carga'; });
+    const n = Object.keys(det).length;
+    if (!n) throw new Error('El archivo no trae existencias de artículos del catálogo');
+    if (!(await INV.confirmar('Cargar existencias', `Se reemplazará la existencia de <b>${n}</b> artículos (almacén MDE / MP / insumos) y de <b>${Object.keys(S.pt || {}).length}</b> en almacén PT con el archivo del <b>${esc(S.fecha || '')}</b>.<br>No se modifican catálogo, silos, órdenes de compra ni configuración.${fuera.length ? '<br><span class="muted small">' + fuera.length + ' códigos no están en el catálogo y se omiten.</span>' : ''}`, 'Cargar'))) return null;
+    await DB.update(up);
+    return DB.push('movimientos', { tipo: 'carga', ts, fecha: hoyISO(), items: det, cant: n, nota: 'Carga de existencias desde archivo (' + (S.fecha || '') + ', ' + n + ' artículos)', por });
   }
   INV.cargarSemilla = cargarSemilla;
 
