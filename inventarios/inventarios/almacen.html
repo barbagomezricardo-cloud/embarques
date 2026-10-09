@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Almacén · Inventarios Pet Food</title>
+<meta name="theme-color" content="#0b1622">
+<link rel="manifest" href="manifest-almacen.json">
+<link rel="icon" href="icons/icono-192.png">
+<link rel="apple-touch-icon" href="icons/icono-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body class="app-ui">
+<div id="app"><div class="login"><div class="muted">Cargando…</div></div></div>
+<script src="config.js"></script>
+<script src="core.js"></script>
+<script>
+/* =====================================================================
+   APP DEL ALMACENISTA (tablet)
+   Conteo cíclico por familias y ubicaciones · lectura de silos ·
+   reporte de material entregado a producción
+   ===================================================================== */
+(async function () {
+  'use strict';
+  const I = window.INV;
+  const { $, $$, esc, num, fmt, hoyISO, fFecha, fDia, vals } = I;
+  try { await I.start({ appKey: 'almacen' }); } catch (e) { return; }
+  const DB = I.DB, AUTH = I.AUTH;
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
+
+  const S = { catalogo: {}, conteos: {}, silos: {}, silosLect: {}, solicitudes: {}, entregas: {} };
+  let USER = null, offs = [], TAB = 'conteo';
+  const UI = { fam: null, q: '', soloPend: false, entrega: null };
+
+  AUTH.onChange(u => {
+    offs.forEach(f => f()); offs = [];
+    USER = u && u.uid ? u : null;
+    if (!USER) { I.pantallaLogin($('#app'), { titulo: 'App Almacenista', icono: '🧾' }); return; }
+    if (!['almacenista', 'jefe', 'master'].includes(USER.rol)) { $('#app').innerHTML = `<div class="login"><div class="login-card"><h1>Sin acceso</h1><p class="muted">Esta app es para el almacenista.</p><button class="btn" id="lo">Cerrar sesión</button></div></div>`; $('#lo').onclick = () => AUTH.logout(); return; }
+    shell();
+    const sub = (p, k, n) => offs.push((n ? DB.onLast(p, n, v => { S[k] = v || {}; render(); }) : DB.on(p, v => { S[k] = v || {}; render(); })));
+    sub('catalogo', 'catalogo'); sub('conteos', 'conteos', 30); sub('silos', 'silos'); sub('silosLect', 'silosLect'); sub('solicitudes', 'solicitudes', 150); sub('entregas', 'entregas', 150);
+  });
+
+  function shell() {
+    $('#app').innerHTML = `${I.DEMO ? '<div class="demo-bar">MODO DEMO</div>' : ''}
+      <header class="top"><div class="top-in"><div class="brand"><div class="logo">🧾</div><div>Almacén<small>${esc(USER.nombre)}</small></div></div><span class="sp"></span><span id="net" class="chip">●</span><button class="btn sm" id="out">Salir</button></div></header>
+      <div class="app-main" id="main"></div>
+      <nav class="tabs-bottom">${[['conteo', '📋', 'Conteo'], ['silos', '🛢️', 'Silos'], ['entregas', '📦', 'Entregas'], ['hist', '🕘', 'Historial']].map(([k, i, t]) => `<button data-t="${k}"><span>${i}</span>${t}</button>`).join('')}</nav>`;
+    $('#out').onclick = () => AUTH.logout();
+    $$('.tabs-bottom button').forEach(b => b.onclick = () => { TAB = b.dataset.t; UI.mounted = null; render(true); window.scrollTo(0, 0); });
+    const net = () => { const n = $('#net'); if (n) { n.textContent = navigator.onLine ? '● en línea' : '● sin internet'; n.style.color = navigator.onLine ? 'var(--grn)' : 'var(--red)'; } };
+    addEventListener('online', net); addEventListener('offline', net); net();
+    UI.mounted = null; render(true);
+  }
+
+  let rT;
+  function render(now) {
+    if (!USER || !$('#main')) return;
+    if (!now) { clearTimeout(rT); rT = setTimeout(() => render(true), 150); return; }
+    $$('.tabs-bottom button').forEach(b => b.classList.toggle('on', b.dataset.t === TAB));
+    ({ conteo: vConteo, silos: vSilos, entregas: vEntregas, hist: vHist })[TAB]($('#main'));
+  }
+
+  const items = () => vals(S.catalogo).map(x => Object.assign({}, x, { id: x._k })).filter(x => x.activo !== false).sort((a, b) => (I.FAMILIAS.indexOf(a.familia) - I.FAMILIAS.indexOf(b.familia)) || ((a.orden || 999) - (b.orden || 999)));
+  const item = id => Object.assign({ id, nombre: id, unidad: '' }, S.catalogo[id] || {});
+  const miConteo = () => vals(S.conteos).filter(c => c.estado === 'en_captura' && c.almacenista && c.almacenista.uid === USER.uid).sort((a, b) => b.inicio - a.inicio)[0];
+  const itemsDe = c => items().filter(it => it.fuente !== 'silo' && (c.familias || []).includes(it.familia));
+  const capturado = (c, id) => { const x = c.items && c.items[id]; return !!(x && x.lineas && vals(x.lineas).length && vals(x.lineas).every(l => l.q !== '' && l.q != null)); };
+
+  /* ---------------- CONTEO CÍCLICO ---------------- */
+  function vConteo(el) {
+    const c = miConteo();
+    if (!c) {
+      if (UI.mounted === 'conteo-ini') return;
+      UI.mounted = 'conteo-ini';
+      const ult = vals(S.conteos).filter(x => x.almacenista && x.almacenista.uid === USER.uid).sort((a, b) => b.inicio - a.inicio)[0];
+      const sel = new Set(['EMPAQUE']);
+      el.innerHTML = `<h2>Conteo cíclico</h2>
+        ${ult ? `<div class="note" style="margin-bottom:12px">Tu último conteo (${fDia(ult.fecha)}) está <b>${ult.estado === 'confirmado' ? 'confirmado y en revisión del jefe de inventarios' : ult.estado === 'aplicado' ? 'revisado y aplicado' : ult.estado}</b>.</div>` : ''}
+        <div class="card"><h3>¿Qué familias vas a contar hoy?</h3><p class="muted small">Elige una o varias. Los materiales de silos se miden en la pestaña Silos.</p>
+        <div class="fam-chips" id="ini-f" style="flex-wrap:wrap">${I.FAMILIAS.map(f => { const n = items().filter(it => it.familia === f && it.fuente !== 'silo').length; return n ? `<button data-f="${f}" class="${sel.has(f) ? 'on' : ''}">${I.FAM_ICO[f]} ${f}<span class="c">${n}</span></button>` : ''; }).join('')}</div>
+        <button class="btn pri big" id="ini-b" style="margin-top:14px">Iniciar conteo</button></div>`;
+      $$('#ini-f button').forEach(b => b.onclick = () => { sel.has(b.dataset.f) ? sel.delete(b.dataset.f) : sel.add(b.dataset.f); b.classList.toggle('on'); });
+      $('#ini-b').onclick = async () => {
+        if (!sel.size) return I.toast('Elige al menos una familia', 'err');
+        $('#ini-b').disabled = true;
+        await DB.push('conteos', { fecha: hoyISO(), inicio: Date.now(), estado: 'en_captura', familias: Array.from(sel), almacenista: { uid: USER.uid, nombre: USER.nombre }, items: {} });
+        UI.mounted = null; UI.fam = null; I.toast('Conteo iniciado', 'ok');
+      };
+      return;
+    }
+    const its = itemsDe(c);
+    if (!UI.fam || !c.familias.includes(UI.fam)) UI.fam = c.familias[0];
+    const key = 'conteo-' + c._k + '-' + UI.fam + '-' + UI.soloPend + '-' + UI.q;
+    if (UI.mounted !== key) {
+      UI.mounted = key;
+      const q = UI.q.toLowerCase();
+      const lista = its.filter(it => it.familia === UI.fam && (!q || I.itemLabel(it).toLowerCase().includes(q) || (it.ubic || []).join(' ').toLowerCase().includes(q)) && (!UI.soloPend || !capturado(c, it.id)));
+      el.innerHTML = `<div class="row"><h2 class="grow" style="margin:0">Conteo del ${fDia(c.fecha)}</h2><span class="b b-amb">en captura</span></div>
+        ${c.devuelto ? `<div class="warn" style="margin:8px 0">El jefe de inventarios regresó este conteo para revisión (${esc(c.devuelto.por)}). Corrige y vuelve a confirmar.</div>` : ''}
+        <div class="bar grn" style="margin:10px 0 4px"><i id="pg-bar"></i></div><div class="small muted" id="pg-txt"></div>
+        <div class="fam-chips" style="margin-top:10px">${c.familias.map(f => `<button data-f="${f}" class="${f === UI.fam ? 'on' : ''}">${I.FAM_ICO[f]} ${f}<span class="c" data-pf="${f}"></span></button>`).join('')}</div>
+        <div class="row" style="margin:8px 0"><input id="q" class="grow" placeholder="Buscar artículo o ubicación…" value="${esc(UI.q)}"><label style="margin:0"><input type="checkbox" id="sp" ${UI.soloPend ? 'checked' : ''}> solo pendientes</label></div>
+        <div id="lst">${lista.map(it => itemCard(c, it)).join('') || '<div class="empty">Nada pendiente en esta familia ✔</div>'}</div>
+        <div class="sticky-foot"><button class="btn pri big" id="conf">Confirmar conteo</button></div>`;
+      $$('.fam-chips button').forEach(b => b.onclick = () => { UI.fam = b.dataset.f; render(true); });
+      $('#q').oninput = I.debounce(() => { UI.q = $('#q').value; render(true); setTimeout(() => { const q = $('#q'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 0); }, 400);
+      $('#sp').onchange = e => { UI.soloPend = e.target.checked; render(true); };
+      bindItems(c);
+      $('#conf').onclick = () => confirmar(c);
+    }
+    // progreso (sin redibujar las cajas de captura)
+    const cap = its.filter(it => capturado(c, it.id)).length;
+    $('#pg-bar').style.width = (its.length ? cap / its.length * 100 : 0) + '%';
+    $('#pg-txt').textContent = `${cap} de ${its.length} artículos capturados` + (cap === its.length ? ' — listo para confirmar' : '');
+    $$('[data-pf]').forEach(s => { const f = s.dataset.pf; const t = its.filter(it => it.familia === f); const p = t.filter(it => !capturado(c, it.id)).length; s.textContent = p ? p + ' pend.' : '✔'; });
+    $$('[data-card]').forEach(d => d.classList.toggle('ok', capturado(c, d.dataset.card)));
+    $('#conf').disabled = cap !== its.length;
+  }
+
+  function itemCard(c, it) {
+    const x = (c.items && c.items[it.id]) || {};
+    let lineas = x.lineas ? vals(x.lineas) : (it.ubic && it.ubic.length ? it.ubic : ['GENERAL']).map(u => ({ u, q: '' }));
+    const tot = lineas.reduce((s, l) => s + (l.q === '' || l.q == null ? 0 : num(l.q)), 0);
+    return `<div class="item" data-card="${it.id}">
+      <div class="row"><div class="grow"><div class="nm">${esc(it.nombre)}</div><div class="cd">${esc(it.codigo || '')} · ${esc(it.unidad)}${it.ppp ? ' · ' + fmt(it.ppp) + ' pzas/paca' : ''}</div></div><div class="num"><div class="tiny muted">Total</div><b data-tot="${it.id}">${fmt(tot)}</b></div></div>
+      <div data-lines="${it.id}">${lineas.map((l, i) => lineaHtml(it, i, l)).join('')}</div>
+      <div class="row" style="margin-top:8px"><button class="btn sm ghost" data-addu="${it.id}">+ otra ubicación</button><input class="grow" data-nota="${it.id}" placeholder="Nota (opcional)" value="${esc(x.nota || '')}" style="font-size:14px;padding:7px 10px"></div>
+    </div>`;
+  }
+  const lineaHtml = (it, i, l) => `<div class="linea" data-li="${it.id}|${i}"><div><input class="u" data-u="${it.id}|${i}" value="${esc(l.u)}" style="background:transparent;border:0;padding:2px 0;font-size:13px;color:var(--muted)"></div><div class="row" style="gap:6px;flex-wrap:nowrap">${it.ppp ? `<input class="in-num" data-pac="${it.id}|${i}" placeholder="pacas" inputmode="decimal" style="width:80px">` : ''}<input class="in-num" data-q="${it.id}|${i}" inputmode="decimal" placeholder="cantidad" value="${l.q === '' || l.q == null ? '' : l.q}"><button class="btn sm ghost" data-zero="${it.id}|${i}" title="Poner 0">0</button></div></div>`;
+
+  function bindItems(c) {
+    const save = {};
+    const guardar = id => {
+      clearTimeout(save[id]);
+      save[id] = setTimeout(async () => {
+        const lineas = {}; let tot = 0, todas = true;
+        $$(`[data-li^="${id}|"]`).forEach((row, i) => { const k = row.dataset.li.split('|')[1]; const u = $(`[data-u="${id}|${k}"]`).value.trim() || 'GENERAL'; const v = $(`[data-q="${id}|${k}"]`).value; const q = v === '' ? '' : num(v); if (q === '') todas = false; else tot += q; lineas[i] = { u, q }; });
+        const tt = $(`[data-tot="${id}"]`); if (tt) tt.textContent = fmt(tot);
+        await DB.set('conteos/' + c._k + '/items/' + id, { lineas, total: todas ? tot : null, ts: Date.now(), nota: ($(`[data-nota="${id}"]`) || {}).value || '' });
+      }, 500);
+    };
+    const bindRow = root => {
+      $$('[data-q]', root).forEach(i => i.oninput = () => guardar(i.dataset.q.split('|')[0]));
+      $$('[data-u]', root).forEach(i => i.oninput = () => guardar(i.dataset.u.split('|')[0]));
+      $$('[data-zero]', root).forEach(b => b.onclick = () => { const [id, k] = b.dataset.zero.split('|'); $(`[data-q="${id}|${k}"]`).value = 0; guardar(id); });
+      $$('[data-pac]', root).forEach(i => i.oninput = () => { const [id, k] = i.dataset.pac.split('|'); const it = item(id); if (it.ppp && i.value !== '') { $(`[data-q="${id}|${k}"]`).value = num(i.value) * num(it.ppp); guardar(id); } });
+    };
+    bindRow(document);
+    $$('[data-nota]').forEach(i => i.oninput = () => guardar(i.dataset.nota));
+    $$('[data-addu]').forEach(b => b.onclick = () => { const id = b.dataset.addu; const cont = $(`[data-lines="${id}"]`); const i = cont.children.length; const d = document.createElement('div'); d.innerHTML = lineaHtml(item(id), 'n' + i, { u: 'OTRA UBICACIÓN', q: '' }); const row = d.firstElementChild; cont.appendChild(row); bindRow(row); $(`[data-u="${id}|n${i}"]`).select(); });
+  }
+
+  async function confirmar(c0) {
+    const c = Object.assign({ _k: c0._k }, S.conteos[c0._k] || {});
+    const its = itemsDe(c); const pend = its.filter(it => !capturado(c, it.id));
+    if (pend.length) return I.toast('Faltan ' + pend.length + ' artículos por capturar', 'err');
+    const r = await I.modal('Confirmar conteo', `<p>Capturaste <b>${its.length}</b> artículos de: ${c.familias.map(f => esc(f)).join(', ')}.</p><label style="display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--txt)"><input type="checkbox" id="cf-ok" style="margin-top:4px"> <span>Confirmo que los datos capturados son reales, que fueron contados físicamente por mí y que <b>los respaldo</b>.</span></label><label>Nombre<input id="cf-n" value="${esc(USER.nombre)}"></label>`, [{ t: 'Cancelar', v: 0 }, { t: 'Confirmar y enviar', c: 'pri', v: 1, antes: ov => { if (!$('#cf-ok', ov).checked) { I.toast('Marca la casilla de confirmación', 'err'); return false; } c._firma = $('#cf-n', ov).value.trim() || USER.nombre; } }]);
+    if (r.v !== 1) return;
+    await DB.update({ ['conteos/' + c._k + '/estado']: 'confirmado', ['conteos/' + c._k + '/confirmadoTs']: Date.now(), ['conteos/' + c._k + '/firma']: c._firma + ' · ' + fFecha(Date.now()) });
+    UI.mounted = null; I.toast('Conteo confirmado y enviado al jefe de inventarios ✔', 'ok');
+  }
+
+  /* ---------------- SILOS ---------------- */
+  function vSilos(el) {
+    const ss = vals(S.silos).sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    if (UI.mounted !== 'silos') {
+      UI.mounted = 'silos';
+      el.innerHTML = `<h2>Lectura de silos y tanques</h2><p class="muted small">Captura el vacío medido con el láser (metros desde arriba hasta el producto).</p>` + ss.map(s => `<div class="item" data-sc="${s._k}"><div class="row"><div class="grow"><div class="nm">${esc(s.nombre)}</div><div class="cd" data-si="${s._k}"></div></div><div class="num"><div class="t" data-st="${s._k}" style="font-size:20px;font-weight:800;color:var(--acc2)"></div></div></div>
+        <div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="in-num" data-sv="${s._k}" inputmode="decimal" placeholder="vacío (m)"><select data-sq="${s._k}" style="max-width:170px">${['OK', 'AW', 'CONTAMINACION', 'DENSIDAD', 'DEFORMES', 'QUEMADO', 'PRODUCTO PRUEBA', 'TONALIDAD', 'QUEBRADO', 'PRODUCTO PEGADO'].map(x => `<option>${x}</option>`).join('')}</select><button class="btn pri" data-ss="${s._k}">Guardar</button></div></div>`).join('');
+      $$('[data-ss]').forEach(b => b.onclick = async () => {
+        const k = b.dataset.ss, s = S.silos[k], v = $(`[data-sv="${k}"]`).value;
+        if (v === '' || num(v) < 0 || num(v) > num(s.alto) + num(s.cono)) return I.toast('El vacío debe estar entre 0 y ' + fmt(num(s.alto) + num(s.cono)) + ' m', 'err');
+        const o = { vacio: num(v), calidad: $(`[data-sq="${k}"]`).value, ts: Date.now(), por: USER.nombre };
+        await DB.set('silosLect/' + k, o); await DB.push('silosHist/' + k, o);
+        $(`[data-sv="${k}"]`).value = ''; I.toast('Lectura guardada ✔', 'ok');
+      });
+    }
+    ss.forEach(s => { const l = S.silosLect[s._k]; const c = I.calcSilo(s, l); const i = $(`[data-si="${s._k}"]`), t = $(`[data-st="${s._k}"]`); if (i) i.innerHTML = l ? `Último: vacío ${fmt(l.vacio)} m · ${fFecha(l.ts)} · ${esc(l.por || '')}${l.calidad && l.calidad !== 'OK' ? ' · <span class="b b-red">' + esc(l.calidad) + '</span>' : ''}` : 'Sin lectura'; if (t) t.textContent = c.contenido == null ? '—' : fmt(c.contenido) + ' t · ' + fmt(c.pct * 100, 0) + '%'; });
+  }
+
+  /* ---------------- ENTREGAS A PRODUCCIÓN ---------------- */
+  function vEntregas(el) {
+    if (UI.entrega) return formEntrega(el);
+    const hoy = hoyISO();
+    const pend = vals(S.solicitudes).filter(s => s.estado === 'pendiente' && s.fecha >= I.hoyISO(new Date(Date.now() - 3 * 86400000))).sort((a, b) => a.ts - b.ts);
+    const mias = vals(S.entregas).filter(e => e.fecha === hoy).sort((a, b) => b.ts - a.ts);
+    UI.mounted = 'entregas';
+    el.innerHTML = `<h2>Solicitudes de producción</h2>
+      ${pend.map(s => `<div class="item"><div class="row"><div class="grow"><div class="nm">${esc(s.por && s.por.nombre)}</div><div class="cd">${fFecha(s.ts)}${s.fecha !== hoy ? ' · <span class="b b-amb">de otro día</span>' : ''}</div></div><button class="btn pri" data-sur="${s._k}">Surtir</button></div><div class="small" style="margin-top:6px">${vals(s.lineas).map(l => `${esc(item(l.itemId).nombre)}: <b>${fmt(l.cant)}</b> ${esc(item(l.itemId).unidad)}`).join('<br>')}</div>${s.nota ? `<div class="small muted">📝 ${esc(s.nota)}</div>` : ''}</div>`).join('') || '<div class="empty">No hay solicitudes pendientes</div>'}
+      <button class="btn big" id="libre" style="margin:6px 0 18px">+ Reportar entrega sin solicitud</button>
+      <h3>Lo que entregaste hoy</h3>
+      ${mias.map(e => `<div class="item"><div class="row"><span class="b ${e.estado === 'por_validar' ? 'b-amb' : e.estado === 'validada' ? 'b-grn' : 'b-red'}">${e.estado === 'por_validar' ? 'por validar' : e.estado}</span><span class="muted small">${fFecha(e.ts)}</span></div><div class="small" style="margin-top:4px">${vals(e.lineas).map(l => `${esc(item(l.itemId).nombre)}: <b>${fmt(l.cantValidada != null ? l.cantValidada : l.cant)}</b>${l.pacas ? ' (' + fmt(l.pacas) + ' pacas)' : ''}`).join('<br>')}</div>${e.notaVal ? `<div class="small muted">Jefe: ${esc(e.notaVal)}</div>` : ''}</div>`).join('') || '<div class="empty">Aún no reportas entregas hoy</div>'}`;
+    $$('[data-sur]').forEach(b => b.onclick = () => { const s = S.solicitudes[b.dataset.sur]; UI.entrega = { solicitudId: b.dataset.sur, lineas: vals(s.lineas).map(l => ({ itemId: l.itemId, cant: l.cant, pacas: '' })), nota: '' }; render(true); });
+    $('#libre').onclick = () => { UI.entrega = { solicitudId: null, lineas: [], nota: '' }; render(true); };
+  }
+
+  function formEntrega(el) {
+    const E = UI.entrega;
+    if (UI.mounted === 'form-entrega') return;
+    UI.mounted = 'form-entrega';
+    const sol = E.solicitudId && S.solicitudes[E.solicitudId];
+    el.innerHTML = `<div class="row"><button class="btn sm" id="bk">← Regresar</button><h2 class="grow" style="margin:0">Reportar entrega a producción</h2></div>
+      ${sol ? `<div class="note" style="margin:10px 0">Surtiendo la solicitud de <b>${esc(sol.por && sol.por.nombre)}</b> (${fFecha(sol.ts)}). Ajusta las cantidades a lo que realmente entregas.</div>` : ''}
+      <div id="ls"></div>
+      <div class="card" style="margin-top:8px"><label>Agregar artículo<input id="add" list="dl" placeholder="Busca código o nombre…"></label><datalist id="dl">${items().map(it => `<option value="${esc(I.itemLabel(it))}"></option>`).join('')}</datalist></div>
+      <label style="margin-top:10px">Nota<input id="nt" value="${esc(E.nota)}"></label>
+      <button class="btn pri big" id="env" style="margin-top:8px">Enviar al jefe de inventarios para validar</button>`;
+    const draw = () => {
+      $('#ls').innerHTML = E.lineas.map((l, i) => { const it = item(l.itemId); return `<div class="item"><div class="row"><div class="grow"><div class="nm">${esc(it.nombre)}</div><div class="cd">${esc(it.codigo || '')} · ${esc(it.unidad)}${it.ppp ? ' · ' + fmt(it.ppp) + ' pzas/paca' : ''}</div></div><button class="btn sm ghost" data-rm="${i}">✕</button></div><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input class="in-num" data-p="${i}" placeholder="pacas" inputmode="decimal" value="${l.pacas || ''}" style="max-width:120px"><input class="in-num" data-c="${i}" placeholder="cantidad" inputmode="decimal" value="${l.cant}"></div></div>`; }).join('') || '<div class="empty">Agrega los artículos que entregaste</div>';
+      $$('[data-p]').forEach(i => i.oninput = () => { const l = E.lineas[+i.dataset.p]; l.pacas = i.value; const it = item(l.itemId); if (it.ppp && i.value !== '') { l.cant = num(i.value) * num(it.ppp); $(`[data-c="${i.dataset.p}"]`).value = l.cant; } });
+      $$('[data-c]').forEach(i => i.oninput = () => E.lineas[+i.dataset.c].cant = i.value);
+      $$('[data-rm]').forEach(b => b.onclick = () => { E.lineas.splice(+b.dataset.rm, 1); draw(); });
+    };
+    draw();
+    $('#add').onchange = () => { const v = $('#add').value; const it = items().find(x => I.itemLabel(x) === v); if (it) { E.lineas.push({ itemId: it.id, cant: '', pacas: '' }); $('#add').value = ''; draw(); } };
+    $('#nt').oninput = () => E.nota = $('#nt').value;
+    $('#bk').onclick = () => { UI.entrega = null; UI.mounted = null; render(true); };
+    $('#env').onclick = async () => {
+      const ls = E.lineas.map(l => ({ itemId: l.itemId, cant: num(l.cant), pacas: num(l.pacas) || null })).filter(l => l.cant > 0);
+      if (!ls.length) return I.toast('Captura al menos una cantidad', 'err');
+      $('#env').disabled = true;
+      const k = await DB.push('entregas', { fecha: hoyISO(), ts: Date.now(), origen: 'almacen', por: { uid: USER.uid, nombre: USER.nombre }, solicitudId: E.solicitudId || null, lineas: Object.assign({}, ls), nota: E.nota || '', estado: 'por_validar' });
+      if (E.solicitudId) await DB.update({ ['solicitudes/' + E.solicitudId + '/estado']: 'surtida', ['solicitudes/' + E.solicitudId + '/entregaId']: k, ['solicitudes/' + E.solicitudId + '/surtidaTs']: Date.now() });
+      UI.entrega = null; UI.mounted = null; I.toast('Entrega reportada ✔ — el jefe la validará', 'ok'); render(true);
+    };
+  }
+
+  /* ---------------- HISTORIAL ---------------- */
+  function vHist(el) {
+    UI.mounted = 'hist';
+    const es = vals(S.entregas).filter(e => e.por && e.por.uid === USER.uid).sort((a, b) => b.ts - a.ts).slice(0, 60);
+    const cs = vals(S.conteos).filter(c => c.almacenista && c.almacenista.uid === USER.uid).sort((a, b) => b.inicio - a.inicio);
+    el.innerHTML = `<h2>Mis conteos</h2>${cs.map(c => `<div class="item"><div class="row"><b>${fDia(c.fecha)}</b><span class="sp"></span><span class="b ${c.estado === 'en_captura' ? 'b-amb' : c.estado === 'confirmado' ? 'b-blu' : 'b-grn'}">${c.estado === 'en_captura' ? 'en captura' : c.estado === 'confirmado' ? 'en revisión' : 'aplicado'}</span></div><div class="small muted">${(c.familias || []).join(', ')}${c.firma ? ' · ✔ ' + esc(c.firma) : ''}</div></div>`).join('') || '<div class="empty">Sin conteos</div>'}
+      <h2 style="margin-top:16px">Mis entregas</h2>${es.map(e => `<div class="item"><div class="row"><b>${fFecha(e.ts)}</b><span class="sp"></span><span class="b ${e.estado === 'por_validar' ? 'b-amb' : e.estado === 'validada' ? 'b-grn' : 'b-red'}">${e.estado === 'por_validar' ? 'por validar' : e.estado}</span></div><div class="small">${vals(e.lineas).map(l => `${esc(item(l.itemId).nombre)}: ${fmt(l.cantValidada != null ? l.cantValidada : l.cant)}`).join(' · ')}</div>${e.notaVal ? `<div class="small muted">Jefe: ${esc(e.notaVal)}</div>` : ''}</div>`).join('') || '<div class="empty">Sin entregas</div>'}`;
+  }
+})();
+</script>
+</body>
+</html>

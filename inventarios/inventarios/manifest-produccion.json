@@ -1,0 +1,14 @@
+{
+  "name": "Producción · Inventarios Pet Food",
+  "short_name": "Producción",
+  "start_url": "produccion.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1622",
+  "theme_color": "#0b1622",
+  "orientation": "any",
+  "icons": [
+    { "src": "icons/icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Producción · Solicitud de empaque</title>
+<meta name="theme-color" content="#0b1622">
+<link rel="manifest" href="manifest-produccion.json">
+<link rel="icon" href="icons/icono-192.png">
+<link rel="apple-touch-icon" href="icons/icono-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body class="app-ui">
+<div id="app"><div class="login"><div class="muted">Cargando…</div></div></div>
+<script src="config.js"></script>
+<script src="core.js"></script>
+<script>
+/* =====================================================================
+   APP DE PRODUCCIÓN
+   Ve su existencia en el almacén de insumos PT, captura cada mañana lo
+   que va a necesitar (empaque u otros insumos) y sigue el estatus:
+   pendiente → surtida por almacén → validada por el jefe de inventarios
+   ===================================================================== */
+(async function () {
+  'use strict';
+  const I = window.INV;
+  const { $, $$, esc, num, fmt, hoyISO, fFecha, fDia, vals } = I;
+  try { await I.start({ appKey: 'produccion', messaging: true }); } catch (e) { return; }
+  const DB = I.DB, AUTH = I.AUTH;
+  let SW = null;
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').then(r => SW = r).catch(() => { });
+
+  const S = { catalogo: {}, pt: {}, solicitudes: {}, config: {} };
+  let USER = null, offs = [], TAB = 'pedido';
+  const UI = { fam: 'EMPAQUE', q: '', cart: {}, nota: '' };
+  try { UI.cart = JSON.parse(localStorage.getItem('inv_cart') || '{}'); } catch (e) { }
+  const saveCart = () => { try { localStorage.setItem('inv_cart', JSON.stringify(UI.cart)); } catch (e) { } };
+
+  AUTH.onChange(u => {
+    offs.forEach(f => f()); offs = [];
+    USER = u && u.uid ? u : null;
+    if (!USER) { I.pantallaLogin($('#app'), { titulo: 'App Producción', icono: '🏭' }); return; }
+    if (!['produccion', 'jefe', 'master'].includes(USER.rol)) { $('#app').innerHTML = `<div class="login"><div class="login-card"><h1>Sin acceso</h1><p class="muted">Esta app es para producción.</p><button class="btn" id="lo">Cerrar sesión</button></div></div>`; $('#lo').onclick = () => AUTH.logout(); return; }
+    shell();
+    const sub = (p, k, n) => offs.push((n ? DB.onLast(p, n, v => { S[k] = v || {}; render(); }) : DB.on(p, v => { S[k] = v || {}; render(); })));
+    sub('catalogo', 'catalogo'); sub('pt', 'pt'); sub('solicitudes', 'solicitudes', 200); sub('config', 'config');
+    recordatorioLocal();
+  });
+
+  function shell() {
+    $('#app').innerHTML = `${I.DEMO ? '<div class="demo-bar">MODO DEMO</div>' : ''}
+      <header class="top"><div class="top-in"><div class="brand"><div class="logo">🏭</div><div>Producción<small>${esc(USER.nombre)}</small></div></div><span class="sp"></span><button class="btn sm" id="ntf" title="Notificaciones">🔔</button><button class="btn sm" id="out">Salir</button></div></header>
+      <div class="app-main" id="main"></div>
+      <nav class="tabs-bottom">${[['pedido', '📝', 'Pedido de hoy'], ['pt', '🏭', 'Mi almacén PT'], ['hist', '🕘', 'Historial']].map(([k, i, t]) => `<button data-t="${k}"><span>${i}</span>${t}</button>`).join('')}</nav>`;
+    $('#out').onclick = () => AUTH.logout();
+    $('#ntf').onclick = activarNotificaciones;
+    $$('.tabs-bottom button').forEach(b => b.onclick = () => { TAB = b.dataset.t; UI.mounted = null; render(true); window.scrollTo(0, 0); });
+    UI.mounted = null; render(true);
+  }
+
+  let rT;
+  function render(now) {
+    if (!USER || !$('#main')) return;
+    if (!now) { clearTimeout(rT); rT = setTimeout(() => render(true), 150); return; }
+    $$('.tabs-bottom button').forEach(b => b.classList.toggle('on', b.dataset.t === TAB));
+    ({ pedido: vPedido, pt: vPT, hist: vHist })[TAB]($('#main'));
+  }
+  const items = () => vals(S.catalogo).map(x => Object.assign({}, x, { id: x._k })).filter(x => x.activo !== false).sort((a, b) => (I.FAMILIAS.indexOf(a.familia) - I.FAMILIAS.indexOf(b.familia)) || ((a.orden || 999) - (b.orden || 999)));
+  const item = id => Object.assign({ id, nombre: id, unidad: '' }, S.catalogo[id] || {});
+  const ptQ = id => num(S.pt[id] && S.pt[id].cant);
+  const misHoy = () => vals(S.solicitudes).filter(s => s.fecha === hoyISO() && s.por && s.por.uid === USER.uid).sort((a, b) => b.ts - a.ts);
+  const estTxt = s => ({ pendiente: '⏳ Pendiente de surtir', surtida: '📦 Surtida por almacén', validada: '✔ Validada por inventarios', rechazada: '✕ Rechazada', cancelada: 'Cancelada' }[s] || s);
+  const estCls = s => ({ pendiente: 'b-amb', surtida: 'b-blu', validada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' }[s] || 'b-gry');
+  const horaRec = () => (S.config.recordatorio && S.config.recordatorio.hora) || '08:00';
+
+  /* ---------------- PEDIDO DE HOY ---------------- */
+  function vPedido(el) {
+    const hoy = misHoy();
+    const key = 'ped-' + UI.fam + '-' + UI.q + '-' + Object.keys(S.catalogo).length;
+    const ahora = new Date(), hh = horaRec().split(':');
+    const tarde = ahora.getHours() * 60 + ahora.getMinutes() >= (+hh[0]) * 60 + (+hh[1]);
+    if (UI.mounted !== key) {
+      UI.mounted = key;
+      const q = UI.q.toLowerCase();
+      const lista = items().filter(it => (!UI.fam || it.familia === UI.fam) && (!q || I.itemLabel(it).toLowerCase().includes(q)));
+      el.innerHTML = `<div id="banner"></div><div id="hoy"></div>
+        <h2 style="margin-top:6px">¿Qué vas a necesitar?</h2>
+        <div class="fam-chips">${I.FAMILIAS.map(f => `<button data-f="${f}" class="${f === UI.fam ? 'on' : ''}">${I.FAM_ICO[f]} ${f}</button>`).join('')}</div>
+        <input id="q" placeholder="Buscar material…" value="${esc(UI.q)}" style="margin:8px 0">
+        <div id="lst">${lista.map(it => `<div class="item" data-it="${it.id}"><div class="row" style="flex-wrap:nowrap"><div class="grow"><div class="nm">${esc(it.nombre)}</div><div class="cd">${esc(it.codigo || '')} · en PT: <b>${fmt(ptQ(it.id))}</b> ${esc(it.unidad)}${it.ppp ? ' · ' + fmt(it.ppp) + ' pzas/paca' : ''}</div></div>${it.ppp ? `<input class="in-num" data-pac="${it.id}" placeholder="pacas" inputmode="decimal" style="width:90px" value="${UI.cart[it.id] && UI.cart[it.id].pacas || ''}">` : ''}<input class="in-num" data-c="${it.id}" placeholder="cantidad" inputmode="decimal" style="width:130px" value="${UI.cart[it.id] ? UI.cart[it.id].cant : ''}"></div></div>`).join('') || '<div class="empty">Sin materiales</div>'}</div>
+        <div class="sticky-foot"><div class="small muted" id="cart-txt" style="margin-bottom:6px"></div><input id="nt" placeholder="Nota para almacén (turno, línea, urgencia…)" value="${esc(UI.nota)}" style="margin-bottom:8px"><button class="btn pri big" id="env">Enviar solicitud</button></div>`;
+      $$('.fam-chips button').forEach(b => b.onclick = () => { UI.fam = b.dataset.f; render(true); });
+      $('#q').oninput = I.debounce(() => { UI.q = $('#q').value; render(true); setTimeout(() => { const x = $('#q'); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }, 0); }, 400);
+      $$('[data-c]').forEach(i => i.oninput = () => { const id = i.dataset.c; if (i.value === '' || !(num(i.value) > 0)) delete UI.cart[id]; else UI.cart[id] = Object.assign(UI.cart[id] || {}, { cant: num(i.value) }); saveCart(); cartTxt(); });
+      $$('[data-pac]').forEach(i => i.oninput = () => { const id = i.dataset.pac; const it = item(id); if (i.value === '') { delete UI.cart[id]; $(`[data-c="${id}"]`).value = ''; } else { UI.cart[id] = { cant: num(i.value) * num(it.ppp), pacas: num(i.value) }; $(`[data-c="${id}"]`).value = UI.cart[id].cant; } saveCart(); cartTxt(); });
+      $('#nt').oninput = () => UI.nota = $('#nt').value;
+      $('#env').onclick = enviar;
+    }
+    $('#banner').innerHTML = (!hoy.length && tarde) ? `<div class="warn" style="margin-bottom:10px">🔔 Son más de las ${horaRec()} y aún no capturas tu solicitud de hoy.</div>` : '';
+    $('#hoy').innerHTML = hoy.length ? `<h3>Tus solicitudes de hoy</h3>` + hoy.map(s => `<div class="item"><div class="row"><span class="b ${estCls(s.estado)}">${estTxt(s.estado)}</span><span class="muted small">${fFecha(s.ts)}</span><span class="sp"></span>${s.estado === 'pendiente' ? `<button class="btn sm danger" data-can="${s._k}">Cancelar</button>` : ''}</div><div class="small" style="margin-top:6px">${vals(s.lineas).map(l => `${esc(item(l.itemId).nombre)}: <b>${fmt(l.cant)}</b> ${esc(item(l.itemId).unidad)}`).join('<br>')}</div></div>`).join('') : '';
+    $$('[data-can]').forEach(b => b.onclick = async () => { if (await I.confirmar('Cancelar solicitud', '¿Cancelar esta solicitud?')) await DB.update({ ['solicitudes/' + b.dataset.can + '/estado']: 'cancelada' }); });
+    cartTxt();
+  }
+  function cartTxt() { const n = Object.keys(UI.cart).length; const t = $('#cart-txt'); if (t) t.innerHTML = n ? `${n} material(es) en tu solicitud: ` + Object.keys(UI.cart).map(id => `${esc(item(id).nombre)} <b>${fmt(UI.cart[id].cant)}</b>`).join(' · ') : 'Captura cantidades en los materiales que necesitas.'; }
+  async function enviar() {
+    const ls = Object.keys(UI.cart).filter(id => S.catalogo[id] && UI.cart[id].cant > 0).map(id => ({ itemId: id, cant: UI.cart[id].cant, pacas: UI.cart[id].pacas || null }));
+    if (!ls.length) return I.toast('Captura al menos una cantidad', 'err');
+    const ok = await I.confirmar('Enviar solicitud', ls.map(l => `${esc(item(l.itemId).nombre)}: <b>${fmt(l.cant)}</b>`).join('<br>'), 'Enviar');
+    if (!ok) return;
+    await DB.push('solicitudes', { fecha: hoyISO(), ts: Date.now(), por: { uid: USER.uid, nombre: USER.nombre }, lineas: Object.assign({}, ls), nota: UI.nota || '', estado: 'pendiente' });
+    UI.cart = {}; UI.nota = ''; saveCart(); UI.mounted = null; render(true);
+    I.toast('Solicitud enviada al almacén ✔', 'ok');
+  }
+
+  /* ---------------- MI ALMACÉN PT ---------------- */
+  function vPT(el) {
+    UI.mounted = 'pt';
+    const its = items().filter(it => ptQ(it.id) || (it.familia === 'EMPAQUE' && it.planear));
+    let fam = null;
+    el.innerHTML = `<h2>Existencia en almacén de insumos PT</h2><p class="muted small">Se actualiza con cada entrega validada y con la existencia de Odoo.</p>` + its.map(it => {
+      const g = it.familia !== fam ? `<h3 style="margin:14px 0 6px">${I.FAM_ICO[it.familia] || ''} ${esc(it.familia)}</h3>` : ''; fam = it.familia;
+      const q = ptQ(it.id), dia = num(it.consumo) / 30, dias = dia > 0 ? q / dia : null;
+      return g + `<div class="item"><div class="row" style="flex-wrap:nowrap"><div class="grow"><div class="nm">${esc(it.nombre)}</div><div class="cd">${esc(it.codigo || '')}${dias != null ? ' · alcanza ~' + fmt(dias, 0) + ' día(s)' : ''}</div></div><div class="num"><b style="font-size:20px">${fmt(q)}</b><div class="tiny muted">${esc(it.unidad)}${it.ppp ? ' · ' + fmt(q / it.ppp) + ' pacas' : ''}</div></div></div>${dias != null && dias < 2 ? '<span class="b b-red">bajo</span>' : ''}</div>`;
+    }).join('');
+  }
+
+  /* ---------------- HISTORIAL ---------------- */
+  function vHist(el) {
+    UI.mounted = 'hist';
+    const ss = vals(S.solicitudes).filter(s => s.por && (s.por.uid === USER.uid || USER.rol !== 'produccion')).sort((a, b) => b.ts - a.ts).slice(0, 80);
+    el.innerHTML = `<h2>Historial de solicitudes</h2>` + (ss.map(s => `<div class="item"><div class="row"><b>${fDia(s.fecha)}</b><span class="muted small">${fFecha(s.ts)}</span><span class="sp"></span><span class="b ${estCls(s.estado)}">${estTxt(s.estado)}</span></div><div class="small" style="margin-top:4px">${vals(s.lineas).map(l => `${esc(item(l.itemId).nombre)}: ${fmt(l.cant)}`).join(' · ')}</div>${USER.rol !== 'produccion' ? `<div class="tiny muted">${esc(s.por.nombre)}</div>` : ''}</div>`).join('') || '<div class="empty">Sin solicitudes</div>');
+  }
+
+  /* ---------------- NOTIFICACIONES ---------------- */
+  async function activarNotificaciones() {
+    if (!('Notification' in window)) return I.toast('Este navegador no soporta notificaciones', 'err');
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') return I.toast('Permiso de notificaciones denegado', 'err');
+    if (!I.DEMO && I.CFG.VAPID_KEY && window.firebase && firebase.messaging) {
+      try {
+        const reg = SW || await navigator.serviceWorker.ready;
+        const tok = await firebase.messaging(I.app).getToken({ vapidKey: I.CFG.VAPID_KEY, serviceWorkerRegistration: reg });
+        if (tok) { await DB.set('tokens/' + USER.uid + '/' + tok.slice(-24).replace(/[.#$\[\]\/]/g, '_'), { token: tok, ts: Date.now(), ua: navigator.userAgent.slice(0, 120) }); I.toast('Notificaciones activadas ✔ Te llegará el recordatorio a las ' + horaRec(), 'ok'); return; }
+      } catch (e) { console.warn(e); I.toast('No se pudo registrar push: ' + e.message, 'err'); }
+    }
+    I.toast('Recordatorio activado en este dispositivo (con la app abierta)', 'ok');
+  }
+  /* Respaldo sin servidor: si la app está abierta a la hora del recordatorio y no hay solicitud, avisa */
+  function recordatorioLocal() {
+    let avisado = '';
+    setInterval(() => {
+      if (!USER || USER.rol !== 'produccion') return;
+      const r = S.config.recordatorio || { hora: '08:00', activo: true, dias: [1, 2, 3, 4, 5, 6] };
+      if (r.activo === false) return;
+      const d = new Date(), hh = (r.hora || '08:00').split(':');
+      if (!(r.dias || [1, 2, 3, 4, 5, 6]).includes(d.getDay())) return;
+      if (d.getHours() * 60 + d.getMinutes() < (+hh[0]) * 60 + (+hh[1]) || avisado === hoyISO() || misHoy().length) return;
+      avisado = hoyISO();
+      const msg = { body: 'Captura lo que vas a necesitar de empaque e insumos hoy.', icon: 'icons/icono-192.png', tag: 'recordatorio-' + avisado };
+      try { if (Notification.permission === 'granted') { if (SW && SW.showNotification) SW.showNotification('Solicitud de empaque', msg); else new Notification('Solicitud de empaque', msg); } } catch (e) { }
+      render(true);
+    }, 60000);
+  }
+})();
+</script>
+</body>
+</html>
