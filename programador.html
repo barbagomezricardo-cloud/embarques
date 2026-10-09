@@ -600,6 +600,11 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
         </div>
       </div>
       <hr style="border-color:var(--line);margin:16px 0">
+      <h3 style="margin:0 0 8px;font-size:13px">🧹 Espacio del navegador (todas tus apps)</h3>
+      <p class="hint" style="margin-top:0">Chrome da ~5 MB por sitio y lo comparten Programador, Ventas, Vendedores, Maestra e Inicio. Si se llena, las apps dejan de conectarse. Aquí lo ves y lo liberas sin riesgo: solo borra copias que se vuelven a bajar de la nube. <b>No toca</b> el corte de mes, tus configuraciones, usuarios ni nada de la nube.</p>
+      <div id="espBox"></div>
+      <button class="ghost" onclick="espacioLiberar(false)">🧹 Liberar espacio ahora</button>
+      <hr style="border-color:var(--line);margin:16px 0">
       <h3 style="margin:0 0 8px;font-size:13px">Conexión en la nube (Firebase)</h3>
       <p class="hint" style="margin-top:0">Pega aquí la configuración de tu proyecto de Firebase para sincronizar en tiempo real con la app de cargadores. Si lo dejas vacío, funciona en modo local en este equipo.</p>
       <textarea id="cfgFb" rows="7" style="width:100%;font-family:ui-monospace,monospace;font-size:11.5px" placeholder='{
@@ -1566,7 +1571,28 @@ function applyLock(){
 function requireUnlock(){ if(!unlocked){ toast('Tu usuario no tiene permiso para esta acción'); return false; } return true; }
 
 /* ================= CONFIG ================= */
-function openConfig(){ if(!requireMaster())return; buildCfg(); document.getElementById('cfgOverlay').classList.add('show'); }
+/* ===== Espacio del navegador (localStorage compartido por todas las apps de github.io) ===== */
+const ESP_QUOTA=5000000;   // ~5 M de caracteres por sitio
+// SOLO copias que la nube vuelve a entregar (cuadre, detalle de Odoo, bitácora, proyección). Nunca: corte de mes, configuraciones, usuarios, sesión.
+const ESP_LIBERABLES=['progEmbarques_cuadre_v1','progEmbarques_cuadre_odoo_v1','progEmbarques_audit_v1','progEmbarques_proyeccion_v1'];
+function espacioUso(){ let tot=0,prog=0,ventas=0; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i)||''; const n=k.length+(localStorage.getItem(k)||'').length; tot+=n; if(/^progEmbarques_/.test(k)) prog+=n; else if(/04mas|^sk_|^appZoom/i.test(k)) ventas+=n; } }catch(e){} return {tot,prog,ventas,otras:tot-prog-ventas,pct:Math.round(tot/ESP_QUOTA*100)}; }
+const espNubeOk=()=>!!(fb&&document.getElementById('connTxt')&&document.getElementById('connTxt').textContent==='Nube conectada');
+function espacioRender(){ const el=document.getElementById('espBox'); if(!el) return; const u=espacioUso(); const col=u.pct>=85?'#ff6b6b':u.pct>=70?'#ffb454':'#5dd39e'; const mb=n=>(n/1e6).toFixed(2)+' MB';
+  el.innerHTML='<div style="background:var(--panel2,#14202e);border-radius:6px;height:12px;overflow:hidden;margin:4px 0"><div style="width:'+Math.min(100,u.pct)+'%;height:100%;background:'+col+'"></div></div><div class="hint" style="margin-bottom:8px"><b style="color:'+col+'">'+u.pct+'% usado</b> ('+mb(u.tot)+' de ~5 MB) · Programador '+mb(u.prog)+' · Ventas/Vendedores/Maestra '+mb(u.ventas)+' · otros '+mb(u.otras)+(espNubeOk()?'':' · <span style="color:#ffb454">sin conexión a la nube: no se puede liberar ahora</span>')+'</div>'; }
+function espacioLiberar(auto){
+  if(!espNubeOk()){ if(!auto) toast('Primero debe estar «Nube conectada» (así se garantiza que todo se vuelve a bajar)',4500); return false; }
+  const antes=espacioUso();
+  if(!auto&&!confirm('Voy a borrar SOLO las copias guardadas en este navegador (cuadre, detalle de Odoo, bitácora y proyección). Se vuelven a bajar solas de la nube.\n\nNo toca el corte de mes, configuraciones, usuarios ni lo que está en la nube.\n\nUsa ahora '+antes.pct+'% del espacio. ¿Continuar?')) return false;
+  ESP_LIBERABLES.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+  if(!auto){ try{ _idbDel('cuadre'); _idbDel('odoodata'); }catch(e){} }
+  const des=espacioUso(); espacioRender();
+  if(auto) toast('🧹 Liberé espacio del navegador ('+antes.pct+'% → '+des.pct+'%)',4000);
+  else{ toast('🧹 Listo: '+antes.pct+'% → '+des.pct+'%. Recargando para bajar todo limpio…',3500); setTimeout(()=>location.reload(),1800); }
+  return true; }
+// vigilancia automática: si el espacio pasa de 85% y la nube está conectada, libera solo (sin recargar ni preguntar)
+setInterval(()=>{ try{ if(espacioUso().pct>=85&&espNubeOk()) espacioLiberar(true); }catch(e){} },60000);
+setTimeout(()=>{ try{ if(espacioUso().pct>=85&&espNubeOk()) espacioLiberar(true); }catch(e){} },12000);
+function openConfig(){ if(!requireMaster())return; buildCfg(); espacioRender(); document.getElementById('cfgOverlay').classList.add('show'); }
 function buildCfg(){
   document.getElementById('cfgBody').innerHTML=Object.entries(CFG.limites).map(([k,v])=>`
     <div style="display:flex;gap:9px;align-items:center;margin-bottom:7px">
@@ -2208,7 +2234,10 @@ try{ if(!Storage.prototype.__fbq){ const _si=Storage.prototype.setItem; Storage.
 const CUAD_KEY='progEmbarques_cuadre_v1', CUADODOO_KEY='progEmbarques_cuadre_odoo_v1';
 /* El detalle de Odoo (1.4 MB) vive en IndexedDB, no en localStorage (que se llena y tumba la conexión). */
 const _odIdb=()=>new Promise((res,rej)=>{ try{ const q=indexedDB.open('progEmbarquesOdoo',1); q.onupgradeneeded=()=>q.result.createObjectStore('kv'); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }catch(e){ rej(e); } });
-function odIdbGet(){ return _odIdb().then(db=>new Promise(res=>{ const r=db.transaction('kv').objectStore('kv').get('odoodata'); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); })).catch(()=>null); }
+function _idbGet(key){ return _odIdb().then(db=>new Promise(res=>{ const r=db.transaction('kv').objectStore('kv').get(key); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); })).catch(()=>null); }
+function _idbPut(key,val){ return _odIdb().then(db=>new Promise(res=>{ try{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').put(val,key); t.oncomplete=()=>res(true); t.onerror=()=>res(false); t.onabort=()=>res(false); }catch(e){ res(false); } })).catch(()=>false); }
+function _idbDel(key){ return _odIdb().then(db=>new Promise(res=>{ try{ const t=db.transaction('kv','readwrite'); t.objectStore('kv').delete(key); t.oncomplete=()=>res(true); t.onerror=()=>res(false); }catch(e){ res(false); } })).catch(()=>false); }
+function odIdbGet(){ return _idbGet('odoodata'); }
 let _odIdbT=null;
 function odIdbSet(){ clearTimeout(_odIdbT); _odIdbT=setTimeout(()=>{ _odIdb().then(db=>{ try{ db.transaction('kv','readwrite').objectStore('kv').put(JSON.parse(JSON.stringify(CUAD.odoodata)),'odoodata'); }catch(e){} }).catch(()=>{}); },400); }
 const VEHICULOS=['PICK UP','3.5 TON','RABÓN','TORTON','TRAILER','FULL','CONTENEDOR','PIPA','PLATAFORMA','OTRO'];
@@ -2221,11 +2250,15 @@ const cuadCfg=()=>({ tolKg:(CFG.bascTolKg!=null&&!isNaN(Number(CFG.bascTolKg)))?
   tolProg:(CFG.cuadreTolProgPct!=null&&!isNaN(Number(CFG.cuadreTolProgPct)))?Math.max(0,Number(CFG.cuadreTolProgPct)):5,
   tolSacos:(CFG.bascTolSacos!=null&&!isNaN(Number(CFG.bascTolSacos)))?Math.max(0,Number(CFG.bascTolSacos)):0 });
 function cuadLoadLocal(){
-  try{ const c=localStorage.getItem(CUAD_KEY); if(c){ const o=JSON.parse(c); CUAD.bascula=o.bascula||{}; CUAD.cierres=o.cierres||{}; CUAD.odoo=o.odoo||{}; CUAD.ajustes=o.ajustes||{}; CUAD.bandeja=o.bandeja||{}; CUAD.solicitudes=o.solicitudes||{}; CUAD.obs=o.obs||{}; } }catch(e){}
+  const _ap=o=>{ CUAD.bascula=o.bascula||{}; CUAD.cierres=o.cierres||{}; CUAD.odoo=o.odoo||{}; CUAD.ajustes=o.ajustes||{}; CUAD.bandeja=o.bandeja||{}; CUAD.solicitudes=o.solicitudes||{}; CUAD.obs=o.obs||{}; };
+  /* El caché del cuadre (2 MB) también vive en IndexedDB. Migración segura: se copia, se confirma y SOLO entonces se borra de localStorage. */
+  try{ const c=localStorage.getItem(CUAD_KEY); if(c){ const o=JSON.parse(c); _ap(o); _idbPut('cuadre',o).then(ok=>{ if(ok){ try{ localStorage.removeItem(CUAD_KEY); }catch(e){} } }); } }catch(e){}
+  _idbGet('cuadre').then(o=>{ if(!o) return; const vacio=!Object.keys(CUAD.bascula||{}).length&&!Object.keys(CUAD.odoo||{}).length; if(vacio){ _ap(o); try{ refreshCuad(); }catch(e){} } });
   try{ const c=localStorage.getItem(CUADODOO_KEY); if(c){ CUAD.odoodata=JSON.parse(c)||{}; odIdbSet(); setTimeout(()=>{ try{ localStorage.removeItem(CUADODOO_KEY); }catch(e){} },1500); } }catch(e){}   // migración: lo viejo pasa a IndexedDB y se libera el espacio
   odIdbGet().then(o=>{ if(!o) return; let ch=false; Object.keys(o).forEach(k=>{ if(CUAD.odoodata[k]==null){ CUAD.odoodata[k]=o[k]; ch=true; } else if(k==='_ts'&&typeof o[k]==='object'){ CUAD.odoodata._ts=Object.assign({},o[k],CUAD.odoodata._ts||{}); } }); if(ch){ try{ refreshCuad(); }catch(e){} } });
 }
-function cuadSaveLocal(){ try{ localStorage.setItem(CUAD_KEY,JSON.stringify({bascula:CUAD.bascula,cierres:CUAD.cierres,odoo:CUAD.odoo,ajustes:CUAD.ajustes,bandeja:CUAD.bandeja,solicitudes:CUAD.solicitudes,obs:CUAD.obs})); }catch(e){} }
+let _cuadIdbT=null;
+function cuadSaveLocal(){ clearTimeout(_cuadIdbT); _cuadIdbT=setTimeout(()=>{ try{ _idbPut('cuadre',JSON.parse(JSON.stringify({bascula:CUAD.bascula,cierres:CUAD.cierres,odoo:CUAD.odoo,ajustes:CUAD.ajustes,bandeja:CUAD.bandeja,solicitudes:CUAD.solicitudes,obs:CUAD.obs}))); }catch(e){} },500); }
 function cuadSaveOdooLocal(){ odIdbSet(); }
 // escribe en memoria + localStorage + nube. path = 'bascula/ID' · 'cierres/2026-09' · 'cierres/2026-09/areas/bascula' …
 function cuadSet(path,val){
@@ -3743,5 +3776,3 @@ function addMotivo(){
 </script>
 </body>
 </html>
-
-<!-- build 20261009T150141 -->

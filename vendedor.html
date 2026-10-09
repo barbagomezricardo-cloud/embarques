@@ -88,6 +88,7 @@ input[type=file]{display:none}
   <div id="loading" style="display:none;text-align:center;padding:40px 0;color:#9fb0cc">Cargando datos en vivo…</div>
   <div id="app" style="display:none"></div>
 </div>
+<script>/* anti-«Conectando…»: el localStorage de github.io lo comparten todas las apps; si se llena, Firebase truena al guardar su marca de reconexión. Se ignora ese error solo para llaves firebase:. */try{if(!Storage.prototype.__fbq){var _si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){try{return _si.call(this,k,v)}catch(e){if(/^firebase:/i.test(String(k)))return;throw e}};Storage.prototype.__fbq=1}}catch(e){}</script>
 <script>
 const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
 
