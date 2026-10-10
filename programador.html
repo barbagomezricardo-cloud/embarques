@@ -2087,7 +2087,7 @@ function renderFormLotes(){
   const box=document.getElementById('f_lotes'); if(!box) return;
   const prods=productosActuales(); const can=unlocked;
   box.innerHTML=formLotes.length? formLotes.map((x,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-      <select ${can?'':'disabled'} onchange="setFormLote(${i},'cod',this.value)" style="flex:2;min-width:200px"><option value="">— producto —</option>${prods.map(p=>`<option value="${escProy(p.cod)}" ${p.cod===x.cod?'selected':''}>${escProy(p.name)}</option>`).join('')}${x.cod&&!prods.some(p=>p.cod===x.cod)?`<option value="${escProy(x.cod)}" selected>${escProy(x.prod||x.cod)}</option>`:''}</select>
+      <button type="button" class="ppbtn ${x.cod?'':'empty'}" ${can?'':'disabled'} onclick="formProdOpen(${i})" style="flex:2;min-width:200px">${(()=>{ const pr=x.cod?prods.find(p=>p.cod===x.cod):null; return x.cod?(`<span>${PP_ICON[ppCat(pr||{cod:x.cod,name:x.prod})]}</span><b>${escProy(pr?pr.name:(x.prod||x.cod))}</b>${can?'<small>cambiar</small>':''}`):'🔎 Buscar producto…'; })()}</button>
       <input ${can?'':'disabled'} value="${escProy(x.lote||'')}" placeholder="LOTE" style="flex:1;min-width:120px;text-transform:uppercase" onchange="setFormLote(${i},'lote',this.value)">
       <input ${can?'':'disabled'} type="number" value="${x.sacos!=null?x.sacos:''}" placeholder="sacos" style="width:90px" onchange="setFormLote(${i},'sacos',this.value)">
       ${can?`<button type="button" class="ghost" style="color:var(--late);padding:6px 9px" onclick="delFormLote(${i})">✕</button>`:''}
@@ -2095,6 +2095,7 @@ function renderFormLotes(){
   const sacos=formLotes.reduce((a,x)=>a+(Number(x.sacos)||0),0), kg=formLotes.reduce((a,x)=>a+(Number(x.sacos)||0)*(Number(x.kgSaco)||0),0);
   document.getElementById('f_lotesTot').textContent=formLotes.length?(sacos.toLocaleString('es-MX')+' sacos · ≈ '+Math.round(kg).toLocaleString('es-MX')+' kg'):'';
 }
+function formProdOpen(i){ const x=formLotes[i]; if(!x) return; prodPick({items:productosActuales(),current:x.cod,onPick:cod=>{ setFormLote(i,'cod',cod); setTimeout(()=>{ const el=document.querySelectorAll('#f_lotes input[placeholder="LOTE"]')[i]; if(el) el.focus(); },80); }}); }
 function addFormLote(){ if(!requireUnlock())return; formLotes.push({cod:'',prod:'',lote:'',sacos:'',kgSaco:0}); renderFormLotes(); }
 function delFormLote(i){ formLotes.splice(i,1); renderFormLotes(); recalc(); }
 function setFormLote(i,k,v){ const x=formLotes[i]; if(!x)return;
@@ -2523,6 +2524,63 @@ function cuadLec(o,hasInv,hasFac,tolS){
   return out;
 }
 
+/* ===== Selector de producto con buscador + filtros (Mascotas / Caballo / Gallo) ===== */
+function ppNorm(s){ return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function ppCat(p){ const c=String(p.cod||'').toUpperCase(), n=ppNorm(p.name);
+  if(/caballo/.test(n)||/^\d+CAB/.test(c)) return 'Caballo';
+  if(/gallo|pollo/.test(n)||/^\d+GAL/.test(c)) return 'Gallo';
+  if(/^04MAS/.test(c)||/\bkan\b|\bcat\b|boob|pet food|perro|gato/.test(n)) return 'Mascotas';
+  return 'Otros'; }
+const PP_ICON={Mascotas:'🐾',Caballo:'🐴',Gallo:'🐓',Otros:'📦'};
+let _pp={items:[],cur:'',cat:'Todos',q:'',cb:null};
+function ppEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function ppInit(){ if(document.getElementById('ppOv')) return;
+  const st=document.createElement('style'); st.textContent=`
+#ppOv{position:fixed;inset:0;background:rgba(5,10,18,.72);z-index:99999;display:none;align-items:flex-end;justify-content:center}
+#ppOv.show{display:flex}
+#ppSheet{background:var(--panel,#16212e);color:var(--txt,#eaf1f8);border:1px solid var(--line,#28394d);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+@media(min-width:700px){#ppOv{align-items:center}#ppSheet{border-radius:16px;max-height:80vh}}
+#ppSheet .pph{display:flex;align-items:center;gap:8px;padding:14px 16px 6px}
+#ppSheet .pph b{flex:1;font-size:16px}
+#ppSheet .ppx{background:transparent;border:0;color:var(--muted,#93a6bc);font-size:22px;line-height:1;padding:4px 8px;cursor:pointer}
+#ppQ{margin:4px 16px 8px;padding:13px 14px;font-size:16px;border-radius:11px;border:1px solid var(--line,#28394d);background:var(--bg,#0d1520);color:var(--txt,#eaf1f8);width:calc(100% - 32px);box-sizing:border-box}
+#ppCats{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 8px}
+#ppCats button{border:1px solid var(--line,#28394d);background:var(--panel2,#1d2a3a);color:var(--txt,#eaf1f8);border-radius:20px;padding:8px 13px;font-size:14px;cursor:pointer}
+#ppCats button.on{background:#2f6df6;border-color:#2f6df6;color:#fff;font-weight:700}
+#ppList{overflow:auto;padding:0 10px 14px;flex:1;-webkit-overflow-scrolling:touch}
+#ppList .ppi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line,#28394d);color:var(--txt,#eaf1f8);padding:13px 8px;font-size:15px;cursor:pointer;border-radius:0}
+#ppList .ppi:active,#ppList .ppi:hover{background:var(--panel2,#1d2a3a)}
+#ppList .ppi.sel{background:rgba(47,109,246,.18)}
+#ppList .ppi .pn{flex:1;line-height:1.25}
+#ppList .ppi .pk{color:var(--muted,#93a6bc);font-size:12.5px;white-space:nowrap}
+#ppList .ppe{padding:22px;text-align:center;color:var(--muted,#93a6bc)}
+.ppbtn{width:100%;text-align:left;background:var(--panel2,#1d2a3a);border:1px solid var(--line,#28394d);color:var(--txt,#eaf1f8);border-radius:9px;padding:11px 12px;font-size:15px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.ppbtn small{color:var(--muted,#93a6bc);font-size:12px;margin-left:auto;white-space:nowrap}
+.ppbtn.empty{color:var(--muted,#93a6bc)}`;
+  document.head.appendChild(st);
+  const ov=document.createElement('div'); ov.id='ppOv';
+  ov.innerHTML='<div id="ppSheet" role="dialog" aria-label="Elegir producto"><div class="pph"><b>🔎 Elegir producto</b><button type="button" class="ppx" aria-label="Cerrar" onclick="ppClose()">✕</button></div><input id="ppQ" type="search" inputmode="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Buscar… (ej. gallo 40, kan 5, caballo)"><div id="ppCats"></div><div id="ppList"></div></div>';
+  ov.addEventListener('click',e=>{ if(e.target===ov) ppClose(); });
+  document.body.appendChild(ov);
+  const q=document.getElementById('ppQ');
+  q.addEventListener('input',()=>{ _pp.q=q.value; ppRender(); });
+  q.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const f=ppFiltrados(); if(f.length) ppChoose(f[0].cod); e.preventDefault(); } else if(e.key==='Escape') ppClose(); });
+  document.getElementById('ppCats').addEventListener('click',e=>{ const b=e.target.closest('button[data-c]'); if(!b) return; _pp.cat=b.dataset.c; ppRender(); });
+  document.getElementById('ppList').addEventListener('click',e=>{ const b=e.target.closest('button[data-cod]'); if(b) ppChoose(b.dataset.cod); }); }
+function ppFiltrados(){ const toks=ppNorm(_pp.q).split(/\s+/).filter(Boolean);
+  return _pp.items.filter(p=>(_pp.cat==='Todos'||ppCat(p)===_pp.cat)&&toks.every(t=>ppNorm(p.name+' '+p.cod+' '+(p.kg||'')+'kg').includes(t))); }
+function ppRender(){ const cats=['Todos',...['Mascotas','Caballo','Gallo','Otros'].filter(c=>_pp.items.some(p=>ppCat(p)===c))];
+  const cnt=c=>c==='Todos'?_pp.items.length:_pp.items.filter(p=>ppCat(p)===c).length;
+  document.getElementById('ppCats').innerHTML=cats.map(c=>`<button type="button" data-c="${c}" class="${_pp.cat===c?'on':''}">${c==='Todos'?'':(PP_ICON[c]+' ')}${c} <small>${cnt(c)}</small></button>`).join('');
+  const f=ppFiltrados(); const cur=ppPkey(_pp.cur);
+  document.getElementById('ppList').innerHTML=f.length?f.map(p=>`<button type="button" class="ppi ${cur&&ppPkey(p.cod)===cur?'sel':''}" data-cod="${ppEsc(p.cod)}"><span>${PP_ICON[ppCat(p)]}</span><span class="pn">${ppEsc(p.name)}</span><span class="pk">${p.kg?ppEsc(p.kg)+' kg':''}${cur&&ppPkey(p.cod)===cur?' ✓':''}</span></button>`).join(''):'<div class="ppe">Sin resultados. Prueba con otra palabra o toca «Todos».</div>'; }
+function ppPkey(c){ try{ return typeof pkey==='function'?pkey(c):String(c||''); }catch(e){ return String(c||''); } }
+function ppChoose(cod){ const cb=_pp.cb; ppClose(); if(cb) cb(cod); }
+function ppClose(){ const ov=document.getElementById('ppOv'); if(ov) ov.classList.remove('show'); _pp.cb=null; }
+function prodPick(o){ ppInit(); _pp={items:(o.items||[]).slice(),cur:o.current||'',cat:'Todos',q:'',cb:o.onPick||null};
+  // si el producto actual es de una categoría, abre ya filtrado en ella solo si no hay búsqueda (mejor ver todo); se deja en «Todos»
+  const q=document.getElementById('ppQ'); q.value=''; ppRender(); document.getElementById('ppOv').classList.add('show'); setTimeout(()=>{ try{ q.focus(); }catch(e){} },80); }
+
 
 /* ================= PESTAÑA BÁSCULA (captura del pesaje) ================= */
 const BS={sk:'',sd:1};
@@ -2610,11 +2668,12 @@ function renderBascLines(){
   const prods=bascProductos(); const lock=bsEdit&&bascBloqueado(CUAD.bascula[bsEdit],DATA.find(x=>x.id===bsEdit))&&!isMaster&&!isBasc;
   const box=document.getElementById('bs_lineas');
   box.innerHTML=bsLines.map((x,i)=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-    <select ${lock?'disabled':''} onchange="bsSetLine(${i},'cod',this.value)" style="flex:2;min-width:220px"><option value="">— producto —</option>${prods.map(p=>`<option value="${escProy(p.cod)}" ${pkey(p.cod)===pkey(x.cod)&&x.cod?'selected':''}>${escProy(p.name)}</option>`).join('')}</select>
+    <button type="button" class="ppbtn ${x.cod?'':'empty'}" ${lock?'disabled':''} onclick="bsProdOpen(${i})" style="flex:2;min-width:220px">${(()=>{ const pr=x.cod?prods.find(p=>pkey(p.cod)===pkey(x.cod)):null; return x.cod?(`<span>${PP_ICON[ppCat(pr||{cod:x.cod,name:x.prod})]}</span><b>${escProy(pr?pr.name:(x.prod||x.cod))}</b>${lock?'':'<small>cambiar</small>'}`):'🔎 Buscar producto…'; })()}</button>
     <input ${lock?'disabled':''} value="${escProy(x.lote||'')}" placeholder="LOTE" style="flex:1;min-width:120px;text-transform:uppercase" onchange="bsSetLine(${i},'lote',this.value)">
     <input ${lock?'disabled':''} type="number" value="${x.sacos!=null?x.sacos:''}" placeholder="sacos" style="width:90px" onchange="bsSetLine(${i},'sacos',this.value)">
     ${lock?'':`<button type="button" class="ghost" style="color:var(--late);padding:6px 9px" onclick="bsDelLine(${i})">✕</button>`}</div>`).join('');
 }
+function bsProdOpen(i){ const x=bsLines[i]; if(!x) return; prodPick({items:bascProductos(),current:x.cod,onPick:cod=>{ bsSetLine(i,'cod',cod); setTimeout(()=>{ const el=document.querySelectorAll('#bs_lineas input[placeholder="LOTE"]')[i]; if(el) el.focus(); },80); }}); }
 function bsAddLine(){ bsLines.push({cod:'',prod:'',lote:'',sacos:'',kgSaco:0}); renderBascLines(); }
 function bsDelLine(i){ bsLines.splice(i,1); if(!bsLines.length)bsLines.push({cod:'',prod:'',lote:'',sacos:'',kgSaco:0}); renderBascLines(); bascRecalc(); }
 function bsSetLine(i,k,v){ const x=bsLines[i]; if(!x)return;
