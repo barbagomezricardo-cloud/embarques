@@ -793,8 +793,10 @@
         const alc = $('#od-alc').value;
         if (alc === 'pt') return cargarOdooPT(f);
         try {
-          const rep = await I.leerOdoo(f); const od = { fecha: hoyISO(), ts: Date.now(), archivo: f.name, alcance: alc, por: USER.nombre, items: rep.items };
-          await DB.set('odoo', od); await I.mov({ tipo: 'odoo', nota: 'Reporte de Odoo cargado: ' + f.name + ' (' + rep.n + ' renglones, ' + (alc === 'mde' ? 'solo almacenes' : 'todas las ubicaciones') + ')' });
+          const rep = await I.leerOdoo(f);
+          if (rep.ubicaciones) { const prev = (S.odoo && S.odoo.items) || {}; Object.keys(rep.items).forEach(k => { if (!rep.items[k].costo && prev[k] && prev[k].costo) rep.items[k].costo = prev[k].costo; }); }
+          const od = { fecha: hoyISO(), ts: Date.now(), archivo: f.name, alcance: rep.ubicaciones ? 'ubic' : alc, por: USER.nombre, items: rep.items };
+          await DB.set('odoo', od); await I.mov({ tipo: 'odoo', nota: 'Reporte de Odoo cargado: ' + f.name + ' (' + rep.n + ' renglones, ' + (rep.ubicaciones ? 'por ubicación' : alc === 'mde' ? 'solo almacenes' : 'todas las ubicaciones') + ')' });
           I.toast('Reporte de Odoo cargado ✔ (' + rep.n + ' renglones)', 'ok');
           setTimeout(async () => { const nv = nuevosAuto(od); if (nv.length && await I.confirmar('Artículos nuevos', `El reporte trae <b>${nv.length}</b> artículos de empaque, materia prima o combustibles que no están en tu catálogo (las cribas se revisan una por una abajo). ¿Los agrego en su almacén (MDE / MP / insumos) con la existencia de Odoo?`, 'Agregar')) await agregarNuevosOdoo(od, nv); await actualizarFisicoOdoo(od); }, 300);
         } catch (e) { I.toast(e.message, 'err'); }
@@ -804,7 +806,7 @@
     },
     update(el) {
       const od = S.odoo;
-      $('#od-last', el).innerHTML = od ? `Último reporte: <b>${esc(od.archivo || '')}</b> · ${fDia(od.fecha)} · ${od.alcance === 'mde' ? 'solo almacenes' : 'todas las ubicaciones'} · cargó ${esc(od.por || '')} · ${vals(od.items).length} códigos` : 'Aún no se ha cargado ningún reporte.';
+      $('#od-last', el).innerHTML = od ? `Último reporte: <b>${esc(od.archivo || '')}</b> · ${fDia(od.fecha)} · ${od.alcance === 'ubic' ? 'por ubicación (almacén / PT)' : od.alcance === 'mde' ? 'solo almacenes' : 'todas las ubicaciones'} · cargó ${esc(od.por || '')} · ${vals(od.items).length} códigos` : 'Aún no se ha cargado ningún reporte.';
       if (!od) { $('#od-t', el).innerHTML = '<div class="empty">Carga un reporte para comparar</div>'; $('#od-res', el).innerHTML = ''; $('#od-new', el).innerHTML = ''; return; }
       const rows = odRows();
       const tf = rows.reduce((s, r) => s + r.fis * costo(r.it.id), 0), tt = rows.reduce((s, r) => s + (r.q || 0) * costo(r.it.id), 0), ta = rows.reduce((s, r) => s + Math.abs(r.val || 0), 0);
@@ -829,20 +831,26 @@
   /* Actualizar el físico con el reporte de Odoo: por artículo se elige si toma la existencia de Odoo */
   async function actualizarFisicoOdoo(od) {
     if (!od || od.alcance === 'pt') return;
-    const rows = items(true).map(it => { const o = od.items && od.items[it.id]; if (!o) return null; const f = F(it.id); const nuevo = od.alcance === 'mde' ? Math.max(0, num(o.q)) : Math.max(0, num(o.q) - f.pt); return { it, f, q: num(o.q), nuevo, d: nuevo - f.mde, ctl: I.control(it) }; }).filter(Boolean);
-    const sel = {}; rows.forEach(r => sel[r.it.id] = r.ctl === 'odoo' && Math.abs(r.d) > 0.0001);
+    const ub = od.alcance === 'ubic';
+    const rows = items(true).map(it => { let o = od.items && od.items[it.id]; if (!o && !ub) return null; o = o || { q: 0, alm: 0, pt: 0 }; const f = F(it.id);
+      const nuevo = ub ? Math.max(0, num(o.alm)) : od.alcance === 'mde' ? Math.max(0, num(o.q)) : Math.max(0, num(o.q) - f.pt);
+      const nuevoPt = ub ? Math.max(0, num(o.pt)) : f.pt;
+      return { it, f, q: num(o.q), nuevo, nuevoPt, d: nuevo - f.mde, dPt: nuevoPt - f.pt, ctl: I.control(it), falta: !(od.items && od.items[it.id]) }; }).filter(r => r && !(r.falta && !r.f.mde && !r.f.pt));
+    rows.forEach(r => r.cambia = Math.abs(r.d) > 0.0001 || Math.abs(r.dPt) > 0.0001);
+    const sel = {}; rows.forEach(r => sel[r.it.id] = r.ctl === 'odoo' && r.cambia);
     let fam = null;
     const tabla = `<div class="row small" style="gap:6px;margin-bottom:6px"><button class="btn sm" data-ms="odoo">Solo control Odoo</button><button class="btn sm" data-ms="all">Todos</button><button class="btn sm" data-ms="none">Ninguno</button><span class="muted">Los de control "Inventarios" conservan su físico y solo se comparan.</span></div>
-      <div class="tw" style="max-height:52vh"><table><thead><tr><th></th><th>Artículo</th><th>Control</th><th class="num">Físico actual (almacén)</th><th class="num">Odoo</th><th class="num">Nuevo físico</th><th class="num">Dif.</th></tr></thead><tbody>${rows.map(r => { const g = r.it.familia !== fam ? `<tr class="grp"><td colspan="7">${I.FAM_ICO[r.it.familia] || ''} ${esc(r.it.familia)} · ${I.almacen(r.it.familia).cod}</td></tr>` : ''; fam = r.it.familia; return g + `<tr><td><input type="checkbox" data-uo="${r.it.id}" ${sel[r.it.id] ? 'checked' : ''}></td><td class="small">${esc(I.itemLabel(r.it))}</td><td><span class="b ${r.ctl === 'odoo' ? 'b-blu' : 'b-gry'}">${r.ctl === 'odoo' ? 'Odoo' : 'Inventarios'}</span></td><td class="num">${fmt(r.f.mde)}</td><td class="num muted">${fmt(r.q)}</td><td class="num"><b>${fmt(r.nuevo)}</b></td><td class="num ${Math.abs(r.d) > 0.5 ? (r.d < 0 ? 'neg' : 'low') : ''}">${fmt(r.d)}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="muted small" style="margin-top:6px">${od.alcance === 'mde' ? 'El reporte es solo de almacenes: el nuevo físico = Odoo.' : 'El reporte es de todas las ubicaciones: el nuevo físico del almacén = Odoo − lo que hay en almacén PT.'} El control de cada artículo se cambia en Catálogo.</p>`;
+      <div class="tw" style="max-height:52vh"><table><thead><tr><th></th><th>Artículo</th><th>Control</th><th class="num">Almacén actual</th><th class="num">Almacén Odoo</th><th class="num">Dif.</th>${ub ? '<th class="num">PT actual</th><th class="num">PT Odoo</th><th class="num">Dif. PT</th>' : ''}</tr></thead><tbody>${rows.map(r => { const g = r.it.familia !== fam ? `<tr class="grp"><td colspan="${ub ? 9 : 6}">${I.FAM_ICO[r.it.familia] || ''} ${esc(r.it.familia)} · ${I.almacen(r.it.familia).cod}</td></tr>` : ''; fam = r.it.familia; return g + `<tr><td><input type="checkbox" data-uo="${r.it.id}" ${sel[r.it.id] ? 'checked' : ''}></td><td class="small">${esc(I.itemLabel(r.it))}</td><td><span class="b ${r.ctl === 'odoo' ? 'b-blu' : 'b-gry'}">${r.ctl === 'odoo' ? 'Odoo' : 'Inventarios'}</span></td><td class="num">${fmt(r.f.mde)}</td><td class="num"><b>${fmt(r.nuevo)}</b>${r.falta ? '<div class="tiny muted">no está en el reporte</div>' : ''}</td><td class="num ${Math.abs(r.d) > 0.5 ? (r.d < 0 ? 'neg' : 'low') : ''}">${fmt(r.d)}</td>${ub ? `<td class="num">${fmt(r.f.pt)}</td><td class="num"><b>${fmt(r.nuevoPt)}</b></td><td class="num ${Math.abs(r.dPt) > 0.5 ? (r.dPt < 0 ? 'neg' : 'low') : ''}">${fmt(r.dPt)}</td>` : ''}</tr>`; }).join('')}</tbody></table></div>
+      <p class="muted small" style="margin-top:6px">${ub ? 'Reporte por ubicación: almacén = MDE / MP / ALMPI / COM / ALMEX / RYH; PT = PT y ALMFA; cuarentena no cuenta. Los artículos que no vienen en el reporte quedan en 0.' : od.alcance === 'mde' ? 'El reporte es solo de almacenes: el nuevo físico = Odoo.' : 'El reporte es de todas las ubicaciones: el nuevo físico del almacén = Odoo − lo que hay en almacén PT.'} El control de cada artículo se cambia en Catálogo.</p>`;
     const r = await I.modal('¿Actualizar el físico con Odoo?', tabla, [{ t: 'No, solo comparar', v: 0 }, { t: 'Actualizar físico de los marcados', c: 'pri', v: 1 }], { ancho: true, onOpen: ov => { const md = $('.modal', ov); if (md) { md.style.maxWidth = '1000px'; md.style.width = 'min(1000px, 96vw)'; }
       $$('[data-uo]', ov).forEach(c => c.onchange = () => sel[c.dataset.uo] = c.checked);
-      $$('[data-ms]', ov).forEach(b => b.onclick = () => { rows.forEach(x => sel[x.it.id] = b.dataset.ms === 'all' ? true : b.dataset.ms === 'none' ? false : (x.ctl === 'odoo' && Math.abs(x.d) > 0.0001)); $$('[data-uo]', ov).forEach(c => c.checked = !!sel[c.dataset.uo]); });
+      $$('[data-ms]', ov).forEach(b => b.onclick = () => { rows.forEach(x => sel[x.it.id] = b.dataset.ms === 'all' ? true : b.dataset.ms === 'none' ? false : (x.ctl === 'odoo' && x.cambia)); $$('[data-uo]', ov).forEach(c => c.checked = !!sel[c.dataset.uo]); });
     } });
     if (r.v !== 1) return;
     const ch = rows.filter(x => sel[x.it.id]); if (!ch.length) return I.toast('No marcaste artículos', 'err');
     const up = {}, det = {}, ts = Date.now();
-    ch.forEach(x => { up['fisico/' + x.it.id] = { mde: x.nuevo, ts, por: USER.nombre, origen: 'odoo', nota: 'Actualizado con Odoo ' + (od.archivo || '') }; det[x.it.id] = { antes: x.f.mde, despues: x.nuevo }; });
+    ch.forEach(x => { up['fisico/' + x.it.id] = { mde: x.nuevo, ts, por: USER.nombre, origen: 'odoo', nota: 'Actualizado con Odoo ' + (od.archivo || '') }; det[x.it.id] = { antes: x.f.mde, despues: x.nuevo };
+      if (ub && Math.abs(x.dPt) > 0.0001) { up['pt/' + x.it.id + '/cant'] = x.nuevoPt; up['pt/' + x.it.id + '/ts'] = ts; up['pt/' + x.it.id + '/origen'] = 'odoo'; det[x.it.id].ptAntes = x.f.pt; det[x.it.id].ptDespues = x.nuevoPt; } });
     await DB.update(up); await I.mov({ tipo: 'carga', items: det, cant: ch.length, nota: 'Físico actualizado con el reporte de Odoo ' + (od.archivo || '') + ' (' + ch.length + ' artículos)' });
     I.toast('Físico actualizado en ' + ch.length + ' artículos ✔', 'ok');
   }

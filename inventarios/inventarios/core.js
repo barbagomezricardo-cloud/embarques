@@ -415,19 +415,29 @@
     const find = (...ws_) => hd.findIndex(x => ws_.some(w => x.includes(w)));
     const cN = find('nombre en pantalla', 'producto', 'nombre', 'artículo', 'articulo');
     let cQ = find('a la mano'); if (cQ < 0) cQ = find('cantidad disponible', 'cantidad');
-    const cC = find('costo'), cU = find('unidad');
+    const cC = find('costo'), cU = find('unidad'), cL = find('ubicaci'), cLt = find('lote', 'serie');
     const items = {}; let n = 0, grupo = '';
     for (let i = h + 1; i < rows.length; i++) {
-      const r = rows[i]; if (!r || !r[cN]) continue;
+      const r = rows[i]; if (!r) continue;
+      if (!r[cN]) { if (cL >= 0 && r[cL]) { const g = String(r[cL]).trim().match(/^(.+?)\s*\(\d+\)$/); if (g) grupo = g[1].trim(); } continue; }
       const m = String(r[cN]).match(/\[([^\]]+)\]\s*(.*)/);
       if (!m) { const g = String(r[cN]).trim().match(/^(.+?)\s*\(\d+\)$/); if (g) grupo = g[1].trim(); continue; }
       const code = m[1].trim(), k = keySafe(code);
       const q = num(r[cQ]);
-      if (items[k]) items[k].q += q; else items[k] = { c: code, n: m[2].trim(), q, costo: cC >= 0 ? num(r[cC]) : 0, u: cU >= 0 ? (r[cU] || '') : '', cat: grupo };
+      if (cL >= 0) {
+        /* Reporte por ubicación (stock.quant): PT/… y ALMFA/… = almacén de insumos PT; CUARE/… = cuarentena (no cuenta); lo demás (MDE, MP, ALMPI, COM, ALMEX, RYH…) = almacén de origen */
+        const loc = String(r[cL] || '').trim(), pre = loc.split('/')[0].toUpperCase();
+        const o = items[k] = items[k] || { c: code, n: m[2].trim(), q: 0, alm: 0, pt: 0, cuar: 0, costo: 0, u: cU >= 0 ? (r[cU] || '') : '', cat: grupo, ubic: {}, lotes: [] };
+        if (pre === 'CUARE') o.cuar += q; else if (pre === 'PT' || pre === 'ALMFA') o.pt += q; else o.alm += q;
+        if (pre !== 'CUARE') o.q += q;
+        o.ubic[keySafe(loc) || 'SIN'] = (o.ubic[keySafe(loc) || 'SIN'] || 0) + q;
+        if (cLt >= 0 && r[cLt] && q) o.lotes.push({ u: loc, l: String(r[cLt]).slice(0, 40), q });
+      } else if (items[k]) items[k].q += q; else items[k] = { c: code, n: m[2].trim(), q, costo: cC >= 0 ? num(r[cC]) : 0, u: cU >= 0 ? (r[cU] || '') : '', cat: grupo };
       n++;
     }
     if (!n) throw new Error('El archivo no tiene renglones con código entre corchetes, p. ej. [02SAC001].');
-    return { items, n, hoja: wb.SheetNames[0] };
+    Object.values(items).forEach(o => { ['q', 'alm', 'pt', 'cuar'].forEach(f => { if (o[f] != null) o[f] = Math.round(o[f] * 1000) / 1000; }); if (o.lotes && !o.lotes.length) delete o.lotes; });
+    return { items, n, hoja: wb.SheetNames[0], ubicaciones: cL >= 0 };
   };
 
   INV.exportXlsx = async function (nombre, hojas) {
