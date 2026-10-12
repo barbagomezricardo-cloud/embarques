@@ -416,13 +416,14 @@
     const cN = find('nombre en pantalla', 'producto', 'nombre', 'artículo', 'articulo');
     let cQ = find('a la mano'); if (cQ < 0) cQ = find('cantidad disponible', 'cantidad');
     const cC = find('costo'), cU = find('unidad');
-    const items = {}; let n = 0;
+    const items = {}; let n = 0, grupo = '';
     for (let i = h + 1; i < rows.length; i++) {
       const r = rows[i]; if (!r || !r[cN]) continue;
-      const m = String(r[cN]).match(/\[([^\]]+)\]\s*(.*)/); if (!m) continue;
+      const m = String(r[cN]).match(/\[([^\]]+)\]\s*(.*)/);
+      if (!m) { const g = String(r[cN]).trim().match(/^(.+?)\s*\(\d+\)$/); if (g) grupo = g[1].trim(); continue; }
       const code = m[1].trim(), k = keySafe(code);
       const q = num(r[cQ]);
-      if (items[k]) items[k].q += q; else items[k] = { c: code, n: m[2].trim(), q, costo: cC >= 0 ? num(r[cC]) : 0, u: cU >= 0 ? (r[cU] || '') : '' };
+      if (items[k]) items[k].q += q; else items[k] = { c: code, n: m[2].trim(), q, costo: cC >= 0 ? num(r[cC]) : 0, u: cU >= 0 ? (r[cU] || '') : '', cat: grupo };
       n++;
     }
     if (!n) throw new Error('El archivo no tiene renglones con código entre corchetes, p. ej. [02SAC001].');
@@ -529,6 +530,11 @@
   INV.exacto = (cnt, sis, tolPct) => { cnt = num(cnt); sis = num(sis); const base = Math.max(Math.abs(cnt), Math.abs(sis)); return base === 0 || Math.abs(cnt - sis) <= Math.max(0.5, base * num(tolPct) / 100); };
   /* Almacén de origen según familia: MDE = empaque, MP = materias primas (macros, micros, grasas), INS = insumos otros (cribas, otros) */
   INV.almacen = fam => fam === 'EMPAQUE' ? { cod: 'MDE', nombre: 'Almacén de empaque (MDE)' } : (fam === 'CRIBAS' || fam === 'OTROS INSUMOS') ? { cod: 'INS', nombre: 'Insumos otros' } : { cod: 'MP', nombre: 'Almacén de materias primas (MP)' };
+  /* Quién controla la existencia: 'odoo' = se descuenta en automático en Odoo (el físico se actualiza con el reporte); 'inventarios' = control 100 % del departamento (Odoo solo compara) */
+  INV.MP_FAM = ['MACROINGREDIENTES', 'MICROINGREDIENTES', 'GRASAS Y DIGESTAS'];
+  INV.control = it => (it && (it.control === 'odoo' || it.control === 'inventarios')) ? it.control : (it && INV.MP_FAM.includes(it.familia) ? 'odoo' : 'inventarios');
+  /* Familia (almacén) sugerida para un artículo nuevo de Odoo según su categoría y código */
+  INV.famDeOdoo = o => { const c = String(o.c || '').toUpperCase(), g = String(o.cat || '').toUpperCase(); if (/^0\dCRI/.test(c)) return 'CRIBAS'; if (g.includes('EMPAQUE') || /^0\d(SAC|PRO)|^PRO\d/.test(c)) return 'EMPAQUE'; if (g.includes('COMBUST')) return 'OTROS INSUMOS'; if (g.includes('MATERIA PRIMA')) { if (/^0\dACE|^02CROQ011/.test(c)) return 'GRASAS Y DIGESTAS'; if (/^0\d(GRA|PAS|CROQ)|^02MIN04/.test(c)) return 'MACROINGREDIENTES'; return 'MICROINGREDIENTES'; } return null; };
   INV.ESTATUS_COMPRA = { cotizando: 'Cotizando', oc: 'OC colocada', transito: 'En tránsito', detenido: 'Detenido' };
 
   INV.itemLabel = it => it ? ((it.codigo ? '[' + it.codigo + '] ' : '') + it.nombre) : '—';
