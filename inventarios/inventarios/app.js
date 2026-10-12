@@ -19,7 +19,6 @@
     { id: 'tablero', t: '📊 Tablero', roles: ['master', 'jefe', 'compras'] },
     { id: 'entradas', t: '📥 Entradas a almacén', roles: ['master', 'jefe'] },
     { id: 'transfer', t: '🔁 Transferencias a PT', roles: ['master', 'jefe'], cnt: () => vals(S.entregas).filter(e => I.estadoEntrega(e) === 'recibida').length },
-    { id: 'pt', t: '🏭 Almacén PT', roles: ['master', 'jefe'] },
     { id: 'fisico', t: '📋 Físico y conteos', roles: ['master', 'jefe'], cnt: () => vals(S.conteos).filter(c => c.estado === 'confirmado').length },
     { id: 'silos', t: '🛢️ Silos', roles: ['master', 'jefe', 'compras'] },
     { id: 'proyeccion', t: '📈 Proyección', roles: ['master', 'jefe', 'compras'] },
