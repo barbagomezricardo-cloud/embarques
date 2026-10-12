@@ -224,10 +224,10 @@
   async function silenciar(id) {
     const it = item(id), act = silencio(id);
     if (act) {
-      await I.modal('Volver a alertar · ' + it.nombre, `<p>Este artículo está fuera de alertas desde el ${fFecha(act.ts)} (${esc(act.por)})${act.motivo ? ': <i>' + esc(act.motivo) + '</i>' : ''}.</p><p class="muted small">Al reactivarlo vuelve a aparecer en alertas, tablero y en el aviso de compras.</p>`, [{ t: 'Cancelar' }, { t: '🔔 Volver a alertar', c: 'pri', antes: async () => { await DB.push('notasCompra/' + id, { alerta: 'on', texto: '🔔 Vuelve a alertar', por: USER.nombre, rol: USER.rol, ts: Date.now() }); I.toast('Reactivado en alertas ✔', 'ok'); } }]);
+      await I.modal('Volver a alertar · ' + it.nombre, `<p>Este artículo está fuera de alertas desde el ${fFecha(act.ts)} (${esc(act.por)})${act.motivo ? ': <i>' + esc(act.motivo) + '</i>' : ''}.</p><p class="muted small">Al reactivarlo vuelve a aparecer en alertas, tablero y proyección.</p>`, [{ t: 'Cancelar' }, { t: '🔔 Volver a alertar', c: 'pri', antes: async () => { await DB.push('notasCompra/' + id, { alerta: 'on', texto: '🔔 Vuelve a alertar', por: USER.nombre, rol: USER.rol, ts: Date.now() }); I.toast('Reactivado en alertas ✔', 'ok'); } }]);
       return;
     }
-    await I.modal('No alertar · ' + it.nombre, `<p class="muted small">Sale de las alertas de compra, del tablero y de los críticos. Sigue visible en la proyección y en el filtro "🔕 Sin alerta (temporada)", donde lo puedes reactivar.</p>
+    await I.modal('No alertar · ' + it.nombre, `<p class="muted small">Sale de las alertas de compra, del tablero, de los críticos y de la proyección. Lo ves y lo reactivas en Alertas → "🔕 Sin alerta (temporada)" o en Proyección → botón 🔕.</p>
       <div class="form"><label class="full">Motivo<input id="sl-m" value="Artículo de temporada"></label><label>Volver a alertar el (opcional)<input id="sl-h" type="date"></label></div>`,
       [{ t: 'Cancelar' }, { t: '🔕 No alertar', c: 'pri', antes: async ov => { const m = $('#sl-m', ov).value.trim() || 'Artículo de temporada', h = $('#sl-h', ov).value || null; if (h && h <= hoyISO()) { I.toast('La fecha para volver a alertar debe ser futura', 'err'); return false; } await DB.push('notasCompra/' + id, { alerta: 'off', motivo: m, hasta: h, texto: '🔕 No alertar: ' + m + (h ? ' (hasta el ' + fDia(h) + ')' : ''), por: USER.nombre, rol: USER.rol, ts: Date.now() }); I.toast('Fuera de alertas ✔', 'ok'); } }]);
   }
@@ -738,27 +738,61 @@
       el.innerHTML = `<div class="card"><div class="card-h"><h2>📈 Proyección de inventario y compras</h2><span class="sp"></span>
         <select id="py-fam" style="max-width:230px">${famOpts(UI.proyFam, true)}</select><input id="py-q" placeholder="Buscar…" style="max-width:180px" value="${esc(UI.proyQ)}">
         <select id="py-m" style="max-width:120px">${[6, 12, 15, 18, 24].map(n => `<option ${n === UI.proyMeses ? 'selected' : ''} value="${n}">${n} meses</option>`).join('')}</select>
-        <label style="margin:0"><input type="checkbox" id="py-pc" ${UI.proyPC ? 'checked' : ''}> incluir "por comprar"</label><button class="btn sm" id="py-x">Exportar</button></div>
+        <label style="margin:0"><input type="checkbox" id="py-pc" ${UI.proyPC ? 'checked' : ''}> incluir "por comprar"</label><button class="btn sm ${UI.proySil ? '' : 'ghost'}" id="py-sil" title="Artículos excluidos de alertas (temporada)">🔕</button><button class="btn sm" id="py-img" title="Descarga una imagen PNG de la proyección por familia (todas las familias si el filtro está en 'Todas')">📷 Capturas por familia</button><button class="btn sm" id="py-x">Exportar</button></div>
         <p class="muted small">Stock fin de mes = stock anterior + llegadas del mes − consumo mensual. Arranca del <b>físico total de hoy</b>. <span class="b b-amb">ámbar</span> debajo del stock de seguridad · <span class="b b-red">rojo</span> desabasto · subrayado azul = llega material (pasa el cursor para ver el detalle).</p>
         <div id="py-tab"></div></div><div id="py-det"></div>`;
       $('#py-fam').onchange = e => { UI.proyFam = e.target.value; render(true); };
       $('#py-q').oninput = I.debounce(() => { UI.proyQ = $('#py-q').value; render(true); }, 200);
       $('#py-m').onchange = e => { UI.proyMeses = +e.target.value; render(true); };
       $('#py-pc').onchange = e => { UI.proyPC = e.target.checked; render(true); };
+      $('#py-img').onclick = () => capturaProy();
+      $('#py-sil').onclick = () => { UI.proySil = !UI.proySil; UI.proyItem = null; $('#py-sil').classList.toggle('ghost', !UI.proySil); render(true); };
       $('#py-x').onclick = () => { const rows = proyRows(); const ms = rows[0] ? rows[0].p.meses.map(m => mesLabel(m.mes)) : []; const filas = [['Código', 'Artículo', 'Físico hoy', 'Consumo mensual', 'Lead time (meses)', 'Stock seguridad'].concat(ms).concat(['Quiebre', 'Pedir a más tardar'])]; rows.forEach(r => filas.push([r.it.codigo, r.it.nombre, r.f.total, num(r.it.consumo), num(r.it.lt), r.p.ss].concat(r.p.meses.map(m => Math.round(m.stock))).concat([r.p.quiebre ? mesLabel(r.p.quiebre) : '', r.p.pedirAntes ? hoyISO(r.p.pedirAntes) : '']))); const ll = [['Artículo', 'Mes', 'Cantidad', 'Estado', 'Proveedor', 'OC', 'Nota']]; vals(S.llegadas).filter(l => l.estado !== 'recibido').forEach(l => ll.push([lbl(l.itemId), l.mes, l.cant, l.estado, l.proveedor || '', l.oc || '', l.nota || ''])); I.exportXlsx('Proyeccion_' + hoyISO() + '.xlsx', [{ nombre: 'Proyección', filas }, { nombre: 'Llegadas', filas: ll }]); };
     },
     update(el) {
-      const rows = proyRows();
-      if (!rows.length) { $('#py-tab', el).innerHTML = '<div class="empty">No hay artículos con consumo mensual en esta familia. Captura el consumo en el Catálogo y marca "Planear compras".</div>'; $('#py-det', el).innerHTML = ''; return; }
+      const rows = proyRows(), nSil = proyBase().filter(it => silencio(it.id)).length;
+      const bs = $('#py-sil', el); if (bs) bs.textContent = UI.proySil ? '← Volver a la proyección' : '🔕 Sin alerta (' + nSil + ')';
+      const aviso = UI.proySil ? `<div class="warn" style="margin-bottom:10px">🔕 Artículos excluidos de alertas y proyección (temporada). Con <b>🔔 Volver a alertar</b> regresan a la proyección y a las alertas de compra.</div>` : '';
+      if (!rows.length) { $('#py-tab', el).innerHTML = aviso + `<div class="empty">${UI.proySil ? 'No hay artículos excluidos en esta familia.' : 'No hay artículos con consumo mensual en esta familia. Captura el consumo en el Catálogo y marca "Planear compras".'}</div>`; $('#py-det', el).innerHTML = ''; return; }
       const ms = rows[0].p.meses;
-      $('#py-tab', el).innerHTML = `<div class="tw"><table class="t-proy"><thead><tr><th>Artículo</th><th class="num">Físico hoy</th><th class="num">Consumo/mes</th><th class="num">LT</th>${ms.map(m => `<th class="num">${mesLabel(m.mes)}</th>`).join('')}<th>Pedir a más tardar</th></tr></thead><tbody>${rows.map(r => `<tr data-pi="${r.it.id}" style="cursor:pointer" class="${UI.proyItem === r.it.id ? 'sel' : ''}"><td><b>${esc(r.it.nombre)}</b><div class="tiny muted">${esc(r.it.codigo)}</div></td><td class="num">${fmt(r.f.total)}</td><td class="num">${fmt(num(r.it.consumo))}</td><td class="num">${fmt(num(r.it.lt))}m</td>${r.p.meses.map(m => `<td class="num ${m.negativo ? 'cell-red' : m.bajoSS ? 'cell-amb' : ''} ${m.llega ? 'cell-arr' : ''}" title="${m.llega ? esc('Llega: ' + m.notas.map(n => fmt(n.cant) + ' (' + (n.estado === 'fincado' ? 'fincado' : 'por comprar') + ') ' + (n.oc || n.nota || '')).join('; ')) : ''}">${fmt(m.stock, 0)}</td>`).join('')}<td>${r.p.pedirAntes ? `<span class="b ${r.p.pedirAntes < new Date() ? 'b-red' : 'b-amb'}">${fDia(hoyISO(r.p.pedirAntes))}</span>` : '<span class="b b-grn">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+      $('#py-tab', el).innerHTML = aviso + proyTabla(rows, ms);
+      $$('[data-rea]', el).forEach(b => b.onclick = ev => { ev.stopPropagation(); silenciar(b.dataset.rea); });
       $$('[data-pi]', el).forEach(tr => tr.onclick = () => { UI.proyItem = tr.dataset.pi; render(true); setTimeout(() => { const d = $('#py-det'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); });
       const sel = rows.find(r => r.it.id === UI.proyItem);
       $('#py-det', el).innerHTML = sel ? proyDetalle(sel) : '<div class="card muted small">Toca un artículo para ver su gráfica, las llegadas programadas y registrar pedidos.</div>';
       if (sel) bindProyDet(sel);
     }
   };
-  const proyRows = () => { const q = UI.proyQ.toLowerCase(); return items(true).filter(it => it.planear && num(it.consumo) > 0 && (!UI.proyFam || it.familia === UI.proyFam) && (!q || I.itemLabel(it).toLowerCase().includes(q))).map(it => { const f = Fd(it.id); return { it, f, p: I.proyeccion(it, f, S.llegadas, UI.proyMeses, UI.proyPC) }; }); };
+  const proyTabla = (rows, ms) => `<div class="tw"><table class="t-proy"><thead><tr><th>Artículo</th><th class="num">Físico hoy</th><th class="num">Consumo/mes</th><th class="num">LT</th>${ms.map(m => `<th class="num">${mesLabel(m.mes)}</th>`).join('')}<th>Pedir a más tardar</th></tr></thead><tbody>${rows.map(r => `<tr data-pi="${r.it.id}" style="cursor:pointer" class="${UI.proyItem === r.it.id ? 'sel' : ''}"><td><b>${esc(r.it.nombre)}</b><div class="tiny muted">${esc(r.it.codigo)}</div>${UI.proySil && silencio(r.it.id) ? `<div class="tiny"><span class="b b-gry">🔕 ${esc(silencio(r.it.id).motivo || 'sin alerta')}</span>${silencio(r.it.id).hasta ? ' · vuelve el ' + fDia(silencio(r.it.id).hasta) : ''} ${puedeComprar() ? `<button class="btn sm" data-rea="${r.it.id}">🔔 Volver a alertar</button>` : ''}</div>` : ''}</td><td class="num">${fmt(r.f.total)}</td><td class="num">${fmt(num(r.it.consumo))}</td><td class="num">${fmt(num(r.it.lt))}m</td>${r.p.meses.map(m => `<td class="num ${m.negativo ? 'cell-red' : m.bajoSS ? 'cell-amb' : ''} ${m.llega ? 'cell-arr' : ''}" title="${m.llega ? esc('Llega: ' + m.notas.map(n => fmt(n.cant) + ' (' + (n.estado === 'fincado' ? 'fincado' : 'por comprar') + ') ' + (n.oc || n.nota || '')).join('; ')) : ''}">${fmt(m.stock, 0)}</td>`).join('')}<td>${r.p.pedirAntes ? `<span class="b ${r.p.pedirAntes < new Date() ? 'b-red' : 'b-amb'}">${fDia(hoyISO(r.p.pedirAntes))}</span>` : '<span class="b b-grn">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  /* Capturas de la proyección: una imagen PNG por familia (la familia elegida, o todas si el filtro está en "todas") */
+  async function capturaProy() {
+    const b = $('#py-img'); b.disabled = true; const t0 = b.textContent; b.textContent = '⏳ Generando…';
+    const fams = UI.proyFam ? [UI.proyFam] : I.FAMILIAS.slice();
+    const prevF = UI.proyFam, prevS = UI.proySil, prevI = UI.proyItem; let n = 0;
+    try {
+      await I.loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+      const bg = getComputedStyle(document.body).backgroundColor || '#0b1220';
+      UI.proySil = false; UI.proyItem = null;
+      for (const fam of fams) {
+        UI.proyFam = fam; const rows = proyRows(); if (!rows.length) continue;
+        const box = document.createElement('div');
+        box.style.cssText = 'position:absolute;left:-20000px;top:0;width:max-content;padding:18px;background:' + bg;
+        box.innerHTML = `<div class="card" style="margin:0"><div class="card-h"><h2>📈 Proyección · ${I.FAM_ICO[fam] || ''} ${esc(fam)}</h2></div><p class="small muted">${esc(I.CFG.EMPRESA || '')} · ${I.almacen(fam).nombre} · ${UI.proyMeses} meses${UI.proyPC ? ' · incluye "por comprar"' : ''} · físico al ${fFecha(ultimaAct())} · generado ${fFecha(Date.now())} por ${esc(USER.nombre)}</p><p class="tiny muted"><span class="b b-amb">ámbar</span> debajo del stock de seguridad · <span class="b b-red">rojo</span> desabasto · subrayado azul = llega material</p>${proyTabla(rows, rows[0].p.meses)}</div>`;
+        box.querySelectorAll('.tw').forEach(x => { x.style.maxHeight = 'none'; x.style.overflow = 'visible'; }); box.querySelectorAll('th, td').forEach(x => { x.style.position = 'static'; x.style.left = 'auto'; }); box.querySelectorAll('table').forEach(x => { x.style.width = 'max-content'; });
+        document.body.appendChild(box);
+        try {
+          const cv = await html2canvas(box, { backgroundColor: bg, scale: 2, ignoreElements: x => x.tagName === 'BUTTON' });
+          const a = document.createElement('a'); a.download = 'Proyeccion_' + fam.replace(/[^A-Za-z0-9]+/g, '_') + '_' + hoyISO() + '.png'; a.href = cv.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove(); n++;
+          await new Promise(r => setTimeout(r, 400));
+        } finally { box.remove(); }
+      }
+      I.toast(n ? n + ' imagen' + (n > 1 ? 'es' : '') + ' descargada' + (n > 1 ? 's' : '') + ' ✔' : 'No hay artículos que capturar', n ? 'ok' : 'err');
+    } catch (e) { I.toast('No se pudo generar la imagen: ' + e.message, 'err'); }
+    UI.proyFam = prevF; UI.proySil = prevS; UI.proyItem = prevI; b.disabled = false; b.textContent = t0;
+  }
+  /* La proyección oculta los artículos excluidos de alertas (temporada); el botón 🔕 los muestra para reactivarlos */
+  const proyBase = () => { const q = UI.proyQ.toLowerCase(); return items(true).filter(it => it.planear && num(it.consumo) > 0 && (!UI.proyFam || it.familia === UI.proyFam) && (!q || I.itemLabel(it).toLowerCase().includes(q))); };
+  const proyRows = () => proyBase().filter(it => UI.proySil ? !!silencio(it.id) : !silencio(it.id)).map(it => { const f = Fd(it.id); return { it, f, p: I.proyeccion(it, f, S.llegadas, UI.proyMeses, UI.proyPC) }; });
 
   function chartSVG(r) {
     const ms = r.p.meses, W = 900, H = 260, P = { l: 70, r: 16, t: 16, b: 34 };
@@ -779,7 +813,7 @@
   function proyDetalle(r) {
     const ll = vals(S.llegadas).filter(l => l.itemId === r.it.id).sort((a, b) => String(a.mes).localeCompare(b.mes));
     const a = I.alerta(r.it, r.f, I.transito(r.it.id, S.llegadas));
-    return `<div class="card"><div class="card-h"><h2>${esc(I.itemLabel(r.it))}</h2><span class="sp"></span><span class="b ${I.statusClass(a.status)}">${a.status}</span><span class="b ${I.critClass(a.crit)}">${a.crit}</span></div>
+    return `<div class="card"><div class="card-h"><h2>${esc(I.itemLabel(r.it))}</h2><span class="sp"></span><span class="b ${I.statusClass(a.status)}">${a.status}</span><span class="b ${I.critClass(a.crit)}">${a.crit}</span>${puedeComprar() ? ` <button class="btn sm" id="py-sd">${silencio(r.it.id) ? '🔔 Volver a alertar' : '🔕 No alertar (temporada)'}</button>` : ''}</div>
       <div class="grid g4" style="margin-bottom:10px"><div class="kpi"><div class="l">Físico hoy (almacén + PT)</div><div class="v">${fmt(r.f.total)}</div><div class="s">${fmt(r.f.mde)} + ${fmt(r.f.pt)}</div>${r.f.bloq ? `<div class="s" style="color:var(--red)">− ${fmt(r.f.bloq)} kg en silo con calidad no OK (no cuenta)</div>` : ''}</div><div class="kpi"><div class="l">Consumo mensual</div><div class="v">${fmt(num(r.it.consumo))}</div><div class="s">${fmt(a.consDia)} por día</div></div><div class="kpi"><div class="l">Stock mínimo</div><div class="v">${fmt(a.min)}</div><div class="s">LT ${fmt(a.ltd, 0)} días + seguridad ${fmt(a.ss)}</div></div><div class="kpi ${r.p.quiebre ? 'red' : 'grn'}"><div class="l">Quiebre proyectado</div><div class="v">${r.p.quiebre ? mesLabel(r.p.quiebre) : 'Sin quiebre'}</div><div class="s">${r.p.pedirAntes ? 'pedir a más tardar ' + fDia(hoyISO(r.p.pedirAntes)) : ''}</div></div></div>
       <div class="chart">${chartSVG(r)}</div>
       <div class="card-h" style="margin-top:12px"><h3>Llegadas programadas (pedidos fincados y por comprar)</h3></div>
@@ -788,6 +822,7 @@
     </div>`;
   }
   function bindProyDet(r) {
+    const sd = $('#py-sd'); if (sd) sd.onclick = async () => { await silenciar(r.it.id); UI.proyItem = null; render(true); };
     $$('[data-le]').forEach(b => b.onclick = () => editarLlegada(b.dataset.le, r.it.id));
     const n = $('#ll-new'); if (n) n.onclick = () => editarLlegada(null, r.it.id, can('compras'));
     $$('[data-nt]').forEach(b => b.onclick = () => notasCompra(b.dataset.nt));
