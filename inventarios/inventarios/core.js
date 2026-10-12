@@ -408,6 +408,7 @@
     const wb = XLSX.read(buf, { type: 'array' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    for (let i = 0; i < Math.min(rows.length, 15); i++) { const r = (rows[i] || []).map(x => String(x || '').trim().toLowerCase()); if (r.includes('desde') && (r.includes('a') || r.includes('hacia')) && r.some(x => x.startsWith('fecha')) && r.some(x => x.startsWith('cantidad'))) return INV.consumoDeMovs(rows, i, file.name); }
     let h = -1;
     for (let i = 0; i < Math.min(rows.length, 15); i++) { const r = (rows[i] || []).map(x => String(x || '').toLowerCase()); if (r.some(x => x.includes('cantidad')) && r.some(x => x.includes('nombre') || x.includes('producto') || x.includes('artículo') || x.includes('articulo'))) { h = i; break; } }
     if (h < 0) throw new Error('No encontré las columnas "Nombre/Producto" y "Cantidad" en el archivo.');
@@ -438,6 +439,40 @@
     if (!n) throw new Error('El archivo no tiene renglones con código entre corchetes, p. ej. [02SAC001].');
     Object.values(items).forEach(o => { ['q', 'alm', 'pt', 'cuar'].forEach(f => { if (o[f] != null) o[f] = Math.round(o[f] * 1000) / 1000; }); if (o.lotes && !o.lotes.length) delete o.lotes; });
     return { items, n, hoja: wb.SheetNames[0], ubicaciones: cL >= 0 };
+  };
+
+  /* Reporte de movimientos de Odoo (stock.move.line): consumo real = lo que sale a Producción o a Clientes, menos lo que regresa.
+     Promedio mensual de los últimos 90 días (o del periodo que traiga el archivo si es menor) + detalle por mes. */
+  INV.CONS_DIAS = 90;
+  INV.consumoDeMovs = function (rows, h, archivo) {
+    const hd = rows[h].map(x => String(x || '').trim().toLowerCase());
+    const ix = (...w) => hd.findIndex(x => w.includes(x));
+    const cF = hd.findIndex(x => x.startsWith('fecha')), cP = ix('producto'), cD = ix('desde'), cA = ix('a', 'hacia'), cU = ix('unidad', 'unidad de medida'), cE = ix('estado');
+    let cQ = ix('cantidad'); if (cQ < 0) cQ = hd.findIndex(x => x.startsWith('cantidad'));
+    if (cP < 0 || cQ < 0 || cF < 0) throw new Error('El reporte de movimientos necesita las columnas Fecha, Producto, Desde, A y Cantidad.');
+    const fecha = v => v instanceof Date ? v : typeof v === 'number' ? new Date(Math.round((v - 25569) * 864e5)) : v ? new Date(String(v).replace(' ', 'T')) : null;
+    const SAL = /^(production|producción|produccion|customers|clientes)$/i, esSal = x => SAL.test(String(x || '').trim().split('/').pop().trim()) || SAL.test(String(x || '').trim());
+    const mv = []; let fin = 0, ini = Infinity;
+    for (let i = h + 1; i < rows.length; i++) {
+      const r = rows[i]; if (!r || !r[cP] || !r[cF]) continue;
+      if (cE >= 0 && r[cE] && !/hecho|done/i.test(String(r[cE]))) continue;
+      const m = String(r[cP]).match(/\[([^\]]+)\]\s*(.*)/); if (!m) continue;
+      const d = fecha(r[cF]); if (!d || isNaN(d)) continue;
+      const sa = esSal(r[cA]), en = esSal(r[cD]); if (sa === en) continue;
+      const q = num(r[cQ]) * (sa ? 1 : -1); if (!q) continue;
+      mv.push({ k: keySafe(m[1]), c: m[1].trim(), n: m[2].trim(), u: cU >= 0 ? (r[cU] || '') : '', d, q });
+      if (+d > fin) fin = +d; if (+d < ini) ini = +d;
+    }
+    if (!mv.length) throw new Error('El reporte no trae salidas a Producción ni a Clientes.');
+    const dias = Math.max(1, Math.min(INV.CONS_DIAS, Math.round((fin - ini) / 864e5))), desde = fin - dias * 864e5;
+    const items = {};
+    mv.forEach(x => {
+      const o = items[x.k] = items[x.k] || { c: x.c, n: x.n, u: x.u, tot: 0, mov: 0, meses: {} };
+      const mk = x.d.toISOString().slice(0, 7); o.meses[mk] = (o.meses[mk] || 0) + x.q;
+      if (+x.d >= desde) { o.tot += x.q; o.mov++; }
+    });
+    Object.values(items).forEach(o => { o.prom = Math.max(0, Math.round(o.tot * 30.4 / dias * 100) / 100); Object.keys(o.meses).forEach(m => o.meses[m] = Math.round(o.meses[m] * 100) / 100); delete o.tot; });
+    return { tipo: 'consumo', items, n: mv.length, dias, desde: new Date(desde).toISOString().slice(0, 10), hasta: new Date(fin).toISOString().slice(0, 10), archivo };
   };
 
   INV.exportXlsx = async function (nombre, hojas) {
