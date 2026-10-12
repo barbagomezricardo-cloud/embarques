@@ -461,7 +461,25 @@
   }
 
   /* Ajuste manual con nota obligatoria (físico MDE o PT) */
+  /* Ajuste del físico: lo que se captura ES el físico total (lo que realmente se encontró en todas las ubicaciones).
+     El PT de la app se conserva como parte de ese total y el almacén toma el resto; no se le vuelve a sumar nada. */
+  async function ajustarFisico(id) {
+    const it = item(id), f = F(id), actual = f.total;
+    await I.modal('Ajustar existencia física', `<p><b>${esc(I.itemLabel(it))}</b></p><p class="muted small">Físico actual: <b>${fmt(actual)}</b> ${esc(it.unidad)}${f.pt ? ` (incluye ${fmt(f.pt)} en almacén de insumos PT)` : ''}</p><label>Existencia física real (lo que encontraste, total)<input id="aj-v" class="in-num" value="${actual}"></label><p class="tiny muted">Es el total físico; no se le suma el PT. La comparación contra Odoo usa la suma de todos sus almacenes.</p><label>Nota del ajuste (obligatoria, queda en bitácora)<textarea id="aj-n"></textarea></label>`, [{ t: 'Cancelar' }, {
+      t: 'Guardar ajuste', c: 'pri', antes: async ov => {
+        const v = num($('#aj-v', ov).value), n = $('#aj-n', ov).value.trim();
+        if (v < 0) { I.toast('La existencia no puede ser negativa', 'err'); return false; }
+        if (!n) { I.toast('La nota es obligatoria', 'err'); return false; }
+        const ts = Date.now(), pt = Math.min(f.pt, v), up = { ['fisico/' + id + '/mde']: Math.round((v - pt) * 1000) / 1000, ['fisico/' + id + '/ts']: ts, ['fisico/' + id + '/por']: USER.nombre, ['fisico/' + id + '/origen']: 'ajuste', ['fisico/' + id + '/nota']: n };
+        if (pt !== f.pt) { up['pt/' + id + '/cant'] = pt; up['pt/' + id + '/ts'] = ts; up['pt/' + id + '/origen'] = 'ajuste'; }
+        await DB.update(up);
+        await I.mov({ tipo: 'ajuste', donde: 'total', itemId: id, antes: actual, despues: v, cant: v - actual, nota: n });
+        I.toast('Ajuste guardado y registrado en bitácora ✔', 'ok');
+      }
+    }]);
+  }
   async function ajustarCant(id, donde) {
+    if (donde !== 'pt') return ajustarFisico(id);
     const it = item(id), f = F(id); const actual = donde === 'pt' ? f.pt : f.mde;
     await I.modal('Ajustar ' + (donde === 'pt' ? 'almacén PT' : 'existencia en almacén'), `<p><b>${esc(I.itemLabel(it))}</b></p><p class="muted small">Actual: ${fmt(actual)} ${esc(it.unidad)}</p><label>Nueva existencia<input id="aj-v" class="in-num" value="${actual}"></label><label>Nota del ajuste (obligatoria, queda en bitácora)<textarea id="aj-n"></textarea></label>`, [{ t: 'Cancelar' }, {
       t: 'Guardar ajuste', c: 'pri', antes: async ov => {
@@ -496,17 +514,17 @@
   function fisicoView(body) {
     if (VIEWS.fisico._m !== 'fis') {
       body.innerHTML = `<div class="card"><div class="card-h"><h2>Existencia física</h2><span class="sp"></span><select id="fi-fam" style="max-width:240px">${famOpts(UI.fisFam, true)}</select><input id="fi-q" placeholder="Buscar…" style="max-width:220px" value="${esc(UI.fisQ)}"><button class="btn sm" id="fi-x">Exportar Excel</button></div>
-      <p class="muted small">Físico total = almacén de origen (MDE empaque · MP materias primas · insumos otros) + almacén de insumos PT. Es la base de la proyección y de las alertas de compra. Los ajustes manuales piden nota y quedan en bitácora.</p><div id="fi-tab"></div></div>`;
+      <p class="muted small">Físico total = lo que realmente se encontró (lo que capturas en Editar o en un conteo); no se le suma nada. La columna PT solo indica cuánto de ese total está en el almacén de insumos PT. Odoo (teórico) = suma de todos sus almacenes. Es la base de la proyección y de las alertas de compra. Los ajustes manuales piden nota y quedan en bitácora.</p><div id="fi-tab"></div></div>`;
       $('#fi-fam').onchange = e => { UI.fisFam = e.target.value; render(true); };
       $('#fi-q').oninput = I.debounce(e => { UI.fisQ = $('#fi-q').value; render(true); }, 200);
       $('#fi-x').onclick = () => { const filas = [['Código', 'Artículo', 'Familia', 'Unidad', 'Almacén', 'Almacén (código)', 'PT', 'Físico total', 'Odoo teórico', 'Diferencia', 'Actualizado', 'Por', 'Origen']]; fisRows().forEach(r => filas.push([r.it.codigo, r.it.nombre, r.it.familia, r.it.unidad, r.f.mde, I.almacen(r.it.familia).cod, r.f.pt, r.f.total, r.q, r.q == null ? '' : r.f.total - r.q, fFecha(r.fx.ts), r.fx.por || '', r.fx.origen || ''])); I.exportXlsx('Existencia_fisica_' + hoyISO() + '.xlsx', [{ nombre: 'Físico', filas }]); };
       VIEWS.fisico._m = 'fis';
     }
     let fam = null;
-    $('#fi-tab', body).innerHTML = `<div class="tw"><table><thead><tr><th>Artículo</th><th>Ubicación</th><th class="num">Almacén</th><th class="num">PT</th><th class="num">Físico total</th><th class="num">Odoo</th><th class="num">Dif.</th><th>Actualizado</th><th></th></tr></thead><tbody>${fisRows().map(r => {
+    $('#fi-tab', body).innerHTML = `<div class="tw"><table><thead><tr><th>Artículo</th><th>Ubicación</th><th class="num">Físico total</th><th class="num" title="Parte del físico total que está en el almacén de insumos PT">de ello en PT</th><th class="num" title="Suma de todos los almacenes del último reporte de Odoo">Odoo (teórico)</th><th class="num">Dif.</th><th>Actualizado</th><th></th></tr></thead><tbody>${fisRows().map(r => {
       const g = r.it.familia !== fam ? `<tr class="grp"><td colspan="9">${I.FAM_ICO[r.it.familia] || ''} ${esc(r.it.familia)}</td></tr>` : ''; fam = r.it.familia;
       const d = r.q == null ? null : r.f.total - r.q;
-      return g + `<tr><td>${esc(I.itemLabel(r.it))}${r.it.fuente === 'silo' ? ' <span class="b b-blu">silo</span>' : ''}</td><td class="tiny muted"><span class="b b-gry">${I.almacen(r.it.familia).cod}</span> ${esc((r.it.ubic || []).join(', '))}</td><td class="num ${r.f.mde < 0 ? 'neg' : ''}">${fmt(r.f.mde)}</td><td class="num">${r.f.pt ? fmt(r.f.pt) : ''}</td><td class="num"><b>${fmt(r.f.total)}</b> <span class="tiny muted">${esc(r.it.unidad)}</span></td><td class="num muted">${r.q == null ? '' : fmt(r.q)}</td><td class="num ${d && Math.abs(d) > 0.5 ? (d < 0 ? 'neg' : 'low') : ''}">${d == null ? '' : fmt(d)}</td><td class="tiny muted">${fFecha(r.fx.ts)}<br>${esc(r.fx.origen || '')}${r.fx.por ? ' · ' + esc(r.fx.por) : ''}</td><td><button class="btn sm" data-aj="${r.it.id}">Editar</button></td></tr>`;
+      return g + `<tr><td>${esc(I.itemLabel(r.it))}${r.it.fuente === 'silo' ? ' <span class="b b-blu">silo</span>' : ''}</td><td class="tiny muted"><span class="b b-gry">${I.almacen(r.it.familia).cod}</span> ${esc((r.it.ubic || []).join(', '))}</td><td class="num ${r.f.total < 0 ? 'neg' : ''}"><b>${fmt(r.f.total)}</b> <span class="tiny muted">${esc(r.it.unidad)}</span></td><td class="num muted">${r.f.pt ? fmt(r.f.pt) : ''}</td><td class="num muted">${r.q == null ? '' : fmt(r.q)}</td><td class="num ${d && Math.abs(d) > 0.5 ? (d < 0 ? 'neg' : 'low') : ''}">${d == null ? '' : fmt(d)}</td><td class="tiny muted">${fFecha(r.fx.ts)}<br>${esc(r.fx.origen || '')}${r.fx.por ? ' · ' + esc(r.fx.por) : ''}</td><td><button class="btn sm" data-aj="${r.it.id}">Editar</button></td></tr>`;
     }).join('')}</tbody></table></div>`;
     $$('[data-aj]', body).forEach(b => b.onclick = () => ajustarCant(b.dataset.aj, 'mde'));
   }
@@ -814,7 +832,7 @@
     const ll = vals(S.llegadas).filter(l => l.itemId === r.it.id).sort((a, b) => String(a.mes).localeCompare(b.mes));
     const a = I.alerta(r.it, r.f, I.transito(r.it.id, S.llegadas));
     return `<div class="card"><div class="card-h"><h2>${esc(I.itemLabel(r.it))}</h2><span class="sp"></span><span class="b ${I.statusClass(a.status)}">${a.status}</span><span class="b ${I.critClass(a.crit)}">${a.crit}</span>${puedeComprar() ? ` <button class="btn sm" id="py-sd">${silencio(r.it.id) ? '🔔 Volver a alertar' : '🔕 No alertar (temporada)'}</button>` : ''}</div>
-      <div class="grid g4" style="margin-bottom:10px"><div class="kpi"><div class="l">Físico hoy (almacén + PT)</div><div class="v">${fmt(r.f.total)}</div><div class="s">${fmt(r.f.mde)} + ${fmt(r.f.pt)}</div>${r.f.bloq ? `<div class="s" style="color:var(--red)">− ${fmt(r.f.bloq)} kg en silo con calidad no OK (no cuenta)</div>` : ''}</div><div class="kpi"><div class="l">Consumo mensual</div><div class="v">${fmt(num(r.it.consumo))}</div><div class="s">${fmt(a.consDia)} por día</div></div><div class="kpi"><div class="l">Stock mínimo</div><div class="v">${fmt(a.min)}</div><div class="s">LT ${fmt(a.ltd, 0)} días + seguridad ${fmt(a.ss)}</div></div><div class="kpi ${r.p.quiebre ? 'red' : 'grn'}"><div class="l">Quiebre proyectado</div><div class="v">${r.p.quiebre ? mesLabel(r.p.quiebre) : 'Sin quiebre'}</div><div class="s">${r.p.pedirAntes ? 'pedir a más tardar ' + fDia(hoyISO(r.p.pedirAntes)) : ''}</div></div></div>
+      <div class="grid g4" style="margin-bottom:10px"><div class="kpi"><div class="l">Físico hoy</div><div class="v">${fmt(r.f.total)}</div><div class="s">${r.f.pt ? 'de ello ' + fmt(r.f.pt) + ' en PT' : ''}</div>${r.f.bloq ? `<div class="s" style="color:var(--red)">− ${fmt(r.f.bloq)} kg en silo con calidad no OK (no cuenta)</div>` : ''}</div><div class="kpi"><div class="l">Consumo mensual</div><div class="v">${fmt(num(r.it.consumo))}</div><div class="s">${fmt(a.consDia)} por día</div></div><div class="kpi"><div class="l">Stock mínimo</div><div class="v">${fmt(a.min)}</div><div class="s">LT ${fmt(a.ltd, 0)} días + seguridad ${fmt(a.ss)}</div></div><div class="kpi ${r.p.quiebre ? 'red' : 'grn'}"><div class="l">Quiebre proyectado</div><div class="v">${r.p.quiebre ? mesLabel(r.p.quiebre) : 'Sin quiebre'}</div><div class="s">${r.p.pedirAntes ? 'pedir a más tardar ' + fDia(hoyISO(r.p.pedirAntes)) : ''}</div></div></div>
       <div class="chart">${chartSVG(r)}</div>
       <div class="card-h" style="margin-top:12px"><h3>Llegadas programadas (pedidos fincados y por comprar)</h3></div>
       <div class="tw" style="max-height:none"><table><thead><tr><th>Llegada estimada</th><th class="num">Cantidad</th><th>Estado</th><th>Proveedor</th><th>OC</th><th>Nota</th>${puedeComprar() ? '<th></th>' : ''}</tr></thead><tbody>${ll.map(l => `<tr><td>${fLleg(l)}</td><td class="num">${fmt(l.cant)}${l.recibido ? `<div class="tiny muted">recibido ${fmt(l.recibido)}</div>` : ''}</td><td><span class="b ${l.estado === 'fincado' ? 'b-blu' : l.estado === 'por_comprar' ? 'b-amb' : l.estado === 'recibido' ? 'b-grn' : 'b-gry'}">${l.estado === 'por_comprar' ? 'por comprar' : l.estado}</span></td><td>${esc(l.proveedor || '')}</td><td>${esc(l.oc || '')}${l.fechaOC ? `<div class="tiny muted">${fDia(l.fechaOC)}</div>` : ''}</td><td class="small">${esc(l.nota || '')}${l.origen === 'compras' ? ' <span class="b b-gry">compras</span>' : ''}</td>${puedeComprar() ? `<td>${editor() || (l.origen === 'compras' && l.estado !== 'recibido') ? `<button class="btn sm" data-le="${l._k}">✎</button>` : ''}</td>` : ''}</tr>`).join('') || '<tr><td colspan="7" class="empty">Sin llegadas programadas</td></tr>'}</tbody></table></div>
