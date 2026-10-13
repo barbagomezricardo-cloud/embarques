@@ -6248,8 +6248,11 @@ function corrPanel(){
     h+='</table></div>'; }
   h+='</div>'; return h;
 }
+// ── Llaves seguras para Firebase: un nombre con . $ # [ ] / (p.ej. "S.A. de C.V.") hacía que la nube rechazara TODO el envío ──
+function fbEnc(n){return String(n).replace(/[%.$#\[\]\/\u0000-\u001f\u007f]/g,function(c){return '%'+('0'+c.charCodeAt(0).toString(16)).slice(-2).toUpperCase();});}
+function fbDec(k){return String(k).replace(/%(25|2E|24|23|5B|5D|2F|7F|[01][0-9A-F])/g,function(m,h){return String.fromCharCode(parseInt(h,16));});}
 function getVisitasImport(){var live=window._visitasLive||{};var pasted={};try{pasted=JSON.parse(localStorage.getItem('visitasImport04mas')||'{}');}catch(e){}return Object.assign({},pasted,live);}
-function fetchVisitasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/visits.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var vis=o[v]||{};for(var n in vis){store[n]=Object.assign({},vis[n],{v:v});}}window._visitasLive=store;renderProspec();}).catch(function(){}); }
+function fetchVisitasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/visits.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var vis=o[v]||{};for(var n in vis){store[fbDec(n)]=Object.assign({},vis[n],{v:v});}}window._visitasLive=store;renderProspec();}).catch(function(){}); }
 function addVisitasCode(){ if(!reqSuper())return;
   var el=document.getElementById('visimport'); if(!el)return;
   var raw=(el.value||'').trim(); if(!raw){alert('Pega el código de visitas que te envió el vendedor.');return;}
@@ -6272,9 +6275,9 @@ function visitasPanel(){
   else h+='<div style="font-size:.75rem;color:#94a3b8">Las visitas aparecen aquí <b>en vivo</b> cuando los vendedores las registran en su app (vía Firebase). Si un vendedor está sin conexión, puede enviarte un código y lo pegas aquí.</div>';
   h+='</div>'; return h;
 }
-function fetchObsLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_obs.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._obsLive=store;renderProspec();}).catch(function(){}); }
+function fetchObsLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_obs.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[fbDec(n)]=Object.assign({},ob[n],{v:v});}}window._obsLive=store;renderProspec();}).catch(function(){}); }
 // Motivos de fuga que capturan los vendedores en su app — mismo patrón que las observaciones de prospectos.
-function fetchFugaNotaLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_fugaNota.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[n]=Object.assign({},ob[n],{v:v});}}window._fugaNotaLive=store;drawFugaTable();}).catch(function(){}); }
+function fetchFugaNotaLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_fugaNota.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[fbDec(n)]=Object.assign({},ob[n],{v:v});}}window._fugaNotaLive=store;drawFugaTable();}).catch(function(){}); }
 function obsPanel(){
   var st=window._obsLive||{}; var names=Object.keys(st);
   var h='<div style="background:#2a2413;border:1px solid #86612a;border-radius:8px;padding:12px;margin-bottom:12px">'
@@ -6340,6 +6343,8 @@ function renderProspec(){
 function fetchAltasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_altas.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._altasLive=o||{};renderProspec();}).catch(function(){}); }
 function fetchClienteInfoLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_clienteInfo.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._clienteInfoLive=o||{};try{renderClienteTable();}catch(e){}try{renderProspec();}catch(e){}try{renderMapeoTable();}catch(e){}try{renderRiesgo();}catch(e){}}).catch(function(){}); }
 try{fetchProspFix();}catch(e){}
+try{fetchVisitasLive();}catch(e){}
+try{fetchObsLive();}catch(e){}
 try{fetchAltasLive();}catch(e){}
 try{fetchClienteInfoLive();}catch(e){}
 try{fetchContactoPendLive();}catch(e){}
