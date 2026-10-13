@@ -947,7 +947,7 @@ const COLS=[
   {k:'cliente',t:'Cliente'},{k:'destino',t:'Destino'},{k:'tipo',t:'Unidad'},{k:'eco',t:'Eco'},
   {k:'anden',t:'Andén'},{k:'turno',t:'Turno'},{k:'colocacion',t:'Coloc.'},{k:'inicioCarga',t:'Inicio'},
   {k:'finCarga',t:'Fin'},{k:'horaSalida',t:'Salida'},{k:'carga',t:'T.Carga',calc:1},
-  {k:'estatusCarga',t:'Carga',calc:1},{k:'estatusSalida',t:'Salida ✓',calc:1},
+  {k:'estatusCarga',t:'Carga',calc:1},{k:'estatusSalida',t:'Salida ✓',calc:1},{k:'entrega',t:'Entrega (vendedor)',calc:1},
   {k:'peso',t:'Kg prog',num:1},{k:'kilos',t:'Kg cargados',num:1},{k:'fechaCarga',t:'F. Carga'},
   {k:'lotes',t:'Lotes',calc:1},{k:'bascula',t:'Báscula',calc:1},{k:'motivo',t:'Motivo'},{k:'cargador',t:'Cargador'}
 ];
@@ -958,6 +958,10 @@ function cellHTML(r,c,cv){
     if(c.k==='carga') return cv.carga==null?'<span class="muted">—</span>':minToHM(cv.carga)+(cv.retrasoCarga?` <span style="color:var(--late)">(+${cv.retrasoCarga}m)</span>`:'');
     if(c.k==='estatusCarga') return pill(cv.estatusCarga);
     if(c.k==='lotes'){ const n=lotesDe(r).length; if(n) return `<span class="pill p-ok" title="${escProy(lotesResumen(r.lotes))}">${n} · ${lotesSacos(r).toLocaleString('es-MX')} sc</span>`; return cv.despachado?'<span class="pill p-late">SIN LOTES</span>':'<span class="muted">—</span>'; }
+    if(c.k==='entrega'){ const e=r.entregaEstado; if(!e) return '<span class="muted">—</span>';
+      const tip=escProy(`${r.entregaPor||''} · ${r.entregaTs||''}${r.entregaNota?' — '+r.entregaNota:''}`).replace(/"/g,'&quot;');
+      if(e==='incidencia') return `<span class="pill p-late" title="${tip}">⚠ INCIDENCIA</span>${r.entregaNota?` <span class="muted" title="${tip}">${escProy(String(r.entregaNota).slice(0,40))}${String(r.entregaNota).length>40?'…':''}</span>`:''}`;
+      return `<span class="pill p-ok" title="${tip}">✓ Entregó OK</span>`; }
     if(c.k==='bascula'){ const b=CUAD.bascula[r.id]; if(b){ let st='ok'; try{ st=cuadUnit({id:r.id,r,b,noProg:false,fecha:fechaEmb(r),per:perDe(fechaEmb(r))}).st; }catch(e){} return `<span class="pill ${st==='ok'?'p-ok':st==='ana'?'p-proc':'p-late'}" title="Folio ${escProy(b.folio||'')}">${st==='ok'?'✓':'⚠'} ${Math.round(Number(b.neto)||0).toLocaleString('es-MX')} kg</span>`; } return cv.despachado?'<span class="pill p-late">SIN BÁSCULA</span>':'<span class="muted">—</span>'; }
     if(c.k==='estatusSalida') return pill(cv.estatusSalida)+(cv.retrasoSalida?` <span class="muted">+${cv.retrasoSalida}m</span>`:'');
   }
@@ -990,9 +994,15 @@ function render(){
 }
 
 /* ================= AVISOS PROACTIVOS (banner fijo, visible sin entrar a la pestaña) ================= */
+function entregaIncList(){ const d=new Date(); d.setDate(d.getDate()-30); const lim=d.toISOString().slice(0,10);
+  return DATA.filter(r=>r.entregaEstado==='incidencia'&&((r.fechaCarga||r.fechaProg||'9999')>=lim)).sort((a,b)=>String(b.fechaCarga||b.fechaProg||'').localeCompare(String(a.fechaCarga||a.fechaProg||''))); }
+function entregaIncShow(){ const l=entregaIncList(); alert('Incidencias de entrega reportadas por vendedores (últimos 30 días):\n\n'+(l.length?l.map(r=>'• '+(r.cliente||'')+' · pedido '+(r.pedido||'—')+' · '+(r.fechaCarga||r.fechaProg||'')+'\n   '+(r.entregaNota||'(sin nota)')+' — '+(r.entregaPor||'')+' '+(r.entregaTs||'')).join('\n'):'Ninguna.')); }
 function renderBanners(){
   const box=document.getElementById('alertBanners'); if(!box)return;
   let html='';
+  try{ const inc=entregaIncList();
+    if(inc.length){ html+=`<div onclick="entregaIncShow()" style="cursor:pointer;background:#3a1414;border:1px solid var(--late);color:var(--late);border-radius:10px;padding:10px 14px;margin:0 0 10px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px">📦 ${inc.length} entrega(s) con incidencia reportada por el vendedor — toca para ver el detalle (también en la columna «Entrega (vendedor)»)</div>`; }
+  }catch(e){}
   // Flota: vencidos/urgentes — visible para cualquiera que abra el programador.
   try{
     const units=flotaUnits();

@@ -341,6 +341,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
   <!-- ALERTAS -->
   <div class="pane" id="pane-alertas">
     <div style="display:flex;flex-direction:column;width:100%;flex:1;min-height:0">
+      <div id="ent-panel"></div>
       <div class="alert-hdr">
         <div>
           <div class="alert-hdr-ttl">🔔 Alertas por vendedor</div>
@@ -4306,6 +4307,7 @@ function showTab(name){
   const pn=document.getElementById('pane-'+name); if(pn)pn.classList.add('active');
   if(name==='tablero'&&typeof renderTablero==='function')renderTablero();
   if(name==='prospec'&&typeof renderProspec==='function')renderProspec();
+  if(name==='alertas'&&typeof fetchEntregasLive==='function')fetchEntregasLive();
   if(name==='mapeo'&&typeof renderMapeoTable==='function')renderMapeoTable();
   if(name==='seguimiento'&&typeof renderSeguimiento==='function')renderSeguimiento();
   if(name==='ruta'&&typeof renderRuta==='function')renderRuta();
@@ -6274,6 +6276,25 @@ function visitasPanel(){
     h+='</table>'; }
   else h+='<div style="font-size:.75rem;color:#94a3b8">Las visitas aparecen aquí <b>en vivo</b> cuando los vendedores las registran en su app (vía Firebase). Si un vendedor está sin conexión, puede enviarte un código y lo pegas aquí.</div>';
   h+='</div>'; return h;
+}
+// ── Entregas que confirman los vendedores en su app (embarques/{id}.entregaEstado) ──
+function fetchEntregasLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/embarques.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){window._entregasLive=o||{};renderEntregasPanel();}).catch(function(){}); }
+function renderEntregasPanel(){
+  var box=document.getElementById('ent-panel'); if(!box)return;
+  var o=window._entregasLive||{}; var lim=new Date(); lim.setDate(lim.getDate()-30); lim=lim.toISOString().slice(0,10);
+  var ok=0,inc=[],pend=0; var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  Object.keys(o).forEach(function(id){var r=o[id]||{}; var f=r.fechaCarga||r.fechaProg||''; if(f<lim)return; if(r.cancelado===true)return;
+    var desp=r.despachado===true||r.despachado==='1'||r.despachado===1;
+    if(r.entregaEstado==='incidencia')inc.push(r); else if(r.entregaEstado)ok++; else if(desp)pend++;});
+  inc.sort(function(a,b){return String(b.fechaCarga||b.fechaProg||'').localeCompare(String(a.fechaCarga||a.fechaProg||''));});
+  var h='<div style="background:#10233f;border:1px solid #21406e;border-radius:8px;padding:12px;margin:0 0 12px">'
+   +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:800;color:#93c5fd">📦 Entregas confirmadas por vendedores — últimos 30 días</span><button onclick="fetchEntregasLive()" style="background:#1e3a6b;color:#dbeafe;border:none;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer">🔄 Actualizar</button></div>'
+   +'<div style="font-size:.78rem;color:#cbd5e1;margin-bottom:6px"><b style="color:#4ade80">'+ok+'</b> llegaron bien · <b style="color:'+(inc.length?'#fca5a5':'#4ade80')+'">'+inc.length+'</b> con incidencia · <b style="color:#f4d58a">'+pend+'</b> despachadas sin confirmar todavía</div>';
+  if(inc.length){ h+='<table style="width:100%;font-size:.76rem;color:#cbd5e1;border-collapse:collapse"><tr style="color:#94a3b8;text-align:left"><td>Fecha</td><td>Cliente</td><td>Pedido</td><td>Qué pasó</td><td>Vendedor</td><td>Reportó</td></tr>';
+    inc.slice(0,60).forEach(function(r){h+='<tr style="border-top:1px solid #1e3a6b"><td style="white-space:nowrap">'+esc(r.fechaCarga||r.fechaProg||'')+'</td><td style="color:#fff">'+esc(r.cliente)+'</td><td>'+esc(r.pedido)+'</td><td style="color:#fca5a5">'+esc(r.entregaNota||'(sin nota)')+'</td><td>'+esc(r.entregaPor)+'</td><td style="white-space:nowrap">'+esc(r.entregaTs)+'</td></tr>';});
+    h+='</table>'; }
+  else h+='<div style="font-size:.75rem;color:#94a3b8">Sin incidencias reportadas.</div>';
+  h+='</div>'; box.innerHTML=h;
 }
 function fetchObsLive(){ var cfg=getCloudCfg(); if(!cfg.db)return; var url=cfg.db.replace(/\/$/,'')+'/skan/_obs.json'+(cfg.secret?('?auth='+encodeURIComponent(cfg.secret)):''); skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){var store={};o=o||{};for(var v in o){var ob=o[v]||{};for(var n in ob){store[fbDec(n)]=Object.assign({},ob[n],{v:v});}}window._obsLive=store;renderProspec();}).catch(function(){}); }
 // Motivos de fuga que capturan los vendedores en su app — mismo patrón que las observaciones de prospectos.
