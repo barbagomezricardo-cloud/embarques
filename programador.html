@@ -2717,9 +2717,15 @@ function saveBasc(){
   const neto=bruto-tara, kg=items.reduce((a,x)=>a+x.sacos*x.kgSaco,0), cfg=cuadCfg(), obs=g('bs_obs');
   if(Math.abs(kg-neto)>cfg.tolKg && !obs){ toast('La diferencia entre lo registrado y el neto pasa de '+cfg.tolKg+' kg: explícala en observaciones',5000); document.getElementById('bs_obs').focus(); return; }
   if(bsNoProg&&!g('bs_cli')){ toast('Captura el cliente de la unidad sin programa'); return; }
+  // Alerta: los sacos capturados no coinciden con lo programado en el pedido (avisa desde medio saco de diferencia)
+  let progDif='';
+  if(!bsNoProg&&r&&Number(r.peso)>0){ const prog=Number(r.peso), sc=items.reduce((a,x)=>a+x.sacos,0), kgs=items.map(x=>Number(x.kgSaco)||0).filter(Boolean), tol=kgs.length?Math.max(...kgs)/2:Math.max(prog*0.005,12), d=kg-prog;
+    if(kg>0&&Math.abs(d)>tol){ const uni=kgs.length&&kgs.every(k=>Math.abs(k-kgs[0])<0.01), sp=uni?Math.round(prog/kgs[0]):null;
+      if(!confirm('⚠️ ¿Estás seguro?\n\nLa cantidad de sacos capturada no coincide con la cantidad programada.\n\n• Capturado: '+fS(sc)+' sacos (≈'+fK(Math.round(kg))+' kg)\n• Programado: '+(sp?fS(sp)+' sacos (':'')+fK(Math.round(prog))+' kg'+(sp?')':'')+'\n• Diferencia: '+(d>0?'+':'')+fK(Math.round(d))+' kg ('+(d>0?'de más':'de menos')+')\n\nAceptar = sí, es correcto · Cancelar = voy a revisarlo')) return;
+      progDif=fS(sc)+' sacos / '+fK(Math.round(kg))+' kg vs '+fK(Math.round(prog))+' kg programados'; } }
   const now=Date.now();
   const rec={...(prev||{}),id,emb:bsNoProg?null:id,noProg:bsNoProg,folio,oper,placa:g('bs_placa').toUpperCase(),eco:g('bs_eco').toUpperCase(),vehiculo:g('bs_vehiculo'),horaEntrada:g('bs_hent'),horaSalida:g('bs_hsal'),turno:g('bs_turno'),
-    bruto,tara,neto,obs,items,sacos:items.reduce((a,x)=>a+x.sacos,0),
+    bruto,tara,neto,obs,items,sacos:items.reduce((a,x)=>a+x.sacos,0),progDif:progDif||((prev&&prev.progDif)||''),
     fecha:bsNoProg?(g('bs_fecha')||TODAY):(fechaEmb(r)||TODAY),
     cliente:bsNoProg?g('bs_cli'):(r&&r.cliente)||'',pedido:bsNoProg?g('bs_ped'):(r&&r.pedido)||'',
     usuario:prev?prev.usuario:cuadUser(),ts:prev?prev.ts:now,tsEdit:now,editor:cuadUser(),generado:false,estimado:false};   // si alguien captura un pesaje real sobre un registro generado, deja de ser «generado»

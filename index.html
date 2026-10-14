@@ -466,6 +466,27 @@ function validaLotes(r){
       if(Math.abs(dif)>TOL_LOT) return 'No cuadra: los lotes suman '+lotesSacos(r).toLocaleString('es-MX')+' sacos (≈'+Math.round(ke).toLocaleString('es-MX')+' kg) y capturaste '+Math.round(kc).toLocaleString('es-MX')+' kg ('+(dif>0?'+':'')+dif.toFixed(1)+'%). Corrige los sacos de los lotes o los kg ⚖️'; } }
   return null;
 }
+/* Alerta: los sacos capturados (en lotes) no coinciden con lo programado (kg programados del pedido).
+   Avisa si la diferencia es de medio saco o más. */
+function difProgramado(r,extraSacos,extraKg){
+  const prog=Number(r&&r.peso)||0; if(!(prog>0)) return null;
+  const L=lotesDe(r); const sacos=lotesSacos(r)+(extraSacos||0); const kg=lotesKg(r)+(extraKg||0);
+  if(!(sacos>0)||!(kg>0)) return null;
+  const kgs=L.map(x=>Number(x.kgSaco)||0).filter(Boolean); if(extraKg&&extraSacos) kgs.push(extraKg/extraSacos);
+  const kgSaco=kgs.length?Math.max(...kgs):0;
+  const tol=kgSaco?kgSaco/2:Math.max(prog*0.005,12);
+  const dif=kg-prog; if(Math.abs(dif)<=tol) return null;
+  const uniforme=kgs.length&&kgs.every(k=>Math.abs(k-kgs[0])<0.01);
+  const sacosProg=uniforme?Math.round(prog/kgs[0]):null;
+  return {sacos,kg:Math.round(kg),prog:Math.round(prog),sacosProg,dif:Math.round(dif),mas:dif>0};
+}
+function confirmaProgramado(d){
+  const f=n=>n.toLocaleString('es-MX');
+  return '⚠️ ¿Estás seguro?\n\nLa cantidad de sacos capturada no coincide con la cantidad programada.\n\n'
+   +'• Capturado: '+f(d.sacos)+' sacos (≈'+f(d.kg)+' kg)\n'
+   +'• Programado: '+(d.sacosProg?f(d.sacosProg)+' sacos (':'')+f(d.prog)+' kg'+(d.sacosProg?')':'')+'\n'
+   +'• Diferencia: '+(d.mas?'+':'')+f(d.dif)+' kg ('+(d.mas?'de más':'de menos')+')\n\n'
+   +'Aceptar = sí, es correcto · Cancelar = voy a revisarlo'; }
 function avisoLotes(msg){ toast(msg,5200); const b=document.getElementById('lotbox'); if(b){ b.classList.add('err'); try{b.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){} setTimeout(()=>b.classList.remove('err'),4500); } }
 function lotChip(r,s){ if(s==='pend'||!LOTES_REQ&&!lotesDe(r).length) return ''; const n=lotesDe(r).length;
   if(n) return `<div class="meta"><span class="lcnt ok">📦 ${n} lote${n>1?'s':''} · ${lotesSacos(r).toLocaleString('es-MX')} sacos</span></div>`;
@@ -565,6 +586,7 @@ function saveLote(otro){ if(!requireTurno())return; const r=DATA.find(x=>x.id===
   if(!p){ toast('Elige el producto'); loteProdOpen(); return; }
   if(lote.length<3){ toast('Escribe el lote tal como viene en el costal (mínimo 3 caracteres)'); document.getElementById('loteNum').focus(); return; }
   if(!(sacos>0)||sacos>5000){ toast('Captura los sacos de ese lote (1 a 5,000)'); document.getElementById('loteSacos').focus(); return; }
+  { const d=difProgramado(r,sacos,sacos*(p.kg||0)); if(d&&(!otro||d.mas)&&!confirm(confirmaProgramado(d))) return; }   // si agrega otro lote, solo avisa cuando ya se pasó de lo programado
   const before=lotesResumen(r.lotes); const L=lotesDe(r).map(x=>({...x}));
   const dup=L.find(x=>x.cod===cod&&x.lote===lote);
   if(dup)dup.sacos=(Number(dup.sacos)||0)+sacos; else L.push({cod:p.cod,prod:p.name,lote:lote,sacos:sacos,kgSaco:p.kg||0});
@@ -605,6 +627,8 @@ function stopLoad(id){
   const r=DATA.find(x=>x.id===id);
   if(r.kilos===''||r.kilos==null||isNaN(Number(r.kilos))||Number(r.kilos)<=0){ toast('Captura los kilos cargados antes de finalizar ⚖️'); const el=document.getElementById('kgInput'); if(el){ el.style.borderColor='var(--late)'; el.focus(); } return; }
   const vl=validaLotes(r); if(vl){ avisoLotes(vl); return; }   // trazabilidad: no se finaliza sin lotes que cuadren
+  { const d=difProgramado(r); if(d){ if(!confirm(confirmaProgramado(d))) { const b=document.getElementById('lotbox'); if(b){ b.classList.add('err'); try{b.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){} setTimeout(()=>b.classList.remove('err'),4500); } return; }
+      appAudit(r,'sacosProg','Sacos ≠ programado (confirmado en app)','',d.sacos+' sacos / '+d.kg+' kg vs '+d.prog+' kg prog'); } }
   const fin=nowHM();
   const L=lateness({...r, finCarga:fin});
   if(L.late){ // retraso por carga o por horario de salida -> pedir motivo
