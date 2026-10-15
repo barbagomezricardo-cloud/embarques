@@ -2359,7 +2359,7 @@ function cuadUnit(u){
     const est=!!b.estimado;   // registro generado por el master a partir de Odoo: no hay ticket real, el neto no se puede verificar
     if(b.sinOdoo) flags.push({lvl:'info',k:'gen',t:'Cerrado sin salida en Odoo: el embarque salió en el programa pero no se encontró su salida de inventario. Se cierra con el peso programado (nota para análisis futuros, no es un pesaje real)'});
     else if(est) flags.push({lvl:'info',k:'gen',t:'Registro generado por conciliación con Odoo (neto estimado, no es un pesaje real)'});
-    const dif=Bkg-neto, ad=est?0:Math.abs(dif);
+    const dif=neto-Bkg, ad=est?0:Math.abs(dif);   // dif = neto de báscula − lo registrado: positivo = EXCEDENTE (la báscula pesó más), negativo = FALTANTE
     if(ad>cfg.tolKg) flags.push({lvl:'crit',k:'neto',t:'Báscula: lo registrado pesa '+fK(Bkg)+' kg y el neto es '+fK(neto)+' kg ('+(dif<0?'FALTANTE':'EXCEDENTE')+' CRÍTICO de '+fK(ad)+' kg, tolerancia '+cfg.tolKg+' kg)'});
     else if(ad>0) flags.push({lvl:'info',k:'neto',t:'Báscula: '+(dif<0?'faltante':'excedente')+' menor de '+fK(ad)+' kg entre lo registrado y el neto'});
     if(!est && !u.noProg && Cef>0 && Math.abs(neto-Cef)>cfg.tolKg) flags.push({lvl:'warn',k:'carganeto',t:'Neto de báscula '+fK(neto)+' kg vs '+fK(Cef)+' kg que capturó Cargadores (dif. '+sgn(neto-Cef)+' kg)'});
@@ -2696,7 +2696,7 @@ function bascRecalc(){
   const br=Number(document.getElementById('bs_bruto').value)||0, ta=Number(document.getElementById('bs_tara').value)||0, neto=br-ta>0?br-ta:0;
   document.getElementById('bs_neto').value=neto?fK(neto):'';
   const L=bsLinesOk(); const kg=L.reduce((a,x)=>a+x.sacos*x.kgSaco,0), sc=L.reduce((a,x)=>a+x.sacos,0), cfg=cuadCfg();
-  const dif=kg-neto, ad=Math.abs(dif); let est='';
+  const dif=neto-kg, ad=Math.abs(dif); let est='';   // dif = neto de báscula − lo registrado: positivo = EXCEDENTE (la báscula pesó más), negativo = FALTANTE
   if(neto&&L.length){ est=ad===0?'<span class="pill p-ok">OK · cuadra exacto</span>':ad<=cfg.tolKg?`<span class="pill p-warn">${dif<0?'FALTANTE':'EXCEDENTE'} MENOR · ${fK(ad)} kg</span>`:`<span class="pill p-late">${dif<0?'FALTANTE':'EXCEDENTE'} CRÍTICO · ${fK(ad)} kg</span>`; }
   document.getElementById('bsChk').innerHTML=`<span>Sacos: <b>${fS(sc)}</b></span><span>Peso de lo registrado: <b>${fK(kg)} kg</b></span><span>Neto báscula: <b>${fK(neto)} kg</b></span><span>Diferencia: <b>${neto&&L.length?sgn(Math.round(dif))+' kg':'—'}</b> ${est}</span><span class="muted">Tolerancia ±${cfg.tolKg} kg</span>`;
   const need=neto&&L.length&&ad>cfg.tolKg; document.getElementById('bsObsReq').style.display=need?'inline':'none';
