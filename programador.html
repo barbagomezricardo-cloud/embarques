@@ -2502,18 +2502,19 @@ function cuadCompute(P){
   const gp=k=>{ let o=prod.get(k); if(!o){ o={k,name:'',c:0,b:0,inv:0,fac:0}; prod.set(k,o);} return o; };
   const gc=k=>{ let o=cli.get(k); if(!o){ o={k,name:'',c:0,b:0,inv:0,fac:0}; cli.set(k,o);} return o; };
   const gl=k=>{ let o=lot.get(k); if(!o){ o={k,pk:'',lote:'',name:'',c:0,b:0,inv:0}; lot.set(k,o);} return o; };
-  let cPend=0;
+  let cPend=0, sacVac=0, sacVacF=0;
+  const _sv=pk=>/^02SAC/i.test(String(pk||''));      // costales vacíos vendidos en Odoo: no son producto, no pasan por báscula ni Cargadores
   cus.forEach(cu=>{ const nc=normNom(cu.u.r.cliente);
     if(!cu.u.b){ cPend+=cu.Csc; return; }          // sin báscula todavía: no se compara producto contra producto
     cu.prods.forEach(p=>{ const o=gp(p.k); o.name=o.name||p.prod; o.c+=p.c; o.b+=p.b;
       const oc=gc(nc); oc.name=oc.name||cu.u.r.cliente; oc.c+=p.c; oc.b+=p.b;
       p.lots.forEach(l=>{ const o2=gl(p.k+'|'+l.nl); o2.pk=p.k; o2.lote=o2.lote||l.lote; o2.name=o2.name||p.prod; o2.c+=l.c; o2.b+=l.b; }); }); });
-  if(inv) inv.rows.forEach(([c,pk,l,q])=>{ const o=gp(pk); o.name=o.name||nm[pk]||pk; o.inv+=q;
+  if(inv) inv.rows.forEach(([c,pk,l,q])=>{ if(_sv(pk)){ sacVac+=q; return; } const o=gp(pk); o.name=o.name||nm[pk]||pk; o.inv+=q;
     const oc=gc(normNom(c)); oc.name=oc.name||c; oc.inv+=q; const o2=gl(pk+'|'+l); o2.pk=pk; o2.lote=o2.lote||l||'(sin lote)'; o2.name=o2.name||nm[pk]||pk; o2.inv+=q; });
   let facDesc=0, facMan=0, facBruto=0;
-  if(fac) fac.rows.forEach(([c,pk,q,t])=>{ facBruto+=q; if(t==='d'){facDesc+=q;return;} if(t==='m'){facMan+=q;return;}
+  if(fac) fac.rows.forEach(([c,pk,q,t])=>{ if(_sv(pk)&&t!=='d'&&t!=='m'){ sacVacF+=q; return; } facBruto+=q; if(t==='d'){facDesc+=q;return;} if(t==='m'){facMan+=q;return;}
     const o=gp(pk); o.name=o.name||nm[pk]||pk; o.fac+=q; if(c){ const oc=gc(normNom(c)); oc.name=oc.name||c; oc.fac+=q; } });
-  const hasFacCli=!!(fac&&fac.rows.some(r=>r[0]));
+  const hasFacCli=!!(fac&&fac.rows.some(r=>r[0]&&!_sv(r[1])));
   const arr=m=>[...m.values()].filter(o=>o.c||o.b||o.inv||o.fac).sort((a,b)=>(a.name||'').localeCompare(b.name||'','es'));
   const prodA=arr(prod); prodA.forEach(o=>{ o.name=prodNameByKey(o.k,o.name); }); prodA.sort((a,b)=>a.name.localeCompare(b.name,'es'));   // nombre del catálogo (Odoo a veces trae el de la promoción)
   const lotA=arr(lot); lotA.forEach(o=>{ o.name=prodNameByKey(o.pk,o.name); }); lotA.sort((a,b)=>a.name.localeCompare(b.name,'es')||String(a.lote).localeCompare(String(b.lote)));
@@ -2522,7 +2523,7 @@ function cuadCompute(P){
     pend:cus.filter(c=>c.st==='pend').length,gen:cus.filter(c=>c.u.b&&c.u.b.generado).length,noProg:cus.filter(c=>c.u.noProg).length,
     c:sum(prodA,'c'),b:sum(prodA,'b'),inv:sum(prodA,'inv'),fac:sum(prodA,'fac'),cPend,
     kgProg:cus.reduce((s,c)=>s+c.Pkg,0),kgNeto:cus.reduce((s,c)=>s+c.neto,0)};
-  return {P,cus,prod:prodA,cli:arr(cli),lot:lotA,k,hasInv:!!inv,hasFac:!!fac,hasFacCli,facDesc,facMan,facBruto,invMeta:CUAD.odoo[P]&&CUAD.odoo[P].inv,facMeta:CUAD.odoo[P]&&CUAD.odoo[P].fac};
+  return {P,cus,prod:prodA,cli:arr(cli),lot:lotA,k,hasInv:!!inv,hasFac:!!fac,hasFacCli,sacVac:Math.max(sacVac,sacVacF),facDesc,facMan,facBruto,invMeta:CUAD.odoo[P]&&CUAD.odoo[P].inv,facMeta:CUAD.odoo[P]&&CUAD.odoo[P].fac};
 }
 // Lectura de las diferencias entre las 4 fuentes de un renglón (producto/cliente/lote)
 function cuadLec(o,hasInv,hasFac,tolS){
@@ -2773,6 +2774,7 @@ function renderCuadre(){
   document.getElementById('cqOdoo').innerHTML=
     `<span class="pill ${mi?'p-ok':'p-warn'}">📦 Inventario Odoo: ${mi?('cargado · '+ttsStr(mi.ts)+' · '+escProy(mi.usuario||'')):'sin cargar'}</span> `+
     `<span class="pill ${mf?'p-ok':'p-warn'}">🧾 Ventas facturadas: ${mf?('cargado · '+ttsStr(mf.ts)+' · '+escProy(mf.usuario||'')+(mf.formato?' · '+escProy(mf.formato):'')):'sin cargar'}</span>`+
+    (D.sacVac?` <span class="muted">🧺 Sin contar ${fS(D.sacVac)} costales vacíos (02SAC) de Odoo</span>`:'')+
     (D.hasFac?` <span class="muted">Facturado sin descuento ni maniobra · se restaron ${fS(D.facDesc)} (descuento) y ${fS(D.facMan)} (maniobra) de ${fS(D.facBruto)} facturados</span>`:'');
   const dInvFac=K.inv-K.fac;
   const kp=[
