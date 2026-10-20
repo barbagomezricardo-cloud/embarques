@@ -2327,7 +2327,8 @@ function lotesDesde(){ if(CFG.lotesDesde) return CFG.lotesDesde; const n=Date.no
 /* ---------- unidades del cuadre: embarques programados + unidades pesadas sin programa ---------- */
 function cuadUnits(){
   const out=[]; const seen=new Set();
-  DATA.forEach(r=>{ if(r.cancelado)return; const b=CUAD.bascula[r.id]||null; seen.add(r.id);
+  DATA.forEach(r=>{ if(r.cancelado){ const b0=CUAD.bascula[r.id]; if(b0&&(b0.generado||b0.estimado||b0.sinOdoo)) seen.add(r.id); return; }   // embarque cancelado: su pesaje GENERADO (sin ticket real) ya no cuenta; uno con ticket real sí se sigue mostrando como «sin programa»
+    const b=CUAD.bascula[r.id]||null; seen.add(r.id);
     if(!(isDesp(r)||b)) return;                 // lo que aún no sale ni se pesa no entra al cuadre
     out.push({id:r.id,r,b,noProg:false,fecha:fechaEmb(r),per:perEmb(fechaEmb(r),b)}); });
   Object.entries(CUAD.bascula).forEach(([id,b])=>{ if(seen.has(id)||!b) return;
