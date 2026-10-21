@@ -426,7 +426,7 @@ function fillSheet(r){
     </div>`;
     body+=lotesCardHTML(r,!isDesp(r));   // trazabilidad: lotes por producto (obligatorio para finalizar y despachar)
   }
-  // botones — flujo obligatorio en orden: colocación → iniciar → (kg) finalizar → despachar
+  // botones — flujo obligatorio en orden: colocación → iniciar → (kg + lotes) finalizar, que también libera la unidad
   if(s==='pend'){
     if(!r.colocacion){
       body+=`<div class="hint" style="text-align:center;margin-top:12px">Paso 1 de 3 · Marca el ingreso del camión al andén</div>`;
@@ -440,8 +440,9 @@ function fillSheet(r){
     body+=`<button class="bigbtn bg-stop" onclick="stopLoad('${r.id}')">■ Finalizar carga</button>`;
     body+=`<button class="bigbtn bg-dis" onclick="undoStart('${r.id}')">Deshacer inicio</button>`;
   } else {
-    if(!isDesp(r)) body+=`<button class="bigbtn bg-done" onclick="dispatch('${r.id}')">✓ Marcar despachado</button>`;
-    else body+=`<div class="statusline" style="background:#123522;color:var(--ok)">🚚 Despachado</div>`;
+    // ya no hay botón «Marcar despachado»: «Finalizar carga» libera la unidad. Solo una carga finalizada antes de este cambio puede quedar sin liberar; la libera Programación.
+    if(!isDesp(r)) body+=`<div class="statusline" style="background:#3a2a10;color:var(--warn,#f0b429)">Carga finalizada · pendiente de liberar en Programación</div>`;
+    else body+=`<div class="statusline" style="background:#123522;color:var(--ok)">🚚 Carga finalizada y liberada</div>`;
   }
   document.getElementById('sheetBody').innerHTML=body;
 }
@@ -638,8 +639,11 @@ function stopLoad(id){
     document.getElementById('motivoRazon').textContent=razon;
     document.getElementById('motivoModal').classList.add('show'); return;
   }
-  r.finCarga=fin; appAudit(r,'finCarga','Fin de carga (app)','',fin); upd(r); toast('Carga finalizada ✓');
+  r.finCarga=fin; liberarAlFinalizar(r); appAudit(r,'finCarga','Fin de carga (app) · unidad liberada','',fin); upd(r); toast('Carga finalizada y unidad liberada 🚚');
 }
+/* Finalizar carga = liberar la unidad (despachado). Antes eran dos botones y al olvidarse el segundo se abría un desfase
+   entre Cargadores y Báscula. La hora de salida queda en la hora de fin si no traía otra. */
+function liberarAlFinalizar(r){ r.despachado=true; if(!r.horaSalida) r.horaSalida=r.finCarga; if(!r.fechaCarga) r.fechaCarga=todayISO(); }
 let pendingStop=null;
 // Semilla local por si nunca llega nada de Firebase (modo local, o antes de que conecte).
 // La lista de verdad la manda el programador de embarques por CFG.motivos — ver fbCfg.on('value') abajo.
@@ -652,7 +656,7 @@ function confirmMotivo(){ const mv=document.getElementById('motivoSel').value;
   // última compuerta de trazabilidad: aunque el motivo se pida DESPUÉS de revisar los lotes, se vuelve a revisar aquí antes de guardar el despacho/fin de carga
   { const pid=(pendingStop&&pendingStop.id)||(pendingDispatch&&pendingDispatch.id); const rr=pid&&DATA.find(x=>x.id===pid); const vl=rr&&validaLotes(rr); if(vl){ document.getElementById('motivoModal').classList.remove('show'); pendingStop=null; pendingDispatch=null; avisoLotes(vl); return; } }
   document.getElementById('motivoModal').classList.remove('show');
-  if(pendingStop){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=mv; appAudit(r,'finCarga','Fin de carga con motivo (app)','',r.finCarga+' · '+mv); upd(r); toast('Finalizado con motivo'); pendingStop=null; return; }
+  if(pendingStop){ const r=DATA.find(x=>x.id===pendingStop.id); r.finCarga=pendingStop.fin; r.motivo=mv; liberarAlFinalizar(r); appAudit(r,'finCarga','Fin de carga con motivo (app) · unidad liberada','',r.finCarga+' · '+mv); upd(r); toast('Finalizado con motivo y unidad liberada'); pendingStop=null; return; }
   if(pendingDispatch){ const r=DATA.find(x=>x.id===pendingDispatch.id); r.despachado=true; r.horaSalida=pendingDispatch.sal; r.motivo=mv; if(!r.fechaCarga)r.fechaCarga=todayISO(); appAudit(r,'despachado','Despachado con motivo (app)','',r.horaSalida+' · '+mv); upd(r); toast('Despachado con motivo'); pendingDispatch=null; return; } }
 function dispatch(id){ if(!requireTurno())return; const r=DATA.find(x=>x.id===id); const sal=r.horaSalida||nowHM();
   const vl=validaLotes(r); if(vl){ avisoLotes(vl); return; }   // trazabilidad: tampoco se libera la unidad sin lotes (cubre también unidades terminadas antes de esta función)
