@@ -561,6 +561,34 @@
   INV.estadoEntrega = e => { const s = e && e.estado; return s === 'por_validar' ? 'por_recibir' : s; };
   INV.ENTREGA_TXT = { por_recibir: 'Por confirmar producción', recibida: 'Recibida · por aceptar', validada: 'Aceptada', rechazada: 'Rechazada', cancelada: 'Cancelada' };
   INV.ENTREGA_CLS = { por_recibir: 'b-amb', recibida: 'b-blu', validada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' };
+  /* Manufactura: el almacenista registra lo empacado → el jefe de inventarios valida → se descuentan los sacos vacíos del almacén PT.
+     Solo cuando la app trabaja como espejo de Odoo (GitHub Pages). Dentro del ERP (CFG.SIM) viene APAGADO: ahí Odoo ya consume
+     el saco con la orden de fabricación y registrarlo aquí lo descontaría dos veces. Se puede forzar con INV_CONFIG.MANUFACTURA. */
+  INV.MANUF = CFG.MANUFACTURA != null ? !!CFG.MANUFACTURA : !CFG.SIM;
+  INV.MANUF_TXT = { por_validar: 'Por validar', validando: 'Validando…', validada: 'Validada', rechazada: 'Rechazada' };
+  INV.MANUF_CLS = { por_validar: 'b-amb', validando: 'b-blu', validada: 'b-grn', rechazada: 'b-red' };
+  /* Catálogo de producto terminado (presentación → saco vacío que consume: 1 saco por saco empacado).
+     Se puede cambiar en Manufactura › Catálogo de PT; si el nodo catalogoPT está vacío se usa esta lista. */
+  INV.PT_DEFAULT = [
+    { codigo: '04MAS001', nombre: 'SILVER KAN PREMIUM +22% 25 KG', kg: 25, saco: '02SAC005' },
+    { codigo: '04MAS0011', nombre: 'SILVER KAN PREMIUM +22% 25 KG + 2 KG EXTRA', kg: 27, saco: '02SAC005' },
+    { codigo: '04MAS0019', nombre: 'SILVER KAN PREMIUM 20 KGS', kg: 20, saco: '02PRO089' },
+    { codigo: '04MAS002', nombre: 'SILVER KAN 18% 5 KGS', kg: 5, saco: '02SAC006' },
+    { codigo: '04MAS003', nombre: 'SILVER KAN 18% 25 KGS', kg: 25, saco: '02SAC001' },
+    { codigo: '04MAS0017', nombre: 'SILVER KAN 18% 25 KG + 1 KG EXTRA', kg: 26, saco: '02SAC017' },
+    { codigo: '04MAS004', nombre: 'SILVER KAN CACHORRO 20 KGS', kg: 20, saco: '02SAC008' },
+    { codigo: '04MAS0015', nombre: 'SILVER KAN CACHORRO 20 + 1 KG EXTRA', kg: 21, saco: '02SAC019' },
+    { codigo: '04MAS005', nombre: 'SILVER KAN CACHORRO 5 KGS', kg: 5, saco: '02SAC009' },
+    { codigo: '04MAS006', nombre: 'SILVER CAT 15 KGS', kg: 15, saco: '02SAC010' },
+    { codigo: '04MAS0016', nombre: 'SILVER CAT 15 + 1 KG EXTRA', kg: 16, saco: '02SAC011' },
+    { codigo: '04MAS007', nombre: 'SILVER CAT 5 KGS', kg: 5, saco: '02SAC012' },
+    { codigo: '04MAS008', nombre: 'MI BOOB 20 KGS', kg: 20, saco: '02SAC007' },
+    { codigo: '04MAS0012', nombre: 'MI BOOB 20 + 1 KG EXTRA', kg: 21, saco: '02SAC018' },
+    { codigo: '04MAS009', nombre: 'KAN KAN 20 KGS', kg: 20, saco: '02SAC004' },
+    { codigo: '04MAS0020', nombre: 'KAN KAN 25 KG', kg: 25, saco: '02SAC002' },
+    { codigo: '04MAS0013', nombre: 'KAN KAN 25 + 1 KG EXTRA', kg: 26, saco: '02SAC003' },
+    { codigo: '04MAS010', nombre: 'PET FOOD 20 KG (R)', kg: 20, saco: '02SAC026' }
+  ];
   /* Silos ligados a un artículo y kg calculados a partir del vacío láser */
   INV.silosDe = (silos, itemId) => vals(silos).filter(s => s.itemId === itemId).sort((a, b) => (a.orden || 0) - (b.orden || 0));
   INV.kgSilo = (s, vacio) => { const c = INV.calcSilo(s, { vacio }); return c.contenido == null ? null : Math.round(c.contenido * 1000); };

@@ -29,9 +29,9 @@
   const DB = I.DB, AUTH = I.AUTH;
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
 
-  const S = { catalogo: {}, conteos: {}, silos: {}, silosLect: {}, solicitudes: {}, entregas: {}, config: {}, meta: {} };
+  const S = { catalogo: {}, conteos: {}, silos: {}, silosLect: {}, solicitudes: {}, entregas: {}, config: {}, meta: {}, manufacturas: {}, catalogoPT: {} };
   let USER = null, offs = [], TAB = 'conteo';
-  const UI = { fam: null, q: '', soloPend: false, entrega: null };
+  const UI = { fam: null, q: '', soloPend: false, entrega: null, manuf: null };
 
   AUTH.onChange(u => {
     offs.forEach(f => f()); offs = [];
@@ -41,13 +41,14 @@
     shell();
     const sub = (p, k, n) => offs.push((n ? DB.onLast(p, n, v => { S[k] = v || {}; render(); }) : DB.on(p, v => { S[k] = v || {}; render(); })));
     sub('catalogo', 'catalogo'); sub('conteos', 'conteos', 150); sub('meta', 'meta'); sub('silos', 'silos'); sub('silosLect', 'silosLect'); sub('solicitudes', 'solicitudes', 150); sub('entregas', 'entregas', 150); sub('config', 'config');
+    if (I.MANUF) { sub('manufacturas', 'manufacturas', 150); sub('catalogoPT', 'catalogoPT'); }
   });
 
   function shell() {
     $('#app').innerHTML = `${I.DEMO ? '<div class="demo-bar">MODO DEMO</div>' : ''}
       <header class="top"><div class="top-in"><div class="brand"><div class="logo">🧾</div><div>Almacén<small>${esc(USER.nombre)}</small></div></div><span class="sp"></span><span id="net" class="chip">●</span><button class="btn sm" id="out">Salir</button></div></header>
       <div class="app-main" id="main"></div>
-      <nav class="tabs-bottom">${[['conteo', '📋', 'Conteo'], ['silos', '🛢️', 'Silos'], ['entregas', '📦', 'Entregas'], ['hist', '🕘', 'Historial']].map(([k, i, t]) => `<button data-t="${k}"><span>${i}</span>${t}</button>`).join('')}</nav>`;
+      <nav class="tabs-bottom">${[['conteo', '📋', 'Conteo'], ['silos', '🛢️', 'Silos'], ['entregas', '📦', 'Entregas']].concat(I.MANUF ? [['manuf', '🏭', 'Manufactura']] : [], [['hist', '🕘', 'Historial']]).map(([k, i, t]) => `<button data-t="${k}"><span>${i}</span>${t}</button>`).join('')}</nav>`;
     $('#out').onclick = () => AUTH.logout();
     $$('.tabs-bottom button').forEach(b => b.onclick = () => { TAB = b.dataset.t; UI.mounted = null; render(true); window.scrollTo(0, 0); });
     const net = () => { const n = $('#net'); if (n) { n.textContent = navigator.onLine ? '● en línea' : '● sin internet'; n.style.color = navigator.onLine ? 'var(--grn)' : 'var(--red)'; } };
@@ -60,7 +61,7 @@
     if (!USER || !$('#main')) return;
     if (!now) { clearTimeout(rT); rT = setTimeout(() => render(true), 150); return; }
     $$('.tabs-bottom button').forEach(b => b.classList.toggle('on', b.dataset.t === TAB));
-    ({ conteo: vConteo, silos: vSilos, entregas: vEntregas, hist: vHist })[TAB]($('#main'));
+    ({ conteo: vConteo, silos: vSilos, entregas: vEntregas, manuf: vManuf, hist: vHist })[TAB]($('#main'));
   }
 
   const items = () => vals(S.catalogo).map(x => Object.assign({}, x, { id: x._k })).filter(x => x.activo !== false).sort((a, b) => (I.FAMILIAS.indexOf(a.familia) - I.FAMILIAS.indexOf(b.familia)) || ((a.orden || 999) - (b.orden || 999)));
@@ -305,6 +306,54 @@
       if (E.solicitudId) await DB.update({ ['solicitudes/' + E.solicitudId + '/estado']: 'surtida', ['solicitudes/' + E.solicitudId + '/entregaId']: k, ['solicitudes/' + E.solicitudId + '/surtidaTs']: Date.now() });
       UI.entrega = null; UI.mounted = null; I.toast('Entrega registrada ✔ — producción debe confirmar lo que recibió', 'ok'); render(true);
     };
+  }
+
+  /* ---------------- MANUFACTURA: registro de lo empacado (el jefe de inventarios lo valida) ---------------- */
+  const catPT = () => { const c = vals(S.catalogoPT).filter(x => x.activo !== false); return (c.length ? c : I.PT_DEFAULT).slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true })); };
+  const sacosItems = () => items().filter(it => it.familia === 'EMPAQUE' && String(it.unidad).toLowerCase() !== 'kg' && !/ribete|hilo|stretch/i.test(it.nombre));
+  const ptLabel = p => '[' + p.codigo + '] ' + p.nombre;
+  function vManuf(el) {
+    if (UI.mounted === 'manuf') return manufHist();
+    UI.mounted = 'manuf';
+    const M = UI.manuf = UI.manuf || { lineas: [], lote: '', nota: '' };
+    el.innerHTML = `<h2>Manufactura empacada</h2>
+      <div class="note" style="margin:10px 0">Captura <b>cuántos sacos de cada presentación se empacaron</b>. El jefe de inventarios lo valida y entonces se descuenta el saco vacío del almacén PT (1 saco por saco empacado).</div>
+      <div id="mf-ls"></div>
+      <div class="card" style="margin-top:8px"><label>Agregar presentación<input id="mf-add" list="mf-dl" placeholder="Busca código o nombre…"></label><datalist id="mf-dl">${catPT().map(p => `<option value="${esc(ptLabel(p))}"></option>`).join('')}</datalist></div>
+      <label style="margin-top:10px">Lote / turno (opcional)<input id="mf-lote" value="${esc(M.lote)}"></label>
+      <label style="margin-top:6px">Nota<input id="mf-nota" value="${esc(M.nota)}"></label>
+      <button class="btn pri big" id="mf-go" style="margin-top:8px">Enviar al jefe de inventarios para validar</button>
+      <h3 style="margin-top:18px">Mis registros recientes</h3><div id="mf-hist"></div>`;
+    const draw = () => {
+      $('#mf-ls').innerHTML = M.lineas.map((l, i) => { const p = catPT().find(x => x.codigo === l.pt) || {}; const sid = l.saco || p.saco; const kg = num(l.cant) * num(p.kg);
+        return `<div class="item"><div class="row"><div class="grow"><div class="nm">${esc(p.nombre || l.pt)}</div><div class="cd">${esc(l.pt)} · ${fmt(p.kg)} kg por saco</div></div><button class="btn sm danger" data-mrm="${i}">Quitar</button></div>
+          <div class="row" style="margin-top:6px"><input class="in-num" data-mc="${i}" inputmode="numeric" placeholder="Sacos empacados" value="${esc(l.cant)}" style="max-width:170px"><span class="muted small" data-mk="${i}">${kg ? fmt(kg) + ' kg' : ''}</span></div>
+          <div class="row" style="margin-top:6px"><span class="muted small">Saco vacío:</span><select data-ms="${i}" class="grow">${sacosItems().map(s => `<option value="${esc(s.id)}" ${s.id === sid ? 'selected' : ''}>${esc(I.itemLabel(s))}</option>`).join('')}${sid && !S.catalogo[sid] ? `<option value="${esc(sid)}" selected>${esc(sid)} (no está en catálogo)</option>` : ''}</select></div></div>`; }).join('') || '<div class="empty">Agrega las presentaciones que se empacaron</div>';
+      $$('[data-mc]').forEach(i => i.oninput = () => { const l = M.lineas[+i.dataset.mc]; l.cant = i.value; const p = catPT().find(x => x.codigo === l.pt) || {}; const kg = num(i.value) * num(p.kg); $(`[data-mk="${i.dataset.mc}"]`).textContent = kg ? fmt(kg) + ' kg' : ''; });
+      $$('[data-ms]').forEach(s => s.onchange = () => M.lineas[+s.dataset.ms].saco = s.value);
+      $$('[data-mrm]').forEach(b => b.onclick = () => { M.lineas.splice(+b.dataset.mrm, 1); draw(); });
+    };
+    draw();
+    $('#mf-add').onchange = () => { const p = catPT().find(x => ptLabel(x) === $('#mf-add').value); if (p) { if (!M.lineas.some(l => l.pt === p.codigo)) M.lineas.push({ pt: p.codigo, cant: '', saco: p.saco }); $('#mf-add').value = ''; draw(); } };
+    $('#mf-lote').oninput = () => M.lote = $('#mf-lote').value; $('#mf-nota').oninput = () => M.nota = $('#mf-nota').value;
+    $('#mf-go').onclick = async () => {
+      const ls = M.lineas.map(l => { const p = catPT().find(x => x.codigo === l.pt) || {}; const sid = l.saco || p.saco; const s = S.catalogo[sid]; return { pt: l.pt, nombre: p.nombre || l.pt, kg: num(p.kg), cant: num(l.cant), sacoId: sid || '', sacoNombre: s ? s.nombre : (sid || '') }; }).filter(l => l.cant > 0);
+      if (!ls.length) return I.toast('Captura al menos una cantidad', 'err');
+      if (ls.some(l => !l.sacoId)) return I.toast('Falta el saco vacío de alguna presentación: avisa al jefe de inventarios', 'err');
+      const resumen = ls.map(l => '<b>' + fmt(l.cant) + '</b> × ' + esc(l.nombre)).join('<br>');
+      if (!(await I.confirmar('¿Enviar a validación?', resumen + '<br><span class="muted small">Se descontarán esos sacos vacíos del almacén PT cuando el jefe lo valide.</span>'))) return;
+      $('#mf-go').disabled = true;
+      try {
+        await DB.push('manufacturas', { fecha: hoyISO(), ts: Date.now(), por: { uid: USER.uid, nombre: USER.nombre }, lote: M.lote.trim(), lineas: Object.assign({}, ls), nota: M.nota.trim(), estado: 'por_validar' });
+        UI.manuf = null; UI.mounted = null; I.toast('Enviado ✔ — el jefe de inventarios lo validará', 'ok'); render(true);
+      } catch (x) { $('#mf-go').disabled = false; I.toast('No se pudo enviar: ' + x.message, 'err'); }
+    };
+    manufHist();
+  }
+  function manufHist() {
+    const h = $('#mf-hist'); if (!h) return;
+    const es = vals(S.manufacturas).filter(m => m.por && m.por.uid === USER.uid).sort((a, b) => b.ts - a.ts).slice(0, 25);
+    h.innerHTML = es.length ? es.map(m => `<div class="item"><div class="row"><b>${fFecha(m.ts)}</b>${m.lote ? `<span class="b b-gry">${esc(m.lote)}</span>` : ''}<span class="sp"></span><span class="b ${I.MANUF_CLS[m.estado] || 'b-gry'}">${I.MANUF_TXT[m.estado] || m.estado}</span></div><div class="small" style="margin-top:4px">${vals(m.lineas).map(l => fmt(l.cantValidada != null ? l.cantValidada : l.cant) + ' × ' + esc(l.nombre)).join('<br>')}</div>${m.notaVal ? `<div class="muted small">Jefe: ${esc(m.notaVal)}</div>` : ''}</div>`).join('') : '<div class="empty">Aún no registras manufactura</div>';
   }
 
   /* ---------------- HISTORIAL ---------------- */

@@ -9,7 +9,7 @@
   try { await I.start({ appKey: 'principal', messaging: true }); } catch (e) { return; }
   const DB = I.DB, AUTH = I.AUTH;
 
-  const S = { catalogo: {}, fisico: {}, pt: {}, silos: {}, silosLect: {}, densidades: {}, llegadas: {}, odoo: null, conteos: {}, entregas: {}, solicitudes: {}, movimientos: {}, ptCortes: {}, usuarios: {}, config: {}, meta: {}, notasCompra: {} };
+  const S = { catalogo: {}, fisico: {}, pt: {}, silos: {}, silosLect: {}, densidades: {}, llegadas: {}, odoo: null, conteos: {}, entregas: {}, solicitudes: {}, movimientos: {}, ptCortes: {}, usuarios: {}, config: {}, meta: {}, notasCompra: {}, manufacturas: {}, catalogoPT: {} };
   let USER = null, offs = [], TAB = null;
   const UI = { proyFam: 'EMPAQUE', proyMeses: 15, proyPC: true, proyQ: '', proyItem: null, alFam: '', alSt: 'todos', alQ: '', fisFam: '', fisQ: '', fisSub: 'fis', conteoSel: null, catFam: '', catQ: '', catAct: 'act', bitTipo: '', bitQ: '', bitDesde: '', bitHasta: '', histQ: '', histDesde: '', iaModelo: 'haiku', odooQ: '', rev: {} };
   const ROLES_PRINCIPAL = ['master', 'jefe', 'compras'];
@@ -19,6 +19,7 @@
     { id: 'tablero', t: '📊 Tablero', roles: ['master', 'jefe', 'compras'] },
     { id: 'entradas', t: '📥 Entradas a almacén', roles: ['master', 'jefe'] },
     { id: 'transfer', t: '🔁 Transferencias a PT', roles: ['master', 'jefe'], cnt: () => vals(S.entregas).filter(e => I.estadoEntrega(e) === 'recibida').length },
+    { id: 'manuf', t: '🏭 Manufactura', roles: ['master', 'jefe'], cnt: () => vals(S.manufacturas).filter(m => m.estado === 'por_validar').length },
     { id: 'fisico', t: '📋 Físico y conteos', roles: ['master', 'jefe'], cnt: () => vals(S.conteos).filter(c => c.estado === 'confirmado').length },
     { id: 'silos', t: '🛢️ Silos', roles: ['master', 'jefe', 'compras'] },
     { id: 'proyeccion', t: '📈 Proyección', roles: ['master', 'jefe', 'compras'] },
@@ -57,13 +58,14 @@
     sub('catalogo', 'catalogo'); sub('fisico', 'fisico'); sub('pt', 'pt'); sub('llegadas', 'llegadas'); sub('silos', 'silos'); sub('silosLect', 'silosLect'); sub('config', 'config'); sub('meta', 'meta');
     if (editor()) {
       sub('densidades', 'densidades'); sub('odoo', 'odoo'); sub('conteos', 'conteos', 60); sub('entregas', 'entregas', 600); sub('solicitudes', 'solicitudes', 400); sub('movimientos', 'movimientos', 2500); sub('ptCortes', 'ptCortes', 60);
+      if (I.MANUF) { sub('manufacturas', 'manufacturas', 300); sub('catalogoPT', 'catalogoPT'); }
     }
     if (can('master')) sub('usuarios', 'usuarios');
     sub('notasCompra', 'notasCompra');
   }
 
   function shell() {
-    const tabs = TABS.filter(t => t.roles.includes(USER.rol));
+    const tabs = TABS.filter(t => t.roles.includes(USER.rol) && (t.id !== 'manuf' || I.MANUF));
     if (!TAB || !tabs.some(t => t.id === TAB)) TAB = (localStorage.getItem('inv_tab') && tabs.some(t => t.id === localStorage.getItem('inv_tab'))) ? localStorage.getItem('inv_tab') : tabs[0].id;
     $('#app').innerHTML = `
       ${I.DEMO ? '<div class="demo-bar">MODO DEMO — datos de prueba que viven solo en este navegador. Quita ?demo=1 de la dirección para trabajar con los datos reales.</div>' : ''}
@@ -152,17 +154,19 @@
       const oc = al.filter(a => a.status === 'COLOCAR OC'), cr = al.filter(a => a.crit === 'CRÍTICO');
       const porVal = vals(S.entregas).filter(e => I.estadoEntrega(e) === 'recibida');
       const porConf = vals(S.entregas).filter(e => I.estadoEntrega(e) === 'por_recibir');
+      const manPend = I.MANUF ? manufPend() : [];
       const hoy = hoyISO();
       const solHoy = vals(S.solicitudes).filter(s => s.fecha === hoy);
       const conteo = vals(S.conteos).filter(c => c.estado === 'en_captura').sort((a, b) => b.inicio - a.inicio)[0];
       const confirmados = vals(S.conteos).filter(c => c.estado === 'confirmado');
       let valor = 0, difAbs = 0, teo = 0;
       items(true).forEach(it => { const f = F(it.id); valor += f.total * costo(it.id); const q = odooQ(it.id); if (q != null && S.odoo && S.odoo.alcance === 'total') { difAbs += Math.abs(f.total - q) * costo(it.id); teo += q * costo(it.id); } });
-      const pendOdoo = entregasValidadas().filter(e => !e.odoo).length + vals(S.movimientos).filter(m => m.tipo === 'entrada' && !m.odoo).length;
+      const pendOdoo = entregasValidadas().filter(e => !e.odoo).length + (I.MANUF ? vals(S.manufacturas).filter(m => m.estado === 'validada' && !m.odoo).length : 0) + vals(S.movimientos).filter(m => m.tipo === 'entrada' && !m.odoo).length;
       let avance = '';
       if (conteo) { const tot = conteoItems(conteo).length, cap = conteoItems(conteo).filter(it => conteoCapturado(conteo, it.id)).length; avance = `${cap}/${tot}`; }
       const vacio = !Object.keys(S.catalogo).length;
       el.innerHTML = (vacio ? `<div class="card" style="border-color:var(--acc);margin-bottom:12px"><h2>👋 Primer arranque</h2><p>La base está vacía. ${can('master') ? 'Carga el catálogo, las existencias, consumos, lead times, silos, pedidos fincados y el reporte de Odoo que vienen de tus archivos de Excel.' : 'Pide al master que haga la carga inicial.'}</p>${can('master') ? '<button class="btn pri" id="seed-go">Cargar datos iniciales de mis archivos</button>' : ''}</div>` : '') + `
+      ${manPend.length ? `<div class="card" style="border-color:var(--amb);margin-bottom:12px"><div class="row"><b>🏭 ${manPend.length} registro(s) de manufactura por validar</b><span class="muted small grow">${esc(manPend.slice(0, 2).map(m => (m.por && m.por.nombre) + ': ' + manufTxt(m)).join(' · '))}</span><button class="btn sm pri" data-go="manuf">Validar</button></div></div>` : ''}
       <div class="grid g4">
         <div class="kpi red"><div class="l">Colocar OC</div><div class="v">${oc.length}</div><div class="s">${cr.length} críticos</div></div>
         <div class="kpi ${porVal.length ? 'amb' : 'grn'}"><div class="l">Transferencias a PT por aceptar</div><div class="v">${porVal.length}</div><div class="s">${porConf.length} esperando confirmación de producción</div></div>
@@ -415,6 +419,81 @@
   }
 
   /* ---------- ALMACÉN PT ---------- */
+
+  /* ---------- MANUFACTURA: el almacenista registra lo empacado → el jefe valida → baja los sacos vacíos del almacén PT ----------
+     Es un reporte independiente de las transferencias: hoy se lleva a mano y de aquí sale el consumo de saco vacío en PT. */
+  const catPT = () => { const c = vals(S.catalogoPT); return (c.length ? c : I.PT_DEFAULT.map(x => Object.assign({ _k: x.codigo }, x))).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true })); };
+  const sacosItems = () => items(true).filter(it => it.familia === 'EMPAQUE' && String(it.unidad).toLowerCase() !== 'kg' && !/ribete|hilo|stretch/i.test(it.nombre));
+  const manufLineas = m => vals(m.lineas);
+  const manufTxt = m => manufLineas(m).map(l => fmt(l.cantValidada != null ? l.cantValidada : l.cant) + ' × ' + esc(l.nombre)).join(' · ');
+  const manufPend = () => vals(S.manufacturas).filter(m => m.estado === 'por_validar');
+  async function ensureCatPT() { const cur = await DB.get('catalogoPT'); if (cur && Object.keys(cur).length) return; const up = {}; I.PT_DEFAULT.forEach(x => up['catalogoPT/' + I.keySafe(x.codigo)] = Object.assign({ activo: true }, x)); await DB.update(up); }
+  async function validarManuf(k, d) {
+    const claim = await DB.tx('manufacturas/' + k + '/estado', cur => cur === 'por_validar' ? 'validando' : undefined);   // evita aplicarla dos veces (dos jefes / doble clic)
+    if (claim !== 'validando') return I.toast('Este registro ya fue atendido', 'err');
+    try {
+      const m = S.manufacturas[k] || {}, ts = Date.now(), lineasObj = {};
+      for (const l of d.lineas) {
+        const q = num(l.cantValidada), c = Object.assign({}, l); delete c._k; lineasObj[l._k] = c;
+        if (!(q > 0) || !l.sacoId) continue;
+        const f = F(l.sacoId);
+        await I.sumar('pt/' + l.sacoId + '/cant', -q);
+        await DB.update({ ['pt/' + l.sacoId + '/ts']: ts, ['pt/' + l.sacoId + '/origen']: 'manufactura' });
+        await I.mov({ tipo: 'manufactura_pt', itemId: l.sacoId, cant: q, pt: l.pt, producto: l.nombre, reportado: num(l.cant), manufacturaId: k, reporto: (m.por && m.por.nombre) || '', ptAntes: f.pt, ptDespues: f.pt - q, nota: d.nota || '' });
+      }
+      await DB.update({ ['manufacturas/' + k + '/estado']: 'validada', ['manufacturas/' + k + '/lineas']: lineasObj, ['manufacturas/' + k + '/validado']: { uid: USER.uid, nombre: USER.nombre }, ['manufacturas/' + k + '/valTs']: ts, ['manufacturas/' + k + '/notaVal']: d.nota || '', ['manufacturas/' + k + '/odoo']: false });
+      I.toast('Manufactura validada ✔ — sacos vacíos descontados del almacén PT', 'ok');
+    } catch (x) { await DB.update({ ['manufacturas/' + k + '/estado']: 'por_validar' }).catch(() => { }); I.toast('Error: ' + x.message, 'err'); }
+  }
+  async function editarPT(cod) {
+    await ensureCatPT();
+    const x = (cod && vals(S.catalogoPT).find(r => r.codigo === cod)) || (cod && I.PT_DEFAULT.find(r => r.codigo === cod)) || { codigo: '', nombre: '', kg: 20, saco: '', activo: true };
+    const sacos = sacosItems();
+    const r = await I.modal(cod ? 'Editar presentación' : 'Nueva presentación de PT', `<label>Código PT<input id="pt-c" value="${esc(x.codigo)}" ${cod ? 'readonly' : ''} placeholder="04MAS0000"></label><label>Nombre<input id="pt-n" value="${esc(x.nombre)}"></label><label>Kg por saco<input id="pt-k" class="in-num" value="${esc(x.kg)}"></label><label>Saco vacío que consume (1 por saco empacado)<select id="pt-s"><option value="">— elegir —</option>${sacos.map(s => `<option value="${esc(s.id)}" ${s.id === x.saco ? 'selected' : ''}>${esc(I.itemLabel(s))}</option>`).join('')}</select></label><label><input type="checkbox" id="pt-a" ${x.activo !== false ? 'checked' : ''}> Activo (aparece en la app del almacenista)</label>`,
+      [{ t: 'Cancelar' }, { t: 'Guardar', c: 'pri', v: 1, antes: ov => { const c = $('#pt-c', ov).value.trim(), n = $('#pt-n', ov).value.trim(), kg = num($('#pt-k', ov).value), s = $('#pt-s', ov).value; if (!c || !n || !(kg > 0) || !s) { I.toast('Código, nombre, kg y saco son obligatorios', 'err'); return false; } x._v = { codigo: c, nombre: n, kg, saco: s, activo: $('#pt-a', ov).checked }; } }]);
+    if (r.v !== 1) return;
+    await DB.update({ ['catalogoPT/' + I.keySafe(x._v.codigo)]: x._v }); I.toast('Presentación guardada ✔', 'ok');
+  }
+  VIEWS.manuf = {
+    mount(el) {
+      el.innerHTML = `<div class="card"><div class="card-h"><h2>🏭 Manufactura por validar</h2><span class="sp"></span><button class="btn sm" id="mf-push" title="Recibir aviso en este dispositivo cuando el almacén registre manufactura">🔔 Activar avisos</button></div>
+        <p class="muted small">El almacenista reporta cuántos sacos de cada presentación se empacaron. Al validar, se <b>descuenta el saco vacío en el almacén PT</b> (1 saco por saco empacado). No mueve MDE ni transferencias.</p><div id="mf-pend"></div></div>
+        <div class="card"><div class="card-h"><h3>Historial</h3><span class="sp"></span><input id="mf-q" placeholder="Buscar presentación o persona…" style="max-width:240px"><input type="date" id="mf-d" style="max-width:160px"><button class="btn sm" id="mf-x">Exportar</button></div><div id="mf-hist"></div></div>
+        <div class="card"><div class="card-h"><h3>🗂️ Catálogo de PT · presentación → saco vacío</h3><span class="sp"></span><button class="btn sm pri" id="mf-new">+ Presentación</button></div><p class="muted small">Es el catálogo que ve el almacenista. Si no lo has editado se usa la lista inicial (todas las presentaciones 04MAS).</p><div id="mf-cat"></div></div>`;
+      $('#mf-push', el).onclick = activarPush; $('#mf-q', el).oninput = I.debounce(() => render(true), 200); $('#mf-d', el).onchange = () => render(true); $('#mf-new', el).onclick = () => editarPT(null);
+      $('#mf-x', el).onclick = () => { const f = [['Folio', 'Fecha', 'Registró', 'Lote/turno', 'PT', 'Presentación', 'Sacos reportados', 'Sacos validados', 'Saco vacío descontado', 'Estado', 'Validó', 'Fecha validación', 'Nota', 'Reflejada en Odoo']]; histManuf().forEach(m => manufLineas(m).forEach(l => f.push([m._k, m.fecha, m.por && m.por.nombre, m.lote || '', l.pt, l.nombre, num(l.cant), l.cantValidada != null ? num(l.cantValidada) : '', l.sacoNombre || l.sacoId, I.MANUF_TXT[m.estado] || m.estado, m.validado && m.validado.nombre, m.valTs ? fFecha(m.valTs) : '', m.notaVal || '', m.odoo ? 'Sí' : '']))); I.exportXlsx('Manufactura_' + hoyISO() + '.xlsx', [{ nombre: 'Manufactura', filas: f }]); };
+    },
+    update(el) {
+      const pend = manufPend().sort((a, b) => a.ts - b.ts);
+      $('#mf-pend', el).innerHTML = pend.length ? pend.map(m => `<div class="card" style="background:var(--panel2)"><div class="row"><b>${esc(m.por && m.por.nombre)}</b><span class="muted small">registró ${fFecha(m.ts)}</span>${m.lote ? `<span class="b b-gry">${esc(m.lote)}</span>` : ''}</div>${m.nota ? `<div class="muted small">${esc(m.nota)}</div>` : ''}
+        <div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Presentación</th><th class="num">Kg/saco</th><th class="num">Sacos reportados</th><th>Saco vacío que se descuenta</th><th class="num">Existencia en PT</th><th style="width:140px">Sacos a validar</th></tr></thead><tbody>
+        ${manufLineas(m).map(l => { const f = F(l.sacoId); return `<tr><td>${esc(l.nombre)}<div class="tiny muted">${esc(l.pt)}</div></td><td class="num">${fmt(l.kg)}</td><td class="num">${fmt(l.cant)}</td><td>${esc(l.sacoNombre || l.sacoId)}</td><td class="num">${fmt(f.pt)}</td><td><input class="in-num" data-mq="${m._k}|${l._k}" value="${l.cant}"></td></tr>`; }).join('')}</tbody></table></div>
+        <div class="row" style="margin-top:8px"><input class="grow" placeholder="Nota (obligatoria si cambias cantidades o rechazas)" data-mn="${m._k}"><button class="btn danger" data-mrej="${m._k}">Rechazar</button><button class="btn ok" data-mval="${m._k}">✔ Validar y descontar sacos</button></div></div>`).join('') : '<div class="empty">Nada por validar</div>';
+      $$('[data-mval]', el).forEach(b => b.onclick = async () => {
+        const k = b.dataset.mval, m = S.manufacturas[k]; if (!m) return;
+        const ls = manufLineas(m).map(l => Object.assign({}, l, { cantValidada: num($(`[data-mq="${k}|${l._k}"]`).value) }));
+        const nota = $(`[data-mn="${k}"]`).value.trim();
+        if (ls.some(l => Math.abs(l.cantValidada - num(l.cant)) > 0.0001) && !nota) return I.toast('Cambiaste cantidades: escribe una nota', 'err');
+        const falta = {}; ls.forEach(l => { falta[l.sacoId] = (falta[l.sacoId] || 0) + l.cantValidada; });
+        const neg = Object.keys(falta).filter(id => F(id).pt - falta[id] < 0);
+        if (neg.length && !(await I.confirmar('Sacos vacíos insuficientes en PT', 'Estos sacos quedarían en negativo en el almacén PT: <b>' + neg.map(id => esc(item(id).nombre)).join(', ') + '</b>. ¿Validar de todos modos?'))) return;
+        b.disabled = true; await validarManuf(k, { lineas: ls, nota }); b.disabled = false;
+      });
+      $$('[data-mrej]', el).forEach(b => b.onclick = async () => {
+        const k = b.dataset.mrej, nota = $(`[data-mn="${k}"]`).value.trim(); if (!nota) return I.toast('Escribe el motivo del rechazo en la nota', 'err');
+        const claim = await DB.tx('manufacturas/' + k + '/estado', cur => cur === 'por_validar' ? 'rechazada' : undefined); if (claim !== 'rechazada') return I.toast('Este registro ya fue atendido', 'err');
+        await DB.update({ ['manufacturas/' + k + '/validado']: { uid: USER.uid, nombre: USER.nombre }, ['manufacturas/' + k + '/valTs']: Date.now(), ['manufacturas/' + k + '/notaVal']: nota }); I.toast('Registro rechazado', 'ok');
+      });
+      const h = histManuf();
+      $('#mf-hist', el).innerHTML = h.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Presentaciones</th><th>Registró</th><th>Validó</th><th>Estado</th><th>Odoo</th></tr></thead><tbody>${h.slice(0, 200).map(m => `<tr><td>${fDia(m.fecha)}<div class="tiny muted">${fFecha(m.valTs || m.ts)}</div></td><td class="small">${manufTxt(m)}${m.notaVal ? `<div class="muted tiny">Nota: ${esc(m.notaVal)}</div>` : ''}</td><td>${esc(m.por && m.por.nombre)}</td><td>${esc(m.validado ? m.validado.nombre : '')}</td><td><span class="b ${I.MANUF_CLS[m.estado] || 'b-gry'}">${I.MANUF_TXT[m.estado] || m.estado}</span></td><td>${m.estado === 'validada' ? `<label title="Marca cuando ya lo reflejaste en Odoo"><input type="checkbox" data-meo="${m._k}" ${m.odoo ? 'checked' : ''}></label>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin historial</div>';
+      $$('[data-meo]', el).forEach(c => c.onchange = () => DB.update({ ['manufacturas/' + c.dataset.meo + '/odoo']: c.checked, ['manufacturas/' + c.dataset.meo + '/odooPor']: USER.nombre, ['manufacturas/' + c.dataset.meo + '/odooTs']: Date.now() }));
+      const sac = id => item(id).nombre;
+      $('#mf-cat', el).innerHTML = `<div class="tw"><table><thead><tr><th>Código</th><th>Presentación</th><th class="num">Kg</th><th>Saco vacío</th><th>Activo</th><th></th></tr></thead><tbody>${catPT().map(x => `<tr style="${x.activo === false ? 'opacity:.5' : ''}"><td>${esc(x.codigo)}</td><td>${esc(x.nombre)}</td><td class="num">${fmt(x.kg)}</td><td>${esc(sac(x.saco))}${S.catalogo[x.saco] ? '' : ' <span class="b b-red">no está en catálogo</span>'}</td><td>${x.activo === false ? 'No' : 'Sí'}</td><td><button class="btn sm" data-ept="${esc(x.codigo)}">Editar</button></td></tr>`).join('')}</tbody></table></div>`;
+      $$('[data-ept]', el).forEach(b => b.onclick = () => editarPT(b.dataset.ept));
+    }
+  };
+  function histManuf() { const q = ($('#mf-q') && $('#mf-q').value || '').toLowerCase(), d = $('#mf-d') && $('#mf-d').value; return vals(S.manufacturas).filter(m => m.estado !== 'por_validar' && (!d || m.fecha >= d) && (!q || (manufTxt(m) + ' ' + (m.por && m.por.nombre) + ' ' + (m.validado && m.validado.nombre)).toLowerCase().includes(q))).sort((a, b) => (b.valTs || b.ts) - (a.valTs || a.ts)); }
+
   VIEWS.pt = {
     mount(el) {
       el.innerHTML = `
@@ -1105,7 +1184,7 @@
   }
 
   /* ---------- BITÁCORA ---------- */
-  const TIPOS = { carga: 'Carga de existencias', entrada: 'Entrada a almacén', transferencia_pt: 'Transferencia a PT', salida_pt: 'Salida PT (Odoo)', ajuste: 'Ajuste manual', conteo: 'Conteo aplicado', silo: 'Niveles de silo', odoo: 'Reporte Odoo', catalogo: 'Catálogo', sistema: 'Sistema', usuario: 'Usuarios' };
+  const TIPOS = { carga: 'Carga de existencias', entrada: 'Entrada a almacén', transferencia_pt: 'Transferencia a PT', manufactura_pt: 'Manufactura (saco vacío en PT)', salida_pt: 'Salida PT (Odoo)', ajuste: 'Ajuste manual', conteo: 'Conteo aplicado', silo: 'Niveles de silo', odoo: 'Reporte Odoo', catalogo: 'Catálogo', sistema: 'Sistema', usuario: 'Usuarios' };
   VIEWS.bitacora = {
     mount(el) {
       el.innerHTML = `<div class="card"><div class="card-h"><h2>🧾 Bitácora de movimientos</h2><span class="sp"></span><select id="bi-t" style="max-width:200px"><option value="">Todos los tipos</option>${Object.keys(TIPOS).map(k => `<option value="${k}">${TIPOS[k]}</option>`).join('')}</select><label style="margin:0">Desde <input type="date" id="bi-d" style="width:auto"></label><label style="margin:0">Hasta <input type="date" id="bi-h" style="width:auto"></label><input id="bi-q" placeholder="Buscar…" style="max-width:180px"><button class="btn sm" id="bi-x">Exportar</button></div><div id="bi-l"></div></div>`;
@@ -1175,6 +1254,7 @@
   function drawChat() { const c = $('#ia-c'); if (!c) return; c.innerHTML = CHAT.length ? CHAT.map(m => `<div class="msg ${m.r}">${esc(m.t)}</div>`).join('') : '<div class="empty small">Haz una pregunta o usa uno de los atajos.</div>'; c.scrollTop = c.scrollHeight; }
   function hallazgos() {
     const H = [], now = Date.now();
+    if (I.MANUF) manufPend().filter(m => now - m.ts > 12 * 3600e3).forEach(m => H.push({ n: 'media', t: 'Manufactura sin validar (' + fFecha(m.ts) + ')', d: esc((m.por && m.por.nombre) + ': ' + manufTxt(m)) }));
     items(true).forEach(it => { const f = F(it.id); if (f.mde < 0) H.push({ n: 'alta', t: 'Existencia negativa en ' + I.almacen(it.familia).cod + ': ' + it.nombre, d: I.almacen(it.familia).cod + ' = ' + fmt(f.mde) + ' ' + esc(it.unidad) + '. Revisa transferencias a PT sin entrada registrada.' }); if (f.pt < 0) H.push({ n: 'alta', t: 'Existencia negativa en PT: ' + it.nombre, d: 'PT = ' + fmt(f.pt) }); });
     if (S.odoo) odRows().filter(r => r.d != null && Math.abs(r.val || 0) > 5000 && Math.abs(r.pct || 0) > 5).sort((a, b) => Math.abs(b.val) - Math.abs(a.val)).slice(0, 8).forEach(r => H.push({ n: Math.abs(r.val) > 50000 ? 'alta' : 'media', t: 'Diferencia vs Odoo: ' + r.it.nombre, d: 'Físico ' + fmt(r.fis) + ' vs teórico ' + fmt(r.q) + ' (' + fmt(r.pct) + '%, ' + money(r.val) + ')' }));
     vals(S.entregas).filter(e => ['por_recibir', 'recibida'].includes(I.estadoEntrega(e)) && now - e.ts > 86400000).forEach(e => H.push({ n: 'media', t: (I.estadoEntrega(e) === 'recibida' ? 'Entrega recibida por producción sin aceptar desde ' : 'Entrega sin confirmar por producción desde ') + fFecha(e.ts), d: esc(e.por && e.por.nombre) + ': ' + lineasTxt(e.lineas) }));
