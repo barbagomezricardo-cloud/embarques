@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Los 19 Hermanos · Mi cuenta</title>
+<meta name="description" content="App de clientes de Los 19 Hermanos División Pet Food: tu avance, tus descuentos, tus prepedidos y su seguimiento.">
+<meta name="theme-color" content="#DE0A14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="19 Hermanos">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/icono-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --rojo:#DE0A14; --rojo-o:#A80810; --rojo-s:#FDE8E9; --tinta:#281E12; --tinta-2:#5A4E42; --tinta-3:#8C8178;
+  --papel:#FBF7F2; --blanco:#FFFFFF; --linea:#EADFD3; --linea-2:#F3ECE4;
+  --ok:#1D7A45; --ok-s:#E3F3EA; --warn:#A35F00; --warn-s:#FCF0DC; --info:#1F4E8C; --info-s:#E6EEF9;
+  --r:16px; --sombra:0 1px 2px rgba(40,30,18,.06),0 6px 20px rgba(40,30,18,.07);
+  --f-d:"Archivo",system-ui,sans-serif; --f-b:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --tinta:#F4ECE3; --tinta-2:#CFC3B6; --tinta-3:#9C9084; --papel:#17120D; --blanco:#221B14; --linea:#3A3027; --linea-2:#2B231B;
+  --rojo-s:#3B1214; --ok:#5CC98A; --ok-s:#16301F; --warn:#F0B357; --warn-s:#33270F; --info:#8FB4EA; --info-s:#172438; color-scheme:dark}}
+:root[data-theme="dark"]{--tinta:#F4ECE3; --tinta-2:#CFC3B6; --tinta-3:#9C9084; --papel:#17120D; --blanco:#221B14; --linea:#3A3027; --linea-2:#2B231B;
+  --rojo-s:#3B1214; --ok:#5CC98A; --ok-s:#16301F; --warn:#F0B357; --warn-s:#33270F; --info:#8FB4EA; --info-s:#172438; color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--papel);color:var(--tinta);font-family:var(--f-b);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--f-d);letter-spacing:-.01em;margin:0;line-height:1.15;text-wrap:balance}
+.num{font-family:var(--f-d);font-variant-numeric:tabular-nums}
+a{color:var(--rojo)}
+.oculto{display:none!important}
+
+/* ── encabezado ── */
+.top{position:sticky;top:0;z-index:20;background:var(--rojo);color:#fff;padding:calc(10px + var(--safe-t)) 16px 10px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(168,8,16,.25)}
+.top .sello{width:44px;height:44px;border-radius:50%;background:#fff;display:grid;place-items:center;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.top .sello img{width:40px;height:40px}
+.top .marca{flex:1;min-width:0}
+.top .marca b{display:block;font-family:var(--f-d);font-weight:900;font-size:17px;letter-spacing:.01em;text-transform:uppercase;line-height:1.1}
+.top .marca span{display:block;font-size:12px;opacity:.88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.campana{position:relative;width:42px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;cursor:pointer}
+.campana .pt{position:absolute;top:5px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#fff;color:var(--rojo);font:800 11px/17px var(--f-d)}
+.estrellas{height:12px;background:var(--rojo-o);display:flex;justify-content:center;gap:14px;overflow:hidden;color:rgba(255,255,255,.55);font-size:9px;line-height:12px;letter-spacing:0}
+.demo-banda{background:#281E12;color:#FBE7C6;text-align:center;font-size:12px;padding:5px 10px;font-weight:600}
+
+main{max-width:640px;margin:0 auto;padding:16px 16px calc(96px + var(--safe-b))}
+.vista{display:grid;gap:14px;animation:entra .22s ease}
+@keyframes entra{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.vista{animation:none}}
+
+.card{background:var(--blanco);border:1px solid var(--linea);border-radius:var(--r);box-shadow:var(--sombra);padding:16px}
+.card h2{font-size:18px;font-weight:800}
+.card h3{font-size:15px;font-weight:800}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-3);font-weight:700}
+.muted{color:var(--tinta-2)}
+.chico{font-size:13px}
+.fila{display:flex;align-items:center;gap:10px}
+.entre{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+
+/* ── nivel ── */
+.nivel{border-radius:20px;color:#fff;padding:18px 18px 16px;position:relative;overflow:hidden;background:linear-gradient(140deg,var(--rojo) 0%,var(--rojo-o) 100%);box-shadow:0 10px 26px rgba(168,8,16,.28)}
+.nivel::after{content:"★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★";position:absolute;left:-10px;right:-10px;bottom:6px;font-size:10px;letter-spacing:6px;color:rgba(255,255,255,.18);white-space:nowrap;overflow:hidden}
+.nivel .tag{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:3px 10px;font:800 12px var(--f-d);letter-spacing:.08em;text-transform:uppercase}
+.nivel .tag i{width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--c,#fff)}
+.nivel h2{font-size:22px;font-weight:900;margin-top:10px}
+.nivel .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.nivel .kpi{background:rgba(255,255,255,.12);border-radius:12px;padding:9px 10px}
+.nivel .kpi b{display:block;font:900 22px/1.1 var(--f-d);font-variant-numeric:tabular-nums}
+.nivel .kpi span{font-size:11.5px;opacity:.9;line-height:1.25;display:block;margin-top:2px}
+
+.pbar{height:9px;background:var(--linea-2);border-radius:99px;overflow:hidden;margin:6px 0 2px}
+.pbar i{display:block;height:100%;border-radius:99px;background:var(--rojo);transition:width .5s ease}
+.pbar.ok i{background:var(--ok)}
+.meta{padding:11px 0;border-top:1px solid var(--linea-2)}
+.meta:first-of-type{border-top:0}
+.meta .entre b{font:800 14px var(--f-d)}
+.meta .estado{font:800 12px var(--f-d);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.meta .estado.si{background:var(--ok-s);color:var(--ok)}
+.meta .estado.no{background:var(--warn-s);color:var(--warn)}
+.big{font:900 34px/1 var(--f-d);font-variant-numeric:tabular-nums}
+.aviso{border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.45}
+.aviso.info{background:var(--info-s);color:var(--info)}
+.aviso.ok{background:var(--ok-s);color:var(--ok)}
+.aviso.warn{background:var(--warn-s);color:var(--warn)}
+.aviso.rojo{background:var(--rojo-s);color:var(--rojo-o)}
+:root[data-theme="dark"] .aviso.rojo{color:#FF9EA3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .aviso.rojo{color:#FF9EA3}}
+
+/* ── botones / formularios ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:12px;padding:13px 16px;font:800 15px var(--f-d);cursor:pointer;background:var(--rojo);color:#fff;min-height:48px;text-decoration:none}
+.btn:active{transform:translateY(1px)}
+.btn svg,.ubic-ok svg{width:20px;height:20px;flex:none}
+.btn.sec{background:var(--blanco);color:var(--tinta);border:1.5px solid var(--linea)}
+.btn.ghost{background:transparent;color:var(--rojo);padding:8px 10px;min-height:auto}
+.btn.wa{background:#1FA855}
+.btn.full{width:100%}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.tab:focus-visible{outline:3px solid #F7B3B6;outline-offset:2px}
+label.campo{display:grid;gap:5px;font-size:13px;font-weight:700;color:var(--tinta-2)}
+label.campo small{font-weight:500;color:var(--tinta-3)}
+input.in,select.in,textarea.in{width:100%;border:1.5px solid var(--linea);background:var(--blanco);border-radius:12px;padding:12px 13px;font-size:16px;min-height:48px}
+textarea.in{min-height:96px;resize:vertical}
+.tel-in{display:flex;border:1.5px solid var(--linea);border-radius:12px;background:var(--blanco);overflow:hidden}
+.tel-in span{padding:12px 12px;background:var(--linea-2);font-weight:700;color:var(--tinta-2);font-size:16px}
+.tel-in input{border:0;flex:1;padding:12px;font-size:18px;letter-spacing:.04em;background:transparent;min-width:0}
+.tel-in input:focus{outline:none}
+.codigo{font:800 26px var(--f-d)!important;letter-spacing:.4em;text-align:center}
+.seg{display:grid;grid-template-columns:repeat(var(--n,2),1fr);background:var(--linea-2);border-radius:12px;padding:4px;gap:4px}
+.seg button{border:0;background:transparent;border-radius:9px;padding:10px 8px;font:700 13.5px var(--f-b);color:var(--tinta-2);cursor:pointer;line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--blanco);color:var(--rojo);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.err{color:var(--rojo);font-size:13px;font-weight:600;min-height:1em}
+
+/* ── catálogo de prepedido ── */
+.prod{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:13px 0;border-top:1px solid var(--linea-2)}
+.prod:first-child{border-top:0}
+.prod .nm{font-weight:700;font-size:14.5px;line-height:1.25}
+.prod .sub{font-size:12.5px;color:var(--tinta-3);margin-top:2px}
+.prod .precio{font:800 14px var(--f-d);color:var(--tinta)}
+.chip{display:inline-block;font:800 10.5px var(--f-d);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:6px;background:var(--rojo-s);color:var(--rojo);vertical-align:1px;margin-left:4px}
+.paso{display:flex;align-items:center;border:1.5px solid var(--linea);border-radius:12px;overflow:hidden;background:var(--blanco)}
+.paso button{width:40px;height:42px;border:0;background:transparent;font:800 20px var(--f-d);color:var(--rojo);cursor:pointer}
+.paso input{width:58px;height:42px;border:0;text-align:center;font:800 16px var(--f-d);background:transparent;-moz-appearance:textfield}
+.paso input::-webkit-outer-spin-button,.paso input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.resumen{position:sticky;bottom:calc(74px + var(--safe-b));z-index:15;background:var(--tinta);color:#fff;border-radius:16px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+:root[data-theme="dark"] .resumen{background:#3A2D20}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .resumen{background:#3A2D20}}
+.resumen .t{flex:1;min-width:0}
+.resumen .t b{font:900 18px var(--f-d)}
+.resumen .t span{display:block;font-size:12px;opacity:.8}
+.simu{border:2px dashed var(--rojo);background:var(--rojo-s);border-radius:16px;padding:14px}
+.simu .flecha{display:flex;align-items:center;gap:10px;margin:8px 0}
+.simu .flecha s{color:var(--tinta-3);font:800 20px var(--f-d)}
+.simu .flecha b{font:900 30px var(--f-d);color:var(--rojo)}
+
+/* ── seguimiento ── */
+.ped{display:grid;gap:10px}
+.ped .cab{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.ped .folio{font:900 17px var(--f-d)}
+.badge{font:800 11.5px var(--f-d);letter-spacing:.04em;text-transform:uppercase;padding:4px 9px;border-radius:99px;white-space:nowrap}
+.b-enviado{background:var(--warn-s);color:var(--warn)} .b-confirmado,.b-fincado{background:var(--info-s);color:var(--info)}
+.b-liberado{background:var(--rojo-s);color:var(--rojo)} .b-facturado{background:var(--ok-s);color:var(--ok)}
+.b-rechazado,.b-cancelado{background:var(--linea-2);color:var(--tinta-3)}
+.linea{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:4px 0}
+.linea div{text-align:center;font-size:10.5px;font-weight:700;color:var(--tinta-3);line-height:1.2}
+.linea div::before{content:"";display:block;height:6px;border-radius:99px;background:var(--linea);margin-bottom:6px}
+.linea div.ya{color:var(--tinta)} .linea div.ya::before{background:var(--rojo)}
+.linea div.fin::before{background:var(--ok)}
+.items{font-size:13.5px;border-top:1px dashed var(--linea);padding-top:8px;display:grid;gap:3px}
+.lotes{background:var(--papel);border-radius:10px;padding:9px 11px;font-size:13px}
+details.mas>summary{cursor:pointer;font-weight:700;color:var(--rojo);font-size:13.5px;list-style:none}
+details.mas>summary::-webkit-details-marker{display:none}
+
+/* ── histórico ── */
+.tabla{width:100%;border-collapse:collapse;font-size:13px}
+.tabla th{text-align:right;color:var(--tinta-3);font-weight:700;font-size:11.5px;padding:6px;border-bottom:1px solid var(--linea);white-space:nowrap}
+.tabla td{text-align:right;padding:6px;border-bottom:1px solid var(--linea-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tabla th:first-child,.tabla td:first-child{text-align:left;white-space:normal;min-width:140px}
+.tabla tr.tot td{font-weight:800;border-top:2px solid var(--linea)}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+.barras{display:flex;align-items:flex-end;gap:8px;height:150px;padding-top:18px}
+.barras .b{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.barras .b i{width:100%;max-width:42px;background:var(--rojo);border-radius:7px 7px 3px 3px;min-height:3px}
+.barras .b.act i{background:repeating-linear-gradient(135deg,var(--rojo),var(--rojo) 6px,var(--rojo-o) 6px,var(--rojo-o) 12px)}
+.barras .b span{font-size:11px;color:var(--tinta-3);font-weight:700}
+.barras .b b{font:800 11.5px var(--f-d)}
+
+/* ── navegación inferior ── */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--blanco);border-top:1px solid var(--linea);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px calc(6px + var(--safe-b));box-shadow:0 -4px 18px rgba(40,30,18,.06)}
+.tab{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:12px;color:var(--tinta-3);font:700 11px var(--f-b);cursor:pointer;position:relative}
+.tab svg{width:24px;height:24px}
+.tab[aria-current="page"]{color:var(--rojo)}
+.tab[aria-current="page"]::before{content:"";position:absolute;top:-6px;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--rojo)}
+.tab .pt{position:absolute;top:2px;right:calc(50% - 20px);min-width:16px;height:16px;border-radius:8px;background:var(--rojo);color:#fff;font:800 10px/16px var(--f-d);padding:0 4px}
+
+/* ── pantallas de acceso ── */
+.acceso{min-height:100vh;display:grid;place-items:center;padding:24px 18px calc(24px + var(--safe-b));background:radial-gradient(1200px 500px at 50% -10%,#fff 0%,var(--papel) 60%)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .acceso{background:var(--papel)}}
+:root[data-theme="dark"] .acceso{background:var(--papel)}
+.acceso .caja{width:100%;max-width:420px;display:grid;gap:16px}
+.acceso .logo{width:138px;height:138px;margin:0 auto;border-radius:50%;background:#fff;padding:6px;box-shadow:0 12px 30px rgba(168,8,16,.18)}
+.acceso .logo img{width:100%;height:100%}
+.acceso h1{text-align:center;font-size:26px;font-weight:900}
+.acceso p.lede{text-align:center;color:var(--tinta-2);margin:0}
+.pasos-reg{display:flex;gap:6px;justify-content:center}
+.pasos-reg i{width:28px;height:5px;border-radius:9px;background:var(--linea)}
+.pasos-reg i.on{background:var(--rojo)}
+#mapa{height:260px;border-radius:12px;border:1.5px solid var(--linea);margin-top:8px;z-index:1}
+.ubic-ok{display:flex;gap:10px;align-items:center;background:var(--ok-s);color:var(--ok);border-radius:12px;padding:10px 12px;font-size:13.5px;font-weight:600}
+
+/* ── hojas / avisos ── */
+.velo{position:fixed;inset:0;background:rgba(20,14,8,.5);z-index:50;display:flex;align-items:flex-end;justify-content:center;animation:fade .15s}
+@keyframes fade{from{opacity:0}}
+.hoja{background:var(--blanco);width:100%;max-width:640px;border-radius:22px 22px 0 0;padding:18px 16px calc(18px + var(--safe-b));max-height:88vh;overflow:auto;display:grid;gap:12px}
+.hoja .asa{width:44px;height:5px;border-radius:9px;background:var(--linea);margin:0 auto 4px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + var(--safe-b));z-index:60;background:var(--tinta);color:var(--papel);padding:11px 16px;border-radius:12px;font-weight:600;font-size:14px;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.cargando{display:grid;place-items:center;min-height:60vh;gap:12px;color:var(--tinta-3)}
+.giro{width:40px;height:40px;border-radius:50%;border:4px solid var(--linea);border-top-color:var(--rojo);animation:gira .8s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+.notif{padding:11px 0;border-top:1px solid var(--linea-2)}
+.notif.nueva b::before{content:"● ";color:var(--rojo)}
+.mini{font-size:12px;color:var(--tinta-3)}
+.vacio{text-align:center;padding:26px 10px;color:var(--tinta-3)}
+.vacio img{width:84px;opacity:.9;margin-bottom:8px}
+.pie{text-align:center;font-size:11.5px;color:var(--tinta-3);padding:6px 0 0}
+.pie img{width:46px;display:block;margin:0 auto 6px;opacity:.95}
+</style>
+</head>
+<body>
+<div id="raiz"><div class="cargando"><div class="giro"></div>Cargando…</div></div>
+<div id="capa"></div>
+<div id="recaptcha"></div>
+
+<script src="config.js"></script>
+<script>
+/* ================================================================
+   App Clientes · Los 19 Hermanos División Pet Food
+   ================================================================ */
+(function(){
+'use strict';
+var CFG = window.CLI_CFG || {};
+var Q = new URLSearchParams(location.search);
+var DEMO = Q.get('demo') === '1' || CFG.demo === true;
+var ESTADO = { auth:null, yo:null, vista:'inicio', carrito:{}, modalidad:'recoge', escenario:'recoge', pendienteSms:null, reg:{}, cargandoYo:false };
+var $ = function(s,c){ return (c||document).querySelector(s); };
+var raiz = document.getElementById('raiz'), capa = document.getElementById('capa');
+var MES = ['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var MESC = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+var NIVLAB = { DIAMANTE_PLUS:'Diamante Plus', DIAMANTE:'Diamante', PLATINO:'Platino', ORO:'Oro', PLATA:'Plata', BRONCE:'Bronce', COBRE:'Cobre', INICIAL:'Inicial' };
+var NIVCOL = { DIAMANTE_PLUS:'#c4b5fd', DIAMANTE:'#67e8f9', PLATINO:'#e2e8f0', ORO:'#f5c842', PLATA:'#cbd5e1', BRONCE:'#f0a868', COBRE:'#d4915d', INICIAL:'#e5e7eb' };
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function fmt(n){ return Math.round(Number(n)||0).toLocaleString('es-MX'); }
+function money(n){ return '$' + (Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function pct(n){ return (Number(n)||0).toFixed(2) + '%'; }
+function fechaHora(ts){ if(!ts) return ''; var d=new Date(ts); return d.toLocaleDateString('es-MX',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}); }
+function toast(t){ var e=document.createElement('div'); e.className='toast'; e.setAttribute('role','status'); e.textContent=t; document.body.appendChild(e); setTimeout(function(){ e.remove(); }, 3200); }
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){} }
+function ico(n){
+  var P = {
+    inicio:'<path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+    pedir:'<path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L20 8H6.2"/><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/>',
+    pedidos:'<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+    historial:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    mas:'<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>',
+    campana:'<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/>',
+    wa:'<path d="M20 12a8 8 0 0 1-11.8 7L4 20l1.1-4A8 8 0 1 1 20 12z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.5-2-1.5-2.5-2.5l1-1-1-2z"/>',
+    ubic:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'
+  };
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(P[n]||'')+'</svg>';
+}
+
+/* ---------------- conexión ---------------- */
+var Net = {
+  llamar: function(accion, datos){
+    if(DEMO) return window.CliDemo.api('cliente', accion, datos||{}, ESTADO.auth);
+    return Auth.token().then(function(tok){
+      return fetch(CFG.api, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok}, body: JSON.stringify({ modo:'cliente', accion:accion, datos:datos||{} }) });
+    }).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){ if(!r.ok) throw { status:r.status, error:j.error||'No se pudo conectar.', code:j.code }; return j; });
+    }, function(e){ if(e && e.status) throw e; throw { status:0, error:'Sin conexión. Revisa tu internet e intenta de nuevo.' }; });
+  }
+};
+
+/* ---------------- autenticación (SMS) ---------------- */
+// En la app de tienda (Capacitor) el SMS lo maneja el plugin nativo de Firebase; en web, el SDK web.
+var NAT = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() ? (window.Capacitor.Plugins||{}) : null;
+var FA = NAT && NAT.FirebaseAuthentication;
+var Auth = {
+  fb:null,
+  iniciar: function(){
+    if(FA && !DEMO){
+      return FA.getCurrentUser().then(function(r){ var u=r&&r.user; ESTADO.auth = u ? { uid:u.uid, tel:u.phoneNumber } : null; return ESTADO.auth; });
+    }
+    if(DEMO){
+      var s = lsGet('cliDemoSesion'); ESTADO.auth = s ? JSON.parse(s) : null;
+      return Promise.resolve(ESTADO.auth);
+    }
+    return cargarScripts(['https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js','https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js']).then(function(){
+      Auth.fb = firebase.initializeApp(CFG.firebase, 'clientes');
+      firebase.auth(Auth.fb).languageCode = 'es';
+      return new Promise(function(res){
+        var un = firebase.auth(Auth.fb).onAuthStateChanged(function(u){ un(); ESTADO.auth = u ? { uid:u.uid, tel:u.phoneNumber } : null; res(ESTADO.auth); });
+      });
+    });
+  },
+  token: function(){ if(FA) return FA.getIdToken().then(function(r){ return r.token; }); var u = Auth.fb && firebase.auth(Auth.fb).currentUser; if(!u) return Promise.reject({ status:401, error:'Inicia sesión.' , code:'sin_sesion'}); return u.getIdToken(); },
+  enviarSms: function(tel10){
+    if(DEMO){ ESTADO.pendienteSms = { tel:tel10 }; return Promise.resolve(); }
+    if(FA) return new Promise(function(ok,ko){
+      var h1, h2;
+      FA.addListener('phoneCodeSent', function(ev){ ESTADO.pendienteSms = { tel:tel10, vid:ev.verificationId }; ok(); }).then(function(h){ h1=h; });
+      FA.addListener('phoneVerificationFailed', function(ev){ ko({ code: ev && ev.message }); }).then(function(h){ h2=h; });
+      FA.signInWithPhoneNumber({ phoneNumber:'+52'+tel10 }).catch(ko);
+    });
+    var auth = firebase.auth(Auth.fb);
+    if(!Auth.verif) Auth.verif = new firebase.auth.RecaptchaVerifier('recaptcha', { size:'invisible' }, Auth.fb);
+    return auth.signInWithPhoneNumber('+52'+tel10, Auth.verif).then(function(conf){ ESTADO.pendienteSms = { tel:tel10, conf:conf }; })
+      .catch(function(e){ try{ Auth.verif.clear(); }catch(x){} Auth.verif=null; throw e; });
+  },
+  confirmar: function(codigo){
+    if(DEMO){
+      if(codigo !== '123456') return Promise.reject({ code:'auth/invalid-verification-code' });
+      ESTADO.auth = { uid:'demo-'+ESTADO.pendienteSms.tel, tel:'+52'+ESTADO.pendienteSms.tel }; lsSet('cliDemoSesion', JSON.stringify(ESTADO.auth)); return Promise.resolve();
+    }
+    if(FA) return FA.confirmVerificationCode({ verificationId:ESTADO.pendienteSms.vid, verificationCode:codigo }).then(function(r){ ESTADO.auth = { uid:r.user.uid, tel:r.user.phoneNumber }; });
+    return ESTADO.pendienteSms.conf.confirm(codigo).then(function(r){ ESTADO.auth = { uid:r.user.uid, tel:r.user.phoneNumber }; });
+  },
+  salir: function(){
+    ESTADO.auth=null; ESTADO.yo=null; ESTADO.carrito={};
+    if(DEMO){ lsSet('cliDemoSesion', null); return Promise.resolve(); }
+    if(FA) return FA.signOut();
+    return firebase.auth(Auth.fb).signOut();
+  }
+};
+function errSms(e){
+  var c = e && e.code || '';
+  if(c==='auth/invalid-phone-number') return 'El número no es válido. Escribe tus 10 dígitos.';
+  if(c==='auth/too-many-requests') return 'Demasiados intentos. Espera unos minutos.';
+  if(c==='auth/invalid-verification-code') return 'El código no coincide. Revísalo e intenta de nuevo.';
+  if(c==='auth/code-expired') return 'El código venció. Pide uno nuevo.';
+  if(c==='auth/quota-exceeded') return 'No pudimos enviar el SMS en este momento. Intenta más tarde.';
+  return 'No se pudo completar. Revisa tu conexión e intenta de nuevo.';
+}
+function cargarScripts(urls){
+  return urls.reduce(function(p,u){ return p.then(function(){ return new Promise(function(ok,ko){ if(document.querySelector('script[src="'+u+'"]')) return ok(); var s=document.createElement('script'); s.src=u; s.onload=ok; s.onerror=function(){ ko(new Error('No cargó '+u)); }; document.head.appendChild(s); }); }); }, Promise.resolve());
+}
+function cargarCss(u){ if(document.querySelector('link[href="'+u+'"]')) return; var l=document.createElement('link'); l.rel='stylesheet'; l.href=u; document.head.appendChild(l); }
+
+/* ---------------- arranque ---------------- */
+function arrancar(){
+  var p = DEMO ? cargarScripts(['cli-core.js','cli-demo.js']) : Promise.resolve();
+  p.then(Auth.iniciar).then(function(a){ if(!a) return pantallaTel(); return cargarYo(); })
+   .catch(function(e){ pantallaError(e && e.error || 'No pudimos iniciar la app. Revisa tu internet.'); });
+  if('serviceWorker' in navigator && !DEMO && !NAT){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
+}
+function cargarYo(silencioso){
+  if(ESTADO.cargandoYo) return Promise.resolve(); ESTADO.cargandoYo=true;
+  if(!silencioso && !ESTADO.yo) raiz.innerHTML = '<div class="cargando"><div class="giro"></div>Cargando tu cuenta…</div>';
+  return Net.llamar('yo').then(function(y){
+    ESTADO.cargandoYo=false; ESTADO.yo = y;
+    if(y.estado==='sin_registro') return pantallaRegistro();
+    if(y.estado!=='activo') return pantallaPendiente();
+    Net.llamar('ping',{ plataforma: plataforma(), version: CFG.version||'' }).catch(function(){});
+    pintarApp();
+  }).catch(function(e){
+    ESTADO.cargandoYo=false;
+    if(e && e.status===401){ return Auth.salir().then(pantallaTel); }
+    if(e && e.status===423) return pantallaError(e.error);
+    if(ESTADO.yo && silencioso) return toast(e.error||'Sin conexión');
+    pantallaError(e && e.error || 'No pudimos cargar tu cuenta.');
+  });
+}
+function plataforma(){ var u=navigator.userAgent||''; var st=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches; return (/iPhone|iPad|iPod/.test(u)?'ios':/Android/.test(u)?'android':'web')+(window.Capacitor?'-nativa':(st?'-instalada':'')); }
+function bandaDemo(){ return DEMO ? '<div class="demo-banda">Modo demostración · datos ficticios · código SMS: 123456</div>' : ''; }
+
+/* ---------------- pantallas de acceso ---------------- */
+function marcoAcceso(html){ raiz.innerHTML = bandaDemo()+'<div class="acceso"><div class="caja">'+html+'</div></div>'; }
+function pantallaError(msg){
+  marcoAcceso('<div class="logo"><img src="img/logo-petfood.png" alt="Los 19 Hermanos División Pet Food"></div><h1>Algo no salió bien</h1><p class="lede">'+esc(msg)+'</p><button class="btn full" id="reint">Intentar de nuevo</button>');
+  $('#reint').onclick=function(){ location.reload(); };
+}
+function pantallaTel(){
+  marcoAcceso(
+    '<div class="logo"><img src="img/logo-petfood.png" alt="Los 19 Hermanos División Pet Food"></div>'+
+    '<div><h1>Tu cuenta de cliente</h1><p class="lede" style="margin-top:6px">Consulta tu avance, tus descuentos y tus pedidos con Los 19 Hermanos.</p></div>'+
+    '<div class="card" style="display:grid;gap:12px"><label class="campo">Tu número de celular<div class="tel-in"><span>+52</span><input id="tel" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10 dígitos" aria-label="Número de celular a 10 dígitos"></div><small>Te enviaremos un código por SMS para verificar que eres tú.</small></label>'+
+    '<div class="err" id="e"></div><button class="btn full" id="ir">Enviar código</button></div>'+
+    '<p class="pie">Al continuar aceptas el <a href="privacidad.html" target="_blank" rel="noopener">aviso de privacidad</a>: usamos tus datos solo para atenderte como cliente.</p>'
+  );
+  var t=$('#tel'); t.focus();
+  t.oninput=function(){ t.value=t.value.replace(/\D/g,'').slice(0,10); };
+  $('#ir').onclick=function(){
+    var v=t.value; if(v.length!==10){ $('#e').textContent='Escribe tu número a 10 dígitos.'; return; }
+    var b=this; b.disabled=true; b.textContent='Enviando…'; $('#e').textContent='';
+    Auth.enviarSms(v).then(pantallaCodigo).catch(function(e){ b.disabled=false; b.textContent='Enviar código'; $('#e').textContent=errSms(e); });
+  };
+  t.onkeydown=function(e){ if(e.key==='Enter') $('#ir').click(); };
+}
+function pantallaCodigo(){
+  var tel=ESTADO.pendienteSms.tel;
+  marcoAcceso(
+    '<div class="logo" style="width:96px;height:96px"><img src="img/logo-petfood.png" alt=""></div>'+
+    '<div><h1>Escribe el código</h1><p class="lede" style="margin-top:6px">Lo enviamos por SMS al <b>'+esc(tel.replace(/(\d{2})(\d{4})(\d{4})/,'$1 $2 $3'))+'</b>.</p></div>'+
+    '<div class="card" style="display:grid;gap:12px"><input id="cod" class="in codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Código de 6 dígitos" placeholder="······">'+
+    '<div class="err" id="e"></div><button class="btn full" id="ok">Entrar</button><button class="btn ghost" id="otro">Cambiar número</button></div>'
+  );
+  var c=$('#cod'); c.focus();
+  c.oninput=function(){ c.value=c.value.replace(/\D/g,'').slice(0,6); if(c.value.length===6) $('#ok').click(); };
+  $('#ok').onclick=function(){
+    if(c.value.length!==6){ $('#e').textContent='El código tiene 6 dígitos.'; return; }
+    var b=this; b.disabled=true; b.textContent='Verificando…';
+    Auth.confirmar(c.value).then(function(){ return cargarYo(); }).catch(function(e){ b.disabled=false; b.textContent='Entrar'; $('#e').textContent=errSms(e); });
+  };
+  $('#otro').onclick=pantallaTel;
+}
+
+/* ---------------- registro ---------------- */
+function pantallaRegistro(paso){
+  paso = paso || 1; var R = ESTADO.reg;
+  var pasos = '<div class="pasos-reg" aria-label="Paso '+paso+' de 2"><i class="on"></i><i class="'+(paso>1?'on':'')+'"></i></div>';
+  if(paso===1){
+    marcoAcceso(pasos+
+      '<div><h1>Regístrate</h1><p class="lede" style="margin-top:6px">Con estos datos te identificamos en nuestro sistema de ventas.</p></div>'+
+      '<div class="card" style="display:grid;gap:14px">'+
+      '<label class="campo">Nombre completo<input class="in" id="nombre" autocomplete="name" value="'+esc(R.nombre||'')+'" placeholder="Nombre y apellidos"></label>'+
+      '<label class="campo">Razón social<input class="in" id="rs" autocomplete="organization" value="'+esc(R.razonSocial||'')+'" placeholder="Como aparece en tu factura"></label>'+
+      '<label class="campo">Número de cliente <small>(opcional, si lo conoces)</small><input class="in" id="ncli" value="'+esc(R.numCliente||'')+'" placeholder="Ej. 1234"></label>'+
+      '<label class="campo">Teléfono de contacto <small>(si es distinto a tu celular)</small><input class="in" id="tc" inputmode="tel" value="'+esc(R.telContacto||'')+'" placeholder="Opcional"></label>'+
+      '<div class="err" id="e"></div><button class="btn full" id="sig">Continuar</button></div>'+
+      '<button class="btn ghost" id="salir">Usar otro número</button>');
+    $('#sig').onclick=function(){
+      R.nombre=$('#nombre').value.trim(); R.razonSocial=$('#rs').value.trim(); R.numCliente=$('#ncli').value.trim(); R.telContacto=$('#tc').value.trim();
+      if(R.nombre.split(/\s+/).length<2){ $('#e').textContent='Escribe tu nombre y apellido.'; return; }
+      if(R.razonSocial.length<3){ $('#e').textContent='Escribe la razón social.'; return; }
+      pantallaRegistro(2);
+    };
+    $('#salir').onclick=function(){ Auth.salir().then(pantallaTel); };
+    return;
+  }
+  R.negocio = R.negocio || { modo:'gps' };
+  var N = R.negocio;
+  marcoAcceso(pasos+
+    '<div><h1>Tu negocio</h1><p class="lede" style="margin-top:6px">Así sabemos a dónde entregarte y qué ruta te corresponde.</p></div>'+
+    '<div class="card" style="display:grid;gap:14px">'+
+    '<label class="campo">Nombre del negocio<input class="in" id="nn" value="'+esc(N.nombre||'')+'" placeholder="Ej. Forrajera San José"></label>'+
+    '<div class="campo" style="display:grid;gap:8px"><span style="font-size:13px;font-weight:700;color:var(--tinta-2)">Ubicación</span>'+
+    '<div class="seg" style="--n:3" role="group" aria-label="Cómo registrar la ubicación"><button data-m="gps" aria-pressed="'+(N.modo==='gps')+'">Estoy aquí</button><button data-m="mapa" aria-pressed="'+(N.modo==='mapa')+'">Marcar en mapa</button><button data-m="manual" aria-pressed="'+(N.modo==='manual')+'">Solo dirección</button></div>'+
+    '<div id="ubicCaja"></div></div>'+
+    '<label class="campo">Dirección <small>(calle, número, colonia, municipio)</small><textarea class="in" id="dir" rows="2" placeholder="Para la entrega">'+esc(N.dir||'')+'</textarea></label>'+
+    '<label class="campo">Referencias <small>(opcional)</small><input class="in" id="ref" value="'+esc(N.ref||'')+'" placeholder="Ej. portón verde, frente a la plaza"></label>'+
+    '<div class="err" id="e"></div><button class="btn full" id="env">Enviar registro</button><button class="btn ghost" id="atras">Regresar</button></div>');
+  function pintaUbic(){
+    var c=$('#ubicCaja');
+    if(N.modo==='gps'){
+      c.innerHTML = (N.lat!=null&&N.modoReal==='gps') ? '<div class="ubic-ok">'+ico('ubic')+'<span>Ubicación registrada'+(N.precision?' (±'+N.precision+' m)':'')+'</span></div>' : '<button class="btn sec full" id="gps">'+ico('ubic')+' Usar mi ubicación actual</button><div class="mini">Hazlo estando en tu negocio.</div>';
+      var g=$('#gps'); if(g) g.onclick=function(){
+        if(!navigator.geolocation){ $('#e').textContent='Tu teléfono no permite ubicar. Usa “Marcar en mapa”.'; return; }
+        g.disabled=true; g.textContent='Ubicando…';
+        navigator.geolocation.getCurrentPosition(function(p){ N.lat=p.coords.latitude; N.lng=p.coords.longitude; N.precision=Math.round(p.coords.accuracy||0); N.modoReal='gps'; pintaUbic(); },
+          function(){ g.disabled=false; g.innerHTML=ico('ubic')+' Usar mi ubicación actual'; $('#e').textContent='No pudimos obtener tu ubicación. Revisa el permiso o usa “Marcar en mapa”.'; }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+      };
+    } else if(N.modo==='mapa'){
+      c.innerHTML='<div id="mapa" role="application" aria-label="Mapa: toca para marcar tu negocio"></div><div class="mini">Toca el mapa para mover el marcador a tu negocio.</div>';
+      cargarCss('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css');
+      cargarScripts(['https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js']).then(function(){
+        var ini = (N.lat!=null) ? [N.lat,N.lng] : [20.55,-102.79];
+        var m = L.map('mapa').setView(ini, N.lat!=null?16:9);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19, attribution:'© OpenStreetMap' }).addTo(m);
+        var mk = N.lat!=null ? L.marker(ini).addTo(m) : null;
+        m.on('click', function(ev){ N.lat=ev.latlng.lat; N.lng=ev.latlng.lng; N.modoReal='mapa'; N.precision=null; if(mk) mk.setLatLng(ev.latlng); else mk=L.marker(ev.latlng).addTo(m); });
+        if(N.lat==null && navigator.geolocation) navigator.geolocation.getCurrentPosition(function(p){ m.setView([p.coords.latitude,p.coords.longitude],16); },function(){}, { timeout:8000 });
+      }).catch(function(){ c.innerHTML='<div class="aviso warn">No cargó el mapa. Usa “Estoy aquí” o escribe la dirección.</div>'; });
+    } else {
+      c.innerHTML='<div class="mini">Escribe abajo la dirección completa. Tu vendedor la confirmará.</div>';
+    }
+  }
+  pintaUbic();
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function(b){ b.onclick=function(){ N.modo=b.dataset.m; Array.prototype.forEach.call(document.querySelectorAll('.seg button'),function(x){ x.setAttribute('aria-pressed', x===b); }); pintaUbic(); }; });
+  $('#atras').onclick=function(){ guarda(); pantallaRegistro(1); };
+  function guarda(){ N.nombre=$('#nn').value.trim(); N.dir=$('#dir').value.trim(); N.ref=$('#ref').value.trim(); }
+  $('#env').onclick=function(){
+    guarda();
+    var tieneUbic = N.lat!=null && N.modo!=='manual';
+    if(!tieneUbic && N.dir.length<8){ $('#e').textContent='Registra la ubicación o escribe la dirección completa.'; return; }
+    var b=this; b.disabled=true; b.textContent='Enviando…';
+    var neg = { nombre:N.nombre, dir:N.dir, ref:N.ref, modo: tieneUbic ? (N.modoReal||N.modo) : 'manual', lat: tieneUbic?N.lat:null, lng: tieneUbic?N.lng:null, precision:N.precision||null };
+    Net.llamar('registrar', { nombre:R.nombre, razonSocial:R.razonSocial, numCliente:R.numCliente, telContacto:R.telContacto, negocio:neg, plataforma:plataforma() })
+      .then(function(){ ESTADO.reg={}; return cargarYo(); })
+      .catch(function(e){ b.disabled=false; b.textContent='Enviar registro'; $('#e').textContent=e.error||'No se pudo enviar.'; });
+  };
+}
+function pantallaPendiente(){
+  var y=ESTADO.yo, u=y.usuario||{};
+  var rech = y.estado==='rechazado' || y.estado==='suspendido';
+  marcoAcceso(
+    '<div class="logo" style="width:110px;height:110px"><img src="img/logo-petfood.png" alt="Los 19 Hermanos División Pet Food"></div>'+
+    '<div><h1>'+(rech?(y.estado==='suspendido'?'Tu acceso está en pausa':'No pudimos validar tu registro'):'¡Gracias, '+esc((u.nombre||'').split(' ')[0])+'!')+'</h1>'+
+    '<p class="lede" style="margin-top:6px">'+(rech?esc(u.motivo||'Comunícate con tu vendedor para revisarlo.'):'Estamos validando tu registro con nuestro equipo de ventas. Te avisaremos en cuanto tu cuenta quede activa.')+'</p></div>'+
+    (rech?'':'<div class="card" style="display:grid;gap:10px"><div class="eyebrow">Lo que sigue</div>'+
+      '<div class="fila"><span class="badge b-facturado">1</span><span>Registro recibido</span></div>'+
+      '<div class="fila"><span class="badge b-enviado">2</span><span>Ventas lo vincula con tu cuenta de cliente</span></div>'+
+      '<div class="fila"><span class="badge b-cancelado">3</span><span>Ves tu avance, descuentos y haces prepedidos</span></div></div>')+
+    '<div class="card"><div class="eyebrow">Registraste</div><div style="margin-top:6px"><b>'+esc(u.razonSocial)+'</b><br><span class="muted chico">'+esc(u.nombre)+' · '+esc(u.tel)+(u.negocio&&u.negocio.nombre?' · '+esc(u.negocio.nombre):'')+'</span></div>'+
+    (rech?'':'<button class="btn ghost" id="editar" style="padding-left:0">Corregir mis datos</button>')+'</div>'+
+    '<button class="btn sec full" id="msg">Dejar un mensaje a gerencia</button>'+
+    '<button class="btn full" id="rev">Revisar de nuevo</button><button class="btn ghost" id="salir">Cerrar sesión</button>');
+  $('#rev').onclick=function(){ cargarYo(); };
+  $('#salir').onclick=function(){ Auth.salir().then(pantallaTel); };
+  $('#msg').onclick=function(){ hojaMensaje(); };
+  var ed=$('#editar'); if(ed) ed.onclick=function(){ ESTADO.reg={ nombre:u.nombre, razonSocial:u.razonSocial, numCliente:u.numCliente, telContacto:u.telContacto, negocio:Object.assign({modo:(u.negocio&&u.negocio.modo)||'gps', modoReal:u.negocio&&u.negocio.modo}, u.negocio||{}) }; pantallaRegistro(1); };
+}
+
+/* ================= APP (cliente activo) ================= */
+function pintarApp(){
+  var y=ESTADO.yo; var sinLeer=(y.notifs||[]).filter(function(n){ return !n.leida; }).length;
+  var abiertos=(y.pedidos||[]).filter(function(p){ return ['enviado','confirmado','fincado','liberado'].indexOf(p.estado)>=0; }).length;
+  raiz.innerHTML = bandaDemo()+
+    '<header class="top"><div class="sello"><img src="img/logo-petfood.png" alt=""></div><div class="marca"><b>Los 19 Hermanos</b><span>'+esc(y.cliente.nombre)+'</span></div>'+
+    '<button class="campana" id="camp" aria-label="Notificaciones'+(sinLeer?' ('+sinLeer+' nuevas)':'')+'">'+ico('campana')+(sinLeer?'<span class="pt">'+sinLeer+'</span>':'')+'</button></header>'+
+    '<div class="estrellas" aria-hidden="true">★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>'+
+    '<main id="vista"></main>'+
+    '<nav class="nav" aria-label="Secciones">'+
+      tabBtn('inicio','Inicio')+tabBtn('pedir','Pedir')+tabBtn('pedidos','Pedidos',abiertos)+tabBtn('historial','Historial')+tabBtn('mas','Más',(y.mensajes||[]).filter(function(m){return m.respuesta && !lsGet('cliMsgVisto'+m.id);}).length)+
+    '</nav>';
+  $('#camp').onclick=hojaNotifs;
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.onclick=function(){ ir(b.dataset.v); }; });
+  ir(ESTADO.vista, true);
+}
+function tabBtn(v,t,n){ return '<button class="tab" data-v="'+v+'"'+(ESTADO.vista===v?' aria-current="page"':'')+'>'+ico(v)+'<span>'+t+'</span>'+(n?'<span class="pt">'+n+'</span>':'')+'</button>'; }
+function ir(v, sinScroll){
+  ESTADO.vista=v;
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ if(b.dataset.v===v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  var m=$('#vista'); if(!m) return;
+  ({ inicio:vInicio, pedir:vPedir, pedidos:vPedidos, historial:vHistorial, mas:vMas }[v]||vInicio)(m);
+  if(!sinScroll) window.scrollTo(0,0);
+}
+
+/* ---------- cálculo del programa (mismo criterio que la app del vendedor) ---------- */
+function ctx(){
+  var y=ESTADO.yo, a=y.avance; if(!a) return null;
+  var M=a.meta, r=a.row, T=y.tiers||[];
+  var PREM=Object.assign({base:3,u1:5,e1:0.5,u2:7.5,e2:1.0}, M.prem||{});
+  var mesVit = M.mesVitrina || M.mesCurso || (M.mesEval?((M.mesEval%12)+1):0) || (new Date().getMonth()+1);
+  var enCurso = !!M.mesCurso && M.mesCurso===mesVit;
+  var tierOf=function(avg){ for(var i=0;i<T.length;i++){ if(avg>=T[i][1]) return T[i]; } return T[T.length-1]; };
+  var t=tierOf(r.avg||0); var idx=T.findIndex(function(x){return x[0]===t[0];}); var nx=idx>0?T[idx-1]:null;
+  var hoy = r.vitSac!=null ? (r.vitSac||0) : (enCurso?(r.cur||0):0);
+  var base = r.baseCrec!=null ? (r.baseCrec||0) : (r.evalSac||0);
+  var pb = r.vitPB!=null ? (r.vitPB||0) : (enCurso?(r.qpb||r.qp||0):0);
+  var pm = r.vitPM!=null ? (r.vitPM||0) : (enCurso?(r.qp||0):0);
+  var esp = r.esp && !(r.esp.hasta && new Date().toISOString().slice(0,10) > r.esp.hasta) ? r.esp : null;
+  var vig = esp ? esp.pct : (r.desc!=null ? r.desc : (r.nvAuth ? r.nvAuth.pct : 0));
+  return { M:M, r:r, T:T, t:t, nx:nx, PREM:PREM, mesVit:mesVit, enCurso:enCurso, hoy:hoy, base:base, pb:pb, pm:pm, esp:esp, vig:vig, PER:(M.evalPeriod==='MES'?1:3) };
+}
+function proyeccion(c, extraSac, extraPrem){
+  extraSac=extraSac||0; extraPrem=extraPrem||0;
+  var t=c.t; if(t[0]==='INICIAL') return { pct:0, inicial:true };
+  var fijo=t[2],kc=t[3],kp=t[4],uc=t[5];
+  var refVol=Math.round(c.r.avg||0);
+  var hoy=c.hoy+extraSac, pb=c.pb+extraPrem, pm=c.pm+extraPrem;
+  var mBase=Math.round(c.PREM.base/100*refVol), m1=Math.round(c.PREM.u1/100*refVol), m2=Math.round(c.PREM.u2/100*refVol);
+  var pctBase=refVol>0?pb/refVol*100:0, pctMix=refVol>0?pm/refVol*100:0;
+  var okPrem=pctBase>=c.PREM.base, ok1=pctMix>=c.PREM.u1, ok2=pctMix>=c.PREM.u2;
+  var boost=ok2?c.PREM.e2:(ok1?c.PREM.e1:0);
+  var metaCrec=Math.round(c.base*(1+uc/100)); var okCrec=c.base>0&&hoy>0&&hoy>=metaCrec;
+  return { pct: fijo+(okCrec?kc:0)+(okPrem?kp:0)+boost, fijo:fijo, kc:kc, kp:kp, uc:uc, hoy:hoy, pb:pb, pm:pm, mBase:mBase, m1:m1, m2:m2, metaCrec:metaCrec, okCrec:okCrec, okPrem:okPrem, ok1:ok1, ok2:ok2, boost:boost, max:fijo+kc+kp+c.PREM.e2 };
+}
+function mesSig(m){ return MES[(m%12)+1] || 'el mes siguiente'; }
+
+/* ---------- INICIO ---------- */
+function vInicio(m){
+  var y=ESTADO.yo, c=ctx();
+  var h='';
+  if(y.aviso) h+='<div class="aviso info">'+esc(y.aviso)+'</div>';
+  if(!c){ m.innerHTML='<div class="vista">'+h+'<div class="card"><h2>Tu avance aún no está publicado</h2><p class="muted">En cuanto ventas publique el reporte del mes verás aquí tu nivel y tus descuentos.</p></div></div>'; return; }
+  var t=c.t, P=proyeccion(c), ini=t[0]==='INICIAL';
+  h+='<section class="nivel" aria-label="Tu nivel"><span class="tag" style="--c:'+NIVCOL[t[0]]+'"><i></i>Nivel '+NIVLAB[t[0]]+'</span>'+
+     '<h2>'+(ini?'Empieza a ganar descuentos':'Tu descuento de '+MES[c.mesVit]+': '+pct(c.vig))+'</h2>'+
+     '<div class="kpis"><div class="kpi"><b>'+fmt(c.r.avg)+'</b><span>sacos/mes promedio</span></div>'+
+     '<div class="kpi"><b>'+fmt(c.hoy)+'</b><span>sacos en '+MES[c.mesVit]+'</span></div>'+
+     '<div class="kpi"><b>'+(ini?'—':pct(P.pct))+'</b><span>vas ganando para '+mesSig(c.mesVit)+'</span></div></div></section>';
+  if(c.esp) h+='<div class="aviso ok"><b>Descuento especial vigente:</b> '+pct(c.esp.pct)+(c.esp.hasta?' hasta el '+c.esp.hasta.split('-').reverse().join('/'):'')+'.</div>';
+  var ult=(y.pedidos||[]).filter(function(p){ return ['enviado','confirmado','fincado','liberado'].indexOf(p.estado)>=0; })[0];
+  if(ult) h+='<button class="card" style="text-align:left;cursor:pointer;display:grid;gap:6px;font:inherit;width:100%" id="ultPed"><div class="entre"><span class="eyebrow">Tu pedido en curso</span><span class="badge b-'+ult.estado+'">'+etiquetaEstado(ult)+'</span></div><b class="num" style="font-size:17px">'+esc(ult.folio)+'</b><span class="muted chico">'+textoEstado(ult)+'</span></button>';
+  if(ini){
+    var meta=200*c.PER;
+    h+='<div class="card"><h2>Llega a Cobre</h2><p class="muted chico" style="margin:6px 0 10px">Con '+fmt(meta)+' sacos en el '+(c.PER===1?'mes':'trimestre')+' empiezas a ganar descuento en tu Pet Food.</p>'+barra(c.hoy,meta)+'<div class="entre chico"><span>Llevas '+fmt(c.hoy)+'</span><b>Te faltan '+fmt(Math.max(0,meta-c.hoy))+'</b></div></div>';
+  } else {
+    h+='<div class="card"><div class="entre"><h2>Lo que vas ganando</h2><span class="big" style="font-size:26px;color:var(--rojo)">'+pct(P.pct)+'</span></div><p class="muted chico" style="margin:4px 0 6px">'+(c.enCurso?'Con lo que llevas facturado en '+MES[c.mesVit]+'. Se paga como nota de crédito en tu primera compra de '+mesSig(c.mesVit)+'.':MES[c.mesVit].replace(/^./,function(x){return x.toUpperCase();})+' apenas comienza: tu avance aparece con tu primera factura del mes.')+'</p>'+
+      metaFila('Descuento fijo de tu nivel', true, '+'+pct(P.fijo), 'Por ser nivel '+NIVLAB[t[0]]+'.', null)+
+      (c.base>0 ? metaFila('Crecer '+P.uc+'% vs. '+MES[((c.mesVit+10)%12)+1], P.okCrec, '+'+pct(P.kc), 'Llevas '+fmt(P.hoy)+' de '+fmt(P.metaCrec)+' sacos', [P.hoy,P.metaCrec])
+               : metaFila('Crecer vs. el mes pasado', false, 'no aplica', 'No hubo compras el mes pasado para comparar.', null))+
+      metaFila('Premium base ('+c.PREM.base+'% de tu promedio)', P.okPrem, '+'+pct(P.kp), 'Llevas '+fmt(P.pb)+' de '+fmt(P.mBase)+' sacos premium o Silver Cat 15', [P.pb,P.mBase])+
+      metaFila('Premium+ escalón 1', P.ok1&&!P.ok2, P.ok2?'—':'+'+pct(c.PREM.e1), 'Llevas '+fmt(P.pm)+' de '+fmt(P.m1)+' sacos', [P.pm,P.m1])+
+      metaFila('Premium+ escalón 2', P.ok2, '+'+pct(c.PREM.e2), 'Llevas '+fmt(P.pm)+' de '+fmt(P.m2)+' sacos', [P.pm,P.m2])+
+      '<div class="mini" style="margin-top:8px">Cuentan Silver Kan Premium (25 y 20 kg) y Silver Cat 15 kg. Los escalones de Premium+ no se suman: cuenta el más alto.</div></div>';
+    var mant=t[1]*c.PER;
+    h+='<div class="card"><h2>Tu nivel</h2><p class="muted chico" style="margin:6px 0 10px">El nivel se calcula con tu promedio mensual de los últimos 6 meses.</p>'+
+      '<div class="entre chico" style="padding:6px 0"><span>Para mantener '+NIVLAB[t[0]]+'</span><b>'+fmt(mant)+' sacos/'+(c.PER===1?'mes':'trimestre')+'</b></div>'+
+      (c.nx?'<div class="entre chico" style="padding:6px 0;border-top:1px solid var(--linea-2)"><span>Para subir a '+NIVLAB[c.nx[0]]+'</span><b>'+fmt(c.nx[1]*c.PER)+' sacos/'+(c.PER===1?'mes':'trimestre')+'</b></div><div class="mini">'+NIVLAB[c.nx[0]]+' paga '+pct(c.nx[2])+' fijo y hasta '+pct(c.nx[2]+c.nx[3]+c.nx[4]+c.PREM.e2)+' con todos los bonos.</div>':'<div class="aviso ok" style="margin-top:6px">Estás en el nivel más alto. ¡Gracias por tu preferencia!</div>')+'</div>';
+  }
+  h+='<button class="btn full" id="aPedir">'+ico('pedir')+' Hacer un prepedido</button>';
+  h+='<div class="pie"><img src="img/logo-19h.png" alt="Los 19 Hermanos">Datos al '+esc(c.M.updatedStr||'último reporte')+' · El avance cambia cuando se factura cada pedido.</div>';
+  m.innerHTML='<div class="vista">'+h+'</div>';
+  $('#aPedir').onclick=function(){ ir('pedir'); };
+  var up=$('#ultPed'); if(up) up.onclick=function(){ ir('pedidos'); };
+}
+function barra(v,meta){ var p=meta>0?Math.min(100,v/meta*100):0; return '<div class="pbar'+(v>=meta&&meta>0?' ok':'')+'" role="progressbar" aria-valuenow="'+Math.round(p)+'" aria-valuemin="0" aria-valuemax="100"><i style="width:'+p+'%"></i></div>'; }
+function metaFila(t, ok, val, sub, bar){
+  return '<div class="meta"><div class="entre"><b>'+t+'</b><span class="estado '+(ok?'si':'no')+'">'+(ok?'✓ ':'')+val+'</span></div>'+(bar?barra(bar[0],bar[1]):'')+'<div class="mini">'+sub+'</div></div>';
+}
+
+/* ---------- PEDIR ---------- */
+function vPedir(m){
+  var y=ESTADO.yo, pr=y.precios||{productos:[]}, c=ctx();
+  var escs = [{ id:'recoge', label:'Recojo en planta' }];
+  if(pr.mostrar){ var vist={}; pr.productos.forEach(function(p){ (p.escenarios||[]).forEach(function(e){ if(e.tipo==='entrega' && !vist[e.id]){ vist[e.id]=1; escs.push({ id:e.id, label:e.label.replace(/^Entregado en /,'Entrega: ') }); } }); }); }
+  else (pr.entregas||[]).forEach(function(e){ escs.push({ id:e.id, label:'Entrega: '+e.label }); });
+  if(escs.length===1) escs.push({ id:'entrega', label:'Entrega en mi negocio' });
+  if(!escs.some(function(e){return e.id===ESTADO.escenario;})) ESTADO.escenario='recoge';
+  var h='<div class="vista">';
+  h+='<div><h2 style="font-size:22px">Prepedido</h2><p class="muted chico" style="margin:4px 0 0">Tu vendedor te llamará para confirmarlo. No es un pedido en firme hasta que lo confirme.</p></div>';
+  h+='<div class="card" style="display:grid;gap:10px"><span class="eyebrow">¿Cómo lo recibes?</span><div style="display:grid;gap:6px">';
+  escs.forEach(function(e){ h+='<label class="fila" style="padding:10px 12px;border:1.5px solid '+(ESTADO.escenario===e.id?'var(--rojo)':'var(--linea)')+';border-radius:12px;cursor:pointer;background:'+(ESTADO.escenario===e.id?'var(--rojo-s)':'transparent')+'"><input type="radio" name="esc" value="'+esc(e.id)+'"'+(ESTADO.escenario===e.id?' checked':'')+' style="accent-color:var(--rojo);width:18px;height:18px"><span style="font-weight:700;font-size:14px">'+esc(e.label)+'</span></label>'; });
+  h+='</div>'+(pr.mostrar?'<div class="mini">Precios de tu lista '+esc(pr.lista)+'. '+(pr.productos.some(function(p){return p.desglosaIva;})?'Mostramos precio + IVA.':'')+' El flete se calcula por saco según la unidad.</div>':'')+'</div>';
+  h+='<div class="card" style="padding:4px 16px">';
+  pr.productos.forEach(function(p){
+    var e = precioEsc(p); var q=ESTADO.carrito[p.code]||0;
+    h+='<div class="prod"><div><div class="nm">'+esc(p.nombre)+(p.premium?'<span class="chip">Premium</span>':'')+'</div>'+
+      '<div class="sub">'+(e?'<span class="precio">'+money(e.conIva)+'</span> '+(p.desglosaIva?'con IVA · '+money(e.precio)+' + IVA':'por saco')+(e.flete?' · incluye flete '+money(e.flete):''):(p.kg?p.kg+' kg':''))+'</div></div>'+
+      '<div class="paso"><button aria-label="Quitar uno de '+esc(p.nombre)+'" data-c="'+p.code+'" data-d="-1">−</button><input inputmode="numeric" aria-label="Sacos de '+esc(p.nombre)+'" data-c="'+p.code+'" value="'+(q||'')+'" placeholder="0"><button aria-label="Agregar uno de '+esc(p.nombre)+'" data-c="'+p.code+'" data-d="1">+</button></div></div>';
+  });
+  if(!pr.productos.length) h+='<div class="vacio">Aún no tenemos tu catálogo. Llama a tu vendedor.</div>';
+  h+='</div>';
+  h+='<div id="simu"></div>';
+  h+='<label class="campo">Comentarios para tu vendedor <small>(opcional)</small><textarea class="in" id="nota" rows="2" placeholder="Ej. entregar antes del jueves">'+esc(ESTADO.nota||'')+'</textarea></label>';
+  h+='<div class="resumen" id="res"></div></div>';
+  m.innerHTML=h;
+  Array.prototype.forEach.call(m.querySelectorAll('input[name=esc]'), function(r){ r.onchange=function(){ ESTADO.escenario=r.value; ESTADO.modalidad=r.value==='recoge'?'recoge':'entrega'; vPedir(m); }; });
+  Array.prototype.forEach.call(m.querySelectorAll('.paso button'), function(b){ b.onclick=function(){ var k=b.dataset.c; var v=Math.max(0,(ESTADO.carrito[k]||0)+Number(b.dataset.d)*(Math.abs(ESTADO.carrito[k]||0)>=10?5:1)); setQ(k,v); m.querySelector('.paso input[data-c="'+k+'"]').value=v||''; resumen(); }; });
+  Array.prototype.forEach.call(m.querySelectorAll('.paso input'), function(i){ i.oninput=function(){ i.value=i.value.replace(/\D/g,'').slice(0,4); setQ(i.dataset.c, Number(i.value)||0); resumen(); }; });
+  $('#nota').oninput=function(){ ESTADO.nota=this.value; };
+  resumen();
+  function setQ(k,v){ if(v>0) ESTADO.carrito[k]=v; else delete ESTADO.carrito[k]; }
+  function resumen(){
+    var sac=0, prem=0, tot=0, sub=0, petSac=0, completos=true;
+    pr.productos.forEach(function(p){ var q=ESTADO.carrito[p.code]||0; if(!q) return; sac+=q; if(p.petfood) petSac+=q; if(p.premium) prem+=q; var e=precioEsc(p); if(e){ tot+=e.conIva*q; sub+=e.precio*q; } else completos=false; });
+    var r=$('#res');
+    r.innerHTML='<div class="t"><b>'+fmt(sac)+' sacos</b><span>'+(pr.mostrar&&completos&&sac?'Total '+money(tot)+(tot!==sub?' con IVA':''):(sac?'Revisa y envía tu prepedido':'Agrega productos'))+'</span></div><button class="btn" id="enviar"'+(sac?'':' disabled')+'>Revisar</button>';
+    $('#enviar').onclick=function(){ confirmarPedido(sac, tot, sub, completos); };
+    var s=$('#simu');
+    if(!c || !sac){ s.innerHTML=''; return; }
+    var A=proyeccion(c), B=proyeccion(c, petSac, prem);
+    if(B.inicial){
+      var meta=200*c.PER; s.innerHTML='<div class="simu"><span class="eyebrow">Con este pedido</span><p style="margin:6px 0 0">Llevarías <b>'+fmt(c.hoy+petSac)+'</b> de '+fmt(meta)+' sacos para entrar a Cobre'+(c.hoy+petSac>=meta?' — <b>¡lo logras!</b>':', te faltarían '+fmt(meta-c.hoy-petSac)+'.')+'</p></div>'; return;
+    }
+    var gana=[];
+    if(B.okCrec&&!A.okCrec) gana.push('crecimiento +'+pct(B.kc));
+    if(B.okPrem&&!A.okPrem) gana.push('premium base +'+pct(B.kp));
+    if(B.boost>A.boost) gana.push('Premium+ '+pct(B.boost));
+    var falta=[];
+    if(!B.okCrec && c.base>0) falta.push(fmt(B.metaCrec-B.hoy)+' sacos para el bono de crecimiento (+'+pct(B.kc)+')');
+    if(!B.okPrem) falta.push(fmt(B.mBase-B.pb)+' sacos premium para el premium base (+'+pct(B.kp)+')');
+    else if(!B.ok2) falta.push(fmt((B.ok1?B.m2:B.m1)-B.pm)+' sacos premium para Premium+ '+(B.ok1?pct(c.PREM.e2):pct(c.PREM.e1)));
+    s.innerHTML='<div class="simu"><span class="eyebrow">Si se factura en '+MES[c.mesVit]+', tu descuento para '+mesSig(c.mesVit)+'</span>'+
+      '<div class="flecha">'+(B.pct!==A.pct?'<s>'+pct(A.pct)+'</s><span aria-hidden="true">→</span>':'')+'<b>'+pct(B.pct)+'</b></div>'+
+      (gana.length?'<div class="aviso ok" style="margin-bottom:8px">Desbloqueas: '+gana.join(' · ')+'</div>':'')+
+      (falta.length?'<div class="chico muted">Te faltarían: '+falta.join('; ')+'.</div>':'<div class="chico" style="color:var(--ok);font-weight:700">Con este pedido alcanzas el máximo de tu nivel.</div>')+'</div>';
+  }
+}
+function precioEsc(p){
+  if(!p.escenarios) return null;
+  var id = ESTADO.escenario;
+  var e = p.escenarios.filter(function(x){ return x.id===id; })[0];
+  if(!e && id==='recoge') e=p.escenarios[0];
+  return e||null;
+}
+function confirmarPedido(sac, tot, sub, completos){
+  var y=ESTADO.yo, pr=y.precios;
+  var lineas = pr.productos.filter(function(p){ return ESTADO.carrito[p.code]; }).map(function(p){ var e=precioEsc(p); var q=ESTADO.carrito[p.code]; return '<div class="entre chico"><span>'+fmt(q)+' × '+esc(p.nombre)+'</span>'+(e?'<b>'+money(e.conIva*q)+'</b>':'')+'</div>'; }).join('');
+  var escL = ESTADO.escenario==='recoge'?'Recojo en planta':(document.querySelector('input[name=esc]:checked')||{}).parentNode.textContent;
+  abrirHoja('<h2>Revisa tu prepedido</h2><div class="items" style="border:0;padding:0">'+lineas+'</div>'+
+    '<div class="entre" style="border-top:1px solid var(--linea);padding-top:10px"><span>'+fmt(sac)+' sacos · '+esc(escL)+'</span>'+(pr.mostrar&&completos?'<b class="num" style="font-size:19px">'+money(tot)+'</b>':'')+'</div>'+
+    (pr.mostrar&&completos&&tot!==sub?'<div class="mini">Subtotal '+money(sub)+' + IVA '+money(tot-sub)+'. Precios de referencia: el precio final lo confirma tu vendedor.</div>':'')+
+    '<div class="aviso info">Tu vendedor te llamará para confirmarlo. Cuando salga de planta te avisamos con los lotes y la hora.</div>'+
+    '<div class="err" id="e"></div><button class="btn full" id="ok">Enviar prepedido</button><button class="btn ghost" id="no">Seguir editando</button>');
+  $('#no').onclick=cerrarHoja;
+  $('#ok').onclick=function(){
+    var b=this; b.disabled=true; b.textContent='Enviando…';
+    var items=Object.keys(ESTADO.carrito).map(function(k){ return { code:k, piezas:ESTADO.carrito[k] }; });
+    Net.llamar('prepedido', { items:items, modalidad:ESTADO.escenario==='recoge'?'recoge':'entrega', escenario:ESTADO.escenario, nota:ESTADO.nota||'' })
+      .then(function(r){ ESTADO.carrito={}; ESTADO.nota=''; exito(r.pedido); return cargarYo(true); })
+      .catch(function(e){ b.disabled=false; b.textContent='Enviar prepedido'; $('#e').textContent=e.error||'No se pudo enviar.'; });
+  };
+}
+function waLink(tel, texto){ var d=String(tel||'').replace(/\D/g,''); if(d.length===10) d='52'+d; return 'https://wa.me/'+d+'?text='+encodeURIComponent(texto); }
+function exito(p){
+  var y=ESTADO.yo; var tel=y.cliente.vendedorTel || CFG.waRespaldo || y.waVentas;
+  var txt='Hola, soy '+(y.usuario.nombre||'')+' de '+y.cliente.nombre+'. Acabo de enviar el prepedido '+p.folio+' desde la app de Los 19 Hermanos: '+p.items.map(function(i){return i.piezas+' '+i.nombre;}).join(', ')+'. ¿Me lo confirmas?';
+  abrirHoja('<div style="text-align:center;display:grid;gap:8px"><img src="img/logo-petfood.png" alt="" style="width:76px;margin:0 auto"><h2>¡Prepedido enviado!</h2><p class="muted" style="margin:0">Folio <b class="num">'+esc(p.folio)+'</b>. Tu vendedor ya recibió la alerta y te llamará para confirmarlo.</p></div>'+
+    (tel?'<a class="btn wa full" target="_blank" rel="noopener" href="'+waLink(tel,txt)+'">'+ico('wa')+' Avisar a mi vendedor por WhatsApp</a>':'')+
+    '<button class="btn sec full" id="verPed">Ver seguimiento</button>');
+  $('#verPed').onclick=function(){ cerrarHoja(); ir('pedidos'); };
+}
+
+/* ---------- PEDIDOS ---------- */
+var PASOS=[['enviado','Enviado'],['confirmado','Confirmado'],['fincado','Registrado'],['liberado','En camino'],['facturado','Facturado']];
+function etiquetaEstado(p){ return ({ enviado:'Por confirmar', confirmado:'Confirmado', fincado:'Registrado', liberado:p.modalidad==='recoge'?'Cargado':'En camino', facturado:'Facturado', rechazado:'No procedió', cancelado:'Cancelado' })[p.estado]||p.estado; }
+function textoEstado(p){
+  switch(p.estado){
+    case 'enviado': return 'Tu vendedor te llamará para confirmarlo.';
+    case 'confirmado': return 'Confirmado por tu vendedor. Ventas lo está registrando en el sistema.';
+    case 'fincado': return 'Registrado con la remisión '+esc(p.remision)+'. En programación de carga.';
+    case 'liberado': return (p.modalidad==='recoge'?'Cargado y liberado':'Salió de planta')+(p.liberacion&&p.liberacion.hora?' a las '+esc(p.liberacion.hora):'')+'. Está en proceso de facturación: al facturarse se suma a tu avance del mes y a tus descuentos.';
+    case 'facturado': return 'Facturado. Ya cuenta en tu avance del mes.';
+    case 'rechazado': return 'No procedió'+(p.motivo?': '+esc(p.motivo):'')+'.';
+    case 'cancelado': return 'Lo cancelaste.';
+  }
+  return '';
+}
+function vPedidos(m){
+  var y=ESTADO.yo, peds=y.pedidos||[];
+  var h='<div class="vista"><div class="entre"><h2 style="font-size:22px">Mis pedidos</h2><button class="btn ghost" id="act">Actualizar</button></div>';
+  if(!peds.length) h+='<div class="card vacio"><img src="img/logo-petfood.png" alt=""><div>Aún no tienes prepedidos desde la app.</div><button class="btn" style="margin-top:12px" id="aPedir">Hacer mi primer prepedido</button></div>';
+  peds.forEach(function(p){
+    var i=PASOS.findIndex(function(x){return x[0]===p.estado;}); var muerto=i<0;
+    h+='<article class="card ped"><div class="cab"><div><div class="folio num">'+esc(p.folio)+'</div><div class="mini">'+fechaHora(p.creado)+' · '+esc(p.entregaLabel||'')+'</div></div><span class="badge b-'+p.estado+'">'+etiquetaEstado(p)+'</span></div>';
+    if(!muerto) h+='<div class="linea" aria-label="Avance del pedido">'+PASOS.map(function(x,k){ return '<div class="'+(k<=i?'ya':'')+(k<=i&&p.estado==='facturado'?' fin':'')+'">'+(x[0]==='liberado'&&p.modalidad==='recoge'?'Cargado':x[1])+'</div>'; }).join('')+'</div>';
+    h+='<div class="chico">'+textoEstado(p)+'</div>';
+    if(p.ajustado) h+='<div class="aviso warn chico">Tu vendedor ajustó cantidades al confirmarlo contigo.</div>';
+    h+='<div class="items">'+p.items.map(function(it){ return '<div class="entre"><span>'+fmt(it.piezas)+' × '+esc(it.nombre)+'</span>'+(it.conIva?'<span class="mini">'+money(it.conIva*it.piezas)+'</span>':'')+'</div>'; }).join('')+(p.totales?'<div class="entre" style="font-weight:800"><span>Total</span><span>'+money(p.totales.total)+'</span></div>':'')+'</div>';
+    if(p.liberacion && (p.liberacion.lotes||[]).length){
+      h+='<div class="lotes"><b>Salió '+esc(p.liberacion.fecha?p.liberacion.fecha.split('-').reverse().join('/'):'')+' a las '+esc(p.liberacion.hora||'')+'</b>'+(p.liberacion.unidad?' · '+esc(p.liberacion.unidad):'')+'<div style="margin-top:4px">'+p.liberacion.lotes.map(function(l){ return esc(l.prod)+' · lote <b>'+esc(l.lote)+'</b> · '+fmt(l.sacos)+' sacos'; }).join('<br>')+'</div></div>';
+    }
+    if(p.estado==='enviado') h+='<button class="btn ghost" data-cancel="'+p.id+'" style="justify-self:start;padding-left:0">Cancelar prepedido</button>';
+    h+='</article>';
+  });
+  h+='</div>'; m.innerHTML=h;
+  $('#act').onclick=function(){ cargarYo(true).then(function(){ toast('Actualizado'); }); };
+  var ap=$('#aPedir'); if(ap) ap.onclick=function(){ ir('pedir'); };
+  Array.prototype.forEach.call(m.querySelectorAll('[data-cancel]'), function(b){ b.onclick=function(){
+    abrirHoja('<h2>¿Cancelar el prepedido?</h2><p class="muted" style="margin:0">Tu vendedor ya no lo verá como pendiente.</p><button class="btn full" id="si">Sí, cancelar</button><button class="btn sec full" id="no">No</button>');
+    $('#no').onclick=cerrarHoja; $('#si').onclick=function(){ Net.llamar('cancelar',{ id:b.dataset.cancel }).then(function(){ cerrarHoja(); toast('Prepedido cancelado'); return cargarYo(true); }).catch(function(e){ cerrarHoja(); toast(e.error); }); };
+  }; });
+}
+
+/* ---------- HISTORIAL ---------- */
+function vHistorial(m){
+  var c=ctx(); var h='<div class="vista"><h2 style="font-size:22px">Tu historial de compras</h2>';
+  if(!c||!c.r.pm){ m.innerHTML=h+'<div class="card vacio">Sin compras publicadas todavía.</div></div>'; return; }
+  var pm=c.r.pm, prods=Object.keys(pm), ms={};
+  prods.forEach(function(p){ Object.keys(pm[p]).forEach(function(k){ ms[k]=1; }); });
+  var meses=Object.keys(ms).map(Number).sort(function(a,b){return a-b;});
+  var porMes=meses.map(function(k){ var s=0; prods.forEach(function(p){ s+=(pm[p][k]||0); }); return s; });
+  var mx=Math.max.apply(null, porMes.concat([1]));
+  h+='<div class="card"><div class="entre"><span class="eyebrow">Sacos por mes '+(new Date().getFullYear())+'</span><span class="mini">Promedio: <b>'+fmt(c.r.avg)+'</b>/mes</span></div><div class="barras" role="img" aria-label="Sacos comprados por mes">'+
+    meses.map(function(k,i){ return '<div class="b'+(k===c.mesVit?' act':'')+'"><b>'+fmt(porMes[i])+'</b><i style="height:'+Math.max(2,porMes[i]/mx*100)+'%"></i><span>'+MESC[k]+'</span></div>'; }).join('')+'</div>'+
+    '<div class="mini" style="margin-top:6px">El mes en curso (rayado) solo incluye lo ya facturado.</div></div>';
+  prods.sort(function(a,b){ var sa=0,sb=0; meses.forEach(function(k){ sa+=pm[a][k]||0; sb+=pm[b][k]||0; }); return sb-sa; });
+  h+='<div class="card"><span class="eyebrow">Por producto</span><div class="scroll-x" style="margin-top:8px"><table class="tabla"><thead><tr><th>Producto</th>'+meses.map(function(k){return '<th>'+MESC[k]+'</th>';}).join('')+'<th>Total</th></tr></thead><tbody>';
+  var gt=0;
+  prods.forEach(function(p){ var t=0; h+='<tr><td>'+esc(p)+'</td>'+meses.map(function(k){ var q=pm[p][k]||0; t+=q; return '<td>'+(q?fmt(q):'·')+'</td>'; }).join('')+'<td><b>'+fmt(t)+'</b></td></tr>'; gt+=t; });
+  h+='<tr class="tot"><td>Total</td>'+porMes.map(function(s){return '<td>'+fmt(s)+'</td>';}).join('')+'<td>'+fmt(gt)+'</td></tr></tbody></table></div></div>';
+  h+='<div class="card"><div class="entre chico"><span>Compras del año</span><b>'+fmt(c.r.tot||gt)+' sacos</b></div><div class="entre chico" style="margin-top:6px"><span>Mezcla premium</span><b>'+(c.r.mix||0).toFixed(1)+'%</b></div></div>';
+  m.innerHTML=h+'</div>';
+}
+
+/* ---------- MÁS ---------- */
+function vMas(m){
+  var y=ESTADO.yo, u=y.usuario;
+  var h='<div class="vista"><h2 style="font-size:22px">Más</h2>';
+  h+='<div class="card" style="display:grid;gap:10px"><div class="entre"><h3>Mensaje a gerencia</h3></div><p class="muted chico" style="margin:0">¿Una sugerencia, una queja o algo que quieras tratar directamente con la gerencia comercial? Escríbenos.</p><button class="btn full" id="nuevoMsg">Escribir mensaje</button>';
+  (y.mensajes||[]).forEach(function(mm){ if(mm.respuesta) lsSet('cliMsgVisto'+mm.id,'1'); h+='<div style="border-top:1px solid var(--linea-2);padding-top:10px"><div class="mini">'+fechaHora(mm.ts)+'</div><div class="chico">'+esc(mm.texto)+'</div>'+(mm.respuesta?'<div class="aviso info chico" style="margin-top:6px"><b>Gerencia:</b> '+esc(mm.respuesta)+'</div>':'<div class="mini">Recibido · pendiente de respuesta</div>')+'</div>'; });
+  h+='</div>';
+  var tel=y.cliente.vendedorTel;
+  h+='<div class="card" style="display:grid;gap:8px"><h3>Tu vendedor</h3><div class="chico">'+esc(y.cliente.vendedor||'—')+'</div>'+(tel?'<div class="fila"><a class="btn sec" style="flex:1" href="tel:'+esc(tel)+'">Llamar</a><a class="btn wa" style="flex:1" target="_blank" rel="noopener" href="'+waLink(tel,'Hola, te escribo desde la app de Los 19 Hermanos.')+'">'+ico('wa')+' WhatsApp</a></div>':'')+'</div>';
+  h+='<div class="card" style="display:grid;gap:6px"><h3>Mis datos</h3><div class="chico"><b>'+esc(u.razonSocial)+'</b><br>'+esc(u.nombre)+'<br>'+esc(u.tel)+(u.negocio&&u.negocio.dir?'<br>'+esc(u.negocio.dir):'')+'</div><div class="mini">Para cambiar tus datos, avisa a tu vendedor.</div></div>';
+  h+='<div class="card" style="display:grid;gap:10px"><h3>Avisos en este teléfono</h3><p class="muted chico" style="margin:0">Recibe un aviso cuando tu pedido se confirme, salga de planta o se facture.</p><button class="btn sec full" id="push">Activar avisos</button>'+
+    '<button class="btn sec full" id="inst">Instalar la app en mi pantalla</button></div>';
+  h+='<div class="card" style="display:grid;gap:8px"><h3>Apariencia</h3><div class="seg" style="--n:3" role="group" aria-label="Tema"><button data-t="">Automático</button><button data-t="light">Claro</button><button data-t="dark">Oscuro</button></div></div>';
+  h+='<button class="btn ghost" id="salir">Cerrar sesión</button><button class="btn ghost" id="baja" style="color:var(--tinta-3);font-size:13px">Eliminar mi cuenta</button>';
+  h+='<div class="pie"><img src="img/logo-19h.png" alt="Los 19 Hermanos">Leche 19 Diecinueve Hermanos S.A. de C.V. · División Pet Food · Tototlán, Jalisco<br><a href="privacidad.html" target="_blank" rel="noopener">Aviso de privacidad</a> · Versión '+esc(CFG.version||'')+'</div>';
+  m.innerHTML=h+'</div>';
+  $('#nuevoMsg').onclick=function(){ hojaMensaje(); };
+  $('#salir').onclick=function(){ Auth.salir().then(pantallaTel); };
+  $('#push').onclick=activarPush;
+  $('#baja').onclick=function(){
+    abrirHoja('<h2>¿Eliminar tu cuenta?</h2><p class="muted chico" style="margin:0">Se borran tus datos de registro y tu acceso a la app. Tu historial de compras sigue en nuestro sistema de ventas como cliente. Puedes volver a registrarte cuando quieras.</p><div class="err" id="e"></div><button class="btn full" id="si">Sí, eliminar mi cuenta</button><button class="btn sec full" id="no">Cancelar</button>');
+    $('#no').onclick=cerrarHoja;
+    $('#si').onclick=function(){ var b=this; b.disabled=true; Net.llamar('eliminarCuenta').then(function(){ cerrarHoja(); return Auth.salir(); }).then(function(){ toast('Tu cuenta fue eliminada'); pantallaTel(); }).catch(function(e){ b.disabled=false; $('#e').textContent=e.error||'No se pudo.'; }); };
+  };
+  $('#inst').onclick=instalar;
+  var tema=lsGet('cliTema')||''; Array.prototype.forEach.call(m.querySelectorAll('[data-t]'), function(b){ b.setAttribute('aria-pressed', b.dataset.t===tema); b.onclick=function(){ lsSet('cliTema', b.dataset.t||null); aplicaTema(); vMas(m); }; });
+}
+function hojaMensaje(){
+  abrirHoja('<h2>Mensaje a gerencia</h2><label class="campo">Tema<select class="in" id="tema"><option>Sugerencia</option><option>Queja</option><option>Precios y descuentos</option><option>Entregas</option><option>Otro</option></select></label><label class="campo">Tu mensaje<textarea class="in" id="txt" rows="5" maxlength="1500" placeholder="Escribe aquí"></textarea></label><div class="err" id="e"></div><button class="btn full" id="env">Enviar</button><button class="btn ghost" id="no">Cancelar</button>');
+  $('#no').onclick=cerrarHoja;
+  $('#env').onclick=function(){ var b=this; var t=$('#txt').value.trim(); if(t.length<3){ $('#e').textContent='Escribe tu mensaje.'; return; } b.disabled=true;
+    Net.llamar('mensaje',{ texto:t, tema:$('#tema').value }).then(function(){ cerrarHoja(); toast('Mensaje enviado a gerencia'); if(ESTADO.yo&&ESTADO.yo.estado==='activo') return cargarYo(true); }).catch(function(e){ b.disabled=false; $('#e').textContent=e.error; }); };
+}
+function hojaNotifs(){
+  var n=ESTADO.yo.notifs||[];
+  abrirHoja('<h2>Avisos</h2>'+(n.length?n.map(function(x){ return '<div class="notif'+(x.leida?'':' nueva')+'"><b>'+esc(x.titulo)+'</b><div class="chico">'+esc(x.cuerpo)+'</div><div class="mini">'+fechaHora(x.ts)+'</div></div>'; }).join(''):'<div class="vacio">No tienes avisos.</div>')+'<button class="btn sec full" id="cer">Cerrar</button>');
+  $('#cer').onclick=cerrarHoja;
+  if(n.some(function(x){return !x.leida;})) Net.llamar('leerNotifs').then(function(){ n.forEach(function(x){ x.leida=true; }); var p=document.querySelector('.campana .pt'); if(p) p.remove(); }).catch(function(){});
+}
+function abrirHoja(html){ capa.innerHTML='<div class="velo" id="velo"><div class="hoja" role="dialog" aria-modal="true"><div class="asa"></div>'+html+'</div></div>'; $('#velo').onclick=function(e){ if(e.target.id==='velo') cerrarHoja(); }; var f=capa.querySelector('input,textarea,button'); if(f) setTimeout(function(){ try{f.focus();}catch(e){} },50); }
+function cerrarHoja(){ capa.innerHTML=''; }
+
+/* ---------- avisos push / instalación ---------- */
+function activarPush(){
+  if(DEMO){ toast('En la demostración los avisos se ven en la campana.'); return; }
+  var FM = NAT && NAT.FirebaseMessaging;
+  if(FM){ FM.requestPermissions().then(function(){ return FM.getToken(); }).then(function(r){ return Net.llamar('ping',{ token:r.token, plataforma:plataforma(), version:CFG.version }); }).then(function(){ toast('Avisos activados'); }).catch(function(){ toast('No se pudieron activar los avisos.'); }); return; }
+  if(!CFG.vapidKey){ toast('Los avisos se activarán pronto. Mientras, revisa la campana.'); return; }
+  if(!('Notification' in window)){ toast(/iPhone|iPad/.test(navigator.userAgent)?'En iPhone primero instala la app en tu pantalla de inicio.':'Tu navegador no permite avisos.'); return; }
+  Notification.requestPermission().then(function(p){
+    if(p!=='granted') throw new Error('Permiso negado');
+    return cargarScripts(['https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js']);
+  }).then(function(){ return navigator.serviceWorker.ready; }).then(function(reg){
+    return firebase.messaging(Auth.fb).getToken({ vapidKey:CFG.vapidKey, serviceWorkerRegistration:reg });
+  }).then(function(tok){ return Net.llamar('ping',{ token:tok, plataforma:plataforma(), version:CFG.version }); })
+    .then(function(){ toast('Avisos activados'); }).catch(function(){ toast('No se pudieron activar los avisos.'); });
+}
+var promptInstalar=null; window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); promptInstalar=e; });
+function instalar(){
+  if(promptInstalar){ promptInstalar.prompt(); promptInstalar=null; return; }
+  if(/iPhone|iPad|iPod/.test(navigator.userAgent)) abrirHoja('<h2>Instalar en iPhone</h2><ol class="chico" style="margin:0;padding-left:18px;line-height:1.8"><li>Abre esta página en <b>Safari</b>.</li><li>Toca el botón <b>Compartir</b> (cuadro con flecha).</li><li>Elige <b>Agregar a pantalla de inicio</b>.</li></ol><button class="btn full" id="cer">Entendido</button>');
+  else abrirHoja('<h2>Instalar la app</h2><p class="chico">En Chrome abre el menú ⋮ y elige <b>Instalar app</b> o <b>Agregar a pantalla principal</b>.</p><button class="btn full" id="cer">Entendido</button>');
+  var c=$('#cer'); if(c) c.onclick=cerrarHoja;
+}
+function aplicaTema(){ var t=lsGet('cliTema'); if(t) document.documentElement.setAttribute('data-theme',t); else document.documentElement.removeAttribute('data-theme'); }
+
+/* refresco: al volver a la app y cada 2 minutos mientras está abierta */
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && ESTADO.yo && ESTADO.yo.estado==='activo' && ESTADO.vista!=='pedir') cargarYo(true); });
+setInterval(function(){ if(!document.hidden && ESTADO.yo && ESTADO.yo.estado==='activo' && !capa.innerHTML && ESTADO.vista!=='pedir') cargarYo(true); }, 120000);
+
+aplicaTema();
+window.CliApp = { estado:ESTADO, recargar:cargarYo, ir:ir };
+arrancar();
+})();
+</script>
+</body>
+</html>
