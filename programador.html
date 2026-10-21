@@ -2355,6 +2355,7 @@ function cuadUnit(u){
     return {k,prod:(c&&c.prod)||(x&&x.prod)||k,c:c?c.sacos:0,b:x?x.sacos:0,lots}; });
   if(!u.noProg && Pkg>0 && Cef>0){ const pct=(Cef-Pkg)/Pkg*100; if(Math.abs(Cef-Pkg)>=1 && Math.abs(pct)>cfg.tolProg) flags.push({lvl:'info',k:'prog',t:'Programado vs cargado (informativo, no afecta el cuadre): Cargadores cargaron '+fK(Cef)+' kg vs '+fK(Pkg)+' kg programados ('+(pct>0?'+':'')+pct.toFixed(1)+'%)'}); }
   if(!u.noProg && isDesp(r) && !lotesDe(r).length && fechaEmb(r)>=lotesDesde()) flags.push({lvl:'crit',k:'lotes',t:'Despachado sin lotes capturados por Cargadores'});
+  if(b&&!u.noProg&&!isDesp(r)) flags.push({lvl:'warn',k:'nolib',t:'Pesado en báscula y Cargadores aún no libera la carga (no está marcado despachado)'});
   if(!b){ if(isDesp(r)) flags.push({lvl:'crit',k:'pend',t:(!u.noProg&&fechaEmb(r)<lotesDesde()&&!lotesDe(r).length)?'Despachado en el programa y sin salida en Odoo (falta liberar en Odoo, o la remisión está mal capturada)':'Despachado sin registro de báscula'}); }
   else {
     const est=!!b.estimado;   // registro generado por el master a partir de Odoo: no hay ticket real, el neto no se puede verificar
@@ -2499,16 +2500,21 @@ function cuadCompute(P){
   const cus=cuadUnits().filter(u=>u.per===P).map(cuadUnit);
   const inv=odooRows(P,'inv'), fac=odooRows(P,'fac');
   const prod=new Map(), cli=new Map(), lot=new Map(); const nm=Object.assign({},(inv&&inv.nm)||{},(fac&&fac.nm)||{});
-  const gp=k=>{ let o=prod.get(k); if(!o){ o={k,name:'',c:0,b:0,inv:0,fac:0}; prod.set(k,o);} return o; };
-  const gc=k=>{ let o=cli.get(k); if(!o){ o={k,name:'',c:0,b:0,inv:0,fac:0}; cli.set(k,o);} return o; };
-  const gl=k=>{ let o=lot.get(k); if(!o){ o={k,pk:'',lote:'',name:'',c:0,b:0,inv:0}; lot.set(k,o);} return o; };
-  let cPend=0, sacVac=0, sacVacF=0;
+  const gp=k=>{ let o=prod.get(k); if(!o){ o={k,name:'',c:0,b:0,inv:0,fac:0,cSinB:0,bSinC:0}; prod.set(k,o);} return o; };
+  const gc=k=>{ let o=cli.get(k); if(!o){ o={k,name:'',c:0,b:0,inv:0,fac:0,cSinB:0,bSinC:0}; cli.set(k,o);} return o; };
+  const gl=k=>{ let o=lot.get(k); if(!o){ o={k,pk:'',lote:'',name:'',c:0,b:0,inv:0,cSinB:0,bSinC:0}; lot.set(k,o);} return o; };
+  let cPend=0, sacVac=0, sacVacF=0, cSinB=0, bSinC=0, nCSinB=0, nBSinC=0;
   const _sv=pk=>/^02SAC/i.test(String(pk||''));      // costales vacíos vendidos en Odoo: no son producto, no pasan por báscula ni Cargadores
-  cus.forEach(cu=>{ const nc=normNom(cu.u.r.cliente);
-    if(!cu.u.b){ cPend+=cu.Csc; return; }          // sin báscula todavía: no se compara producto contra producto
-    cu.prods.forEach(p=>{ const o=gp(p.k); o.name=o.name||p.prod; o.c+=p.c; o.b+=p.b;
-      const oc=gc(nc); oc.name=oc.name||cu.u.r.cliente; oc.c+=p.c; oc.b+=p.b;
-      p.lots.forEach(l=>{ const o2=gl(p.k+'|'+l.nl); o2.pk=p.k; o2.lote=o2.lote||l.lote; o2.name=o2.name||p.prod; o2.c+=l.c; o2.b+=l.b; }); }); });
+  /* Cada área cuenta SU documento: Cargadores = lo que liberó (marcó despachado) · Báscula = lo que pesó.
+     Si una va adelante de la otra el desfase se ve (no se esconde) y se separa del error real de captura. */
+  cus.forEach(cu=>{ const nc=normNom(cu.u.r.cliente), hasB=!!cu.u.b, lib=!cu.u.noProg&&isDesp(cu.u.r);
+    if(!hasB&&!lib) return;
+    if(!hasB){ cPend+=cu.Csc; nCSinB++; } else if(!lib) nBSinC++;
+    const add=(o,c,b)=>{ if(lib){ o.c+=c; if(!hasB) o.cSinB+=c; } if(hasB){ o.b+=b; if(!lib) o.bSinC+=b; } };
+    cu.prods.forEach(p=>{ const o=gp(p.k); o.name=o.name||p.prod; add(o,p.c,p.b);
+      if(lib&&!hasB) cSinB+=p.c; if(hasB&&!lib) bSinC+=p.b;
+      const oc=gc(nc); oc.name=oc.name||cu.u.r.cliente; add(oc,p.c,p.b);
+      p.lots.forEach(l=>{ const o2=gl(p.k+'|'+l.nl); o2.pk=p.k; o2.lote=o2.lote||l.lote; o2.name=o2.name||p.prod; add(o2,l.c,l.b); }); }); });
   if(inv) inv.rows.forEach(([c,pk,l,q])=>{ if(_sv(pk)){ sacVac+=q; return; } const o=gp(pk); o.name=o.name||nm[pk]||pk; o.inv+=q;
     const oc=gc(normNom(c)); oc.name=oc.name||c; oc.inv+=q; const o2=gl(pk+'|'+l); o2.pk=pk; o2.lote=o2.lote||l||'(sin lote)'; o2.name=o2.name||nm[pk]||pk; o2.inv+=q; });
   let facDesc=0, facMan=0, facBruto=0;
@@ -2521,7 +2527,7 @@ function cuadCompute(P){
   const sum=(a,k)=>a.reduce((s,o)=>s+(o[k]||0),0);
   const k={n:cus.length,conB:cus.filter(c=>c.u.b).length,ok:cus.filter(c=>c.st==='ok').length,dif:cus.filter(c=>c.st==='dif').length,ana:cus.filter(c=>c.st==='ana').length,
     pend:cus.filter(c=>c.st==='pend').length,gen:cus.filter(c=>c.u.b&&c.u.b.generado).length,noProg:cus.filter(c=>c.u.noProg).length,
-    c:sum(prodA,'c'),b:sum(prodA,'b'),inv:sum(prodA,'inv'),fac:sum(prodA,'fac'),cPend,
+    c:sum(prodA,'c'),b:sum(prodA,'b'),inv:sum(prodA,'inv'),fac:sum(prodA,'fac'),cPend,cSinB,bSinC,nCSinB,nBSinC,
     kgProg:cus.reduce((s,c)=>s+c.Pkg,0),kgNeto:cus.reduce((s,c)=>s+c.neto,0)};
   return {P,cus,prod:prodA,cli:arr(cli),lot:lotA,k,hasInv:!!inv,hasFac:!!fac,hasFacCli,sacVac:Math.max(sacVac,sacVacF),facDesc,facMan,facBruto,invMeta:CUAD.odoo[P]&&CUAD.odoo[P].inv,facMeta:CUAD.odoo[P]&&CUAD.odoo[P].fac};
 }
@@ -2529,7 +2535,10 @@ function cuadCompute(P){
 function cuadLec(o,hasInv,hasFac,tolS){
   const out=[]; tolS=tolS||0;
   const soloOdoo=!o.c&&!o.b;      // no pasó por báscula ni por Cargadores (p. ej. MP, empaque, venta de mostrador): solo se compara Odoo contra Odoo
-  if(!soloOdoo&&Math.abs(o.c-o.b)>tolS) out.push(['crit','Cargadores ≠ Báscula ('+sgn(o.b-o.c)+')']);
+  if(!soloOdoo){ const cs=o.cSinB||0, bs=o.bSinC||0, res=(o.b-bs)-(o.c-cs);   // desfase de documentos (una área va adelante) vs diferencia real
+    if(cs>tolS) out.push(['warn','Liberado por Cargadores sin pesar en báscula ('+fS(cs)+') · desfase']);
+    if(bs>tolS) out.push(['warn','Pesado en báscula sin liberar por Cargadores ('+fS(bs)+') · desfase']);
+    if(Math.abs(res)>tolS) out.push(['crit','Cargadores ≠ Báscula ('+sgn(res)+')']); }
   if(hasInv){ if(soloOdoo){ if(o.inv) out.push(['info','Solo en Odoo (no pasó por báscula)']); }
     else { const d=o.b-o.inv; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Pesado en báscula sin salida en Odoo ('+sgn(d)+') · falta liberar']); else out.push(['crit','Odoo da salida de más vs báscula ('+sgn(d)+')']); } } }
   if(hasInv&&hasFac&&o.fac!=null){ const d=o.inv-o.fac; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Salió de inventario sin facturar ('+sgn(d)+')']); else out.push(['crit','Facturado sin salida de inventario ('+sgn(d)+')']); } }
@@ -2782,8 +2791,8 @@ function renderCuadre(){
     {l:'Cuadran (3 fuentes)',v:K.ok,f:K.conB?Math.round(K.ok/K.conB*100)+'% de los pesados':'—',c:'ok',bar:K.conB?Math.round(K.ok/K.conB*100):null},
     {l:'Con diferencia',v:K.dif,f:K.ana?K.ana+' ya analizadas':'por analizar',c:K.dif?'late':'ok'},
     {l:'Falta báscula',v:K.pend,f:K.cPend?fS(K.cPend)+' sacos cargados sin pesar':'al corriente',c:K.pend?'warn':'ok'},
-    {l:'Sacos · Cargadores',v:fS(K.c),f:'solo unidades ya pesadas',c:'blue'},
-    {l:'Sacos · Báscula',v:fS(K.b),f:Math.abs(K.c-K.b)>cfg.tolSacos?'dif. vs Cargadores '+sgn(K.b-K.c):'= Cargadores ✓',c:Math.abs(K.c-K.b)>cfg.tolSacos?'late':'ok'},
+    {l:'Sacos · Cargadores',v:fS(K.c),f:'liberado por Cargadores'+(K.cSinB?' · '+fS(K.cSinB)+' aún sin pesar ('+K.nCSinB+')':''),c:K.cSinB?'warn':'blue'},
+    {l:'Sacos · Báscula',v:fS(K.b),f:cuadBascFoot(K,cfg),c:cuadBascCls(K,cfg)},
     {l:'Odoo · salidas inventario',v:D.hasInv?fS(K.inv):'—',f:D.hasInv?'vs báscula '+sgn(K.b-K.inv):'carga el reporte de Odoo',c:D.hasInv?'pur':'warn'},
     {l:'Odoo · facturado neto',v:D.hasFac?fS(K.fac):'—',f:D.hasFac&&D.hasInv?'inventario − facturado '+sgn(dInvFac)+(dInvFac>0?' · por facturar':dInvFac<0?' · facturado sin salir':' ✓'):D.hasFac?'sin descuento ni maniobra':'carga el reporte de Odoo',c:D.hasFac?(Math.abs(dInvFac)<0.5?'ok':'warn'):'warn'}
   ];
@@ -2882,6 +2891,12 @@ async function cuadXLSX(){
 let _h2cP=null;
 function ensureH2C(){ if(window.html2canvas)return Promise.resolve(); if(_h2cP)return _h2cP;
   _h2cP=new Promise((ok,ko)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload=ok; s.onerror=()=>{_h2cP=null;ko(new Error('No se pudo cargar el generador de imagen (revisa internet)'));}; document.head.appendChild(s); }); return _h2cP; }
+// pie del KPI de Báscula: separa el desfase de documentos (una área adelante de la otra) de la diferencia real
+function cuadBascFoot(K,cfg){ const res=(K.b-(K.bSinC||0))-(K.c-(K.cSinB||0)), d=K.b-K.c, t=cfg.tolSacos;
+  if(Math.abs(d)<=t&&!(K.cSinB>t)&&!(K.bSinC>t)) return '= Cargadores ✓';
+  const p=['vs Cargadores '+sgn(d)]; if(K.bSinC>t) p.push(fS(K.bSinC)+' pesados sin liberar ('+K.nBSinC+')'); if(K.cSinB>t) p.push(fS(K.cSinB)+' liberados sin pesar ('+K.nCSinB+')'); if(Math.abs(res)>t) p.push('dif. real '+sgn(res));
+  return p.join(' · '); }
+function cuadBascCls(K,cfg){ const res=(K.b-(K.bSinC||0))-(K.c-(K.cSinB||0)); return Math.abs(res)>cfg.tolSacos?'late':(Math.abs(K.b-K.c)>cfg.tolSacos||K.cSinB>cfg.tolSacos||K.bSinC>cfg.tolSacos)?'warn':'ok'; }
 function cuadReportHTML(D,snapNote){
   const K=D.k, cfg=cuadCfg(); const f=(v,has)=>has?fS(v):'—';
   const rows=D.prod.map(o=>{ const lec=cuadLec(Object.assign({},o,{fac:D.hasFac?o.fac:null}),D.hasInv,D.hasFac,cfg.tolSacos).filter(l=>l[0]!=='info'); const bad=lec.some(l=>l[0]==='crit');
@@ -2891,7 +2906,7 @@ function cuadReportHTML(D,snapNote){
     <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0d2a47;padding-bottom:8px;margin-bottom:12px"><div><div style="font-size:21px;font-weight:800;color:#0d2a47">Cuadre de salidas · ${perLabel(D.P)}</div><div style="font-size:12px;color:#5f6f82">Programado ↔ Cargadores ↔ Báscula ↔ Odoo (inventario y facturado sin descuento ni maniobra)</div></div><div style="font-size:11.5px;color:#5f6f82;text-align:right">Generado ${ttsStr(Date.now())}<br>${snapNote||''}${perCerrado(D.P)?'<b style="color:#16803c">🔒 Mes cerrado</b>':'Mes abierto'}</div></div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px">
       ${box('Embarques',K.n,K.conB+' con báscula · '+K.pend+' sin báscula')}${box('Cuadran / con dif.',K.ok+' / '+(K.dif+K.ana),K.ana+' analizadas')}
-      ${box('Cargadores (sacos)',fS(K.c),'unidades pesadas')}${box('Báscula (sacos)',fS(K.b),Math.abs(K.c-K.b)>cfg.tolSacos?'dif. '+sgn(K.b-K.c):'= Cargadores')}
+      ${box('Cargadores (sacos)',fS(K.c),'liberado por Cargadores'+(K.cSinB?' · '+fS(K.cSinB)+' sin pesar':''))}${box('Báscula (sacos)',fS(K.b),cuadBascFoot(K,cfg))}
       ${box('Odoo · salidas inventario',D.hasInv?fS(K.inv):'—',D.hasInv?'vs báscula '+sgn(K.b-K.inv):'sin cargar')}${box('Odoo · facturado neto',D.hasFac?fS(K.fac):'—',D.hasFac?('sin descuento ('+fS(D.facDesc)+') ni maniobra ('+fS(D.facMan)+')'):'sin cargar')}
       ${box('Inventario − facturado',D.hasInv&&D.hasFac?sgn(K.inv-K.fac):'—',D.hasInv&&D.hasFac?(K.inv-K.fac>0.5?'por facturar':K.inv-K.fac<-0.5?'facturado sin salida':'cuadra'):'')}${box('Programado / neto báscula',fK(K.kgProg/1000)+' t / '+fK(K.kgNeto/1000)+' t','kg totales')}</div>
     <table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:12.5px;min-width:0"><colgroup><col style="width:34%"><col style="width:13%"><col style="width:13%"><col style="width:14%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:6px 8px;background:#e8eef5;color:#13202e;text-transform:none;white-space:normal">Producto</th><th style="text-align:right;padding:6px 8px;background:#e8eef5;color:#13202e;text-transform:none;white-space:normal">Cargadores</th><th style="text-align:right;padding:6px 8px;background:#e8eef5;color:#13202e;text-transform:none;white-space:normal">Báscula</th><th style="text-align:right;padding:6px 8px;background:#e8eef5;color:#13202e;text-transform:none;white-space:normal">Odoo inventario</th><th style="text-align:right;padding:6px 8px;background:#e8eef5;color:#13202e;text-transform:none;white-space:normal">Odoo facturado</th><th style="text-align:left;padding:6px 8px;background:#e8eef5;color:#13202e;text-transform:none;white-space:normal">Estado</th></tr></thead><tbody>${rows}
