@@ -401,6 +401,35 @@
     return { meses: out, quiebre, bajoSS, pedirAntes, ss };
   };
 
+  /* Lead time: meses y días ligados (1 mes = 30 días). Se guarda UN solo valor (lt, en meses); los días son lt × 30. */
+  INV.ltDias = it => Math.round(num(it && it.lt) * 30);
+
+  /* Proyección POR DÍA — misma mecánica que la mensual, día a día:
+     stock al cierre del día = stock anterior + lo que llega ese día − consumo diario (consumo mensual ÷ 30).
+     La llegada usa la fecha estimada de cada pedido (si solo trae mes, el día 15); lo vencido llega hoy.
+     «Pedir a más tardar» = primer día bajo el stock de seguridad − lead time en días (el mismo lead time, ligado al de meses).
+     Quiebre y «pedir» se calculan aunque caigan después del horizonte que se muestra (hasta 400 días). */
+  INV.proyeccionDia = function (it, f, llegadas, nDias, incluirPorComprar) {
+    const hoy = new Date(); hoy.setHours(12, 0, 0, 0); const h0 = hoyISO(hoy);
+    const cons = num(it.consumo), consDia = cons / 30, ss = cons * (it.ss == null ? 0.3 : num(it.ss));
+    const arr = {};
+    vals(llegadas).forEach(l => {
+      if (l.itemId !== it.id || l.estado === 'recibido' || l.estado === 'cancelado') return; if (l.estado === 'por_comprar' && !incluirPorComprar) return;
+      let fch = l.fecha || (l.mes ? l.mes + '-15' : null); if (!fch) return; if (fch < h0) fch = h0;
+      const a = arr[fch] = arr[fch] || { fin: 0, pc: 0, notas: [] }; if (l.estado === 'fincado') a.fin += num(l.cant); else a.pc += num(l.cant); a.notas.push(l);
+    });
+    let stock = f.total; const out = []; let quiebre = null, bajoSS = null; const N = Math.max(nDias || 60, 400);
+    for (let i = 0; i < N; i++) {
+      const d = new Date(hoy); d.setDate(d.getDate() + i); const k = hoyISO(d); const a = arr[k] || { fin: 0, pc: 0, notas: [] };
+      stock = stock + a.fin + a.pc - consDia;
+      if (i < (nDias || 60)) out.push({ fecha: k, dow: d.getDay(), llega: a.fin + a.pc, fincado: a.fin, porComprar: a.pc, notas: a.notas, stock, bajoSS: stock < ss, negativo: stock < 0 });
+      if (stock < 0 && !quiebre) quiebre = k; if (stock < ss && !bajoSS) bajoSS = k;
+    }
+    let pedirAntes = null;
+    if (bajoSS && cons > 0) { const [y, m, dd] = bajoSS.split('-').map(Number); const d = new Date(y, m - 1, dd); d.setDate(d.getDate() - Math.round(num(it.lt) * 30)); pedirAntes = d; }
+    return { dias: out, quiebre, bajoSS, pedirAntes, ss };
+  };
+
   /* Lee un reporte de existencias de Odoo (xlsx/csv) → { CODIGO: {c,n,q,costo,u} } */
   INV.leerOdoo = async function (file) {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
