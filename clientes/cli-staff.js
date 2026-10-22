@@ -19,6 +19,7 @@
   var DEMO = QS.get('clidemo') === '1' || QS.get('demo') === '1';
   // En programador.html el módulo usa la MISMA contraseña de superusuario/master de esa app.
   var MODO_PROG = !!(SCRIPT && SCRIPT.dataset.modo === 'programador');
+  var PAGINA = !!(SCRIPT && SCRIPT.dataset.pagina === '1');   // consola del personal: ocupa toda la pantalla
   var LS_SES = 'cliStaffSes' + (MODO_PROG ? 'Prog' : '') + (DEMO ? 'Demo' : '');
   var S = { ses: null, yo: null, bandeja: null, tab: 'pedidos', filtro: null, abierto: false, ultimoConteo: -1, fletes: null, montajes: [], maestra: '' };
   var VEH = ['NISSAN', 'ISUZU', 'TORTON', 'TRAILER'];
@@ -76,6 +77,23 @@
       '.clis-chips{display:flex;gap:6px;flex-wrap:wrap}',
       '.clis-chips button{border:1.5px solid var(--l);background:var(--b);border-radius:99px;padding:6px 11px;font:700 12.5px inherit;font-family:inherit;color:var(--t2);cursor:pointer}',
       '.clis-chips button[aria-pressed=true]{background:var(--t);color:var(--p);border-color:var(--t)}',
+      '.clis-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}',
+      '.clis-kpi{position:relative;text-align:left;border:1.5px solid var(--l);background:var(--b);border-radius:14px;padding:12px 14px 12px 16px;cursor:pointer;font:inherit;color:var(--t);display:grid;gap:2px;overflow:hidden}',
+      '.clis-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c,var(--l))}',
+      '.clis-kpi b{font:900 28px/1 "Archivo",system-ui,sans-serif;font-variant-numeric:tabular-nums}',
+      '.clis-kpi span{font-size:12.5px;font-weight:700;color:var(--t2);line-height:1.25}',
+      '.clis-kpi small{font-size:11px;color:var(--t3)}',
+      '.clis-kpi[aria-pressed=true]{border-color:var(--c,var(--t));box-shadow:0 0 0 3px color-mix(in srgb,var(--c,var(--t)) 22%,transparent)}',
+      '.clis-kpi.cero b{color:var(--t3)}',
+      '.clis-barra{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}',
+      '.clis-velo.pagina{background:var(--p)}',
+      '.clis-velo.pagina .clis-panel{width:100%;box-shadow:none}',
+      '.clis-velo.pagina .clis-cab{padding:14px max(16px,calc((100% - 1180px)/2))}',
+      '.clis-velo.pagina .clis-cab img{width:46px;height:46px}',
+      '.clis-velo.pagina .clis-tabs{padding:8px max(16px,calc((100% - 1180px)/2)) 0}',
+      '.clis-velo.pagina .clis-cuerpo{padding:20px max(16px,calc((100% - 1180px)/2)) 40px;gap:14px}',
+      '.clis-velo.pagina #clis-cerrar{display:none}',
+      '.clis-estrellas{height:10px;background:#A80810;color:rgba(255,255,255,.5);font-size:8px;line-height:10px;letter-spacing:10px;text-align:center;overflow:hidden;white-space:nowrap}',
       '.clis-chips button b{margin-left:4px}',
       '.clis-badge{font:800 11px "Archivo",system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:99px;white-space:nowrap}',
       '.clis-b-enviado{background:var(--ws);color:var(--w)}.clis-b-confirmado{background:var(--is);color:var(--i)}.clis-b-fincado{background:var(--oks);color:var(--ok)}.clis-b-liberado{background:var(--rs);color:var(--r)}.clis-b-facturado{background:var(--oks);color:var(--ok)}.clis-b-rechazado,.clis-b-cancelado{background:var(--l2);color:var(--t3)}',
@@ -197,9 +215,9 @@
   /* ---------- panel ---------- */
   function abrir() {
     S.abierto = true;
-    var v = D.createElement('div'); v.className = 'clis clis-velo' + (oscuroHost() ? ' oscuro' : ''); v.id = 'clis-velo';
-    v.innerHTML = '<div class="clis-panel" role="dialog" aria-modal="true" aria-label="Clientes"><div class="clis-cab"><img src="' + BASE + 'img/logo-petfood.png" alt=""><div class="t"><b>Clientes</b><span id="clis-quien"></span></div><button class="clis-x" id="clis-salir" title="Cerrar sesión" style="width:auto;padding:0 10px;font:700 12.5px system-ui,sans-serif">Salir</button><button class="clis-x" id="clis-cerrar" aria-label="Cerrar">×</button></div><nav class="clis-tabs" id="clis-tabs" role="tablist"></nav><div class="clis-cuerpo" id="clis-cuerpo"></div></div>';
-    v.onclick = function (e) { if (e.target === v) cerrar(); };
+    var v = D.createElement('div'); v.className = 'clis clis-velo' + (PAGINA ? ' pagina' : (oscuroHost() ? ' oscuro' : '')); v.id = 'clis-velo';
+    v.innerHTML = '<div class="clis-panel" role="dialog" aria-modal="true" aria-label="Clientes"><div class="clis-cab"><img src="' + BASE + 'img/logo-petfood.png" alt=""><div class="t"><b>Clientes · Los 19 Hermanos</b><span id="clis-quien"></span></div><button class="clis-x" id="clis-salir" title="Cerrar sesión" style="width:auto;padding:0 10px;font:700 12.5px system-ui,sans-serif">Salir</button><button class="clis-x" id="clis-cerrar" aria-label="Cerrar">×</button></div><div class="clis-estrellas" aria-hidden="true">★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★</div><nav class="clis-tabs" id="clis-tabs" role="tablist"></nav><div class="clis-cuerpo" id="clis-cuerpo"></div></div>';
+    v.onclick = function (e) { if (e.target === v && !PAGINA) cerrar(); };
     D.body.appendChild(v);
     $('#clis-cerrar').onclick = cerrar;
     $('#clis-salir').onclick = function () { if (!confirm('¿Cerrar tu sesión del módulo Clientes en este equipo?')) return; S.ses = null; S.bandeja = null; S.filtro = null; S.tab = 'pedidos'; S.ultimoConteo = -1; lss(LS_SES, null); pintar(); };
@@ -221,7 +239,7 @@
     var cuerpo = $('#clis-cuerpo'); if (!cuerpo) return;
     var tabs = $('#clis-tabs');
     if (!S.ses) { $('#clis-quien').textContent = 'Acceso del personal'; tabs.innerHTML = ''; formLogin(cuerpo, function () { S.filtro = null; S.bandeja = null; S.ultimoConteo = -1; refrescarBandeja(true).then(pintar); }); return; }
-    var yo = S.ses.yo || {}; $('#clis-quien').textContent = (yo.nombre || yo.u) + ' · ' + ({ vendedor: 'Vendedor', admin: 'Administración', programacion: 'Superusuario', progmaster: 'Master', gerencia: 'Gerencia' }[yo.rol] || '');
+    var yo = Object.assign({}, S.ses.yo || {}, S.yo || {}); $('#clis-quien').textContent = (yo.nombre || yo.u) + ' · ' + ({ vendedor: 'Vendedor', admin: 'Administración', programacion: 'Superusuario', progmaster: 'Master', gerencia: 'Gerencia' }[yo.rol] || '');
     var T = tabsDe(yo.rol); if (!T.some(function (x) { return x[0] === S.tab; })) S.tab = T[0][0];
     var bd = S.bandeja || {};
     tabs.innerHTML = T.map(function (x) {
@@ -244,11 +262,13 @@
     var bd = S.bandeja, rol = bd.yo.rol, peds = bd.pedidos || [];
     if (!S.filtro) S.filtro = rol === 'admin' ? 'confirmado' : (rol === 'programacion' ? 'fincado' : 'enviado');
     var cuenta = function (k) { return peds.filter(function (p) { return k === 'cerrados' ? ['facturado', 'rechazado', 'cancelado'].indexOf(p.estado) >= 0 : p.estado === k; }).length; };
-    var h = '<div class="clis-entre"><div class="clis-chips" role="group" aria-label="Filtrar">' + FILTROS.map(function (x) { return '<button data-f="' + x[0] + '" aria-pressed="' + (S.filtro === x[0]) + '">' + x[1] + '<b>' + cuenta(x[0]) + '</b></button>'; }).join('') + '</div>' +
-      '<button class="clis-btn sec" id="clis-act">Actualizar</button></div>';
+    var COL = { enviado: '#E8A020', confirmado: '#1F4E8C', fincado: '#1D7A45', liberado: '#DE0A14', cerrados: '#8C8178' };
+    var SUB = { enviado: 'el vendedor llama al cliente', confirmado: 'Administración lo captura', fincado: 'esperando a Cargadores', liberado: 'se cierra al facturarse', cerrados: 'facturados o cancelados' };
+    var h = '<div class="clis-barra"><h3>Prepedidos de clientes</h3><span class="clis-mini">Actualizado ' + fh(bd.ts) + ' · <button class="clis-btn ghost" id="clis-act" style="display:inline;min-height:0;padding:0">Actualizar</button></span></div>' +
+      '<div class="clis-kpis" role="group" aria-label="Filtrar por etapa">' + FILTROS.map(function (x) { var n = cuenta(x[0]); return '<button class="clis-kpi' + (n ? '' : ' cero') + '" style="--c:' + COL[x[0]] + '" data-f="' + x[0] + '" aria-pressed="' + (S.filtro === x[0]) + '"><b>' + n + '</b><span>' + x[1] + '</span><small>' + SUB[x[0]] + '</small></button>'; }).join('') + '</div>';
     if (DEMO && rol !== 'vendedor') h += '<div class="clis-aviso i">Demostración: en «Fincados» puedes simular que Cargadores finaliza la unidad, y en «Liberados» que ventas publica la facturación.</div>';
     var lista = peds.filter(function (p) { return S.filtro === 'cerrados' ? ['facturado', 'rechazado', 'cancelado'].indexOf(p.estado) >= 0 : p.estado === S.filtro; });
-    if (!lista.length) h += '<div class="clis-card clis-mut" style="text-align:center">Nada en esta sección.</div>';
+    if (!lista.length) h += '<div class="clis-card" style="text-align:center;padding:28px 16px"><img src="' + BASE + 'img/logo-petfood.png" alt="" style="width:64px;margin:0 auto;opacity:.9"><div style="font-weight:700">Sin prepedidos en «' + (FILTROS.filter(function (x) { return x[0] === S.filtro; })[0] || ['', ''])[1] + '»</div><div class="clis-mini">Cuando un cliente envíe un prepedido desde su app aparecerá aquí y en el botón «Clientes» de la app de su vendedor.</div></div>';
     lista.forEach(function (p) { h += tarjetaPedido(p, rol); });
     c.innerHTML = h;
     $$('[data-f]', c).forEach(function (b) { b.onclick = function () { S.filtro = b.dataset.f; vPedidos(c); }; });
