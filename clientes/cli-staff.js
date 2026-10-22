@@ -17,7 +17,9 @@
   var BASE = SCRIPT ? SCRIPT.src.replace(/[^/]*$/, '') : 'clientes/';
   var QS = new URLSearchParams(location.search);
   var DEMO = QS.get('clidemo') === '1' || QS.get('demo') === '1';
-  var LS_SES = DEMO ? 'cliStaffSesDemo' : 'cliStaffSes';
+  // En programador.html el módulo usa la MISMA contraseña de superusuario/master de esa app.
+  var MODO_PROG = !!(SCRIPT && SCRIPT.dataset.modo === 'programador');
+  var LS_SES = 'cliStaffSes' + (MODO_PROG ? 'Prog' : '') + (DEMO ? 'Demo' : '');
   var S = { ses: null, yo: null, bandeja: null, tab: 'pedidos', filtro: null, abierto: false, ultimoConteo: -1, fletes: null, montajes: [], maestra: '' };
   var VEH = ['NISSAN', 'ISUZU', 'TORTON', 'TRAILER'];
 
@@ -69,7 +71,7 @@
       '.clis-btn.ok{background:var(--ok)}.clis-btn.wa{background:#1FA855}.clis-btn.ghost{background:none;color:var(--r);padding:6px 8px}',
       '.clis-btn[disabled]{opacity:.5;pointer-events:none}',
       '.clis input,.clis select,.clis textarea{font:inherit;color:var(--t);background:var(--b);border:1.5px solid var(--l);border-radius:9px;padding:8px 10px;min-height:38px;max-width:100%}',
-      '.clis textarea{width:100%;min-height:64px}',
+      '.clis textarea{width:100%;min-height:64px}','.clis input:disabled,.clis select:disabled{opacity:.5;background:transparent;border-style:dashed}',
       '.clis label.c{display:grid;gap:4px;font-size:12.5px;font-weight:700;color:var(--t2)}',
       '.clis-chips{display:flex;gap:6px;flex-wrap:wrap}',
       '.clis-chips button{border:1.5px solid var(--l);background:var(--b);border-radius:99px;padding:6px 11px;font:700 12.5px inherit;font-family:inherit;color:var(--t2);cursor:pointer}',
@@ -134,7 +136,15 @@
   /* ---------- sesión ---------- */
   function cargarSesion() { try { var s = JSON.parse(lsg(LS_SES) || 'null'); if (s && (!s.exp || s.exp > Date.now())) S.ses = s; } catch (e) {} }
   function usuarioSugerido() { var h = (location.hash || '').match(/[#&]v=([^&]+)/); return h ? decodeURIComponent(h[1]) : (W.CLI_STAFF_USUARIO || ''); }
+  function guardaSesion(r) { S.ses = { token: r.token, yo: r.yo, exp: r.exp || 0 }; lss(LS_SES, JSON.stringify(S.ses)); S.filtro = null; S.bandeja = null; S.ultimoConteo = -1; }
   function formLogin(cont, alEntrar) {
+    if (MODO_PROG) {
+      cont.innerHTML = '<div class="clis-login"><img src="' + BASE + 'img/logo-petfood.png" alt=""><h3>Fletes y clientes</h3><p class="clis-mut" style="margin:0">Escribe tu contraseña de superusuario o master del programador.</p>' +
+        '<input id="clis-p" type="password" placeholder="Contraseña" autocomplete="current-password"><div class="clis-mini" id="clis-e" style="color:var(--r);min-height:1em"></div><button class="clis-btn" id="clis-in">Entrar</button></div>';
+      var goP = function () { var b = $('#clis-in', cont); b.disabled = true; api('loginProg', '', { pwd: $('#clis-p', cont).value }).then(function (r) { guardaSesion(r); alEntrar(); }).catch(function (e) { b.disabled = false; $('#clis-e', cont).textContent = e.error || 'No se pudo entrar.'; }); };
+      $('#clis-in', cont).onclick = goP; $('#clis-p', cont).onkeydown = function (e) { if (e.key === 'Enter') goP(); };
+      return;
+    }
     cont.innerHTML = '<div class="clis-login"><img src="' + BASE + 'img/logo-petfood.png" alt="Los 19 Hermanos División Pet Food"><h3>Clientes · acceso del personal</h3><p class="clis-mut" style="margin:0">Entra con tu usuario y el PIN que te asignó la gerencia.</p>' +
       '<input id="clis-u" placeholder="Usuario" autocomplete="username" value="' + esc(lsg('cliStaffUlt') || usuarioSugerido()) + '">' +
       '<input id="clis-p" placeholder="PIN" inputmode="numeric" type="password" autocomplete="current-password" maxlength="8">' +
@@ -203,7 +213,7 @@
     var t = [['pedidos', 'Pedidos'], ['registros', 'Registros']];
     if (rol === 'gerencia') t.push(['mensajes', 'Mensajes']);
     if (rol === 'programacion' || rol === 'gerencia') t.push(['fletes', 'Fletes y precios']);
-    if (rol === 'programacion') t = [['fletes', 'Fletes y precios'], ['pedidos', 'Pedidos']];
+    if (rol === 'programacion' || rol === 'progmaster') t = [['fletes', 'Fletes y precios'], ['pedidos', 'Pedidos']];
     t.push(['accesos', '🔑 Accesos']);
     return t;
   }
@@ -211,7 +221,7 @@
     var cuerpo = $('#clis-cuerpo'); if (!cuerpo) return;
     var tabs = $('#clis-tabs');
     if (!S.ses) { $('#clis-quien').textContent = 'Acceso del personal'; tabs.innerHTML = ''; formLogin(cuerpo, function () { S.filtro = null; S.bandeja = null; S.ultimoConteo = -1; refrescarBandeja(true).then(pintar); }); return; }
-    var yo = S.ses.yo || {}; $('#clis-quien').textContent = (yo.nombre || yo.u) + ' · ' + ({ vendedor: 'Vendedor', admin: 'Administración', programacion: 'Programación', gerencia: 'Gerencia' }[yo.rol] || '');
+    var yo = S.ses.yo || {}; $('#clis-quien').textContent = (yo.nombre || yo.u) + ' · ' + ({ vendedor: 'Vendedor', admin: 'Administración', programacion: 'Superusuario', progmaster: 'Master', gerencia: 'Gerencia' }[yo.rol] || '');
     var T = tabsDe(yo.rol); if (!T.some(function (x) { return x[0] === S.tab; })) S.tab = T[0][0];
     var bd = S.bandeja || {};
     tabs.innerHTML = T.map(function (x) {
@@ -375,14 +385,18 @@
   /* ================= FLETES Y PRECIOS ================= */
   function vFletes(c) {
     c.innerHTML = '<div class="clis-mut">Cargando fletes…</div>';
-    var rol = S.ses.yo.rol; var editar = rol === 'programacion' || rol === 'gerencia';
+    var rol = S.ses.yo.rol; var editar = rol === 'progmaster' || rol === 'gerencia';
+    S.nivelFl = editar ? 'total' : (rol === 'programacion' ? 'su' : 'lectura');
     api('staff', 'fletes', {}).then(function (r) { S.fletes = r; pintaFletes(c, editar); }).catch(function (e) { c.textContent = e.error; });
   }
   function calc(ruta) { return W.CliCore ? W.CliCore.calcFlete(ruta, S.fletes.fletes) : null; }
   function pintaFletes(c, editar) {
     var F = S.fletes, fl = F.fletes = F.fletes || {}; fl.params = fl.params || {}; fl.vehiculos = fl.vehiculos || {}; fl.rutas = fl.rutas || {};
     var cfg = F.config || {}; var vb = F.vehiculosBase, pb = F.paramsBase;
+    var su = S.nivelFl === 'su', dT = editar ? '' : ' disabled', dS = (editar || su) ? '' : ' disabled';
     var h = '';
+    if (su) h += '<div class="clis-aviso i"><b>Superusuario:</b> puedes editar <b>km, casetas, diésel y salario del ayudante</b>, y <b>agregar clientes nuevos</b> (rutas). Los costos de las unidades, los márgenes, las listas de precios y lo que ve cada cliente los edita el master.</div>';
+    else if (S.nivelFl === 'lectura') h += '<div class="clis-aviso i">Vista de consulta. Los fletes los edita Programación; precios y márgenes, el master.</div>';
     // 1 · interruptor
     h += '<section class="clis-card"><div class="clis-entre"><div><h3>Precios en la app del cliente</h3><div class="clis-mini">Si lo apagas, el cliente solo arma su pedido en productos y sacos. Puedes cambiarlo por cliente abajo.</div></div>' +
       '<label class="clis-sw"><input type="checkbox" id="clis-mp"' + (cfg.mostrarPrecios ? ' checked' : '') + (editar ? '' : ' disabled') + '> <span>' + (cfg.mostrarPrecios ? 'Mostrar precios con IVA y flete' : 'Solo productos y sacos') + '</span></label></div>' +
@@ -390,14 +404,15 @@
       '<label class="c">WhatsApp de Administración<input id="clis-wa" inputmode="tel" value="' + esc(cfg.waAdmin || '') + '"' + (editar ? '' : ' disabled') + ' placeholder="10 dígitos"></label><label class="c">Aviso para todos los clientes<input id="clis-av" value="' + esc(cfg.avisoGeneral || '') + '"' + (editar ? '' : ' disabled') + ' placeholder="Ej. 2 nov sin entregas"></label></div>' +
       (editar ? '<div><button class="clis-btn" id="clis-gcfg">Guardar ajustes</button></div>' : '') + '</section>';
     // 2 · parámetros y vehículos
-    h += '<section class="clis-card"><div class="clis-entre"><h3>Costos por tipo de unidad</h3><div class="clis-fila"><label class="c" style="grid-auto-flow:column;align-items:center">Diésel $/lt <input id="clis-die" type="number" step="0.01" style="width:90px" value="' + (fl.params.diesel != null ? fl.params.diesel : pb.diesel) + '"></label><label class="c" style="grid-auto-flow:column;align-items:center">Km/año <input id="clis-kma" type="number" style="width:100px" value="' + (fl.params.kmAnual != null ? fl.params.kmAnual : pb.kmAnual) + '"></label><label class="c" style="grid-auto-flow:column;align-items:center">Años <input id="clis-ani" type="number" style="width:70px" value="' + (fl.params.anios != null ? fl.params.anios : pb.anios) + '"></label></div></div>' +
+    h += '<section class="clis-card"><div class="clis-entre"><h3>Costos por tipo de unidad</h3><div class="clis-fila"><label class="c" style="grid-auto-flow:column;align-items:center">Diésel $/lt <input id="clis-die" type="number" step="0.01" style="width:90px" value="' + (fl.params.diesel != null ? fl.params.diesel : pb.diesel) + '"' + dS + '></label><label class="c" style="grid-auto-flow:column;align-items:center">Km/año <input id="clis-kma" type="number" style="width:100px" value="' + (fl.params.kmAnual != null ? fl.params.kmAnual : pb.kmAnual) + '"' + dT + '></label><label class="c" style="grid-auto-flow:column;align-items:center">Años <input id="clis-ani" type="number" style="width:70px" value="' + (fl.params.anios != null ? fl.params.anios : pb.anios) + '"' + dT + '></label></div></div>' +
       '<div class="clis-scroll" style="max-height:none"><table class="clis-tabla"><thead><tr><th>Unidad</th><th>Toneladas</th><th>Km/lt</th><th>Mant. cada km</th><th>Mant. $</th><th>Valor unidad</th><th>Seguro/viaje</th><th>Ayudante</th><th>Margen %</th></tr></thead><tbody>' +
-      VEH.map(function (k) { var v = Object.assign({}, vb[k], fl.vehiculos[k] || {}); return '<tr data-veh="' + k + '"><td><b>' + esc(vb[k].nombre) + '</b></td>' + ['ton', 'rend', 'mantKm', 'mantCosto', 'valor', 'seguro', 'ayudante'].map(function (x) { return '<td><input type="number" step="any" data-k="' + x + '" value="' + v[x] + '"></td>'; }).join('') + '<td><input type="number" step="any" data-k="margen" value="' + (Math.round(v.margen * 100000) / 1000) + '"></td></tr>'; }).join('') +
+      VEH.map(function (k) { var v = Object.assign({}, vb[k], fl.vehiculos[k] || {}); return '<tr data-veh="' + k + '"><td><b>' + esc(vb[k].nombre) + '</b></td>' + ['ton', 'rend', 'mantKm', 'mantCosto', 'valor', 'seguro', 'ayudante'].map(function (x) { return '<td><input type="number" step="any" data-k="' + x + '" value="' + v[x] + '"' + dT + '></td>'; }).join('') + '<td><input type="number" step="any" data-k="margen" value="' + (Math.round(v.margen * 100000) / 1000) + '"' + dT + '></td></tr>'; }).join('') +
       '</tbody></table></div><div class="clis-mini">Igual que tu Excel: combustible = km ÷ rendimiento × diésel; mantenimiento = km ÷ cada km × costo; depreciación = valor ÷ (km/año × años) × km; margen sobre el costo de transporte. Por saco: tonelada ÷ 40 (25 kg), ÷ 50 (20 kg), ÷ 67 (15 kg).</div></section>';
     // 3 · rutas
     var ids = Object.keys(fl.rutas).sort(function (a, b) { return String(fl.rutas[a].destino).localeCompare(String(fl.rutas[b].destino)) || String(fl.rutas[a].vehiculo).localeCompare(String(fl.rutas[b].vehiculo)); });
     h += '<section class="clis-card"><div class="clis-entre"><div><h3>Rutas y fletes</h3><div class="clis-mini">' + ids.length + ' rutas. Los campos en blanco toman el valor de su tipo de unidad.</div></div><div class="clis-fila">' +
-      (editar ? '<button class="clis-btn sec" id="clis-xls">Importar del Excel</button><input type="file" id="clis-xlsf" accept=".xlsx,.xls" hidden><button class="clis-btn sec" id="clis-add">+ Ruta</button><button class="clis-btn" id="clis-gfl">Guardar fletes</button>' : '') + '</div></div>' +
+      (editar ? '<button class="clis-btn sec" id="clis-xls">Importar del Excel</button><input type="file" id="clis-xlsf" accept=".xlsx,.xls" hidden>' : '') +
+      ((editar || su) ? '<button class="clis-btn sec" id="clis-add">+ Cliente / ruta</button><button class="clis-btn" id="clis-gfl">Guardar fletes</button>' : '') + '</div></div>' +
       '<input id="clis-fbus" placeholder="Filtrar rutas…" style="width:100%">' +
       '<div class="clis-scroll"><table class="clis-tabla" id="clis-trutas"><thead><tr><th>Cliente / destino</th><th>Unidad</th><th>Km</th><th>Casetas</th><th>Ayudante</th><th>Seguro</th><th>Diésel</th><th>Costo viaje</th><th>$/ton</th><th>$/saco 25</th><th>$/saco 20</th><th>$/saco 15</th><th>Cobrado hoy</th><th>Dif.</th><th></th></tr></thead><tbody>' +
       ids.map(function (id) { return filaRuta(id, fl.rutas[id], editar); }).join('') + '</tbody></table></div></section>';
@@ -422,8 +437,9 @@
     $$('#clis-trutas input, #clis-trutas select', c).forEach(function (i) { i.oninput = function () { var tr = i.closest('tr'); leerFila(tr); actualizaFila(tr, fl.rutas[tr.dataset.id]); }; });
     $$('[data-del]', c).forEach(function (b) { b.onclick = function () { var tr = b.closest('tr'); if (!confirm('¿Quitar esta ruta?')) return; delete fl.rutas[tr.dataset.id]; tr.remove(); }; });
     $('#clis-fbus', c).oninput = function () { var q = keyp(this.value); $$('#clis-trutas tbody tr', c).forEach(function (tr) { tr.style.display = !q || keyp(tr.dataset.n).indexOf(q) >= 0 ? '' : 'none'; }); };
-    var add = $('#clis-add', c); if (add) add.onclick = function () { leerTabla(c); var id = 'R' + Date.now().toString(36).toUpperCase(); fl.rutas[id] = { destino: 'NUEVA RUTA', vehiculo: 'TORTON', km: 0, casetas: 0 }; pintaFletes(c, editar); };
-    var gfl = $('#clis-gfl', c); if (gfl) gfl.onclick = function () { leerTabla(c); gfl.disabled = true; api('staff', 'guardarFletes', { fletes: fl }).then(function () { gfl.disabled = false; toast('Fletes guardados'); return api('staff', 'fletes', {}).then(function (r) { S.fletes = r; pintaFletes(c, editar); }); }).catch(function (e) { gfl.disabled = false; toast(e.error, true); }); };
+    var add = $('#clis-add', c); if (add) add.onclick = function () { leerTabla(c); var id = 'R' + Date.now().toString(36).toUpperCase(); fl.rutas[id] = { destino: '', vehiculo: 'TORTON', km: '', casetas: '', _nuevo: true }; pintaFletes(c, editar); var f0 = $('#clis-trutas tr[data-id="' + id + '"] input[data-k=destino]', c); if (f0) { f0.scrollIntoView({ block: 'center' }); f0.focus(); } };
+    var gfl = $('#clis-gfl', c); if (gfl) gfl.onclick = function () { leerTabla(c); gfl.disabled = true; var vac = Object.keys(fl.rutas).filter(function (k) { return fl.rutas[k]._nuevo && !String(fl.rutas[k].destino || '').trim(); }); if (vac.length) { gfl.disabled = false; toast('Escribe el nombre del cliente o destino de la ruta nueva', true); return; }
+      api('staff', 'guardarFletes', { fletes: fl }).then(function (r) { gfl.disabled = false; toast(r && r.nuevas != null ? 'Guardado: ' + r.cambios + ' rutas actualizadas, ' + r.nuevas + ' nuevas' : 'Fletes guardados'); return api('staff', 'fletes', {}).then(function (r) { S.fletes = r; pintaFletes(c, editar); }); }).catch(function (e) { gfl.disabled = false; toast(e.error, true); }); };
     var xb = $('#clis-xls', c), xf = $('#clis-xlsf', c); if (xb) { xb.onclick = function () { xf.click(); }; xf.onchange = function () { if (xf.files[0]) importarExcel(xf.files[0], c, editar); }; }
     var lb = $('#clis-lp', c), lf = $('#clis-lpf', c); if (lb) { lb.onclick = function () { lf.click(); }; lf.onchange = function () { if (lf.files[0]) importarListas(lf.files[0], c, editar); }; }
     $('#clis-cbtn', c).onclick = function () {
@@ -433,16 +449,21 @@
     pintaClientes(c, editar);
     if (W.CliCore) recalc(); else cargar(BASE + 'cli-core.js').then(function () { recalc(); pintaClientes(c, editar); });
   }
+  // Qué campo puede tocar cada nivel: master todo; superusuario km, casetas, diésel y ayudante
+  // (y nombre/unidad solo en rutas que él mismo está agregando).
   function filaRuta(id, r, editar) {
-    var dis = editar ? '' : ' disabled';
-    var inp = function (k, w) { return '<input type="number" step="any" data-k="' + k + '" value="' + (r[k] != null && r[k] !== '' ? r[k] : '') + '"' + dis + (w ? ' style="width:' + w + 'px"' : '') + '>'; };
-    return '<tr data-id="' + esc(id) + '" data-n="' + esc(r.destino + ' ' + r.vehiculo) + '"><td class="d"><input data-k="destino" value="' + esc(r.destino || '') + '"' + dis + '></td><td><select data-k="vehiculo"' + dis + '>' + VEH.map(function (v) { return '<option' + (v === r.vehiculo ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select></td>' +
+    var su = S.nivelFl === 'su';
+    var puede = function (k) { if (editar) return true; if (!su) return false; if (['km', 'casetas', 'diesel', 'ayudante'].indexOf(k) >= 0) return true; return !!r._nuevo && (k === 'destino' || k === 'vehiculo'); };
+    var dis = function (k) { return puede(k) ? '' : ' disabled'; };
+    var inp = function (k, w) { return '<input type="number" step="any" data-k="' + k + '" value="' + (r[k] != null && r[k] !== '' ? r[k] : '') + '"' + dis(k) + (w ? ' style="width:' + w + 'px"' : '') + '>'; };
+    return '<tr data-id="' + esc(id) + '" data-n="' + esc(r.destino + ' ' + r.vehiculo) + '"><td class="d"><input data-k="destino" placeholder="Cliente o destino" value="' + esc(r.destino || '') + '"' + dis('destino') + '></td><td><select data-k="vehiculo"' + dis('vehiculo') + '>' + VEH.map(function (v) { return '<option' + (v === r.vehiculo ? ' selected' : '') + '>' + v + '</option>'; }).join('') + '</select></td>' +
       '<td>' + inp('km', 70) + '</td><td>' + inp('casetas', 80) + '</td><td>' + inp('ayudante', 76) + '</td><td>' + inp('seguro', 70) + '</td><td>' + inp('diesel', 64) + '</td>' +
       '<td data-o="total"></td><td data-o="porTon"></td><td data-o="saco25"></td><td data-o="saco20"></td><td data-o="saco15"></td><td>' + inp('cobrado', 86) + '</td><td data-o="dif"></td><td>' + (editar ? '<button class="clis-btn ghost" data-del title="Quitar">×</button>' : '') + '</td></tr>';
   }
   function leerFila(tr) {
     var fl = S.fletes.fletes; var r = fl.rutas[tr.dataset.id] = fl.rutas[tr.dataset.id] || {};
     $$('[data-k]', tr).forEach(function (i) { var k = i.dataset.k; if (k === 'destino' || k === 'vehiculo') r[k] = i.value; else r[k] = i.value === '' ? '' : Number(i.value); });
+    tr.dataset.n = (r.destino || '') + ' ' + (r.vehiculo || '');
   }
   function leerTabla(c) {
     var fl = S.fletes.fletes;
@@ -559,12 +580,13 @@
   /* ---------- montaje en línea (pestaña de programador) ---------- */
   function montarFletes(elId) {
     var host = typeof elId === 'string' ? D.getElementById(elId) : elId; if (!host) return;
+    if (S.montajes.indexOf(host) < 0) S.montajes.push(host);
     estilos();
     host.innerHTML = '<div class="clis clis-inline' + (oscuroHost() ? ' oscuro' : '') + '"><div class="clis-cuerpo" id="clis-inl" style="background:var(--p)"></div></div>';
     var c = $('#clis-inl', host);
     listo().then(function () {
       cargarSesion();
-      var go = function () { var rol = S.ses && S.ses.yo && S.ses.yo.rol; if (rol !== 'programacion' && rol !== 'gerencia' && rol !== 'admin') { c.innerHTML = '<div class="clis-aviso w">Tu usuario no tiene acceso a Fletes y precios. Entra con el usuario de Programación.</div><button class="clis-btn sec" id="clis-otro">Usar otro usuario</button>'; $('#clis-otro', c).onclick = function () { S.ses = null; lss(LS_SES, null); formLogin(c, go); }; return; } vFletes(c); };
+      var go = function () { var rol = S.ses && S.ses.yo && S.ses.yo.rol; if (['programacion', 'progmaster', 'gerencia', 'admin'].indexOf(rol) < 0) { c.innerHTML = '<div class="clis-aviso w">Tu usuario no tiene acceso a Fletes y precios. Entra con el usuario de Programación.</div><button class="clis-btn sec" id="clis-otro">Usar otro usuario</button>'; $('#clis-otro', c).onclick = function () { S.ses = null; lss(LS_SES, null); formLogin(c, go); }; return; } vFletes(c); };
       if (!S.ses) formLogin(c, function () { refrescarBandeja(true); go(); }); else go();
     });
   }
@@ -579,6 +601,15 @@
       D.addEventListener('visibilitychange', function () { if (!D.hidden) refrescarBandeja(true); });
     }).catch(function (e) { console.warn('Clientes:', e); });
   }
-  W.CliStaff = { abrir: function () { listo().then(abrir); }, mountFletes: montarFletes, refrescar: refrescarBandeja };
+  // Lo llama programador.html al entrar con su contraseña: abre la sesión del módulo sin pedirla otra vez.
+  function loginProgramador(pwd) {
+    if (!MODO_PROG || !pwd) return Promise.resolve();
+    return listo().then(function () { return api('loginProg', '', { pwd: pwd }); }).then(function (r) {
+      guardaSesion(r); refrescarBandeja(true);
+      S.montajes.forEach(function (m) { if (D.body.contains(m)) montarFletes(m); });
+    }).catch(function () {});
+  }
+  function salir() { S.ses = null; S.bandeja = null; S.filtro = null; S.fletes = null; lss(LS_SES, null); cerrar(); var n = $('.clis-fab .clis-n'); if (n) n.hidden = true; S.montajes.forEach(function (m) { if (D.body.contains(m)) montarFletes(m); }); }
+  W.CliStaff = { abrir: function () { listo().then(abrir); }, mountFletes: montarFletes, refrescar: refrescarBandeja, loginProgramador: loginProgramador, salir: salir };
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })(window, document);

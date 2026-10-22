@@ -465,7 +465,7 @@
     }
 
     /* =================== API DEL PERSONAL =================== */
-    var ROLES = { vendedor: 'Vendedor', admin: 'Administración (asistentes de venta)', programacion: 'Programación de embarques', gerencia: 'Gerencia' };
+    var ROLES = { vendedor: 'Vendedor', admin: 'Administración (asistentes de venta)', programacion: 'Programación (superusuario)', gerencia: 'Gerencia' };
     function staffLogin(usuario, pin) {
       var k = keyp(usuario);
       if (!k || !/^\d{6,8}$/.test(String(pin || ''))) return Promise.reject(err('credenciales', 'Usuario o PIN incorrectos.', 401));
@@ -485,10 +485,35 @@
         });
       });
     }
+    // El programador de embarques entra con SU contraseña de superusuario o master (la misma de la app).
+    // El servidor la compara contra /config, así que cambiarla ahí cierra estas sesiones.
+    function progLogin(pwd) {
+      pwd = String(pwd || '');
+      var rk = 'rl/PROGLOGIN/' + dayKey(now()) + '/fallos';
+      return Promise.all([Promise.resolve(db.get('config')), g(rk)]).then(function (a) {
+        var c = a[0] || {}, fallos = num(a[1]);
+        if (fallos >= 30) throw err('bloqueado', 'Demasiados intentos hoy. Intenta mañana.', 429);
+        var rol = (c.masterPwd && pwd === String(c.masterPwd)) ? 'progmaster' : ((c.pwd && pwd === String(c.pwd)) ? 'programacion' : '');
+        if (!rol || pwd.length < 4) return s(rk, fallos + 1).then(function () { throw err('credenciales', 'Contraseña incorrecta.', 401); });
+        return Promise.resolve(hashPin(pwd, 'prog')).then(function (h) {
+          return { u: 'PROGRAMADOR', nombre: rol === 'progmaster' ? 'Programación · master' : 'Programación · superusuario', rol: rol, vk: '', prog: true, ph: h };
+        });
+      });
+    }
+    function sesionProg(ses) {
+      return Promise.resolve(db.get('config')).then(function (c) {
+        c = c || {}; var pw = ses.rol === 'progmaster' ? c.masterPwd : c.pwd;
+        if (!pw) throw err('sin_sesion', 'Tu sesión terminó. Vuelve a entrar.', 401);
+        return Promise.resolve(hashPin(String(pw), 'prog')).then(function (h) {
+          if (h !== ses.ph) throw err('sin_sesion', 'La contraseña del programador cambió. Vuelve a entrar.', 401);
+          return { nombre: ses.nombre, rol: ses.rol, vk: '', activo: true, pinVer: ses.v || 1 };
+        });
+      });
+    }
     // ses = {u, rol, vk, v} ya verificada por la firma; aquí se revisa que el usuario siga activo
     function staff(ses, accion, body) {
       body = body || {};
-      return g('staff/' + ses.u).then(function (st) {
+      return (ses.prog ? sesionProg(ses) : g('staff/' + ses.u)).then(function (st) {
         if (!st || st.activo === false || (st.pinVer || 1) !== (ses.v || 1)) throw err('sin_sesion', 'Tu sesión terminó. Vuelve a entrar con tu PIN.', 401);
         var S = { u: ses.u, nombre: st.nombre, rol: st.rol, vk: st.vk || '' };
         var puede = function () { var r = Array.prototype.slice.call(arguments); if (r.indexOf(S.rol) < 0) throw err('permiso', 'Tu usuario no tiene permiso para esto.', 403); };
@@ -499,7 +524,7 @@
           case 'rechazar': puede('vendedor', 'admin', 'gerencia'); return stRechazar(S, body);
           case 'fincar': puede('admin', 'gerencia'); return stFincar(S, body);
           case 'editarRemision': puede('admin', 'gerencia'); return stEditarRemision(S, body);
-          case 'liberarManual': puede('admin', 'gerencia', 'programacion'); return stLiberarManual(S, body);
+          case 'liberarManual': puede('admin', 'gerencia', 'programacion', 'progmaster'); return stLiberarManual(S, body);
           case 'facturado': puede('admin', 'gerencia'); return stFacturado(S, body);
           case 'registros': return stRegistros(S, body);
           case 'buscarClientes': puede('admin', 'gerencia', 'vendedor'); return stBuscar(S, body);
@@ -507,12 +532,14 @@
           case 'estadoUsuario': puede('admin', 'gerencia'); return stEstadoUsuario(S, body);
           case 'mensajes': puede('gerencia'); return stMensajes(S, body);
           case 'responder': puede('gerencia'); return stResponder(S, body);
-          case 'fletes': puede('programacion', 'gerencia', 'admin'); return stFletes(S, body);
-          case 'guardarFletes': puede('programacion', 'gerencia'); return stGuardarFletes(S, body);
-          case 'importarPrecios': puede('programacion', 'gerencia'); return stImportarPrecios(S, body);
-          case 'guardarClienteCfg': puede('programacion', 'gerencia'); return stGuardarClienteCfg(S, body);
-          case 'guardarConfig': puede('programacion', 'gerencia'); return stGuardarConfig(S, body);
-          case 'vistaPrecios': puede('programacion', 'gerencia', 'admin'); return stVistaPrecios(S, body);
+          // Fletes y precios: el superusuario de programación (rol programacion) solo edita km, casetas,
+          // diésel y ayudante, y agrega clientes/rutas nuevos. Todo lo demás: master del programador o gerencia.
+          case 'fletes': puede('programacion', 'progmaster', 'gerencia', 'admin'); return stFletes(S, body);
+          case 'guardarFletes': puede('programacion', 'progmaster', 'gerencia'); return stGuardarFletes(S, body);
+          case 'importarPrecios': puede('progmaster', 'gerencia'); return stImportarPrecios(S, body);
+          case 'guardarClienteCfg': puede('progmaster', 'gerencia'); return stGuardarClienteCfg(S, body);
+          case 'guardarConfig': puede('progmaster', 'gerencia'); return stGuardarConfig(S, body);
+          case 'vistaPrecios': puede('programacion', 'progmaster', 'gerencia', 'admin'); return stVistaPrecios(S, body);
           default: throw err('accion', 'Acción no válida');
         }
       });
@@ -730,7 +757,14 @@
           clientes: a[2] || {}, config: a[3], conApp: Object.keys(a[4] || {}) };
       });
     }
+    function limpiarRuta(r, k) {
+      var o = { destino: clip(r.destino, 80), vehiculo: VEHICULOS_BASE[String(r.vehiculo || '').toUpperCase()] ? String(r.vehiculo).toUpperCase() : 'TORTON', km: num(r.km), casetas: num(r.casetas), cobrado: num(r.cobrado), notas: clip(r.notas, 160) };
+      ['rend', 'diesel', 'seguro', 'ayudante', 'margen', 'ton', 'valor', 'mantKm', 'mantCosto'].forEach(function (x) { if (r[x] !== undefined && r[x] !== '' && r[x] !== null) o[x] = num(r[x]); });
+      return o;
+    }
+    var CAMPOS_SU = ['km', 'casetas', 'diesel', 'ayudante'];
     function stGuardarFletes(S, b) {
+      if (S.rol === 'programacion') return stGuardarFletesSU(S, b);
       var f = b.fletes || {};
       var out = { params: {}, vehiculos: {}, rutas: {} };
       ['diesel', 'kmAnual', 'anios'].forEach(function (k) { if (f.params && f.params[k] !== undefined) out.params[k] = num(f.params[k], PARAMS_BASE[k]); });
@@ -738,11 +772,36 @@
       var rutas = f.rutas || {}; var n = 0;
       Object.keys(rutas).forEach(function (id) {
         if (++n > 600) return; var r = rutas[id]; var k = keyp(id).slice(0, 40) || newId();
-        var o = { destino: clip(r.destino, 80), vehiculo: VEHICULOS_BASE[String(r.vehiculo || '').toUpperCase()] ? String(r.vehiculo).toUpperCase() : 'TORTON', km: num(r.km), casetas: num(r.casetas), cobrado: num(r.cobrado), notas: clip(r.notas, 160) };
-        ['rend', 'diesel', 'seguro', 'ayudante', 'margen', 'ton', 'valor', 'mantKm', 'mantCosto'].forEach(function (x) { if (r[x] !== undefined && r[x] !== '' && r[x] !== null) o[x] = num(r[x]); });
-        out.rutas[k] = o;
+        out.rutas[k] = limpiarRuta(r, k);
       });
       return s('fletes', out).then(function () { return audit(S.u, 'guardarFletes', { rutas: Object.keys(out.rutas).length }); }).then(function () { return { ok: true }; });
+    }
+    // Superusuario: parte de lo guardado y solo acepta km, casetas, diésel y ayudante de las rutas
+    // existentes, el precio del diésel general y rutas (clientes) nuevas. No borra ni toca costos de unidades.
+    function stGuardarFletesSU(S, b) {
+      var f = b.fletes || {};
+      return g('fletes').then(function (prev) {
+        prev = prev || { params: {}, vehiculos: {}, rutas: {} };
+        var out = { params: Object.assign({}, prev.params || {}), vehiculos: prev.vehiculos || {}, rutas: Object.assign({}, prev.rutas || {}) };
+        if (f.params && f.params.diesel !== undefined && f.params.diesel !== '') out.params.diesel = num(f.params.diesel, PARAMS_BASE.diesel);
+        var cambios = 0, nuevas = 0;
+        Object.keys(f.rutas || {}).forEach(function (id) {
+          var r = f.rutas[id] || {}, k = keyp(id).slice(0, 40); if (!k) return;
+          if (out.rutas[k]) {
+            var o = Object.assign({}, out.rutas[k]);
+            CAMPOS_SU.forEach(function (x) { if (r[x] === undefined) return; if (r[x] === '' || r[x] === null) { if (x === 'km' || x === 'casetas') o[x] = 0; else delete o[x]; } else o[x] = num(r[x]); });
+            if (JSON.stringify(o) !== JSON.stringify(out.rutas[k])) cambios++;
+            out.rutas[k] = o;
+          } else if (Object.keys(out.rutas).length < 600) {
+            var n = { destino: clip(r.destino, 80), vehiculo: VEHICULOS_BASE[String(r.vehiculo || '').toUpperCase()] ? String(r.vehiculo).toUpperCase() : 'TORTON', km: num(r.km), casetas: num(r.casetas), cobrado: 0, notas: clip(r.notas, 160), altaPor: S.nombre };
+            CAMPOS_SU.forEach(function (x) { if (x !== 'km' && x !== 'casetas' && r[x] !== undefined && r[x] !== '' && r[x] !== null) n[x] = num(r[x]); });
+            if (!n.destino) return;
+            out.rutas[k] = n; nuevas++;
+          }
+        });
+        return s('fletes', out).then(function () { return audit(S.u, 'guardarFletesSU', { cambios: cambios, nuevas: nuevas, diesel: out.params.diesel }); })
+          .then(function () { return { ok: true, cambios: cambios, nuevas: nuevas }; });
+      });
     }
     function stImportarPrecios(S, b) {
       var D = b.data || {}; var lists = {}, prod = {}, cat = {};
@@ -816,7 +875,7 @@
       return Promise.reject(err('accion', 'Acción no válida'));
     }
 
-    return { cliente: cliente, staff: staff, staffLogin: staffLogin, maestro: maestro, onEmbarque: onEmbarque, preciosCliente: preciosCliente };
+    return { cliente: cliente, staff: staff, staffLogin: staffLogin, progLogin: progLogin, maestro: maestro, onEmbarque: onEmbarque, preciosCliente: preciosCliente };
   }
 
   return {

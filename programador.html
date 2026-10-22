@@ -3484,6 +3484,7 @@ function gateGo(){
     document.getElementById('gatePwd').value='';
     try{ askNotif(); unlockAudio(); }catch(e){}
     gateApply(hit); setView(hit.r==='basc'?'bascula':'tabla');
+    if(hit.r!=='basc'){ try{ if(window.CliStaff) CliStaff.loginProgramador(v); }catch(e){} }   // Fletes y precios / Clientes: misma contraseña
     toast(hit.r==='master'?'Acceso master ✓':hit.r==='su'?'Superusuario habilitado ✓':'Báscula: '+(hit.n||'usuario')+' ✓');
   };
   step();
@@ -3491,6 +3492,7 @@ function gateGo(){
 function gateLogout(){
   try{ sessionStorage.removeItem(GATE_KEY); }catch(x){}
   unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); gateShow(); toast('Sesión cerrada');
+  try{ if(window.CliStaff) CliStaff.salir(); }catch(e){}
 }
 // al abrir: si ya entraste en esta pestaña, se restaura; si no, se pide acceso antes de mostrar nada
 function gateInit(){
@@ -3874,6 +3876,6 @@ function addMotivo(){
 
 <!-- App Clientes: panel de prepedidos, registros, mensajes y fletes (ver clientes/LEEME.md) -->
 <script src="clientes/config.js"></script>
-<script src="clientes/cli-staff.js" defer></script>
+<script src="clientes/cli-staff.js" data-modo="programador" defer></script>
 </body>
 </html>

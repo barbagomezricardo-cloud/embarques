@@ -81,13 +81,18 @@ En tu Panel de Licencia puedes agregar dos interruptores: **`clientes`** (la app
 Abre `ventas.html` o `maestra.html` → botón **Clientes** → **🔑 Accesos** → escribe tu llave maestra. Ahí das de alta:
 - **Cada vendedor**, con rol Vendedor y su **cartera**. Solo ve los prepedidos y clientes de su cartera.
 - **Cada asistente de ventas**, con rol Administración. Conviene un usuario por persona, para que quede registrado quién fincó cada pedido.
-- **Programación de embarques**, con rol Programación.
+- **Programación de embarques no necesita PIN:** en la pestaña «💲 Fletes y precios» entra con la misma contraseña de superusuario o master del programador.
 - **Tú**, con rol Gerencia. Es el único que ve los mensajes para atención gerencial.
 
 Cada persona recibe un **PIN de 6 a 8 dígitos**. A los vendedores captúrales su **WhatsApp**: así el cliente puede escribirle directo al enviar su prepedido. Cambiar un PIN cierra las sesiones abiertas de esa persona. Después de 5 intentos fallidos, el usuario se bloquea 15 minutos.
 
 ### Paso 7. Fletes y precios (Programación)
-En `programador.html` → **💲 Fletes y precios**:
+En `programador.html` → **💲 Fletes y precios**. Se entra con la misma contraseña del programador:
+- **Superusuario:** edita km, casetas, diésel (por ruta y el precio general) y salario del ayudante, y agrega clientes o rutas nuevas. No borra rutas ni cambia costos de las unidades, márgenes, listas de precios ni lo que ve cada cliente.
+- **Master** (y tu usuario de gerencia): edita todo.
+
+El servidor aplica estos límites; no basta con lo que muestre la pantalla. Si cambias la contraseña del programador, las sesiones abiertas con la anterior se cierran.
+
 1. **Importar del Excel:** elige `PARA IMPLEMENTAR.xlsx`. Trae las rutas con km, casetas, ayudante, seguro y diésel de cada renglón, y el «flete interno» cobrado hoy para compararlo. Revisa y pulsa **Guardar fletes**.
 2. **Cargar archivo de listas:** elige el archivo «Clientes y listas de precios 19H» (.html). Carga las 14 listas y el catálogo de clientes con su teléfono, que se usa para sugerir coincidencias al validar registros. Esos datos se guardan en el servidor, **no en GitHub**.
 3. **Precio y flete por cliente:** a cada cliente le asignas su lista para «recoge en planta», opcionalmente una lista con flete incluido, las rutas de entrega que puede elegir y si ve precios.

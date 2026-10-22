@@ -57,9 +57,35 @@ const cli = { uid: 'u1', tel: '+523311112222' };
   r = await D.api('cliente', 'yo', {}, cli); assert.equal(r.mensajes[0].respuesta, 'Con gusto, te llamo mañana');
   // ocultar precios
   const prog = (await D.api('login', '', { usuario: 'PROGRAMACION', pin: '123456' })).token;
-  await D.api('staff', 'guardarConfig', { config: { mostrarPrecios: false } }, { sesion: prog });
+  await assert.rejects(D.api('staff', 'guardarConfig', { config: { mostrarPrecios: false } }, { sesion: prog }));
+  await D.api('staff', 'guardarConfig', { config: { mostrarPrecios: false } }, { sesion: ger });
   r = await D.api('cliente', 'yo', {}, cli); assert.equal(r.precios.mostrar, false); assert.ok(!r.precios.productos[0].escenarios);
   assert.ok(!r.pedidos[0].totales && !r.pedidos[0].items[0].precio, 'no filtra precios viejos');
+
+  // programador: superusuario solo km/casetas/diésel/ayudante y rutas nuevas; master todo
+  await assert.rejects(D.api('loginProg', '', { pwd: 'mala' }));
+  const su = (await D.api('loginProg', '', { pwd: 'admin123' })).token;
+  const pm = (await D.api('loginProg', '', { pwd: 'master-2026' })).token;
+  let F = await D.api('staff', 'fletes', {}, { sesion: su });
+  const rid = Object.keys(F.fletes.rutas)[0]; const antes = F.fletes.rutas[rid];
+  const mod = JSON.parse(JSON.stringify(F.fletes));
+  mod.rutas[rid].km = 999; mod.rutas[rid].casetas = 50; mod.rutas[rid].ayudante = 1500; mod.rutas[rid].seguro = 1; mod.rutas[rid].vehiculo = 'NISSAN'; mod.rutas[rid].cobrado = 1;
+  mod.params.diesel = 25.5; mod.params.anios = 9; mod.vehiculos.TORTON = { margen: 0.9 };
+  mod.rutas.NUEVOCLIENTE = { destino: 'Cliente nuevo', vehiculo: 'TRAILER', km: 300, casetas: 400, seguro: 5 };
+  const otraId = Object.keys(F.fletes.rutas)[1]; delete mod.rutas[otraId];
+  let rr = await D.api('staff', 'guardarFletes', { fletes: mod }, { sesion: su }); assert.equal(rr.nuevas, 1);
+  F = await D.api('staff', 'fletes', {}, { sesion: su });
+  const d = F.fletes.rutas[rid];
+  assert.equal(d.km, 999); assert.equal(d.casetas, 50); assert.equal(d.ayudante, 1500);
+  assert.equal(d.vehiculo, antes.vehiculo, 'unidad no cambia'); assert.ok(d.seguro === antes.seguro && !d.cobrado, 'seguro/cobrado no cambian');
+  assert.equal(F.fletes.params.diesel, 25.5); assert.equal(F.fletes.params.anios, 5); assert.ok(!(F.fletes.vehiculos.TORTON || {}).margen);
+  assert.ok(F.fletes.rutas[otraId], 'superusuario no borra'); assert.ok(F.fletes.rutas.NUEVOCLIENTE && F.fletes.rutas.NUEVOCLIENTE.seguro === undefined);
+  await assert.rejects(D.api('staff', 'guardarConfig', { config: { mostrarPrecios: true } }, { sesion: su }));
+  await assert.rejects(D.api('staff', 'importarPrecios', { data: { lists: [{ id: 'X', name: 'x', items: [] }] } }, { sesion: su }));
+  await assert.rejects(D.api('staff', 'mensajes', {}, { sesion: pm }));
+  mod.params.anios = 6; await D.api('staff', 'guardarFletes', { fletes: mod }, { sesion: pm });
+  F = await D.api('staff', 'fletes', {}, { sesion: pm }); assert.equal(F.fletes.params.anios, 6); assert.ok(!F.fletes.rutas[otraId], 'master sí borra');
+  await D.api('staff', 'guardarConfig', { config: { mostrarPrecios: false } }, { sesion: pm });
   // otro cliente no ve nada ajeno
   const otro = { uid: 'u2', tel: '+523300000000' };
   await assert.rejects(D.api('cliente', 'cancelar', { id: pid }, otro));

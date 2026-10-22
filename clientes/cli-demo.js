@@ -72,6 +72,7 @@
   }
 
   var tree = load() || semilla();
+  if (!tree.config) tree.config = { pwd: 'admin123', masterPwd: 'master-2026' };   // contraseñas de ejemplo del programador
   save(tree);
   var db = memDB(tree, save);
   var core = W.CliCore.create({ db: db, hashPin: demoHash, notifyPush: function () { return Promise.resolve(); } });
@@ -86,6 +87,7 @@
     return new Promise(function (res) { setTimeout(res, 180); }).then(function () {
       if (modo === 'cliente') { if (!auth || !auth.uid) throw { status: 401, error: 'Inicia sesión de nuevo.', code: 'sin_sesion' }; return core.cliente({ uid: auth.uid, tel: auth.tel }, accion, datos); }
       if (modo === 'login') return core.staffLogin(datos.usuario, datos.pin).then(function (ses) { return { token: b64(ses), yo: ses }; });
+      if (modo === 'loginProg') return core.progLogin(datos.pwd).then(function (ses) { return { token: b64(ses), yo: ses }; });
       if (modo === 'staff') { var ses = unb64(auth && auth.sesion); if (!ses) throw { status: 401, error: 'Tu sesión terminó.', code: 'sin_sesion' }; return core.staff(ses, accion, datos); }
       if (modo === 'maestro') { if (accion === 'estado') return { reglasCerradas: true, licenciaClientes: true, licenciaPersonal: true }; return core.maestro(accion, datos); }
       throw { status: 400, error: 'Solicitud no válida' };
