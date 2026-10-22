@@ -212,6 +212,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="bascula" data-basc onclick="setView('bascula')">⚖️ Báscula <span id="bsCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="cuadre" data-basc onclick="setView('cuadre')">🧮 Cuadre <span id="cqCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="cierre" data-basc onclick="setView('cierre')">🗓️ Corte de mes <span id="ciCount" class="pill p-warn" style="margin-left:4px;display:none"></span></button>
+    <button data-v="fletes" onclick="setView('fletes')">💲 Fletes y precios</button>
     <button data-v="sol" id="tabSol" style="display:none" onclick="setView('sol')">✋ Solicitudes <span id="solCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="conc" id="tabConc" style="display:none" onclick="setView('conc')">🕵️ Conciliación <span id="concCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="audit" id="tabAudit" style="display:none" onclick="setView('audit')">🕵️ Auditoría <span id="audCount" class="pill p-late" style="margin-left:4px"></span></button>
@@ -332,6 +333,9 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <div class="legend"><span class="muted">Captura <b>lo que ves en tu ticket y en tu registro</b> (producto, lote y sacos). No se muestra lo que capturó Cargadores hasta que guardes: así la segunda validación es independiente. Clic en un renglón para ver el detalle.</span></div>
     <div class="tablewrap"><table style="min-width:900px"><thead><tr id="theadBs"></tr></thead><tbody id="tbodyBs"></tbody></table></div>
   </div>
+
+  <!-- FLETES Y PRECIOS: calculadora de fletes (Excel PARA IMPLEMENTAR) y lo que ve la app de clientes -->
+  <div class="view" id="v-fletes"><div id="cliFletesMount"></div></div>
 
   <!-- CUADRE: tablero Programado ↔ Cargadores ↔ Báscula ↔ Odoo -->
   <div class="view" id="v-cuadre">
@@ -1803,7 +1807,7 @@ function fill(id,arr){ const el=document.getElementById(id); if(!el)return; cons
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
 
 /* ================= VISTAS ================= */
-function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(v==='sol'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.body.dataset.view=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='conc')concRender(); if(v==='sol')renderSol(); }
+function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(v==='sol'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.body.dataset.view=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='conc')concRender(); if(v==='sol')renderSol(); if(v==='fletes'&&window.CliStaff)CliStaff.mountFletes('cliFletesMount'); }
 
 /* ================================================================
    ================= FLOTA / MANTENIMIENTO ========================
@@ -3480,6 +3484,7 @@ function gateGo(){
     document.getElementById('gatePwd').value='';
     try{ askNotif(); unlockAudio(); }catch(e){}
     gateApply(hit); setView(hit.r==='basc'?'bascula':'tabla');
+    if(hit.r!=='basc'){ try{ if(window.CliStaff) CliStaff.loginProgramador(v); }catch(e){} }   // Fletes y precios / Clientes: misma contraseña
     toast(hit.r==='master'?'Acceso master ✓':hit.r==='su'?'Superusuario habilitado ✓':'Báscula: '+(hit.n||'usuario')+' ✓');
   };
   step();
@@ -3487,6 +3492,7 @@ function gateGo(){
 function gateLogout(){
   try{ sessionStorage.removeItem(GATE_KEY); }catch(x){}
   unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); gateShow(); toast('Sesión cerrada');
+  try{ if(window.CliStaff) CliStaff.salir(); }catch(e){}
 }
 // al abrir: si ya entraste en esta pestaña, se restaura; si no, se pide acceso antes de mostrar nada
 function gateInit(){
@@ -3867,5 +3873,9 @@ function addMotivo(){
   toast('Motivo agregado ✓');
 }
 </script>
+
+<!-- App Clientes: panel de prepedidos, registros, mensajes y fletes (ver clientes/LEEME.md) -->
+<script src="clientes/config.js"></script>
+<script src="clientes/cli-staff.js" data-modo="programador" defer></script>
 </body>
 </html>

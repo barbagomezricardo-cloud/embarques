@@ -4,6 +4,10 @@
       ".read": true,
       ".write": false
     },
+    "cli": {
+      ".read": false,
+      ".write": false
+    },
     "inv": {
       "meta": {
         ".read": true,

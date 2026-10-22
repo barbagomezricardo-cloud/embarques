@@ -1,0 +1,24 @@
+{
+  "name": "clientes-19-hermanos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App de clientes Los 19 Hermanos División Pet Food — empaquetado para App Store y Google Play con Capacitor",
+  "scripts": {
+    "preparar": "node preparar.js",
+    "ios": "npm run preparar && npx cap sync ios && npx cap open ios",
+    "android": "npm run preparar && npx cap sync android && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/geolocation": "^6.0.1",
+    "@capacitor-firebase/authentication": "^6.1.0",
+    "@capacitor-firebase/messaging": "^6.1.0",
+    "firebase": "^10.12.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.2"
+  }
+}

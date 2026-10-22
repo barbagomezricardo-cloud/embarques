@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aviso de privacidad · Los 19 Hermanos</title>
+<meta name="theme-color" content="#DE0A14">
+<link rel="icon" type="image/png" href="img/favicon.png">
+<style>
+  :root{--rojo:#DE0A14;--tinta:#281E12;--tinta2:#5A4E42;--papel:#FBF7F2;--blanco:#fff;--linea:#EADFD3}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--tinta:#F4ECE3;--tinta2:#CFC3B6;--papel:#17120D;--blanco:#221B14;--linea:#3A3027}}
+  :root[data-theme="dark"]{--tinta:#F4ECE3;--tinta2:#CFC3B6;--papel:#17120D;--blanco:#221B14;--linea:#3A3027}
+  body{margin:0;background:var(--papel);color:var(--tinta);font:15px/1.6 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{background:var(--rojo);color:#fff;padding:18px 16px;display:flex;gap:12px;align-items:center}
+  header img{width:52px;height:52px;border-radius:50%;background:#fff;padding:2px}
+  header b{font:900 18px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.02em}
+  main{max-width:720px;margin:0 auto;padding:20px 16px 48px}
+  h1{font-size:24px;margin:0 0 6px}
+  h2{font-size:17px;margin:22px 0 6px}
+  p,li{color:var(--tinta2)}
+  .card{background:var(--blanco);border:1px solid var(--linea);border-radius:14px;padding:16px}
+</style>
+</head>
+<body>
+<header><img src="img/logo-petfood.png" alt=""><div><b>Los 19 Hermanos</b><div style="font-size:13px;opacity:.9">División Pet Food</div></div></header>
+<main>
+  <h1>Aviso de privacidad simplificado</h1>
+  <p>App de clientes «19 Hermanos»</p>
+  <div class="card">
+    <h2>Responsable</h2>
+    <p>Leche 19 Diecinueve Hermanos, S.A. de C.V., División Pet Food, con domicilio en Tototlán, Jalisco, México, es responsable del tratamiento de los datos personales que nos proporcionas en esta aplicación.</p>
+    <h2>Datos que recabamos</h2>
+    <ul>
+      <li>Nombre completo, razón social y número de cliente.</li>
+      <li>Número de celular (para verificar tu identidad por SMS) y teléfono de contacto.</li>
+      <li>Nombre, dirección y ubicación de tu negocio.</li>
+      <li>Tus prepedidos, mensajes y la información de uso de la app (fecha de última conexión, tipo de dispositivo).</li>
+    </ul>
+    <p>No solicitamos datos personales sensibles ni datos bancarios.</p>
+    <h2>Para qué los usamos</h2>
+    <ul>
+      <li>Identificarte como cliente y darte acceso a tu información de compras, avance y descuentos.</li>
+      <li>Recibir, confirmar, programar, entregar y facturar tus pedidos, y avisarte de su estado.</li>
+      <li>Atender tus mensajes, dudas y sugerencias.</li>
+    </ul>
+    <p>No usamos tus datos para fines distintos a la relación comercial contigo y no los vendemos ni los compartimos con terceros, salvo los proveedores tecnológicos que alojan la aplicación (Google Firebase) y cuando la ley lo exija.</p>
+    <h2>Tus derechos</h2>
+    <p>Puedes acceder, rectificar, cancelar u oponerte al uso de tus datos (derechos ARCO), así como revocar tu consentimiento. Desde la app puedes eliminar tu cuenta en <b>Más → Eliminar mi cuenta</b>. Para cualquier otra solicitud comunícate <span id="contacto">con tu vendedor o directamente con la Gerencia Comercial de la División Pet Food</span>.</p>
+    <h2>Cambios</h2>
+    <p>Cualquier cambio a este aviso se publicará en esta misma página.</p>
+  </div>
+</main>
+<script src="config.js"></script>
+<script>
+  var c = (window.CLI_CFG || {}).correoPrivacidad;
+  if (c) document.getElementById('contacto').innerHTML = 'al correo <a href="mailto:' + c + '">' + c + '</a>';
+</script>
+</body>
+</html>

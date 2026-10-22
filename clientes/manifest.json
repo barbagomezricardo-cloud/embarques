@@ -1,0 +1,17 @@
+{
+  "name": "Los 19 Hermanos · Clientes",
+  "short_name": "19 Hermanos",
+  "description": "Tu avance, tus descuentos y tus pedidos con Los 19 Hermanos División Pet Food.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF7F2",
+  "theme_color": "#DE0A14",
+  "lang": "es-MX",
+  "icons": [
+    { "src": "img/icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icono-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
