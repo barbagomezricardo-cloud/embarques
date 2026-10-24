@@ -299,7 +299,12 @@ var Auth = {
       FA.signInWithPhoneNumber({ phoneNumber:'+52'+tel10 }).catch(ko);
     });
     var auth = firebase.auth(Auth.fb);
-    if(!Auth.verif) Auth.verif = new firebase.auth.RecaptchaVerifier('recaptcha', { size:'invisible' }, Auth.fb);
+    if(!Auth.verif){
+      // contenedor nuevo en cada intento: reCAPTCHA no se deja volver a pintar en el mismo elemento
+      var viejo=document.getElementById('recaptcha'); var nuevo=document.createElement('div'); nuevo.id='recaptcha';
+      if(viejo) viejo.parentNode.replaceChild(nuevo, viejo); else document.body.appendChild(nuevo);
+      Auth.verif = new firebase.auth.RecaptchaVerifier('recaptcha', { size:'invisible' }, Auth.fb);
+    }
     return auth.signInWithPhoneNumber('+52'+tel10, Auth.verif).then(function(conf){ ESTADO.pendienteSms = { tel:tel10, conf:conf }; })
       .catch(function(e){ try{ Auth.verif.clear(); }catch(x){} Auth.verif=null; throw e; });
   },
@@ -325,7 +330,11 @@ function errSms(e){
   if(c==='auth/invalid-verification-code') return 'El código no coincide. Revísalo e intenta de nuevo.';
   if(c==='auth/code-expired') return 'El código venció. Pide uno nuevo.';
   if(c==='auth/quota-exceeded') return 'No pudimos enviar el SMS en este momento. Intenta más tarde.';
-  return 'No se pudo completar. Revisa tu conexión e intenta de nuevo.';
+  if(c==='auth/operation-not-allowed') return 'El envío de códigos por SMS no está disponible en este momento. Avísale a tu vendedor; lo resolvemos de inmediato.';
+  if(c==='auth/captcha-check-failed'||c==='auth/invalid-app-credential'||c==='auth/missing-app-credential') return 'No pudimos completar la verificación de seguridad. Recarga la página e intenta de nuevo.';
+  if(c==='auth/network-request-failed') return 'Sin conexión. Revisa tu internet e intenta de nuevo.';
+  if(c==='auth/user-disabled') return 'Este número está desactivado. Comunícate con tu vendedor.';
+  return 'No se pudo completar ('+(c||'error').replace('auth/','')+'). Intenta de nuevo en un momento.';
 }
 function cargarScripts(urls){
   return urls.reduce(function(p,u){ return p.then(function(){ return new Promise(function(ok,ko){ if(document.querySelector('script[src="'+u+'"]')) return ok(); var s=document.createElement('script'); s.src=u; s.onload=ok; s.onerror=function(){ ko(new Error('No cargó '+u)); }; document.head.appendChild(s); }); }); }, Promise.resolve());
