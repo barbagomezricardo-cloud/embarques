@@ -17,7 +17,7 @@
 set -uo pipefail
 PROY="embarques-mascotas"
 DB="https://embarques-mascotas-default-rtdb.firebaseio.com"
-RAMA="${RAMA:-app-clientes}"
+RAMA="${RAMA:-main}"
 RAW="https://raw.githubusercontent.com/barbagomezricardo-cloud/embarques/${RAMA}/clientes"
 API="https://us-central1-${PROY}.cloudfunctions.net/cliApi"
 ok(){ printf '\n\033[1;32m✓ %s\033[0m\n' "$*"; }

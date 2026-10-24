@@ -305,13 +305,25 @@
         base.notifs = Object.keys(nt).map(function (k) { return Object.assign({ id: k }, nt[k]); }).sort(function (x, y) { return y.ts - x.ts; }).slice(0, 30);
         base.aviso = cfg.avisoGeneral || '';
         if (us.estado !== 'activo') return base;
+        var filaP = (us.vk ? filaCliente(us.vk, us.skanName) : Promise.resolve(null)).then(function (f) {
+          if (f || !us.sinCartera) return f;
+          return Promise.resolve(db.get('skan/_index')).then(function (idx) {
+            var vs = (idx && idx.vendors) || [];
+            return vs.reduce(function (p, vk) { return p.then(function (hit) { return hit || filaCliente(vk, us.skanName).then(function (x) { return x ? { f: x, vk: vk } : null; }); }); }, Promise.resolve(null));
+          }).then(function (hit) {
+            if (!hit) return null;
+            var mm = {}; mm['usuarios/' + uid + '/vk'] = hit.vk; mm['usuarios/' + uid + '/sinCartera'] = null; mm['usuarios/' + uid + '/vendedorNombre'] = hit.f.meta.v || ''; mm['clientes/' + us.clienteKey + '/vk'] = hit.vk;
+            us.vk = hit.vk;
+            return Promise.resolve(db.update('cli', mm)).then(function () { return hit.f; });
+          });
+        });
         return Promise.all([
           g('clientes/' + us.clienteKey),
-          filaCliente(us.vk, us.skanName),
+          filaP,
           Promise.resolve(db.get('skan/_config')),
           pedidosDeUid(uid),
           g('ix/uidMsg/' + uid),
-          g('vendTel/' + us.vk)
+          us.vk ? g('vendTel/' + us.vk) : Promise.resolve('')
         ]).then(function (b) {
           var cc = b[0] || {}, fila = b[1], tiers = tiersDeConfig(b[2]);
           return revisarFacturados(b[3], fila).then(function (peds) {
@@ -424,7 +436,7 @@
               snap: { mes: d.m, sacosMes: fila ? sumaMes(fila.row, d.m) : 0 },
               hist: [{ e: 'enviado', ts: t, por: 'cliente', nota: '' }] };
             var m = {};
-            m['pedidos/' + id] = ped; m['ix/uidPed/' + uid + '/' + id] = t; m['ix/vendPed/' + us.vk + '/' + id] = t; m['ix/abiertos/' + id] = 'enviado';
+            m['pedidos/' + id] = ped; m['ix/uidPed/' + uid + '/' + id] = t; if (us.vk) m['ix/vendPed/' + us.vk + '/' + id] = t; m['ix/abiertos/' + id] = 'enviado';
             return Promise.resolve(db.update('cli', m)).then(function () { return audit(uid, 'prepedido', { id: id, folio: folio }); }).then(function () { return { ok: true, pedido: pedidoPublico(ped, pr.mostrar) }; });
           });
         });
@@ -529,6 +541,7 @@
           case 'registros': return stRegistros(S, body);
           case 'buscarClientes': puede('admin', 'gerencia', 'vendedor'); return stBuscar(S, body);
           case 'vincular': puede('admin', 'gerencia'); return stVincular(S, body);
+          case 'listaClientes': puede('admin', 'gerencia'); return stListaClientes(S, body);
           case 'estadoUsuario': puede('admin', 'gerencia'); return stEstadoUsuario(S, body);
           case 'mensajes': puede('gerencia'); return stMensajes(S, body);
           case 'responder': puede('gerencia'); return stResponder(S, body);
@@ -700,7 +713,45 @@
         return S.rol === 'vendedor' ? { skan: a[0].filter(function (r) { return r.vk === S.vk; }), catalogo: [] } : { skan: a[0], catalogo: c.slice(0, 15) };
       });
     }
+    // Activar SIN cartera publicada (cliente del catálogo de Odoo o cliente nuevo): solo gerencia (master).
+    // Administración únicamente vincula clientes que ya están en la cartera publicada de un vendedor.
+    function stVincularSinCartera(S, b) {
+      if (S.rol !== 'gerencia') return Promise.reject(err('permiso', 'Solo el master puede activar clientes que no están en una cartera.', 403));
+      var uid = clip(b.uid, 128), vk = keyp(b.vk), t = now();
+      return Promise.all([g('usuarios/' + uid), b.catKey ? g('catalogo/' + keyp(b.catKey)) : Promise.resolve(null), Promise.resolve(db.get('skan/_index')), vk ? leerSkanVendor(vk) : Promise.resolve(null)]).then(function (a) {
+        var us = a[0]; if (!us) throw err('no_existe', 'Registro no encontrado.', 404);
+        var cat = a[1]; if (b.catKey && !cat) throw err('datos', 'Ese cliente no está en el catálogo.');
+        var vs = (a[2] && a[2].vendors) || []; if (vk && vs.indexOf(vk) < 0) throw err('datos', 'Ese vendedor no existe.');
+        var nombre = clip((cat && cat.n) || b.nombre || us.razonSocial, 160);
+        if (nombre.length < 3) throw err('datos', 'Escribe el nombre del cliente.');
+        var ck = keyp(nombre); var m = {};
+        m['usuarios/' + uid + '/estado'] = 'activo'; m['usuarios/' + uid + '/clienteKey'] = ck; m['usuarios/' + uid + '/skanName'] = nombre;
+        m['usuarios/' + uid + '/vk'] = vk || ''; m['usuarios/' + uid + '/vendedorNombre'] = (a[3] && a[3].v) || ''; m['usuarios/' + uid + '/sinCartera'] = true;
+        m['usuarios/' + uid + '/validadoPor'] = S.nombre; m['usuarios/' + uid + '/validadoTs'] = t; m['usuarios/' + uid + '/motivo'] = null;
+        m['ix/pendientes/' + uid] = null; m['ix/clienteUid/' + ck + '/' + uid] = t;
+        return g('clientes/' + ck).then(function (cc) {
+          m['clientes/' + ck + '/skanName'] = nombre; m['clientes/' + ck + '/vk'] = vk || '';
+          if (cat) m['clientes/' + ck + '/catKey'] = keyp(b.catKey);
+          return Promise.resolve(db.update('cli', m));
+        }).then(function () { return notificar(uid, '¡Tu cuenta está activa!', 'Ya puedes hacer prepedidos. Tu avance aparecerá cuando se publique tu primera compra.', { tipo: 'activa' }); })
+          .then(function () { return audit(S.u, 'vincularSinCartera', { uid: uid, cliente: nombre, catalogo: !!cat }); }).then(function () { return { ok: true }; });
+      });
+    }
+    function stListaClientes(S, b) {
+      return Promise.all([Promise.resolve(db.get('skan/_index')), S.rol === 'gerencia' ? g('catalogo') : Promise.resolve(null)]).then(function (a) {
+        var vs = (a[0] && a[0].vendors) || []; var sk = [], nombres = {};
+        return Promise.all(vs.map(function (vk) { return leerSkanVendor(vk).then(function (p) { (p && p.rows || []).forEach(function (r) { nombres[keyp(r.n)] = 1; sk.push({ n: r.n, vk: vk, v: p.v || vk, avg: Math.round(r.avg || 0) }); }); return { vk: vk, v: (p && p.v) || vk }; }).catch(function () { return { vk: vk, v: vk }; }); }))
+          .then(function (vend) {
+            sk.sort(function (x, y) { return x.n.localeCompare(y.n); });
+            var cat = []; var c = a[1] || {};
+            Object.keys(c).forEach(function (k) { if (!nombres[keyp(c[k].n)]) cat.push({ catKey: k, n: c[k].n, v: c[k].v || '' }); });
+            cat.sort(function (x, y) { return x.n.localeCompare(y.n); });
+            return { cartera: sk, catalogo: cat, vendedores: vend };
+          });
+      });
+    }
     function stVincular(S, b) {
+      if (b.modo === 'catalogo' || b.modo === 'nuevo') return stVincularSinCartera(S, b);
       var uid = clip(b.uid, 128), nombre = clip(b.skanName, 160), vk = keyp(b.vk);
       if (!uid || !nombre || !vk) return Promise.reject(err('datos', 'Elige el cliente del sistema de ventas.'));
       return Promise.all([g('usuarios/' + uid), filaCliente(vk, nombre)]).then(function (a) {
@@ -709,7 +760,7 @@
         var ck = keyp(nombre), t = now();
         var m = {};
         m['usuarios/' + uid + '/estado'] = 'activo'; m['usuarios/' + uid + '/clienteKey'] = ck; m['usuarios/' + uid + '/skanName'] = a[1].row.n;
-        m['usuarios/' + uid + '/vk'] = vk; m['usuarios/' + uid + '/vendedorNombre'] = a[1].meta.v || ''; m['usuarios/' + uid + '/validadoPor'] = S.nombre; m['usuarios/' + uid + '/validadoTs'] = t; m['usuarios/' + uid + '/motivo'] = null;
+        m['usuarios/' + uid + '/vk'] = vk; m['usuarios/' + uid + '/sinCartera'] = null; m['usuarios/' + uid + '/vendedorNombre'] = a[1].meta.v || ''; m['usuarios/' + uid + '/validadoPor'] = S.nombre; m['usuarios/' + uid + '/validadoTs'] = t; m['usuarios/' + uid + '/motivo'] = null;
         m['ix/pendientes/' + uid] = null; m['ix/clienteUid/' + ck + '/' + uid] = t;
         return g('clientes/' + ck).then(function (cc) {
           cc = cc || {};

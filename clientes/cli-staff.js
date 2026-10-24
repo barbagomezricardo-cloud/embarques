@@ -194,6 +194,7 @@
     if (!S.ses) return Promise.resolve();
     return api('staff', 'bandeja', {}).then(function (bd) {
       S.bandeja = bd; S.yo = bd.yo;
+      var q = $('#clis-quien'); if (q && bd.yo && bd.yo.nombre) q.textContent = bd.yo.nombre + ' · ' + ({ vendedor: 'Vendedor', admin: 'Administración', programacion: 'Superusuario', progmaster: 'Master', gerencia: 'Gerencia' }[bd.yo.rol] || '');
       var n = pendientesDe(bd);
       var el = $('.clis-fab .clis-n'); if (el) { el.hidden = !n; el.textContent = n; }
       var cambio = n !== S.ultimoConteo;
@@ -357,7 +358,7 @@
         if (u.estado === 'activo') h += '<div class="clis-fila clis-mini"><b style="color:var(--t)">' + esc(u.skanName) + '</b> · ' + esc(u.vendedorNombre || '') + ' · App ' + (u.ultimaConexion && Date.now() - u.ultimaConexion < 30 * 864e5 ? '<b style="color:var(--ok)">activa</b>' : '<b style="color:var(--w)">sin uso reciente</b>') + ' (' + hace(u.ultimaConexion) + ', ' + esc(u.plataforma || '') + ')' + (u.pushActivo ? ' · avisos ✓' : '') + ' · validó ' + esc(u.validadoPor || '') + '</div>';
         if (u.estado === 'pendiente') {
           h += (u.sugerencias && u.sugerencias.length ? '<div class="clis-aviso i"><b>Posibles coincidencias en el catálogo:</b><br>' + u.sugerencias.map(function (s) { return esc(s.n) + ' <span class="clis-mini">(' + esc(s.por) + (s.v ? ', ' + esc(s.v) : '') + ')</span>'; }).join('<br>') + '</div>' : '<div class="clis-mini">Sin coincidencias automáticas: búscalo por nombre.</div>');
-          if (puede) h += '<div class="clis-fila"><input data-bus placeholder="Buscar cliente en ventas…" value="' + esc((u.sugerencias && u.sugerencias[0] && u.sugerencias[0].n) || u.razonSocial) + '" style="flex:1;min-width:200px"><button class="clis-btn sec" data-a="buscar">Buscar</button><button class="clis-btn ghost" data-a="rechazar">Rechazar</button></div><div data-res></div>';
+          if (puede) h += '<div class="clis-fila"><input data-bus placeholder="Escribe para filtrar tu lista de clientes…" value="' + esc((u.sugerencias && u.sugerencias[0] && u.sugerencias[0].n) || u.razonSocial) + '" style="flex:1;min-width:200px"><button class="clis-btn ghost" data-a="rechazar">Rechazar</button></div><div data-res></div>';
           else h += '<div class="clis-mini">Administración o gerencia lo vincula con su cliente.</div>';
         } else if (puede) {
           h += '<div class="clis-fila">' + (u.estado === 'activo' ? '<button class="clis-btn ghost" data-a="suspender">Suspender acceso</button>' : '<button class="clis-btn ghost" data-a="reactivar">Reactivar</button>') + '</div>';
@@ -367,7 +368,7 @@
       $$('[data-a]', box).forEach(function (b) {
         b.onclick = function () {
           var card = b.closest('[data-uid]'), uid = card.dataset.uid, a = b.dataset.a;
-          if (a === 'buscar') {
+          if (a === 'buscar-viejo') {
             var q = $('[data-bus]', card).value; var res = $('[data-res]', card); res.innerHTML = '<span class="clis-mini">Buscando…</span>';
             api('staff', 'buscarClientes', { q: q }).then(function (r) {
               if (!r.skan.length) { res.innerHTML = '<div class="clis-mini">No aparece en las carteras publicadas. Prueba con otra parte del nombre.</div>'; return; }
@@ -386,7 +387,37 @@
           }
         };
       });
+      if (puede) $$('[data-bus]', box).forEach(function (inp) {
+        var card = inp.closest('[data-uid]'); var res = $('[data-res]', card); var uid = card.dataset.uid;
+        var pinta = function () { listaClientes().then(function (L) { pintaLista(L, inp.value, res, uid, c); }).catch(function (e) { res.innerHTML = '<span class="clis-mini">' + esc(e.error) + '</span>'; }); };
+        inp.oninput = function () { clearTimeout(inp._t); inp._t = setTimeout(pinta, 180); };
+        pinta();
+      });
     }).catch(function (e) { $('#clis-regs', c).textContent = e.error; });
+  }
+  // Lista completa de clientes (cartera publicada + catálogo de Odoo), se baja una vez por sesión del panel.
+  function listaClientes() { if (!S.lista) S.lista = api('staff', 'listaClientes', {}).catch(function (e) { S.lista = null; throw e; }); return S.lista; }
+  function pintaLista(L, q, res, uid, c) {
+    var master = S.ses.yo.rol === 'gerencia' || (S.yo && S.yo.rol === 'gerencia');
+    var k = keyp(q), tok = String(q || '').toUpperCase().split(/\s+/).filter(Boolean).map(keyp);
+    var ok = function (n) { var kn = keyp(n); return !k || kn.indexOf(k) >= 0 || tok.every(function (t) { return kn.indexOf(t) >= 0; }); };
+    var cart = L.cartera.filter(function (x) { return ok(x.n); }).slice(0, 12);
+    var cat = master ? L.catalogo.filter(function (x) { return ok(x.n); }).slice(0, 12) : [];
+    var optV = '<option value="">Sin vendedor por ahora</option>' + L.vendedores.map(function (v) { return '<option value="' + esc(v.vk) + '">' + esc(v.v) + '</option>'; }).join('');
+    var h = '<div style="display:grid;gap:10px;margin-top:6px">';
+    h += '<div class="clis-mini"><b style="color:var(--t)">En carteras de ventas</b> (' + L.cartera.length + ' clientes · con avance y descuentos)</div>';
+    h += cart.length ? cart.map(function (s) { return '<div class="clis-entre" style="border:1px solid var(--l);border-radius:10px;padding:8px"><div><b>' + esc(s.n) + '</b><div class="clis-mini">' + esc(s.v) + ' · ' + fmt(s.avg) + ' sacos/mes</div></div><button class="clis-btn ok" data-vc="' + esc(s.n) + '" data-vk="' + esc(s.vk) + '">Vincular y activar</button></div>'; }).join('') : '<div class="clis-mini">Ningún cliente de cartera coincide' + (q ? ' con «' + esc(q) + '»' : '') + '.</div>';
+    if (master) {
+      h += '<div class="clis-mini" style="margin-top:4px"><b style="color:var(--t)">Catálogo de Odoo, sin cartera publicada</b> (' + L.catalogo.length + ' · solo master; su avance aparece cuando ventas publique su primera compra)</div>';
+      h += cat.map(function (s) { return '<div class="clis-entre" style="border:1px dashed var(--l);border-radius:10px;padding:8px"><div><b>' + esc(s.n) + '</b><div class="clis-mini">' + esc(s.v || 'sin vendedor en Odoo') + '</div></div><div class="clis-fila"><select data-vv>' + optV + '</select><button class="clis-btn" data-vcat="' + esc(s.catKey) + '">Activar</button></div></div>'; }).join('') || '<div class="clis-mini">Nadie del catálogo coincide.</div>';
+      h += '<div class="clis-entre" style="border:1px dashed var(--l);border-radius:10px;padding:8px"><div><b>Cliente nuevo</b><div class="clis-mini">No está en Odoo todavía: se activa con la razón social que registró.</div></div><div class="clis-fila"><select data-vv>' + optV + '</select><button class="clis-btn sec" data-vnuevo>Activar como nuevo</button></div></div>';
+    } else h += '<div class="clis-mini">Si el cliente no está en ninguna cartera, el master puede activarlo.</div>';
+    res.innerHTML = h + '</div>';
+    var fin = function (bt) { return function () { toast('Cuenta activada; el cliente recibió el aviso'); refrescarBandeja(true); vRegistros(c); }; };
+    var mal = function (bt) { return function (e) { bt.disabled = false; toast(e.error, true); }; };
+    $$('[data-vc]', res).forEach(function (bt) { bt.onclick = function () { bt.disabled = true; var cat = L.catalogo.length ? null : null; api('staff', 'vincular', { uid: uid, skanName: bt.dataset.vc, vk: bt.dataset.vk }).then(fin(bt)).catch(mal(bt)); }; });
+    $$('[data-vcat]', res).forEach(function (bt) { bt.onclick = function () { bt.disabled = true; var vk = $('[data-vv]', bt.parentNode).value; api('staff', 'vincular', { uid: uid, modo: 'catalogo', catKey: bt.dataset.vcat, vk: vk }).then(fin(bt)).catch(mal(bt)); }; });
+    $$('[data-vnuevo]', res).forEach(function (bt) { bt.onclick = function () { bt.disabled = true; var vk = $('[data-vv]', bt.parentNode).value; api('staff', 'vincular', { uid: uid, modo: 'nuevo', vk: vk }).then(fin(bt)).catch(mal(bt)); }; });
   }
 
   /* ================= MENSAJES (gerencia) ================= */

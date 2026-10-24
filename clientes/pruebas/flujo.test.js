@@ -86,6 +86,17 @@ const cli = { uid: 'u1', tel: '+523311112222' };
   mod.params.anios = 6; await D.api('staff', 'guardarFletes', { fletes: mod }, { sesion: pm });
   F = await D.api('staff', 'fletes', {}, { sesion: pm }); assert.equal(F.fletes.params.anios, 6); assert.ok(!F.fletes.rutas[otraId], 'master sí borra');
   await D.api('staff', 'guardarConfig', { config: { mostrarPrecios: false } }, { sesion: pm });
+
+  // cliente sin cartera: administración no puede; gerencia sí (catálogo o nuevo)
+  const c3 = { uid: 'u3', tel: '+523900000003' };
+  await D.api('cliente', 'registrar', { nombre: 'Pedro Nuevo Ruiz', razonSocial: 'Forrajes El Nuevo', negocio: { dir: 'Calle Uno 123, Centro' } }, c3);
+  await assert.rejects(D.api('staff', 'vincular', { uid: 'u3', modo: 'catalogo', catKey: 'FORRAJERAELMEZQUITEDEMO' }, { sesion: adm }), (e) => /master/.test(e.error));
+  const LC = await D.api('staff', 'listaClientes', {}, { sesion: adm }); assert.ok(LC.cartera.length >= 2 && LC.catalogo.length === 0);
+  const LG = await D.api('staff', 'listaClientes', {}, { sesion: ger }); assert.ok(LG.vendedores.length >= 1);
+  await D.api('staff', 'vincular', { uid: 'u3', modo: 'nuevo', vk: '' }, { sesion: ger });
+  let y3 = await D.api('cliente', 'yo', {}, c3); assert.equal(y3.estado, 'activo'); assert.equal(y3.avance, null);
+  const p3 = await D.api('cliente', 'prepedido', { items: [{ code: y3.precios.productos[0].code, piezas: 10 }], modalidad: 'recoge' }, c3); assert.ok(p3.ok);
+  const bg = await D.api('staff', 'bandeja', {}, { sesion: ger }); assert.ok(bg.pedidos.some(p => p.id === p3.pedido.id), 'gerencia ve el pedido sin vendedor');
   // otro cliente no ve nada ajeno
   const otro = { uid: 'u2', tel: '+523300000000' };
   await assert.rejects(D.api('cliente', 'cancelar', { id: pid }, otro));
