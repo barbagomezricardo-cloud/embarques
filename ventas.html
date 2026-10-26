@@ -716,6 +716,59 @@ function saveResumenEmailCfg(){
   pushConfigCloud(true);
   alert('✅ Guardado. '+(c.enabled&&c.to?('El correo automático semanal se mandará a: '+c.to):'El correo automático semanal está apagado (actívalo y pon al menos un destinatario).'));
 }
+// Alertas AUTOMÁTICAS de clientes sin compra (las manda la función programada alertasSinCompraEmail).
+// Reemplaza el envío manual del tab Alertas: mismos umbrales (15/30/45 días), pero sale solo.
+//   dias: días de la semana en que se manda (0=domingo … 6=sábado)
+//   aVendedores: cada vendedor recibe SOLO sus clientes en el correo que tenga en ⚙ Config
+//   gerencia: correos que reciben el consolidado de todos los vendedores
+const DEFAULT_ALERTAS_AUTO_CFG={enabled:false, dias:[1], minDias:15, aVendedores:true, gerencia:''};
+function getAlertasAutoCfg(){try{const r=localStorage.getItem('alertasAutoCfg04mas');if(r)return Object.assign({},DEFAULT_ALERTAS_AUTO_CFG,JSON.parse(r));}catch(e){}return Object.assign({},DEFAULT_ALERTAS_AUTO_CFG);}
+function saveAlertasAutoCfg(){
+  if(!reqSuper())return;
+  const dias=[0,1,2,3,4,5,6].filter(d=>(document.getElementById('aa-d'+d)||{}).checked);
+  const md=parseInt((document.getElementById('aa-min')||{}).value,10);
+  const c={
+    enabled: !!(document.getElementById('aa-on')||{}).checked,
+    dias: dias,
+    minDias: (md>=1&&md<=365)?md:15,
+    aVendedores: !!(document.getElementById('aa-vend')||{}).checked,
+    gerencia: ((document.getElementById('aa-ger')||{}).value||'').trim()
+  };
+  localStorage.setItem('alertasAutoCfg04mas', JSON.stringify(c));
+  pushConfigCloud(true);
+  try{publishAlertasSinCompra();}catch(e){}
+  const DN=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  let m;
+  if(!c.enabled) m='Las alertas automáticas quedaron APAGADAS.';
+  else if(!c.dias.length) m='Activaste las alertas pero no elegiste ningún día: no saldrá ningún correo.';
+  else if(!c.gerencia&&!c.aVendedores) m='Activaste las alertas pero no hay destinatarios: pon al menos un correo de gerencia o activa el envío a vendedores.';
+  else m='Las alertas saldrán solas los '+c.dias.map(d=>DN[d]).join(', ')+' a las 8:00 am, con clientes de '+c.minDias+'+ días sin compra.'
+        +(c.aVendedores?'\n• Cada vendedor recibe sus clientes en el correo que tiene en ⚙ Config.':'')
+        +(c.gerencia?'\n• Consolidado a: '+c.gerencia:'');
+  alert('✅ Guardado. '+m);
+}
+// Foto de clientes para la función programada: va la FECHA de la última compra (no los días),
+// así la función calcula los días contra el día de envío aunque no se cargue un reporte nuevo.
+function buildAlertasSinCompraPayload(){
+  if(!DATA||!DATA.clients)return null;
+  const tierCfg=getTierCfg(); const pad=n=>('0'+n).slice(-2);
+  const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  const clientes=[];
+  DATA.clients.forEach(c=>{
+    if(!c.lastDate||!(c.lastDate instanceof Date)||isNaN(c.lastDate))return;
+    if(c.dias>365)return;   // mismo tope que el tab Alertas: más de un año ya no es seguimiento
+    clientes.push({n:(c.nombre||''),v:(c.vendedor||'(sin asignar)'),nivel:(c.nivel||''),prom:Math.round(c.promMes||0),
+      desc:Math.round((c.desc||0)*10)/10,descMax:Math.round((c.descMax||0)*10)/10,promo:((tierCfg[c.nivel]||{}).promo||''),
+      est:(c.estado||''),ult:iso(c.lastDate)});
+  });
+  const now=new Date();
+  return {publishedAt:now.toISOString(),reporte:(typeof TODAY!=='undefined'&&TODAY instanceof Date)?iso(TODAY):iso(now),clientes:clientes};
+}
+function publishAlertasSinCompra(){
+  const cfg=getCloudCfg(); const dbu=((cfg&&cfg.db)||SK_DB).replace(/\/$/,'');
+  const pl=buildAlertasSinCompraPayload(); if(!pl)return Promise.resolve();
+  return skFetch(dbu+'/skan/_alertasSinCompra.json',{method:'PUT',body:JSON.stringify(pl)}).catch(()=>{});
+}
 function saveAiCfg(){
   if(!reqSuper())return;
   const c={
@@ -4585,7 +4638,7 @@ function renderProductos(){
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','alertasAutoCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
@@ -7082,7 +7135,7 @@ function publishCloud(){
     // una ruta nueva a nivel raíz queda bloqueada en silencio (fetch no marca error igual).
     const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
     if(proy)return skFetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
-  }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa tu licencia/internet)'):'')+'.\nCada vendedor verá su info actualizada solo.'); });
+  }).then(()=>{ try{return publishAlertasSinCompra();}catch(e){} }).then(()=>{ if(btn)btn.textContent='☁️ Publicar a la nube ahora'; alert('Publicado: '+done+' vendedor(es)'+(fail?(' · '+fail+' con error (revisa tu licencia/internet)'):'')+'.\nCada vendedor verá su info actualizada solo.'); });
 }
 function autoPublishCloud(){
   if(!SK_SUPER)return; // los visores no publican
@@ -7093,6 +7146,7 @@ function autoPublishCloud(){
   skFetch(db+'/skan/_index.json',{method:'PUT',body:JSON.stringify(idx)}).catch(()=>{});
   const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
   if(proy)skFetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
+  try{publishAlertasSinCompra();}catch(e){}
 }
 // Publica el resumen semanal YA CALCULADO cada vez que cargas un reporte nuevo de Odoo
 // (no solo cuando das clic en "Generar resumen"). Así, aunque tú nunca vuelvas a tocar el
@@ -7169,6 +7223,19 @@ function renderCodesPanel(){
   })();
   h+='</div>';
   (function(){
+    const aa=getAlertasAutoCfg(); const DN=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const vc=getVendCfg(); const conMail=Object.keys(vc).filter(k=>vc[k]&&vc[k].email);
+    h+='<div id="alertasAutoCard" style="background:#2a1a0e;border:1px solid #7c3f12;border-radius:10px;padding:12px;margin-bottom:10px">';
+    h+='<div style="font-weight:800;color:#fdba74;margin-bottom:4px">🔔 Alertas automáticas de clientes sin compra</div>';
+    h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Lo mismo del tab <b>Alertas</b> (🔴 45+ días · 🟠 30-45 · 🟡 15-30), pero llega solo por correo a las 8:00 am los días que elijas. Los días sin compra se cuentan contra el día del envío, con base en tu último reporte de Odoo publicado. Requiere desplegar <code>alertasSinCompraEmail</code> (ver funciones/DESPLIEGUE_LEEME.md).</div>';
+    h+='<label style="font-size:.76rem;color:#e8eef7;display:flex;align-items:center;gap:5px;margin-bottom:6px"><input type="checkbox" id="aa-on"'+(aa.enabled?' checked':'')+'> Mandar alertas automáticas</label>';
+    h+='<div style="font-size:.74rem;color:#cbd5e1;margin-bottom:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">Días: '+DN.map((n,i)=>'<label style="display:flex;align-items:center;gap:3px"><input type="checkbox" id="aa-d'+i+'"'+(aa.dias.indexOf(i)>=0?' checked':'')+'>'+n+'</label>').join('')+'</div>';
+    h+='<label style="font-size:.74rem;color:#cbd5e1;display:block;margin-bottom:6px">Incluir clientes con al menos <input id="aa-min" type="number" min="1" max="365" value="'+aa.minDias+'" style="width:60px;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#fff;padding:4px;text-align:right"> días sin compra</label>';
+    h+='<label style="font-size:.76rem;color:#e8eef7;display:flex;align-items:center;gap:5px;margin-bottom:2px"><input type="checkbox" id="aa-vend"'+(aa.aVendedores?' checked':'')+'> Mandar a cada vendedor solo sus clientes</label>';
+    h+='<div style="font-size:.68rem;color:#7c8aa5;margin:0 0 6px 22px">Usa el correo de cada vendedor en ⚙ Config. Hoy tienen correo: '+(conMail.length?esc(conMail.join(', ')):'<b style="color:#fca5a5">ninguno</b>')+'.</div>';
+    h+='<input id="aa-ger" placeholder="Consolidado para gerencia: correos separados por coma" value="'+esc(aa.gerencia)+'" style="width:100%;background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem;margin-bottom:6px">';
+    h+='<button onclick="saveAlertasAutoCfg()" style="background:#c2410c;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-weight:700;font-size:.74rem;cursor:pointer">Guardar alertas automáticas</button>';
+    h+='</div>';
     let mBase=(cfg.master||'').trim().replace(/#.*$/,'');
     if(mBase&&!/^https?:\/\//i.test(mBase))mBase='https://'+mBase;
     if(/^https?:\/\/[^\/]+$/i.test(mBase))mBase+='/';

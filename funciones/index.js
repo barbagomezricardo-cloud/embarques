@@ -303,3 +303,7 @@ exports.weeklyResumenEmail = onSchedule(
     }
   }
 );
+
+// Alertas automáticas de clientes sin compra (sustituye al Apps Script de prueba [04MAS]).
+// Código en alertas.js — se despliega junto con este archivo.
+exports.alertasSinCompraEmail = require('./alertas').alertasSinCompraEmail;
