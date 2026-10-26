@@ -684,7 +684,7 @@ function initFirebase(){
   const cfg=getAppCfg();
   if(!cfg||!cfg.databaseURL){ setConn('local','Local'); return; }
   loadFbScripts(()=>{ try{
-    if(!fb){ fb=firebase.initializeApp(cfg,'carg'+Date.now()); if(RECAPTCHA_SITE_KEY){ try{ firebase.appCheck(fb).activate(new firebase.appCheck.RecaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true); }catch(e){ console.error('appCheck:',e); } } }
+    if(!fb){ fb=firebase.initializeApp(cfg,'carg'+Date.now()); if(RECAPTCHA_SITE_KEY){ try{ firebase.appCheck(fb).activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true); }catch(e){ console.error('appCheck:',e); } } }
     const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });

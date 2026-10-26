@@ -248,7 +248,7 @@
       await Promise.all(['firebase-database-compat.js', 'firebase-auth-compat.js', 'firebase-app-check-compat.js'].concat(opts.messaging ? ['firebase-messaging-compat.js'] : []).map(f => loadScript(base + f).catch(() => { })));
       INV.app = firebase.apps.find(a => a.name === '[DEFAULT]') || firebase.initializeApp(CFG.FIREBASE);
       /* App Check (reCAPTCHA Enterprise) — igual que tus otras apps */
-      if (CFG.APPCHECK_KEY && firebase.appCheck) { try { firebase.appCheck(INV.app).activate(new firebase.appCheck.RecaptchaEnterpriseProvider(CFG.APPCHECK_KEY), true); } catch (e) { console.warn('appCheck', e); } }
+      if (CFG.APPCHECK_KEY && firebase.appCheck) { try { firebase.appCheck(INV.app).activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(CFG.APPCHECK_KEY), true); } catch (e) { console.warn('appCheck', e); } }
       INV.DB = makeFirebaseDB(INV.app);
       INV.AUTH = makeFirebaseAuth(INV.app, INV.DB);
     }

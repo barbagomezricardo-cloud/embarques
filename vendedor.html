@@ -124,7 +124,7 @@ function _skInitAppCheck(){
           try{
             firebase.initializeApp(SK_FBCFG);
             var ac=firebase.appCheck();
-            ac.activate(new firebase.appCheck.RecaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true);
+            ac.activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true);
             resolve(ac);
           }catch(e){ resolve(null); }
         };
