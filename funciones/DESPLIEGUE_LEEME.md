@@ -103,3 +103,23 @@ Si no te interesa el correo automático todavía, sáltate esto y sigue directo 
 - **Quieres cambiar el día/hora del correo**: hoy está puesto para lunes 8am hora Ciudad de México — si quieres otro día/hora, dime y te actualizo la línea `schedule` en `functions/index.js` (no se puede cambiar desde la app, solo desde el código).
 - **Quieres cambiar el tope de gasto más adelante**: no repitas nada de esto — solo cambia los números en el panel de IA de ventas.html y guarda.
 - **Quieres revisar cuánto se ha gastado**: en https://console.cloud.anthropic.com (o platform.claude.com) hay una sección de uso/facturación con el gasto del mes en tiempo real.
+
+---
+
+## 🔔 Alertas automáticas de clientes sin compra (alertasSinCompraEmail)
+
+Sustituye a las alertas de prueba **"[04MAS] N cliente(s) sin compra"** que mandaba el Apps Script anterior desde la cuenta barbagomezricardo464@gmail.com. Ahora las alertas salen del sistema de ventas vigente (ventas.html), con los mismos umbrales del tab Alertas: 🔴 45+ días · 🟠 30-44 · 🟡 15-29.
+
+**Cómo funciona**
+- Cada vez que se carga un reporte de Odoo o se publica a la nube, ventas.html sube a `/skan/_alertasSinCompra` la fecha de última compra de cada cliente.
+- La función corre todos los días a las 8:00 am (Ciudad de México) y solo manda correo los días que elijas en ventas.html. Los días sin compra se cuentan contra el día del envío.
+- Cada vendedor recibe solo sus clientes (al correo que tiene en ⚙ Config) y gerencia recibe un consolidado de todos.
+
+**Para activarla (una sola vez)**
+1. Usa los mismos secretos `GMAIL_USER` y `GMAIL_APP_PASSWORD` del Paso 3-B. Si ya los diste de alta para el resumen semanal, no repitas nada.
+2. En Cloud Shell sube a la carpeta `functions/` el archivo nuevo **`funciones/alertas.js`** junto con `funciones/index.js` y `funciones/package.json` (el `index.js` ya trae al final la línea que la activa).
+3. `cd functions && npm install && cd .. && firebase deploy --only functions`
+4. En ventas.html (super-usuario) → panel de nube → tarjeta **🔔 Alertas automáticas de clientes sin compra**: marca la casilla, elige los días, el mínimo de días, si va a vendedores, los correos de gerencia, y da clic en **Guardar alertas automáticas**.
+5. Para probarla sin esperar al día siguiente: Google Cloud Console → Cloud Scheduler → la tarea de `alertasSinCompraEmail` → **Forzar ejecución** (solo manda si hoy es uno de los días elegidos).
+
+**Si no llega nada**: Firebase Console → Functions → `alertasSinCompraEmail` → Registros. El registro dice el motivo (apagado, hoy no toca, sin datos publicados, sin destinatarios). Solo se manda una vez por día; la marca queda en `/skan/_alertasLog`.
