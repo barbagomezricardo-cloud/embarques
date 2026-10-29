@@ -2667,7 +2667,7 @@ function renderEquilibrio(){
       }
     }
     var ppm=c.promoProdMes||{}; var promoPorMes={};
-    for(var p2 in ppm){ var cc2=CM_EQ[_famKey(p2)]; var mo2=ppm[p2];
+    for(var p2 in ppm){ var cc2=_costOf(CM_EQ,p2); var mo2=ppm[p2];
       for(var m2 in mo2){ if(comp&&comp.indexOf(+m2)<0)continue; var sac2=mo2[m2]||0; if(sac2<=0)continue;
         promoPorMes[m2]=(promoPorMes[m2]||0)+(cc2?sac2*cc2.costo:0); } }
     var mesesUnion={}; for(var mk in revPorMes)mesesUnion[mk]=1; for(var mk2 in promoPorMes)mesesUnion[mk2]=1;
@@ -2765,7 +2765,20 @@ function _famKey(name){
 }
 function getCostos(){let arr=null;try{arr=JSON.parse(localStorage.getItem('costos04mas')||'null');}catch(e){}if(!Array.isArray(arr)||!arr.length)arr=COSTOS_DEF.map(x=>Object.assign({},x));return arr;}
 function saveCostos(arr){try{localStorage.setItem('costos04mas',JSON.stringify(arr));}catch(e){}}
-function costMap(){const arr=getCostos();const m={};arr.forEach(x=>{m[_famKey(x.name)]={costo:+x.costo||0,precio:+x.precio||0,name:x.name,code:x.code||''};});return m;}
+// Kilos de regalo en el nombre ("+1 EXTRAS", "+ 2 KILOS EXTRAS"): el % de proteína no cuenta.
+function _extraKg(name){var n=String(name||'').toUpperCase().replace(/(\d+(?:\.\d+)?)\s*%/g,' ');var mm=n.match(/\+\s*(\d+(?:\.\d+)?)\s*(?:KG|KGS|KILO|KILOS)?\b/);return mm?parseFloat(mm[1]):0;}
+// Costos por familia+presentación. Antes, si dos renglones caían en la misma clave (p. ej.
+// "SILVER KAN 18% 25 KGS" a $285.61 y "SILVER KAN 18% 25 KG +1 EXTRAS" a $297.03), ganaba el último
+// de la tabla y TODO Silver Kan 25 kg se costeaba con el saco de kilo extra. Ahora la presentación
+// con kilo extra tiene su propia clave, y la clave base la decide el producto normal (no un
+// promo/bonificación ni una variante con extra). Dentro del mismo nivel sigue ganando el último.
+function costMap(){const arr=getCostos();const m={},pri={};arr.forEach(x=>{const k=_famKey(x.name),e=_extraKg(x.name),promo=/^\s*(PROMOCION|BONIFICACION)/i.test(String(x.name||''));
+  const v={costo:+x.costo||0,precio:+x.precio||0,name:x.name,code:x.code||''};
+  const put=(key,score)=>{if(pri[key]==null||score>=pri[key]){m[key]=v;pri[key]=score;}};
+  if(e){ put(k+'+'+e, promo?1:2); put(k, 0); }      // la variante con extra solo llena la base si no hay otra cosa
+  else put(k, promo?1:2);
+});return m;}
+function _costOf(CM,name){var e=_extraKg(name);return (e&&CM[_famKey(name)+'+'+e])||CM[_famKey(name)];}
 function setCosto(i,field,val){const arr=getCostos();if(!arr[i])return;arr[i][field]=(field==='name'?val:(parseFloat(val)||0));saveCostos(arr);renderRentabilidad();}
 function addCostoProd(name){const arr=getCostos();arr.push({code:'',name:(name||'NUEVO PRODUCTO'),costo:0,precio:0});saveCostos(arr);renderRentabilidad();}
 function resetCostos(){if(!confirm('¿Restaurar los costos y precios a los valores originales (jul-2026)?'))return;localStorage.removeItem('costos04mas');renderRentabilidad();}
@@ -2810,7 +2823,7 @@ function cierreCategoriaAuto(nombreProd){
   // producto y las clasificaba como pet food por error (inflando pet food y dejando el costal en $0).
   if(/^COSTAL\b/.test(n))return 'costalvacio';
   if(/PROMOCION|BONIFICACION/.test(n))return 'promobono';
-  if(costMap()[_famKey(nombreProd)])return 'petfood';
+  if(_costOf(costMap(),nombreProd))return 'petfood';
   if(/GALLO|GALLINA|CABALLO|POLLO|CROQUETA|CERDO|GANADO|RUMIANTE|BOVINO|PORCINO|EQUINO|PECUARIO|CONEJO|BORREGO/.test(n))return 'pecuario';
   return 'otros';
 }
@@ -2913,7 +2926,7 @@ function renderRentabilidad(){
     const pm=c.prodMes||{}; const pmv=pmvOf(c);
     const revM={},costM={};
     // Ingreso: usa el $ REAL facturado (Odoo) cuando el reporte lo trae; si no, cae al precio de lista estimado.
-    for(const p in pm){ const cc=CM[_famKey(p)]; const mo=pm[p]; const mov=pmv[p]||{};
+    for(const p in pm){ const cc=_costOf(CM,p); const mo=pm[p]; const mov=pmv[p]||{};
       let sacTot=0; for(const m in mo) sacTot+=mo[m]||0;
       let realTot=0; for(const m in mov) realTot+=mov[m]||0;
       if(sacTot<=0 && realTot<=0)continue;
@@ -2931,7 +2944,7 @@ function renderRentabilidad(){
     const pp=c.promoProd||{}; const ppm=c.promoProdMes||{};
     for(const p in pp)if(!byProdPromo[p])byProdPromo[p]={sac:0,cost:0};
     const promoM={}; const promoSacM={};
-    for(const p in ppm){ const cc=CM[_famKey(p)]; const mo=ppm[p];
+    for(const p in ppm){ const cc=_costOf(CM,p); const mo=ppm[p];
       for(const k in mo){ const sac=mo[k]||0; if(sac<=0)continue; const cst=cc?sac*cc.costo:0;
         promoM[k]=(promoM[k]||0)+cst; promoSacM[k]=(promoSacM[k]||0)+sac;
         if(byProdPromo[p]){ byProdPromo[p].sac+=sac; byProdPromo[p].cost+=cst; }
@@ -3217,7 +3230,7 @@ function renderRentabilidad(){
           for(const m in mo){ if(!monthSet.has(+m))continue; sac+=mo[m]||0; real+=mv[m]||0; }
           if(sac<=0)continue;
           totalSacTodos+=sac;
-          const esP=isPremiumPlus(p), cc=CM[_famKey(p)];
+          const esP=isPremiumPlus(p), cc=_costOf(CM,p);
           const rev=_tieneRealRENT?real:(cc?sac*cc.precio:0), cost=cc?sac*cc.costo:0;
           if(esP){ premSac+=sac; if(cc){premSacCosted+=sac;premRev+=rev;premCost+=cost;} }
           else { noSac+=sac; if(cc){noSacCosted+=sac;noRev+=rev;noCost+=cost;} }
@@ -3263,7 +3276,7 @@ function renderRentabilidad(){
         const pm=c.prodMes||{}, pmv=pmvOf(c);
         recMs.forEach(m=>{
           let rev=0;
-          for(const p in pm){ const mo=pm[p]; if(!mo||!mo[m])continue; const sac=mo[m]; const real=(pmv[p]&&pmv[p][m])||0; const cc=CM[_famKey(p)]; rev+=_tieneRealRENT?real:(cc?sac*cc.precio:0); }
+          for(const p in pm){ const mo=pm[p]; if(!mo||!mo[m])continue; const sac=mo[m]; const real=(pmv[p]&&pmv[p][m])||0; const cc=_costOf(CM,p); rev+=_tieneRealRENT?real:(cc?sac*cc.precio:0); }
           if(rev<=0)return;
           discCostoReciente+=rev*descMesCliente(c,m)/100;
         });
@@ -4570,8 +4583,8 @@ function baselineProdSum(year, vf, mFrom, mTo){
   vendors.forEach(v=>{
     const fams = byVend[v]; if(!fams)return;
     for(const fk in fams){
-      const arr = fams[fk]; let s=0;
-      for(let m=mFrom;m<=mTo;m++) s += arr[m-1]||0;
+      const arr = fams[fk]; let s=0; const F=(DATA&&DATA.yoy&&DATA.yoy.factores)||{};
+      for(let m=mFrom;m<=mTo;m++) s += (arr[m-1]||0)*(F[m]==null?1:F[m]);
       if(s>0) out[fk]=(out[fk]||0)+s;
     }
   });
@@ -4855,6 +4868,23 @@ function getPriorBaseline(){
   return {cy,py,data:b||{}};
 }
 
+// Fracción del mes del año anterior que corresponde a los días que trae el reporte de este año.
+function _yoyFactores(meses,py){
+  const F={}; if(typeof DATA==='undefined'||!DATA)return F;
+  let mn=Infinity,mx=-Infinity; (DATA.lineas||[]).forEach(l=>{const d=+l[2]; if(d>19000000){ if(d<mn)mn=d; if(d>mx)mx=d; }});
+  if(!isFinite(mn))return F;
+  const pd=(typeof getPriorDaily==='function')?getPriorDaily(py):{};
+  const comp=(DATA.completos&&DATA.completos.length)?DATA.completos:null;
+  const yr=Math.floor(mn/10000);
+  const share=(m,d1,d2)=>{ const fin=new Date(yr,m,0).getDate(); d2=Math.min(d2,fin);
+    const arr=(pd&&pd[m])||null; if(arr&&arr.length){ let tot=0,par=0; for(let i=0;i<fin;i++){const v=+arr[i]||0; tot+=v; if(i+1>=d1&&i+1<=d2)par+=v;} if(tot>0)return par/tot; }
+    let tot=0,par=0; for(let x=1;x<=fin;x++){ if(new Date(yr,m-1,x).getDay()===0)continue; tot++; if(x>=d1&&x<=d2)par++; } return tot?par/tot:1; };
+  const m1=Math.floor(mn/100)%100, d1=mn%100, m2=Math.floor(mx/100)%100, d2=mx%100;
+  // El primer mes NO se recorta: Odoo arrancó el 12 de enero pero ese día y el 13 se capturó la venta
+  // de los días anteriores, así que enero viene completo. Solo se recorta el mes en curso.
+  if(meses.indexOf(m2)>=0 && (!comp||comp.indexOf(m2)<0)){ const fin=new Date(yr,m2,0).getDate(); if(d2<fin) F[m2]=(m2===m1?share(m2,d1,d2):share(m2,1,d2)); }
+  return F;
+}
 function computeYoY(){
   if(!DATA)return;
   const meses=DATA.meses.slice();
@@ -4863,6 +4893,11 @@ function computeYoY(){
   const complete=meses.filter(m=>mS[m]>=0.4*maxS);
   const partial=meses.filter(m=>mS[m]<0.4*maxS);
   const PB=getPriorBaseline(); const B=PB.data;
+  // Mismo periodo de verdad: si el último mes va incompleto, el año anterior de ESE mes se recorta
+  // a los mismos días con la curva diaria del año anterior (o, si no hay curva, por días hábiles).
+  // Antes se comparaba el mes en curso contra el mes completo del año pasado.
+  const FAC=_yoyFactores(meses,PB.py);
+  const pm=(b,m)=>((b&&b.m&&b.m[m-1])||0)*(FAC[m]==null?1:FAC[m]);
   // mapa normalizado de la base anterior para emparejar tolerante
   const bNorm=new Map(); for(const k in B) bNorm.set(nkey(k),k);
   const usados=new Set();
@@ -4872,7 +4907,7 @@ function computeYoY(){
     const rk=resolveKey(c.nombre,bNorm); const b=rk?B[rk]:null; if(rk)usados.add(rk);
     const cur=complete.reduce((a,m)=>a+(c.mesData[m]||0),0);
     const curFull=meses.reduce((a,m)=>a+(c.mesData[m]||0),0);
-    const prior=b?complete.reduce((a,m)=>a+((b.m&&b.m[m-1])||0),0):0;
+    const prior=b?complete.reduce((a,m)=>a+pm(b,m),0):0;
     const priorFull=b&&b.m?b.m.reduce((x,y)=>x+y,0):0;
     const tg=metaTier(priorFull);
     const act=Object.keys(c.mesData).map(Number).filter(m=>c.mesData[m]>0);
@@ -4893,7 +4928,7 @@ function computeYoY(){
   for(const k in B){ if(usados.has(k))continue;
     const b=B[k]; const priorFull=b&&b.m?b.m.reduce((x,y)=>x+y,0):0;
     const priorFullT=b&&b.tm?b.tm.reduce((x,y)=>x+y,0):0;
-    const prior=b&&b.m?complete.reduce((a,m)=>a+(b.m[m-1]||0),0):0;
+    const prior=b&&b.m?complete.reduce((a,m)=>a+pm(b,m),0):0;
     const rk=resolveKey(k,mNorm); const info=rk?map[rk]:null;
     const tg=metaTier(priorFull);
     const priorM0=Array(12).fill(0); if(b&&b.m) for(let i=0;i<12;i++) priorM0[i]=b.m[i]||0;
@@ -4906,7 +4941,7 @@ function computeYoY(){
   const finTons=Object.values(tbm).reduce((a,b)=>a+b,0);
   const promoTons=DATA.promoMesTon?complete.reduce((a,m)=>a+(DATA.promoMesTon[m]||0),0):0;
   const prodTons=finTons+promoTons;
-  DATA.yoy={rows,meses,complete,partial,finTons,promoTons,prodTons,totTons:prodTons,tonMes:prodTons/(complete.length||1),
+  DATA.yoy={rows,meses,complete,partial,factores:FAC,finTons,promoTons,prodTons,totTons:prodTons,tonMes:prodTons/(complete.length||1),
     cy:PB.cy,py:PB.py,curTot:rows.reduce((a,r)=>a+r.cur,0),priorTot:rows.reduce((a,r)=>a+r.prior,0)};
 }
 
