@@ -368,7 +368,7 @@ table.tend tr:hover td{background:rgba(232,160,32,.07)}
         <div class="cfg-title">💾 Respaldo de configuración</div>
         <div style="font-size:.78rem;color:#94a3b8;margin-bottom:10px">Exporta el mapeo de clientes, contactos de vendedores y niveles para llevarlos a otra computadora o como respaldo.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-save-cfg" style="margin:0" onclick="exportConfig()">⬇ Exportar configuración</button>
+          <button class="btn-save-cfg" style="margin:0" onclick="exportConfig()" title="Toda la configuración (costos, bloqueados, descuentos, catálogo) y lo que el programa calculó con el reporte cargado">⬇ Exportar configuración y resultados</button>
           <button class="btn-save-cfg" style="margin:0;background:#2563EB" onclick="document.getElementById('cfg-file').click()">⬆ Importar configuración</button>
           <input type="file" id="cfg-file" accept=".json" style="display:none" onchange="importConfig(this.files[0])">
         </div>
@@ -2271,14 +2271,52 @@ function saveTierConfig(){ if(!reqSuper())return;
 
 // ── EXPORT / IMPORT CONFIG ─────────────────────────────────────────────────────
 function exportConfig(){ if(!reqSuper())return;
-  const data={version:2,fecha:new Date().toISOString(),
+  // v3: TODA la configuración del tablero (incluye costos, bloqueados, descuentos especiales,
+  // catálogo de productos, cierre de mes y bases del año anterior) + lo que el programa calculó
+  // con el reporte cargado, para que los agentes comerciales usen exactamente las mismas reglas
+  // y cifras. Las llaves de IA y el secreto de la nube NO se exportan.
+  const SKIP={aiCfg04mas:1};
+  const ls={};
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(!k||k.indexOf('04mas')<0||SKIP[k])continue;
+    let v=localStorage.getItem(k);
+    if(k==='cloudCfg04mas'){ try{const c=JSON.parse(v);delete c.secret;v=JSON.stringify(c);}catch(e){continue;} }
+    try{ls[k]=JSON.parse(v);}catch(e){ls[k]=v;}
+  }
+  let resultados=null;
+  if(typeof DATA!=='undefined'&&DATA){
+    try{ renderRentabilidad(); }catch(e){}
+    let yoy=null;
+    try{ if(DATA.yoy) yoy={meses:DATA.yoy.meses,complete:DATA.yoy.complete,partial:DATA.yoy.partial,curTot:DATA.yoy.curTot,priorTot:DATA.yoy.priorTot,
+      rows:(DATA.yoy.rows||[]).map(r=>({nombre:r.nombre,estado:r.estado,vendedor:r.vend,tier:r.tier,meta:r.meta,nuevo:r.nuevo,perdido:r.perdido,curM:r.curM,priorM:r.priorM}))}; }catch(e){}
+    resultados={
+      reporte:DATA.fname||'', anio:DATA.dataYear||0, meses:DATA.meses||[], mesesCerrados:DATA.completos||[], totalSacos:DATA.totalSacos||0,
+      ventaMesSinIva:DATA.todosMesValSinIva||null, cotizacionesMes:DATA.todosMesCot||null, descuentoMes:DATA.todosMesDesc||null,
+      rentabilidad:window.RENT_RES||null,
+      clientes:(DATA.clients||[]).map(c=>({nombre:c.nombre,estado:c.estado,vendedor:c.vendedor,nivel:c.nivel,promMes:c.promMes,desc:c.desc,descMax:c.descMax,
+        crecio:c.crecio,premOk:c.premOk,mixPrem:c.mixPrem,mixPlus:c.mixPlus,mesData:c.mesData,mesDataValSinIva:c.mesDataValSinIva||null,
+        promoSacos:c.promoSacos,ultimaCompra:c.lastDate?new Date(c.lastDate).toISOString().slice(0,10):null,diasSinCompra:c.dias})),
+      yoy:yoy
+    };
+  }
+  const data={version:3,fecha:new Date().toISOString(),
     mapping:getMapping(),
     vendedores:getVendCfg(),
     direccion:getDirCfg(),
     niveles:getTierCfg(),
     bonoPremium:getPremCfg(),
     evalPeriod:getEvalPeriod(),
-    cobre:getCobreCfg()};
+    cobre:getCobreCfg(),
+    costos:getCostos(),
+    productos:getProdCfg(),
+    bloqueadosDesc:getBloqueadosDesc(),
+    descEspeciales:getDescEsp(),
+    mesDescuento:getMesDesc(),
+    parametros:getVParams(),
+    gastosFijos:getGastosFijos(),
+    localStorage:ls,
+    resultados:resultados};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -2298,6 +2336,11 @@ function importConfig(file){ if(!reqSuper())return;
       if(d.bonoPremium)localStorage.setItem('premCfg04mas',JSON.stringify(d.bonoPremium));
       if(d.evalPeriod==='MES'||d.evalPeriod==='TRIM')localStorage.setItem('evalPeriod04mas',d.evalPeriod);
       if(d.cobre)localStorage.setItem('cobreCfg04mas',JSON.stringify(d.cobre));
+      // v3: restaura también costos, bloqueados, descuentos especiales, catálogo, cierre y bases
+      if(d.localStorage&&typeof d.localStorage==='object'){ for(const k in d.localStorage){ if(k.indexOf('04mas')<0||k==='aiCfg04mas')continue;
+        if(k==='cloudCfg04mas'){ try{const loc=JSON.parse(localStorage.getItem(k)||'{}');const c=d.localStorage[k]||{};if(loc.secret)c.secret=loc.secret;localStorage.setItem(k,JSON.stringify(c));}catch(e){} continue; }
+        const v=d.localStorage[k]; localStorage.setItem(k,typeof v==='string'?v:JSON.stringify(v)); } }
+      else if(Array.isArray(d.costos)) localStorage.setItem('costos04mas',JSON.stringify(d.costos));
       if(DATA){
         const m=getMapping();DATA.mapping=m;
         for(const c of DATA.clients){const info=m[c.nombre]||{e:c.estado,v:c.vendedor};c.estado=info.e;c.vendedor=info.v;
@@ -2840,6 +2883,7 @@ function cierreSetMes(v){CIERRE_MES=parseInt(v,10)||0;renderCierreMes();}
 
 function renderRentabilidad(){
   const box=document.getElementById('rent-content'); if(!box)return;
+  window.RENT_RES={filtros:{vendedor:RENT_VF||'',estado:RENT_EST||''},meses:[]};   // resumen que se exporta con la configuración
   if(typeof DATA==='undefined'||!DATA){box.innerHTML='<div style="padding:20px;color:#94a3b8">Sube el reporte de Odoo para ver la rentabilidad del programa.</div>';return;}
   const CM=costMap();
   const vends=[...new Set(DATA.clients.map(c=>c.vendedor).filter(Boolean))].sort();
@@ -3042,6 +3086,7 @@ function renderRentabilidad(){
       let tend='—';
       if(prevNetoPct!==null){ const d=netoPct-prevNetoPct; tend='<span style="color:'+(d>=0?'#4ade80':'#f87171')+'">'+(d>=0?'▲':'▼')+' '+(d>=0?'+':'')+d.toFixed(1)+'pp</span>'; }
       prevNetoPct=netoPct;
+      try{window.RENT_RES.meses.push({mes:+m,esquema:nuevo?'DESCUENTO':'REGALO',venta:o.rev,margenBruto:bRuta,margenBrutoPct:bRutaPct,sacosRegalados:o.psac,costoRegalados:o.pcost,descPromPct:o.disc>0?descProm:null,costoDescuento:o.disc,costoTotal:dado,costoTotalPct:pctD,margenNeto:neto,margenNetoPct:netoPct});}catch(e){}
       filas+='<tr style="border-top:1px solid #16233f">'
         +'<td style="padding:6px 8px;color:#e8eef7;font-weight:700">'+MES_NOM[m]+'</td>'
         +'<td style="text-align:center"><span style="background:'+(nuevo?'#1e3a5f':'#3a2a12')+';color:'+(nuevo?'#7dd3fc':'#f0a868')+';border-radius:5px;padding:1px 7px;font-size:.66rem;font-weight:700">'+(nuevo?'DESCUENTO':'REGALO')+'</span></td>'
@@ -3057,6 +3102,7 @@ function renderRentabilidad(){
     });
     const pctA=aRev>0?aDado/aRev*100:0, pctN=nRev>0?nDado/nRev*100:0;
     const dif=pctN-pctA;
+    try{Object.assign(window.RENT_RES,{rangoAnterior:rangoA,rangoNuevo:rangoN,ventaAnterior:aRev,dadoAnterior:aDado,pctAnterior:pctA,ventaNuevo:nRev,dadoNuevo:nDado,pctNuevo:pctN,difPuntos:dif,alRitmoAnterior:nRev*pctA/100,ahorro:nRev*pctA/100-nDado,descuentoReal:nDiscDado,regaladosNuevo:nPromoDado});}catch(e){}
     h+='<div style="font-weight:800;color:#cbd5e1;margin:18px 0 6px">📅 Márgenes mes a mes</div>';
     h+='<div style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Ingreso, margen bruto, costo de sacos regalados Y costo de descuento % por separado (un mes puede tener los dos, si hay clientes bloqueados que siguen recibiendo sacos), costo total del programa y margen NETO real, mes por mes. La última columna compara el margen neto % contra el mes anterior. '
       +'<label style="margin-left:8px">El esquema arrancó en: <select onchange="setMesDesc(this.value)" style="background:#1e3258;color:#fff;border:1px solid #2563EB;border-radius:6px;padding:2px 6px;font-size:.72rem">'
@@ -3196,6 +3242,7 @@ function renderRentabilidad(){
       const margGapSac=R.margPremSac-R.margNoSac;
       const sacosDeMas=(deltaMixPP/100)*R.totalSacTodos;
       const extraMargenPesos=sacosDeMas*margGapSac;
+      try{window.RENT_RES.mixPremium={periodoBase:nomB,periodoReciente:nomR,mixBasePct:B.mixPct,mixRecientePct:R.mixPct,cambioPP:deltaMixPP,margenSacoPremium:R.margPremSac,margenSacoResto:R.margNoSac,ventajaSaco:margGapSac,sacosTotalesReciente:R.totalSacTodos,sacosPremiumDeMas:sacosDeMas,margenExtra:extraMargenPesos};}catch(e){}
       const colMix=deltaMixPP>=0?'#4ade80':'#f87171';
       h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
         +kpi(B.mixPct.toFixed(1)+'%','Mix premium · '+nomB)
@@ -4638,7 +4685,7 @@ function renderProductos(){
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','alertasAutoCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas'];
+var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','alertasAutoCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas','costos04mas','mesDesc04mas','cierreCatOv04mas','proyCfg04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
