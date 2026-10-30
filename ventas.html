@@ -687,6 +687,13 @@ const UMBRAL_PREM = 3;
 const DEFAULT_PREM_CFG = {umbralBase:3, u1:5, e1:0.5, u2:7.5, e2:1.0};
 function getPremCfg(){try{const r=localStorage.getItem('premCfg04mas');if(r)return Object.assign({},DEFAULT_PREM_CFG,JSON.parse(r));}catch(e){}return Object.assign({},DEFAULT_PREM_CFG);}
 function premBoost(mixPrem,pc){pc=pc||getPremCfg();return mixPrem>=pc.u2?pc.e2:(mixPrem>=pc.u1?pc.e1:0);}
+// Metas premium en SACOS CERRADOS: la meta es el % × promedio redondeado HACIA ABAJO (nunca menos de 1 saco),
+// y el bono se desbloquea cuando los sacos comprados llegan a esa meta. Antes la app mostraba la meta redondeada
+// (7.5% de 1,775 = 133.125 → "133") pero el bono se evaluaba con el % exacto (133/1,775 = 7.49% < 7.5%): el cliente
+// compraba lo que se le pidió y no se le desbloqueaba (caso Moisés López). Ahora lo que se pide es lo que se exige.
+function metaSac(pct,ref){ ref=Math.round(ref||0); if(!(ref>0)) return Infinity; return Math.max(1,Math.floor((pct||0)*ref/100+1e-9)); }
+function alcanza(sacos,pct,ref){ return Math.round(sacos||0)>=metaSac(pct,ref); }
+function premBoostSac(sacos,ref,pc){pc=pc||getPremCfg();return alcanza(sacos,pc.u2,ref)?pc.e2:(alcanza(sacos,pc.u1,ref)?pc.e1:0);}
 // Cualquier % de mix premium que se muestre junto a un ✓/✗ (o que vaya a una app/credencial donde
 // el cliente lo lea como "ya llegué") tiene que mostrar SIEMPRE la misma cifra que decide ese
 // ✓/✗ — nunca una más generosa. .toFixed()/Math.round() normal REDONDEA HACIA ARRIBA (4.96% se ve
@@ -857,14 +864,14 @@ function calcDesc(nivel,mesData,prodMes,completos,refMonthly){
   var _denP=(_refP||0)*(win.cur.length||1);
   const mixPrem=_denP>0?premBaseU/_denP*100:0;   // % premium BASE vs PROMEDIO (para el 3%)
   const mixPlus=_denP>0?premMixU/_denP*100:0;    // % familia MIX vs PROMEDIO (para +0.5/+1%)
-  const premOk=mixPrem>=(pc.umbralBase!=null?pc.umbralBase:UMBRAL_PREM);
+  const premOk=alcanza(premBaseU,(pc.umbralBase!=null?pc.umbralBase:UMBRAL_PREM),_denP);   // en sacos cerrados (ver metaSac)
   // ── INICIAL (menos de 200 sacos/mes): sin descuento hasta llegar a Cobre ──
   if(nivel==='INICIAL'){
     return{desc:0,descMax:0,crecio:false,premOk:false,mixPrem:mixPrem,mixPlus:mixPlus,boost:0};
   }
   const cfg=getTierCfg()[nivel]||{fijo:0,kc:0,kp:0,uc:UMBRAL_CREC};
   const umbralC=(cfg.uc!=null?cfg.uc:UMBRAL_CREC);const crecio=(vP>0&&vU>0)?((vU-vP)/vP*100>=umbralC):false;
-  const boost=premBoost(mixPlus,pc);                                // +e1 o +e2 por subir el mix (incluye Silver Cat)
+  const boost=premBoostSac(premMixU,_denP,pc);                      // +e1 o +e2 por subir el mix (incluye Silver Cat), en sacos cerrados
   const desc=(cfg.fijo||0)+(crecio?(cfg.kc||0):0)+(premOk?(cfg.kp||0):0)+boost;
   const descMax=(cfg.fijo||0)+(cfg.kc||0)+(cfg.kp||0)+(pc.e2||0);
   return{desc,descMax,crecio,premOk,mixPrem,mixPlus,boost};
@@ -1348,7 +1355,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
       // correcto para márgenes/punto de equilibrio, ya que costos y precio de lista también están sin IVA.
       const prodMesValSinIva=(window.LAST_VAL_PM_SINIVA&&window.LAST_VAL_PM_SINIVA[nombre])||{};
       const mesDataValSinIva={}; for(const _p in prodMesValSinIva){ const _mm=prodMesValSinIva[_p]; for(const _m in _mm) mesDataValSinIva[_m]=(mesDataValSinIva[_m]||0)+(_mm[_m]||0); }
-      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,prodMesVal,mesDataVal,prodMesValSinIva,mesDataValSinIva,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
+      return{nombre,total,promMes,numMeses,activos,topProd,seg,mesData,qualMes,petMes,estado:info.e,vendedor:info.v,prods,prodMes,prodMesVal,mesDataVal,prodMesValSinIva,mesDataValSinIva,nivel,desc:dsc.desc,descMax:dsc.descMax,crecio:dsc.crecio,premOk:dsc.premOk,mixPrem:dsc.mixPrem,mixPlus:dsc.mixPlus,boost:dsc.boost,promoSacos:(promoCliente&&promoCliente[nombre])||0,promoProd:(LAST_PROMO_PROD&&LAST_PROMO_PROD[nombre])||{},promoProdMes:((window.LAST_PROMO_PM&&window.LAST_PROMO_PM[nombre])||{}),lastDate:ld,dias};
     }).sort((a,b)=>b.promMes-a.promMes);
 
     // ── Historial de nivel (para detectar "subió de nivel"): se guarda en ESTE navegador,
@@ -2263,7 +2270,7 @@ function saveTierConfig(){ if(!reqSuper())return;
     min:parseInt(document.getElementById('cob-min')?.value)||300,
     umbral:parseFloat(document.getElementById('cob-umb')?.value)||20};
   localStorage.setItem('cobreCfg04mas',JSON.stringify(ccfg));
-  if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos,c.promMes);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;c.mixPlus=d.mixPlus;}}
+  if(DATA){for(const c of DATA.clients){c.nivel=calcNivel(c.promMes);const d=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos,c.promMes);c.desc=d.desc;c.descMax=d.descMax;c.crecio=d.crecio;c.premOk=d.premOk;c.mixPrem=d.mixPrem;c.mixPlus=d.mixPlus;c.boost=d.boost;}}
   pushConfigCloud(true);
   renderClienteTable();renderRiesgo();renderAlertas();renderConfig();if(typeof renderEquilibrio==='function')renderEquilibrio();if(typeof renderRentabilidad==='function')renderRentabilidad();
   alert('✅ Niveles y descuentos guardados.'+(ccfg.enabled?' Nivel Cobre ACTIVO.':' Nivel Cobre bloqueado.'));
@@ -2345,7 +2352,7 @@ function importConfig(file){ if(!reqSuper())return;
         const m=getMapping();DATA.mapping=m;
         for(const c of DATA.clients){const info=m[c.nombre]||{e:c.estado,v:c.vendedor};c.estado=info.e;c.vendedor=info.v;
           c.nivel=calcNivel(c.promMes);const ds=calcDesc(c.nivel,c.qualMes||c.mesData,c.prodMes,DATA.completos,c.promMes);
-          c.desc=ds.desc;c.descMax=ds.descMax;c.crecio=ds.crecio;c.premOk=ds.premOk;c.mixPrem=ds.mixPrem;c.mixPlus=ds.mixPlus;}
+          c.desc=ds.desc;c.descMax=ds.descMax;c.crecio=ds.crecio;c.premOk=ds.premOk;c.mixPrem=ds.mixPrem;c.mixPlus=ds.mixPlus;c.boost=ds.boost;}
         recalcAggregates();renderMap();renderClienteTable();renderVendedores();renderRiesgo();renderAlertas();renderConfig();renderMapeoTable();
       }
       alert('✅ Configuración importada: '+Object.keys(d.mapping||{}).length+' clientes, '+Object.keys(d.vendedores||{}).length+' vendedores.');
@@ -2382,7 +2389,7 @@ function recalcQualifica(){
     c.promMes=Math.round(totalComp/nComp6);
     c.nivel=calcNivel(c.promMes);
     const dsc=calcDesc(c.nivel,c.qualMes,pm,DATA.completos,c.promMes);
-    c.desc=dsc.desc;c.descMax=dsc.descMax;c.crecio=dsc.crecio;c.premOk=dsc.premOk;c.mixPrem=dsc.mixPrem;c.mixPlus=dsc.mixPlus;
+    c.desc=dsc.desc;c.descMax=dsc.descMax;c.crecio=dsc.crecio;c.premOk=dsc.premOk;c.mixPrem=dsc.mixPrem;c.mixPlus=dsc.mixPlus;c.boost=dsc.boost;
   }
 }
 // Cambia si un código cuenta para el promedio ('qual') o si cuenta como Mix Premium ('prem').
@@ -3593,8 +3600,8 @@ function construirLibroDescuentos(opts){
     const meta=(nMeta>0)?dot(metaFlag,q)/nMeta:prom;
     const den=meta*Math.max(1,nCur);
     const mix=den>0?prU/den*100:0;
-    const prOk=ini?0:(mix>=pBase?1:0);
-    const boost=ini?0:(mix>=pc.u2?pc.e2:(mix>=pc.u1?pc.e1:0));
+    const prOk=ini?0:(alcanza(prU,pBase,den)?1:0);
+    const boost=ini?0:premBoostSac(prU,den,pc);
     const calc=ini?0:(t.fijo+crece*t.kc+prOk*t.kp+boost);
     const tope=ini?0:(t.fijo+t.kc+t.kp+(pc.e2||0));
     const dProg=c.desc||0;
@@ -3621,8 +3628,8 @@ function construirLibroDescuentos(opts){
       f('M'+R+'*MAX(1,'+pR+'$B$7)',den,'#,##0.00'),                                                            // N
       f('IF(N'+R+'>0,L'+R+'/N'+R+'*100,0)',mix,'0.00'),                                                        // O
       f('ROUNDDOWN(O'+R+',1)',Math.floor(mix*10)/10,'0.0'),                                                    // P
-      f('IF(F'+R+'="INICIAL",0,IF(O'+R+'>='+PR.base+',1,0))',prOk),                                            // Q
-      f('IF(F'+R+'="INICIAL",0,IF(O'+R+'>='+PR.u2+','+PR.e2+',IF(O'+R+'>='+PR.u1+','+PR.e1+',0)))',boost,'0.00'),// R
+      f('IF(F'+R+'="INICIAL",0,IF(AND(N'+R+'>0,ROUND(L'+R+',0)>=MAX(1,ROUNDDOWN('+PR.base+'*ROUND(N'+R+',0)/100,0))),1,0))',prOk),                                            // Q
+      f('IF(OR(F'+R+'="INICIAL",N'+R+'<=0),0,IF(ROUND(L'+R+',0)>=MAX(1,ROUNDDOWN('+PR.u2+'*ROUND(N'+R+',0)/100,0)),'+PR.e2+',IF(ROUND(L'+R+',0)>=MAX(1,ROUNDDOWN('+PR.u1+'*ROUND(N'+R+',0)/100,0)),'+PR.e1+',0)))',boost,'0.00'),// R
       f('INDEX('+tRng('C')+',MATCH(F'+R+','+tRng('A')+',0))',t.fijo,'0.00'),                                    // S
       f('INDEX('+tRng('D')+',MATCH(F'+R+','+tRng('A')+',0))',t.kc,'0.00'),                                      // T
       f('INDEX('+tRng('E')+',MATCH(F'+R+','+tRng('A')+',0))',t.kp,'0.00'),                                      // U
@@ -6583,19 +6590,19 @@ function renderSeguimiento(){
     const gTargetP=(c.nivel==='COBRE'||basePrev<=0)?null:Math.round(basePrev*(1+uc/100));
     const nextP=nxFloor!=null?nxFloor*mult:null;
     const baseVol=(c.promMes||0)*mult;   // premium = % del PROMEDIO MENSUAL del cliente
-    const premNeedP=Math.round((pc.umbralBase/100)*baseVol);
-    const mixNeed1=Math.round(pc.u1/100*baseVol);
-    const mixNeed2=Math.round(pc.u2/100*baseVol);
-    const premOk=(c.mixPrem||0)>=pc.umbralBase; const mix=(c.mixPlus||0);
+    const premNeedP=metaSac(pc.umbralBase,baseVol);
+    const mixNeed1=metaSac(pc.u1,baseVol);
+    const mixNeed2=metaSac(pc.u2,baseVol);
+    const premOk=!!c.premOk; const mix=(c.mixPlus||0); const _bst=(c.boost!=null?c.boost:premBoost(mix,pc));
     const topeMax=(t.fijo||0)+(t.kc||0)+(t.kp||0)+(pc.e2||0);
     let falta=[];
     if(c.nivel==='COBRE')falta.push('llegar a 600/mes para entrar a Bronce');
     else{
       if(!c.crecio)falta.push(basePrev>0?('crecer +'+uc+'% → llegar a '+fmt(gTargetP)+' sacos en '+_labS):'sin compra el periodo anterior: el bono de crecimiento no aplica');
       if(!premOk)falta.push('premium ≥'+pc.umbralBase+'% ('+fmt(premNeedP)+' sacos)');
-      if(mix<pc.u1)falta.push('comprar '+fmt(mixNeed1)+' sacos en cualquier presentación de premium o gato → +'+pc.e1+'% extra');
-      else if(mix<pc.u2)falta.push('comprar '+fmt(mixNeed2)+' sacos en cualquier presentación de premium o gato → +'+pc.e2+'% extra');
-      if(c.crecio&&premOk&&mix>=pc.u2)falta.push('✓ ya está al tope máximo '+topeMax.toFixed(1)+'%');
+      if(!(_bst>0))falta.push('comprar '+fmt(mixNeed1)+' sacos en cualquier presentación de premium o gato → +'+pc.e1+'% extra');
+      else if(_bst<pc.e2)falta.push('comprar '+fmt(mixNeed2)+' sacos en cualquier presentación de premium o gato → +'+pc.e2+'% extra');
+      if(c.crecio&&premOk&&_bst>=pc.e2)falta.push('✓ ya está al tope máximo '+topeMax.toFixed(1)+'%');
     }
     h+='<tr>'+
       '<td style="color:#fff;max-width:190px;overflow:hidden;text-overflow:ellipsis"><span onclick="showCliProd(\''+c.nombre.replace(/'/g,"\\'")+'\')" title="Ver compras por producto y mes" style="cursor:pointer;border-bottom:1px dotted #7c93b8">'+c.nombre+'</span></td>'+
@@ -6858,7 +6865,7 @@ function buildVendorPayloads(){
         nvPct:(typeof getNuevoCfg==='function')?getNuevoCfg().pct:0.5, nvArranque:_arr,
         nvFrio:!!_nvi.frio, nvDias:(_nvi.dias!=null?_nvi.dias:null),
         esp:(_esp?{pct:_esp.pct,base:_esp.base,hasta:_esp.hasta,motivo:_esp.motivo,fecha:_esp.fecha}:null),
-        boost:Math.round(premBoost(c.mixPlus||0,getPremCfg())*1000)/1000,
+        boost:Math.round(((c.boost!=null)?c.boost:premBoost(c.mixPlus||0,getPremCfg()))*1000)/1000,
         evalSac:evalSac, antSac:antSac, premEval:Math.round(premEval),
         vitSac:Math.round(vitSac), baseCrec:Math.round(baseCrec), vitPB:Math.round(vitPB), vitPM:Math.round(vitPM),
         ult:ultM, tot:Math.round(c.total||0)};
@@ -7772,11 +7779,11 @@ syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si 
     var refVol=Math.round(c.avg||0);
     var pbNow=premBaseNow(c), pmNow=premMixNow(c);
     var pctBase=refVol>0?(pbNow/refVol*100):0, pctMix=refVol>0?(pmNow/refVol*100):0;
-    var okPrem=pctBase>=PREM.base;
+    var okPrem=alcanza(pbNow,PREM.base,refVol);
     var base=baseCrecApp(c), hoy=vaEnCurso(c);
     var okCrec=(base>0&&hoy>0&&((hoy-base)/base*100)>=uc);
-    var m1=Math.round(PREM.u1/100*refVol), m2=Math.round(PREM.u2/100*refVol), mBase=Math.round(PREM.base/100*refVol);
-    var ok1=pctMix>=PREM.u1, ok2=pctMix>=PREM.u2;
+    var m1=metaSac(PREM.u1,refVol), m2=metaSac(PREM.u2,refVol), mBase=metaSac(PREM.base,refVol);
+    var ok1=alcanza(pmNow,PREM.u1,refVol), ok2=alcanza(pmNow,PREM.u2,refVol);
     var descMax=(fijo+kc+kp+PREM.e2);
     var faltas=[];
     if(!okCrec && base>0){

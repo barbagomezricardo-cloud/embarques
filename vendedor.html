@@ -190,6 +190,13 @@ function viewTabs(){return '<div style="display:flex;gap:6px;margin-bottom:10px;
 function _kp(s){return (s||'').toString().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
 function esAdminApp(){var k=_kp(CLOUD.v||APPVEND||'');return k==='ADMINISTRACION'||k==='ADMINISTRACIN';}
 function premBoost(mix){return mix>=PREM.u2?PREM.e2:(mix>=PREM.u1?PREM.e1:0);}
+// Metas premium en SACOS CERRADOS: la meta es el % × promedio redondeado HACIA ABAJO (nunca menos de 1 saco),
+// y el bono se desbloquea cuando los sacos comprados llegan a esa meta. Antes la app mostraba la meta redondeada
+// (7.5% de 1,775 = 133.125 → "133") pero el bono se evaluaba con el % exacto (133/1,775 = 7.49% < 7.5%): el cliente
+// compraba lo que se le pidió y no se le desbloqueaba (caso Moisés López). Ahora lo que se pide es lo que se exige.
+function metaSac(pct,ref){ ref=Math.round(ref||0); if(!(ref>0)) return Infinity; return Math.max(1,Math.floor((pct||0)*ref/100+1e-9)); }
+function alcanza(sacos,pct,ref){ return Math.round(sacos||0)>=metaSac(pct,ref); }
+function premBoostSac(sacos,ref){return alcanza(sacos,PREM.u2,ref)?PREM.e2:(alcanza(sacos,PREM.u1,ref)?PREM.e1:0);}
 const NIVLAB={DIAMANTE_PLUS:'DIAMANTE PLUS'};
 const MES_NOM={1:'enero',2:'febrero',3:'marzo',4:'abril',5:'mayo',6:'junio',7:'julio',8:'agosto',9:'septiembre',10:'octubre',11:'noviembre',12:'diciembre'};
 const Q_GROUPS=[[[2,3,4],'Feb–Abr'],[[5,6,7],'May–Jul'],[[8,9,10],'Ago–Oct'],[[11,12,1],'Nov–Ene']];
@@ -1504,13 +1511,13 @@ function descBloques(c,t){
   }
   // ── B · lo que va construyendo para el mes siguiente ──
   var refVol=Math.round(c.avg||0);
-  var mBase=Math.round(PREM.base/100*refVol), m1=Math.round(PREM.u1/100*refVol), m2=Math.round(PREM.u2/100*refVol);
+  var mBase=metaSac(PREM.base,refVol), m1=metaSac(PREM.u1,refVol), m2=metaSac(PREM.u2,refVol);
   // Sin ventas del mes en curso, el avance arranca en cero: si se usara c.cur se estaría
   // mostrando otra vez el mes ya evaluado como si fuera progreso del mes nuevo.
   var pbNow=premBaseNow(c), pmNow=premMixNow(c);
   var pctBase=refVol>0?(pbNow/refVol*100):0, pctMix=refVol>0?(pmNow/refVol*100):0;
-  var okPrem=pctBase>=PREM.base;
-  var boostNow=premBoost(pctMix);
+  var okPrem=alcanza(pbNow,PREM.base,refVol);
+  var boostNow=premBoostSac(pmNow,refVol);
   var base=baseCrecApp(c), hoy=vaEnCurso(c);   // base = periodo ANTERIOR · hoy = periodo EN CURSO
   var crecNow=base>0?((hoy-base)/base*100):0;
   var okCrec=(base>0&&hoy>0&&crecNow>=uc);
@@ -1535,7 +1542,7 @@ function descBloques(c,t){
   h+=barra(mBase>0?pbNow/mBase*100:0, okPrem?'#22c55e':'#E8A020');
   // Premium+ · los dos escalones por separado, cada uno con su meta en sacos.
   // Son EXCLUYENTES: se cobra el más alto alcanzado, no los dos.
-  var ok1=pctMix>=PREM.u1, ok2=pctMix>=PREM.u2;
+  var ok1=alcanza(pmNow,PREM.u1,refVol), ok2=alcanza(pmNow,PREM.u2,refVol);
   h+='<div class="drow'+(ok1?' si':' no')+'"><span>'+(ok1?'✓':'○')+' Premium+ escalón 1 (mix ≥'+PREM.u1+'%): lleva '+fmt(pmNow)+' de '+fmt(m1)+' sacos</span><b>'+(ok2?'—':(ok1?('+'+PREM.e1.toFixed(2)+'%'):('+'+PREM.e1.toFixed(2)+'% pendiente')))+'</b></div>';
   h+=barra(m1>0?pmNow/m1*100:0, ok1?'#22c55e':'#E8A020');
   h+='<div class="drow'+(ok2?' si':' no')+'"><span>'+(ok2?'✓':'○')+' Premium+ escalón 2 (mix ≥'+PREM.u2+'%): lleva '+fmt(pmNow)+' de '+fmt(m2)+' sacos</span><b>'+(ok2?('+'+PREM.e2.toFixed(2)+'%'):('+'+PREM.e2.toFixed(2)+'% pendiente'))+'</b></div>';
@@ -1565,11 +1572,11 @@ function showCard(name){
   const growQ=(t[0]==='INICIAL'||gBase<=0)?null:Math.round(gBase*(1+uc/100));
   const bronceRitmo=200*M;
   const refVol=Math.round((c.avg||0)*M);                 // referencia = PROMEDIO MENSUAL del cliente × periodo (evita mañosos)
-  const premNeedQ=Math.round(PREM.base/100*refVol);
+  const premNeedQ=metaSac(PREM.base,refVol);
   const qpBasePct=(refVol>0)?(qpbNow/refVol*100):0;     // % premium BASE vs promedio → 3%
   const qpMixPct=(refVol>0)?(qpNow/refVol*100):0;       // % familia MIX vs promedio → +0.5/+1%
-  const premOk=qpBasePct>=PREM.base;
-  const curBoost=premBoost(qpMixPct);
+  const premOk=alcanza(qpbNow,PREM.base,refVol);
+  const curBoost=premBoostSac(qpNow,refVol);
   const descMax=t[0]==='INICIAL'?0:(fijo+kc+kp+PREM.e2);
   const app=document.getElementById('app');
   // avance del periodo en curso
@@ -1592,12 +1599,12 @@ function showCard(name){
       ? '<div class="row"><span class="t">Crecer +'+uc+'% vs. '+prevLabelApp()+'<br><span style="font-size:11px;color:#8792a3">Compró '+fmt(gBase)+' sacos en '+prevLabelApp()+'</span></span><span class="v">llegar a '+fmt(growQ)+' sacos<br>en '+vitLab+'</span></div>'
       : '<div class="row no"><span class="t">Crecer +'+uc+'% vs. '+prevLabelApp()+'</span><span class="v">no compró en '+prevLabelApp()+':<br>este bono no aplica</span></div>';
     // Bono Premium+ — descuento EXTRA por subir el mix premium
-    const need1=Math.round(PREM.u1/100*refVol);
-    const need2=Math.round(PREM.u2/100*refVol);
+    const need1=metaSac(PREM.u1,refVol);
+    const need2=metaSac(PREM.u2,refVol);
     need+='<h3>Bono Premium+ · hasta '+descMax.toFixed(2)+'% (extra por más premium)</h3>';
     need+='<div style="font-size:11.5px;color:#3d4552;padding:0 2px 8px">Cuenta cualquier presentación de <b>Premium (25 kg o 20 kg)</b> o <b>Silver Cat 15 kg</b>. Compra estos sacos en el '+PW+' para ganar el descuento extra:</div>';
-    need+='<div class="row'+(qpMixPct>=PREM.u1?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need1)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u1+'%)</span></span><span class="v">+'+PREM.e1+'% extra'+(qpMixPct>=PREM.u1?' ✓':'')+'</span></div>';
-    need+='<div class="row'+(qpMixPct>=PREM.u2?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need2)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u2+'%)</span></span><span class="v">+'+PREM.e2+'% extra'+(qpMixPct>=PREM.u2?' ✓':'')+'</span></div>';
+    need+='<div class="row'+(alcanza(qpNow,PREM.u1,refVol)?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need1)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u1+'%)</span></span><span class="v">+'+PREM.e1+'% extra'+(alcanza(qpNow,PREM.u1,refVol)?' ✓':'')+'</span></div>';
+    need+='<div class="row'+(alcanza(qpNow,PREM.u2,refVol)?' ok':'')+'"><span class="t">Comprar <b>'+fmt(need2)+' sacos</b> de premium o gato<br><span style="font-size:11px;color:#8792a3">(mix ≥'+PREM.u2+'%)</span></span><span class="v">+'+PREM.e2+'% extra'+(alcanza(qpNow,PREM.u2,refVol)?' ✓':'')+'</span></div>';
     need+='<div style="font-size:11px;color:#8792a3;padding:2px 4px 8px">Va '+fmt(qpNow)+' sacos premium/gato ('+qpMixPct.toFixed(1)+'%) en '+vitLab+'. Bono actual del cliente: <b>+'+curBoost.toFixed(2)+'%</b>.</div>';
     need+='<h3>Para MANTENER o SUBIR de nivel</h3>';
     need+='<div class="row"><span class="t">Mantener '+nivLab(t[0])+'</span><span class="v">'+fmt(maintainQ)+' sacos<br>en el '+PW+'</span></div>';
@@ -1606,7 +1613,7 @@ function showCard(name){
   app.innerHTML='<button class="back" onclick="volverLista()">‹ Volver a la lista</button>'+syncBar()+
    '<div class="card"><div class="top" style="background:'+NIVBG[t[0]]+'"><h2>'+c.nombre+'</h2>'+(c.vend?'<div class="vend">Vendedor: '+c.vend+'</div>':'')+'<div class="badge">Nivel '+nivLab(t[0])+'</div></div>'+
    '<div class="kpis"><div class="kpi"><div class="n">'+fmt(c.avg)+'</div><div class="l">sacos/mes</div></div>'+
-   '<div class="kpi"><div class="n">'+c.mix.toFixed(1)+'%</div><div class="l">Premium '+(c.mix>=PREM.base?'✓':'(falta '+PREM.base+'%)')+'</div></div>'+
+   '<div class="kpi"><div class="n">'+c.mix.toFixed(1)+'%</div><div class="l">Premium '+((c.premOk!=null?c.premOk:c.mix>=PREM.base)?'✓':'(falta '+PREM.base+'%)')+'</div></div>'+
    '<div class="kpi"><div class="n">'+(t[0]==='INICIAL'?'—':fijo.toFixed(2)+'%')+'</div><div class="l">Descuento fijo<br>de su nivel</div></div></div>'+
    (tieneArranque(c)
      ? '<div style="margin:10px 12px;padding:11px 13px;background:#0f2e1c;border:2px solid #1a7a3f;border-radius:10px">'
@@ -1814,11 +1821,11 @@ if('serviceWorker' in navigator){ window.addEventListener('load', function(){ na
     var refVol=Math.round(c.avg||0);
     var pbNow=premBaseNow(c), pmNow=premMixNow(c);
     var pctBase=refVol>0?(pbNow/refVol*100):0, pctMix=refVol>0?(pmNow/refVol*100):0;
-    var okPrem=pctBase>=PREM.base;
+    var okPrem=alcanza(pbNow,PREM.base,refVol);
     var base=baseCrecApp(c), hoy=vaEnCurso(c);
     var okCrec=(base>0&&hoy>0&&((hoy-base)/base*100)>=uc);
-    var m1=Math.round(PREM.u1/100*refVol), m2=Math.round(PREM.u2/100*refVol), mBase=Math.round(PREM.base/100*refVol);
-    var ok1=pctMix>=PREM.u1, ok2=pctMix>=PREM.u2;
+    var m1=metaSac(PREM.u1,refVol), m2=metaSac(PREM.u2,refVol), mBase=metaSac(PREM.base,refVol);
+    var ok1=alcanza(pmNow,PREM.u1,refVol), ok2=alcanza(pmNow,PREM.u2,refVol);
     var descMax=(fijo+kc+kp+PREM.e2);
     var faltas=[];
     if(!okCrec && base>0){
