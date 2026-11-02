@@ -877,6 +877,7 @@
         ${num_('cf-va', 'Vacaciones: días de anticipación sugeridos', p.vacAnticipacion)}${num_('cf-vt', 'Aviso si se ausenta más del % de un depto', p.vacTopeAusentesPct)}
         <label>¿Permitir vacaciones adelantadas?<select id="cf-vad"><option value="1" ${p.vacPermitirAdelantadas ? 'selected' : ''}>Sí, con aviso</option><option value="0" ${!p.vacPermitirAdelantadas ? 'selected' : ''}>No</option></select></label>
         <label>Fecha del saldo inicial de vacaciones<input id="cf-fc" type="date" value="${esc(p.fechaCorte || '')}"></label>
+        <label>Inicio de operación (antes no cuenta faltas)<input id="cf-io" type="date" value="${esc(p.inicioOperacion || '')}"></label>
         ${num_('cf-dup', 'Ignorar checada repetida en menos de (min)', p.antiDuplicadoMin)}
         <label>Foto al checar en kiosco<select id="cf-fk"><option value="1" ${p.fotoKiosco ? 'selected' : ''}>Sí (evita que otro cheque por él)</option><option value="0" ${!p.fotoKiosco ? 'selected' : ''}>No</option></select></label>
         ${num_('cf-rm', 'Meta de rotación mensual (%)', (D.config.param || {}).rotacionMeta || 3)}
@@ -899,7 +900,7 @@
     $('#cf-gps').onclick = () => { if (!navigator.geolocation) return I.toast('Este navegador no da ubicación', 'err'); navigator.geolocation.getCurrentPosition(pos => { $('#cf-lat').value = pos.coords.latitude.toFixed(6); $('#cf-lng').value = pos.coords.longitude.toFixed(6); I.toast('Ubicación tomada (±' + Math.round(pos.coords.accuracy) + ' m). Guarda las reglas.', 'ok'); }, e => I.toast('No se pudo obtener la ubicación: ' + e.message, 'err'), { enableHighAccuracy: true, timeout: 15000 }); };
     $('#cf-g').onclick = async () => {
       const g = id => num($(id).value);
-      const prm = { toleranciaMin: g('#cf-tol'), semanaInicio: +$('#cf-sem').value, heBloque: g('#cf-heb') || 30, heMinimo: g('#cf-hem'), heRequiereAut: $('#cf-hea').value === '1', retardosPorFalta: g('#cf-rpf'), bonoActivo: $('#cf-bo').value === '1', bonoRetardosMax: g('#cf-brm'), bonoRetardoMaxMin: g('#cf-brx'), vacAnticipacion: g('#cf-va'), vacTopeAusentesPct: g('#cf-vt'), vacPermitirAdelantadas: $('#cf-vad').value === '1', fechaCorte: $('#cf-fc').value, antiDuplicadoMin: g('#cf-dup'), fotoKiosco: $('#cf-fk').value === '1', rotacionMeta: g('#cf-rm'), geocerca: { lat: g('#cf-lat'), lng: g('#cf-lng'), radio: g('#cf-rad') || 200 } };
+      const prm = { toleranciaMin: g('#cf-tol'), semanaInicio: +$('#cf-sem').value, heBloque: g('#cf-heb') || 30, heMinimo: g('#cf-hem'), heRequiereAut: $('#cf-hea').value === '1', retardosPorFalta: g('#cf-rpf'), bonoActivo: $('#cf-bo').value === '1', bonoRetardosMax: g('#cf-brm'), bonoRetardoMaxMin: g('#cf-brx'), vacAnticipacion: g('#cf-va'), vacTopeAusentesPct: g('#cf-vt'), vacPermitirAdelantadas: $('#cf-vad').value === '1', fechaCorte: $('#cf-fc').value, inicioOperacion: $('#cf-io').value, antiDuplicadoMin: g('#cf-dup'), fotoKiosco: $('#cf-fk').value === '1', rotacionMeta: g('#cf-rm'), geocerca: { lat: g('#cf-lat'), lng: g('#cf-lng'), radio: g('#cf-rad') || 200 } };
       await DB.set('config/param', prm); I.log('Cambió reglas', JSON.stringify(prm).slice(0, 300)); I.toast('Reglas guardadas ✔', 'ok');
     };
     $('#cf-tg').onclick = async () => {

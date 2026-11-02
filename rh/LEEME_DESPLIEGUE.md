@@ -17,17 +17,8 @@ Para probar sin tocar datos reales agrega `?demo=1` a cualquier dirección (usua
 
 ---
 
-## Paso 1 — Reglas de seguridad (PRIMERO, antes de cargar datos)
-⚠️ Hoy tu regla `$otro` deja leer/escribir cualquier nodo nuevo con solo tener la licencia activa. Si subes la plantilla sin estas reglas, los datos del personal quedarían expuestos.
-
-1. Firebase → Realtime Database → **Reglas**.
-2. Pega el contenido de `rh/firebase/database.rules.json` (son tus reglas actuales de licencia, cli e inv **más** el nodo `rh`) → **Publicar**.
-3. Actualiza la copia de reglas que guarda tu Panel de Licencia con este mismo archivo, para que "Copiar reglas" no borre el nodo `rh` en el futuro. (Si solo quieres ver el bloque nuevo: `reglas-solo-rh.json`.)
-
-Qué protegen:
-- Solo personal activo con rol entra a `rh`. Salarios y NSS (`rh/privado`) solo master y RH.
-- El empleado solo ve su expediente, sus checadas y sus solicitudes; solo puede crear solicitudes en "pendiente" o cancelarlas.
-- Checadas **no se pueden editar ni borrar** desde kiosco/celular, y la hora debe ser la del servidor (±2 min; el kiosco puede enviar hasta 24 h tarde si se fue el internet). Las correcciones solo las hace RH y quedan en bitácora.
+## Paso 1 — Reglas de seguridad ✅ (publicadas el 2-nov-2026)
+Se agregó el nodo `rh` (y `rh_ia_uso`) a las reglas que ya tenías publicadas, sin tocar los demás nodos. El bloque está en `rh/firebase/reglas-solo-rh.json`. Si algún día pegas reglas desde tu Panel de Licencia, agrega ese bloque para no borrar la protección de RH.
 
 ## Paso 2 — Subir a GitHub (2 min)
 1. github.com/barbagomezricardo-cloud/embarques → **Add file → Upload files**.

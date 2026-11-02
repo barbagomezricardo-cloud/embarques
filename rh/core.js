@@ -302,7 +302,8 @@
     antiDuplicadoMin: 3,         // ignora la misma persona checando dos veces en menos de N min
     fotoKiosco: true,
     geocerca: { lat: 20.6597, lng: -103.3496, radio: 250 }, // ⚠️ cambia a las coordenadas de la planta (Configuración)
-    fechaCorte: ''               // fecha del saldo inicial de vacaciones (de tu Excel)
+    fechaCorte: '',              // fecha del saldo inicial de vacaciones (de tu Excel)
+    inicioOperacion: ''          // antes de esta fecha no se calculan faltas ni retardos
   };
   const FLUJOS_DEF = { VAC: ['jefe', 'rh'], PERM: ['jefe', 'rh'], INC: ['rh'], HE: ['jefe', 'rh'] };
 
@@ -409,6 +410,7 @@
     const C = D.C, P = C.p, hoy = D.hoy || hoyISO();
     const r = { fecha: s, estado: 'ok', chs: [], retardo: 0, heMin: 0, hePag: 0, heAut: 0, trabMin: 0, salAnt: 0, flags: [] };
     if (emp.ingreso && s < emp.ingreso) { r.estado = 'na'; return r; }
+    if (P.inicioOperacion && s < P.inicioOperacion) { r.estado = 'na'; return r; }
     if (emp.estatus === 'baja' && emp.baja && emp.baja.fecha && s > emp.baja.fecha) { r.estado = 'na'; return r; }
     const h = RH.horario(emp, s, C); r.h = h;
     r.fer = RH.esFeriado(s, C);
