@@ -1,0 +1,93 @@
+{
+  "rules": {
+    "rh": {
+      "meta": {
+        ".read": true,
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh')) || (auth != null && !root.child('rh/meta/hayMaster').exists()))"
+      },
+      "usuarios": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))",
+        "$uid": {
+          ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh')) || (auth != null && auth.uid === $uid))",
+          ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master')) || (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh')) && (!data.exists() || data.child('rol').val() === 'empleado' || data.child('rol').val() === 'kiosco') && (!newData.exists() || newData.child('rol').val() === 'empleado' || newData.child('rol').val() === 'kiosco')) || (auth != null && auth.uid === $uid && !root.child('rh/usuarios').exists() && newData.child('rol').val() === 'master'))"
+        }
+      },
+      "config": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true)",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))"
+      },
+      "empleados": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director')) || ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'kiosco')))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))",
+        "$empId": {
+          ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId)",
+          "nipK": {
+            ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId)"
+          }
+        }
+      },
+      "privado": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))"
+      },
+      "gafetes": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'kiosco')) || ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh')))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))"
+      },
+      "checadas": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director')) || (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'kiosco')) || ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))",
+        "$fecha": {
+          "$empId": {
+            ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId)",
+            "$k": {
+              ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && !data.exists() && newData.child('ts').isNumber() && ((((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'kiosco')) && newData.child('ts').val() > now - 86400000 && newData.child('ts').val() < now + 120000) || (((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId) && newData.child('src').val() === 'movil' && newData.child('ts').val() > now - 600000 && newData.child('ts').val() < now + 120000))"
+            }
+          }
+        }
+      },
+      "solicitudes": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director'))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director'))",
+        "$empId": {
+          ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId)",
+          "$id": {
+            ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId) && ((!data.exists() && newData.child('estado').val() === 'pendiente') || (data.child('estado').val() === 'pendiente' && newData.child('estado').val() === 'cancelada'))"
+          }
+        }
+      },
+      "he": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director'))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director'))",
+        "$empId": {
+          ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId)"
+        }
+      },
+      "ajustesVac": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director'))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))",
+        "$empId": {
+          ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'empleado' && root.child('rh/usuarios/' + auth.uid).child('empId').val() === $empId)"
+        }
+      },
+      "cierres": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'jefe' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'director'))",
+        ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))"
+      },
+      "bitacora": {
+        ".read": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && ((auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && (root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'master' || root.child('rh/usuarios/' + auth.uid).child('rol').val() === 'rh'))",
+        "$id": {
+          ".write": "(root.child('licencia/activa').val() === true && (!root.child('licencia/hasta').exists() || now < root.child('licencia/hasta').val())) && (auth != null && root.child('rh/usuarios/' + auth.uid).child('activo').val() === true) && !data.exists()"
+        }
+      },
+      "$otro": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "rh_ia_uso": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

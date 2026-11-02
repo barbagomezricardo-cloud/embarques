@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi Portal 19H</title>
+<meta name="theme-color" content="#DE0A14">
+<link rel="manifest" href="manifest-empleado.json">
+<link rel="icon" href="img/favicon.png">
+<link rel="stylesheet" href="estilos.css?v=20261102">
+<link rel="stylesheet" href="rh.css?v=20261102">
+</head>
+<body class="app-ui">
+<div id="app"><div class="login"><div class="muted">Cargando…</div></div></div>
+<script src="config.js"></script>
+<script src="core.js?v=20261102"></script>
+<script>
+/* =====================================================================
+   PORTAL DEL EMPLEADO (celular)
+   Checar con ubicación · ver su semana · saldo y solicitud de
+   vacaciones con firma · permisos con evidencia · banco de horas
+   ===================================================================== */
+(async function () {
+  const I = RH, { $, $$, esc, num, fmt, fDia, fDiaL, minTxt, vals, addDias } = I; const app = $('#app');
+  try { await I.start({ appKey: 'empleado' }); } catch (e) { return; }
+  let D = null, X = null, U = null, E = null, offs = [], tab = 'inicio';
+
+  I.AUTH.onChange(u => {
+    offs.forEach(f => f()); offs = [];
+    if (!u || !u.rol) { U = null; I.pantallaLogin(app, { titulo: 'Mi portal', icono: '🙋', numerico: true, etqUsuario: 'Número de empleado', etqPass: 'NIP (6 dígitos)', demoTxt: 'MODO DEMO · No. 1013 o 1006 · NIP 123456' }); if (u && (u.bloqueado || u.sinPerfil)) $('#lg-e').textContent = 'Tu acceso no está activo. Acude a Recursos Humanos.'; return; }
+    if (u.rol !== 'empleado') { location.href = 'index.html' + location.search; return; }
+    U = u; const id = u.empId;
+    D = { checadas: {}, empleados: {}, solicitudes: {}, he: {}, ajustesVac: {} };
+    const go = I.debounce(() => { D.C = I.conf(D.config); D.hoy = I.hoyISO(); E = D.empleados[id] ? Object.assign({ _k: id }, D.empleados[id]) : null; X = I.indices(D); render(); }, 80);
+    offs.push(I.DB.on('config', v => { D.config = v || {}; go(); }));
+    offs.push(I.DB.on('empleados/' + id, v => { D.empleados = { [id]: v }; go(); }));
+    offs.push(I.DB.on('solicitudes/' + id, v => { D.solicitudes = { [id]: v || {} }; go(); }));
+    offs.push(I.DB.on('he/' + id, v => { D.he = { [id]: v || {} }; go(); }));
+    offs.push(I.DB.on('ajustesVac/' + id, v => { D.ajustesVac = { [id]: v || {} }; go(); }));
+    for (let i = 0; i <= 20; i++) { const f = addDias(I.hoyISO(), -i); offs.push(I.DB.on('checadas/' + f + '/' + id, v => { if (v) (D.checadas[f] = {})[id] = v; else if (D.checadas[f]) delete D.checadas[f]; go(); })); }
+  });
+
+  const TABS = [['inicio', '🏠', 'Inicio'], ['semana', '🗓️', 'Mi semana'], ['vac', '🌴', 'Vacaciones'], ['perm', '📝', 'Permisos'], ['yo', '👤', 'Yo']];
+  function render() {
+    if (!E) { app.innerHTML = '<div class="app-main"><div class="card warn">No encuentro tu expediente. Acude a Recursos Humanos.</div><button class="btn" onclick="RH.AUTH.logout()">Salir</button></div>'; return; }
+    app.innerHTML = `${I.DEMO ? '<div class="demo-bar">MODO DEMO · <a href="index.html?demo=1">programa principal</a></div>' : ''}<header class="top"><div class="top-in"><div class="brand"><div class="sello"><img src="img/logo-petfood.png" alt="División Pet Food"></div><div><b>Mi portal</b><small>${esc(E.nombre)}</small></div></div></div><div class="estrellas" aria-hidden="true">★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div></header><main class="app-main" id="m"></main><nav class="tabs-bottom">${TABS.map(([k, ic, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}"><span>${ic}</span>${t}</button>`).join('')}</nav>`;
+    $$('.tabs-bottom button').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); window.scrollTo(0, 0); });
+    ({ inicio, semana, vac, perm, yo })[tab]($('#m'));
+  }
+
+  /* -------------------------------------------------- inicio / checar */
+  function inicio(m) {
+    const hoy = I.hoyISO(), r = I.calcDia(E, hoy, D, X), v = I.vacSaldo(E, D);
+    const chs = r.chs; const sig = chs.length % 2 === 0 ? 'Entrada' : 'Salida';
+    m.innerHTML = `<div class="e-hola"><div class="muted small">${esc(fDiaL(hoy))}</div><h2>Hola, ${esc(E.nombre.split(' ').slice(0, 1).join(' '))}</h2><div class="muted small">${esc(E.depto)} · ${r.h ? 'Hoy entras a las ' + r.h.ent + ' y sales a las ' + r.h.sal : 'Hoy es tu día de descanso'}</div></div>
+      ${E.checaMovil ? `<button class="btn pri big e-checar" id="e-ch"><span>📍</span> Checar ${sig}</button><div class="muted small" style="text-align:center;margin-top:6px">${E.enRuta ? 'Se registra tu ubicación (personal en ruta)' : 'Debes estar en la planta · radio ' + D.C.p.geocerca.radio + ' m'}</div>` : '<div class="note">Tu checada se hace en el kiosco de la entrada con tu gafete.</div>'}
+      <div class="card" style="margin-top:12px"><h3>Hoy</h3>${chs.length ? chs.map((c, i) => `<div class="li"><b class="mono" style="font-size:18px">${I.hm(c.ts)}</b><span class="small">${i % 2 ? 'Salida' : 'Entrada'} · ${c.src === 'movil' ? 'celular' : c.src}</span></div>`).join('') : '<div class="muted small">Aún no checas hoy.</div>'}${r.retardo ? `<div class="warn small" style="margin-top:6px">Retardo de ${r.retardo} min</div>` : ''}</div>
+      <div class="grid g2" style="margin-top:12px"><div class="kpi grn"><div class="l">Vacaciones disponibles</div><div class="v">${fmt(v.saldo)} días</div><div class="s">${v.pendientes ? v.pendientes + ' en trámite' : ''}</div></div><div class="kpi"><div class="l">Tu próximo aniversario</div><div class="v" style="font-size:18px">${v.proximo ? esc(fDia(v.proximo.fecha)) : '—'}</div><div class="s">${v.proximo ? 'Ganas ' + v.proximo.dias + ' días' : ''}</div></div></div>
+      ${misSol().filter(s => s.estado === 'pendiente').length ? `<div class="card" style="margin-top:12px"><h3>En trámite</h3>${misSol().filter(s => s.estado === 'pendiente').map(liSol).join('')}</div>` : ''}`;
+    if ($('#e-ch')) $('#e-ch').onclick = checarMovil;
+  }
+  async function checarMovil() {
+    const b = $('#e-ch'); b.disabled = true; b.innerHTML = '<span>⏳</span> Obteniendo ubicación…';
+    if (!navigator.geolocation) { I.toast('Tu celular no permite ubicación', 'err'); b.disabled = false; return render(); }
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const g = D.C.p.geocerca; const p = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) };
+      const d = I.distancia(g, p); p.d = Math.round(d);
+      if (d > g.radio + Math.min(p.acc, 100)) { if (!E.enRuta) { I.modal('Fuera de la planta', `<p>Estás a <b>${fmt(d / 1000)} km</b> de la planta (precisión ±${p.acc} m).</p><p class="muted">Acércate a la planta o checa en el kiosco de la entrada.</p>`); return render(); } p.fuera = true; }
+      try { const r = await I.checar(E, D, { src: 'movil', geo: p }); I.toast(r.dup ? 'Ya habías checado a las ' + I.hm(r.ts) : r.tipo + ' registrada · ' + I.hm(r.ts) + ' ✔', 'ok'); } catch (x) { I.toast('No se pudo registrar: ' + x.message, 'err'); }
+      render();
+    }, err => { I.toast('Activa la ubicación del celular para checar (' + err.message + ')', 'err'); render(); }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  }
+
+  /* -------------------------------------------------- mi semana */
+  function semana(m) {
+    const sem = I.semana(I.hoyISO(), D.C), ant = I.semana(addDias(sem.ini, -7), D.C);
+    const pinta = s => { const R = I.calcSemana(E, s, D, X); return `<div class="card"><h3>${esc(s.label)}</h3>${R.dias.filter(r => r.estado !== 'na' && r.estado !== 'futuro').map(r => `<div class="li"><b style="min-width:64px">${I.DIAS[I.parseISO(r.fecha).getDay()]} ${+r.fecha.slice(8)}</b><span class="small">${r.chs.length ? r.chs.map(c => I.hm(c.ts)).join(' – ') : r.estado === 'descanso' ? 'Descanso' : r.estado === 'festivo' ? 'Festivo' : r.estado === 'inc' ? esc((D.C.tipos[r.sol.tipo] || {}).nombre || '') : r.estado === 'falta' ? '<span class="b b-red">Falta</span>' : ''}</span>${r.retardo ? `<span class="b b-amb">+${r.retardo} min</span>` : ''}${r.heMin ? `<span class="b ${r.hePag ? 'b-grn' : 'b-gry'}">TE ${minTxt(r.heMin)}${r.hePag < r.heMin ? ' (aut. ' + minTxt(r.hePag) + ')' : ''}</span>` : ''}</div>`).join('')}
+      <div class="row small" style="margin-top:8px"><span class="chip">Faltas <b>${R.t.faltas}</b></span><span class="chip">Retardos <b>${R.t.retardos}</b></span><span class="chip">TE pagable <b>${I.hTxt(R.t.hePag)}</b></span>${R.t.bono !== null ? `<span class="chip">Bono <b>${R.t.bono ? 'Sí' : 'No'}</b></span>` : ''}</div></div>`; };
+    const banco = vals(D.he[E._k]).filter(h => h.estado === 'aprobada' && h.forma === 'banco').reduce((a, h) => a + num(h.min), 0) - misSol().filter(s => s.estado === 'aprobada' && s.recompensado).reduce((a, s) => a + num(s.horas) * 60, 0);
+    m.innerHTML = pinta(sem) + pinta(ant) + `<div class="kpi" style="margin-top:12px"><div class="l">Banco de horas (tiempo por tiempo)</div><div class="v">${minTxt(banco)}</div></div><p class="muted small">¿Ves algo mal? Pide a tu jefe o a RH que lo revise; las correcciones quedan registradas.</p>`;
+  }
+
+  /* -------------------------------------------------- vacaciones */
+  const misSol = () => vals(D.solicitudes[E._k]).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const EST = { pendiente: 'b-amb', aprobada: 'b-grn', rechazada: 'b-red', cancelada: 'b-gry' };
+  const liSol = s => { const tp = D.C.tipos[s.tipo] || {}; const p = (s.pasos || []).find(x => x.estado === 'no'); return `<div class="li"><span class="b ${EST[s.estado]}">${esc(s.estado)}</span><span class="small"><b>${esc(tp.nombre || s.tipo)}</b> · ${esc(fDia(s.desde))}${s.hasta && s.hasta !== s.desde ? ' al ' + esc(fDia(s.hasta)) : ''}${s.dias ? ' · ' + s.dias + ' d' : ''}${s.horas ? ' · ' + fmt(s.horas) + ' h' : ''}${s.estado === 'pendiente' ? '<br>Falta: ' + esc(((s.pasos || []).find(x => x.estado === 'pend') || {}).rol === 'jefe' ? 'tu jefe' : 'Recursos Humanos') : ''}${p && p.nota ? '<br>Motivo: ' + esc(p.nota) : ''}</span>${s.estado === 'pendiente' ? `<button class="btn sm ghost" data-can="${s._k}">Cancelar</button>` : ''}</div>`; };
+  function vac(m) {
+    const v = I.vacSaldo(E, D); const L = misSol().filter(s => s.tipo === 'VAC');
+    m.innerHTML = `<div class="kpi grn"><div class="l">Días disponibles</div><div class="v" style="font-size:40px">${fmt(v.saldo)}</div><div class="s">${fmt(v.anios)} años de antigüedad · te tocan ${v.actuales} días por año${v.pendientes ? ' · ' + v.pendientes + ' en trámite' : ''}</div></div>
+      ${v.fueraPlazo ? `<div class="warn" style="margin-top:8px">Tienes ${fmt(v.fueraPlazo)} días que ya debiste tomar. Platícalo con tu jefe para programarlos.</div>` : ''}
+      <button class="btn pri big" id="v-n" style="margin-top:12px">Solicitar vacaciones</button>
+      <div class="card" style="margin-top:12px"><h3>Mis solicitudes</h3>${L.length ? L.map(liSol).join('') : '<div class="muted small">Aún no tienes solicitudes.</div>'}</div>
+      <p class="muted small">Ley Federal del Trabajo: 12 días al cumplir el primer año, 14 el segundo, 16 el tercero, 18 el cuarto, 20 el quinto y después 2 más cada 5 años. Prima vacacional del 25 %.</p>`;
+    $('#v-n').onclick = () => solicitar('VAC');
+    $$('[data-can]', m).forEach(b => b.onclick = () => cancelar(b.dataset.can));
+  }
+  /* -------------------------------------------------- permisos */
+  function perm(m) {
+    const L = misSol().filter(s => s.tipo !== 'VAC');
+    m.innerHTML = `<div class="grid g2">${[['PHR', '⏱️', 'Permiso por horas'], ['CMD', '🩺', 'Cita médica'], ['PCG', '📅', 'Permiso de día(s)'], ['INC', '🏥', 'Incapacidad IMSS'], ['LUT', '🕊️', 'Luto'], ['LPA', '👶', 'Paternidad']].map(([t, ic, n]) => `<button class="btn big e-perm" data-t="${t}"><span>${ic}</span>${n}</button>`).join('')}</div>
+      <div class="card" style="margin-top:12px"><h3>Mis permisos</h3>${L.length ? L.map(liSol).join('') : '<div class="muted small">Sin permisos.</div>'}</div>`;
+    $$('[data-t]', m).forEach(b => b.onclick = () => solicitar(b.dataset.t));
+    $$('[data-can]', m).forEach(b => b.onclick = () => cancelar(b.dataset.can));
+  }
+  async function solicitar(tipo) {
+    const T = D.C.tipos, tp = T[tipo]; let firma = null; const man = addDias(I.hoyISO(), tipo === 'VAC' ? D.C.p.vacAnticipacion : 1);
+    const html = `<div class="form">
+      ${tipo === 'PCG' ? `<label class="full">Tipo de permiso<select id="s-t"><option value="PCG">Con goce de sueldo (lo decide RH)</option><option value="PSG">Sin goce de sueldo</option></select></label>` : ''}
+      <label>${tp.unidad === 'horas' ? 'Día' : 'Desde'}<input type="date" id="s-d" value="${tipo === 'INC' ? I.hoyISO() : man}"></label>
+      ${tp.unidad === 'horas' ? '<label>De<input type="time" id="s-h1" value="09:00"></label><label>A<input type="time" id="s-h2" value="11:00"></label><label class="full">¿Lo repones con tiempo o de tu banco de horas?<select id="s-rec"><option value="0">No</option><option value="1">Sí</option></select></label>' : `<label>Hasta<input type="date" id="s-a" value="${tipo === 'INC' ? I.hoyISO() : man}"></label>`}
+      ${tp.folio ? '<label class="full">Folio de la incapacidad<input id="s-fol"></label>' : ''}
+      <label class="full">Motivo${tipo === 'VAC' ? ' (opcional)' : ''}<input id="s-m"></label>
+      ${tp.evid || tipo === 'INC' ? '<label class="full">Foto del comprobante<input type="file" id="s-ev" accept="image/*" capture="environment"></label>' : ''}
+    </div><div id="s-info"></div><label style="margin-top:10px">Tu firma</label><div id="s-f"></div>`;
+    await I.modal(tipo === 'VAC' ? 'Solicitar vacaciones' : tp.nombre, html, [{ t: 'Cancelar' }, { t: 'Enviar', c: 'pri', antes: async ov => {
+      const c = calc(ov); if (c.err) { I.toast(c.err, 'err'); return false; }
+      if (firma.vacia()) { I.toast('Firma tu solicitud', 'err'); return false; }
+      const t2 = $('#s-t', ov) ? $('#s-t', ov).value : tipo;
+      const d = { tipo: t2, desde: c.desde, hasta: c.hasta, dias: c.dias, motivo: $('#s-m', ov).value.trim(), ts: I.now(), por: E.nombre, porUid: U.uid, estado: 'pendiente', pasos: I.pasosPara(t2, D.C), firmaEmp: firma.dato(), via: 'portal' };
+      if (tp.unidad === 'horas') { d.horaDe = $('#s-h1', ov).value; d.horaA = $('#s-h2', ov).value; d.horas = c.horas; d.recompensado = $('#s-rec', ov).value === '1'; d.dias = 0; }
+      if (tp.folio) { d.folio = $('#s-fol', ov).value.trim(); if (!d.folio) { I.toast('Escribe el folio', 'err'); return false; } }
+      if (t2 === 'VAC') { d.saldoAntes = c.v.saldo; if (c.adel) d.adelantadas = true; }
+      const ev = $('#s-ev', ov) && $('#s-ev', ov).files[0]; if (ev) d.evidencia = await mini(ev);
+      try { await I.DB.push('solicitudes/' + E._k, d); I.toast('Enviada a tu jefe ✔', 'ok'); } catch (x) { I.toast('No se pudo enviar: ' + x.message, 'err'); return false; }
+    } }], { onOpen: ov => { firma = I.padFirma($('#s-f', ov)); ['#s-d', '#s-a', '#s-h1', '#s-h2'].forEach(s => { if ($(s, ov)) $(s, ov).onchange = () => calc(ov); }); calc(ov); } });
+    function calc(ov) {
+      const desde = $('#s-d', ov).value, hasta = $('#s-a', ov) ? $('#s-a', ov).value : desde; const out = { desde, hasta };
+      if (!desde || hasta < desde) { $('#s-info', ov).innerHTML = '<div class="warn small">Revisa las fechas</div>'; return { err: 'Revisa las fechas' }; }
+      const dh = I.diasHabiles(E, desde, hasta, D.C); out.dias = dh.n; let h = '';
+      if (tp.unidad === 'horas') { out.horas = Math.max(0, (I.toMin($('#s-h2', ov).value) - I.toMin($('#s-h1', ov).value)) / 60); h = `<span class="chip">${fmt(out.horas)} horas</span>`; if (!out.horas) out.err = 'Revisa el horario'; }
+      else h = `<span class="chip">${dh.n} día(s) laborables</span><span class="chip">Regresas el ${esc(fDiaL(I.regreso(E, hasta, D.C)))}</span>`;
+      if (tipo === 'VAC') { const v = I.vacSaldo(E, D); out.v = v; const q = v.disponible - dh.n; h += `<span class="chip">Te quedarían <b>${fmt(q)}</b></span>`; if (q < 0) { if (D.C.p.vacPermitirAdelantadas) { out.adel = true; h += '<div class="warn small">No te alcanzan los días: se pedirán como vacaciones adelantadas.</div>'; } else out.err = 'No te alcanzan los días'; } if (!dh.n) out.err = 'Esas fechas no tienen días laborables'; }
+      $('#s-info', ov).innerHTML = '<div class="row" style="margin-top:8px">' + h + '</div>'; return out;
+    }
+  }
+  function mini(file) { return new Promise(ok => { const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const s = Math.min(1, 900 / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = im.width * s; c.height = im.height * s; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', 0.6)); }; im.src = r.result; }; r.readAsDataURL(file); }); }
+  async function cancelar(id) { if (!(await I.confirmar('Cancelar solicitud', '¿Seguro que quieres cancelarla?', 'Sí, cancelar'))) return; await I.DB.update({ ['solicitudes/' + E._k + '/' + id + '/estado']: 'cancelada', ['solicitudes/' + E._k + '/' + id + '/cancelada']: { por: E.nombre, ts: I.now(), motivo: 'Cancelada por el empleado' } }); I.toast('Cancelada', 'ok'); }
+
+  /* -------------------------------------------------- yo */
+  function yo(m) {
+    m.innerHTML = `<div class="card"><h3>${esc(E.nombre)}</h3><div class="small">No. ${esc(E.num || '')}</div><div class="small">${esc(E.depto)} · ${esc(E.puesto || '')}</div><div class="small">Ingreso: ${esc(fDia(E.ingreso))}</div><div class="small">Turno: ${esc((D.C.turnos[E.turno] || {}).nombre || E.turno)}</div></div>
+      <button class="btn big" id="y-nip" style="margin-top:12px">Cambiar mi NIP</button><button class="btn big" id="y-out" style="margin-top:8px">Cerrar sesión</button>
+      <p class="muted small" style="margin-top:12px">Para instalarla: en Chrome toca ⋮ → "Agregar a pantalla de inicio". En iPhone: Compartir → "Agregar a inicio".</p>`;
+    $('#y-out').onclick = () => I.AUTH.logout();
+    $('#y-nip').onclick = () => I.modal('Cambiar NIP', '<label>Nuevo NIP (6 dígitos)<input id="n1" inputmode="numeric" maxlength="6" type="password"></label><label>Repítelo<input id="n2" inputmode="numeric" maxlength="6" type="password"></label>', [{ t: 'Cancelar' }, { t: 'Guardar', c: 'pri', antes: async ov => { const a = $('#n1', ov).value, b = $('#n2', ov).value; if (!/^\d{6}$/.test(a) || a !== b) { I.toast('El NIP debe ser de 6 dígitos y coincidir', 'err'); return false; } try { await I.AUTH.cambiarPass(a); await I.DB.set('empleados/' + E._k + '/nipK', await I.nipHash(E._k, a)); I.toast('NIP actualizado ✔', 'ok'); } catch (x) { I.toast(x.message, 'err'); return false; } } }]);
+  }
+  if ('serviceWorker' in navigator && !I.DEMO) navigator.serviceWorker.register('sw.js').catch(() => { });
+})();
+</script>
+</body>
+</html>
