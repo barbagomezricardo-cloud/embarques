@@ -28,7 +28,14 @@
   I.AUTH.onChange(u => {
     offs.forEach(f => f()); offs = [];
     if (!u || !u.rol) { U = null; I.pantallaLogin(app, { titulo: 'Mi portal', icono: '🙋', numerico: true, etqUsuario: 'Número de empleado', etqPass: 'NIP (6 dígitos)', demoTxt: 'MODO DEMO · No. 1013 o 1006 · NIP 123456' }); if (u && (u.bloqueado || u.sinPerfil)) $('#lg-e').textContent = 'Tu acceso no está activo. Acude a Recursos Humanos.'; return; }
-    if (u.rol !== 'empleado') { location.href = 'index.html' + location.search; return; }
+    if (u.rol !== 'empleado') {
+      app.innerHTML = `<div class="login"><div class="login-card"><div class="login-logos"><img src="img/logo-19h.png" alt="Los 19 Hermanos"><img src="img/logo-petfood.png" alt="División Pet Food"></div>
+        <h1>Mi portal</h1><p class="muted">Este portal es para empleados. En este navegador tienes abierta la sesión de <b>${esc(u.nombre || u.usuario)}</b> (${esc((I.ROLES[u.rol] || {}).nombre || u.rol)}).</p>
+        <button class="btn pri big" id="x-out">Cerrar sesión y entrar como empleado</button>
+        <a class="btn big" style="margin-top:8px" href="index.html${location.search}">Ir al programa principal</a></div></div>`;
+      $('#x-out').onclick = () => I.AUTH.logout();
+      return;
+    }
     U = u; const id = u.empId;
     D = { checadas: {}, empleados: {}, solicitudes: {}, he: {}, ajustesVac: {} };
     const go = I.debounce(() => { D.C = I.conf(D.config); D.hoy = I.hoyISO(); E = D.empleados[id] ? Object.assign({ _k: id }, D.empleados[id]) : null; X = I.indices(D); render(); }, 80);
