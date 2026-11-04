@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Centro de Mando 19H</title>
+<meta name="theme-color" content="#0b1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mando 19H">
+<link rel="icon" href="clientes/img/favicon.png">
+<link rel="apple-touch-icon" href="clientes/img/icono-180.png">
+<link rel="manifest" href="centro-mando.webmanifest">
+<style>
+:root{--bg:#0b1a2e;--bg2:#102540;--card:#13294a;--line:rgba(255,255,255,.09);--tx:#eef3fa;--mut:#9fb0c8;--gold:#E8A020;--gold2:#f6c45c;
+  --ok:#2fbf71;--warn:#f0a92a;--bad:#ef5350;--info:#4aa3ff;--r:14px}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+a{color:inherit}
+header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#0b1a2e 70%,rgba(11,26,46,.92));border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px}
+header img{height:34px;width:auto;background:#fff;border-radius:8px;padding:3px}
+header .t{flex:1;min-width:0}
+header .t b{display:block;font-size:16px;letter-spacing:.2px}
+header .t span{font-size:12px;color:var(--mut)}
+.btn{appearance:none;border:1px solid var(--line);background:var(--bg2);color:var(--tx);border-radius:10px;padding:8px 12px;font:600 13px system-ui,sans-serif;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--gold)}
+.btn.pri{background:var(--gold);border-color:var(--gold);color:#1b1200}
+.btn.sm{padding:5px 9px;font-size:12px}
+main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 14px 12px;min-width:0}
+.card h2{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
+.card h2 .src{margin-left:auto;font:500 11px system-ui;color:var(--mut);text-align:right}
+.card.wide{grid-column:1/-1}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}
+.kpi{background:var(--bg2);border-radius:11px;padding:9px 10px;border:1px solid var(--line)}
+.kpi .l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+.kpi .v{font-size:22px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:12px;color:var(--mut)}
+.kpi.ok .v{color:var(--ok)}.kpi.warn .v{color:var(--warn)}.kpi.bad .v{color:var(--bad)}.kpi.gold .v{color:var(--gold2)}
+.bar{height:8px;background:rgba(255,255,255,.08);border-radius:9px;overflow:hidden;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:9px;background:var(--gold)}
+.bar.ok i{background:var(--ok)}.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}
+.bar .mk{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;opacity:.7}
+.rows{display:flex;flex-direction:column;gap:9px}
+.row{display:grid;grid-template-columns:minmax(90px,1.1fr) 2fr auto;gap:10px;align-items:center;font-size:13px}
+.row .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .p{font-weight:700;font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.pipe div{background:var(--bg2);border-radius:10px;padding:8px 6px;text-align:center;border:1px solid var(--line)}
+.pipe b{display:block;font-size:22px}
+.pipe span{font-size:11px;color:var(--mut)}
+.list{margin:6px 0 0;padding:0;list-style:none;font-size:13px}
+.list li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+.list li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list li span:last-child{color:var(--mut);white-space:nowrap}
+.pill{display:inline-block;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700}
+.p-bad{background:rgba(239,83,80,.18);color:#ff8a80}.p-warn{background:rgba(240,169,42,.18);color:#ffc865}.p-ok{background:rgba(47,191,113,.18);color:#6ee7a6}
+.mut{color:var(--mut)}.small{font-size:12px}
+.alerts{display:flex;flex-direction:column;gap:6px}
+.alert{display:flex;gap:10px;align-items:center;background:var(--bg2);border-left:4px solid var(--warn);border-radius:9px;padding:8px 10px;font-size:13.5px}
+.alert.bad{border-left-color:var(--bad)}.alert.ok{border-left-color:var(--ok)}
+.alert a{margin-left:auto;font-size:12px;color:var(--gold2);white-space:nowrap}
+.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.app{display:flex;flex-direction:column;gap:2px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px;text-decoration:none}
+.app:hover{border-color:var(--gold)}
+.app b{font-size:13.5px}.app span{font-size:11.5px;color:var(--mut)}
+.app .ic{font-size:20px}
+.apps h3{grid-column:1/-1;margin:8px 0 0;font-size:12px;color:var(--gold2);text-transform:uppercase;letter-spacing:.5px}
+.gate{max-width:380px;margin:9vh auto;padding:22px;background:var(--card);border:1px solid var(--line);border-radius:18px;text-align:center}
+.gate img{height:58px;background:#fff;border-radius:10px;padding:4px}
+.gate h1{font-size:19px;margin:14px 0 4px}
+.gate input,.mini input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--tx);font-size:15px;margin-top:8px}
+.gate .btn{width:100%;justify-content:center;margin-top:12px;padding:11px}
+.err{color:#ff8a80;font-size:13px;min-height:1.2em;margin-top:8px}
+.mini{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.mini .btn{justify-content:center;margin-top:8px}
+.empty{color:var(--mut);font-size:13px;padding:6px 0}
+.chart{width:100%;height:auto;display:block}
+footer{max-width:1200px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-size:12px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--mut);border-top-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-1px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (max-width:520px){.grid{grid-template-columns:1fr}.kpi .v{font-size:19px}header .t b{font-size:14.5px}.row{grid-template-columns:minmax(80px,1fr) 1.4fr auto}}
+</style>
+</head>
+<body>
+<div id="root"><div class="gate"><span class="spin"></span> <span class="mut">Validando licencia…</span></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<!-- Fórmulas de alertas de compra: las mismas del programa de Inventarios (no se duplican) -->
+<script src="inventarios/inventarios/core.js"></script>
+<script>
+/* =====================================================================
+   CENTRO DE MANDO GERENCIAL · Leche 19 Diecinueve Hermanos · Pet Food
+   ---------------------------------------------------------------------
+   SOLO LECTURA. Esta pantalla no escribe nada en Firebase: solo lee lo
+   que ya publican tus apps (ventas, embarques, báscula, inventarios,
+   RH y clientes) y lo resume en un solo lugar.
+   Licencia: general (licencia/activa + hasta) y su propio interruptor
+   en licencia/apps/centro_mando (si existe).
+   Acceso: tu usuario MASTER de Inventarios o MASTER/DIRECCIÓN de RH.
+   ===================================================================== */
+const APP_ID = 'centro_mando';
+const DB = 'https://embarques-mascotas-default-rtdb.firebaseio.com';
+const FB_CFG = { apiKey: "AIzaSyBYa3yZxWML-rwxKwuXp_gTyOTkisUKe8w", authDomain: "embarques-mascotas.firebaseapp.com",
+  databaseURL: DB, projectId: "embarques-mascotas", appId: "1:860212111367:web:6a020f94ef6a468af922a2" };
+const APPCHECK_KEY = '6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj';
+const CLI_API = 'https://us-central1-embarques-mascotas.cloudfunctions.net/cliApi';
+const CLI_LS = 'cliStaffSes';             // misma sesión que la consola del personal de Clientes
+const REFRESH_MS = 2 * 60 * 1000;
+const MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+/* ---------- utilidades ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+const fmt = (n, d) => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('es-MX', { maximumFractionDigits: d || 0, minimumFractionDigits: d || 0 });
+const pct = (n, d) => (n == null || !isFinite(n)) ? '—' : (n >= 0 ? '+' : '') + (n * 100).toFixed(d == null ? 1 : d) + '%';
+const pad = n => ('0' + n).slice(-2);
+const hoyISO = (d) => { d = d || new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+const vals = o => (o && typeof o === 'object') ? Object.keys(o).map(k => Object.assign({ _k: k }, o[k])) : [];
+const hhmm = ts => { const d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { } };
+const licViva = n => !!n && n.activa === true && (!n.hasta || Date.now() < Number(n.hasta));
+const sem = (r, okAt, warnAt) => r >= okAt ? 'ok' : (r >= warnAt ? 'warn' : 'bad');   // semáforo por razón de avance
+/* días hábiles lunes a sábado (misma regla de la proyección de tus informes) */
+function habiles(y, m, hasta) { let n = 0; for (let d = 1; d <= hasta; d++) if (new Date(y, m - 1, d).getDay() !== 0) n++; return n; }
+
+/* ---------- Firebase: App Check + dos sesiones independientes (Inventarios y RH) ---------- */
+let APP = null, AC = null, AUTH_INV = null, AUTH_RH = null;
+function initFirebase() {
+  APP = firebase.initializeApp(FB_CFG, 'cm');
+  try { AC = firebase.appCheck(APP); AC.activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(APPCHECK_KEY), true); } catch (e) { AC = null; }
+  const ai = firebase.initializeApp(FB_CFG, 'cm-inv'), ar = firebase.initializeApp(FB_CFG, 'cm-rh');
+  try { firebase.appCheck(ai).activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(APPCHECK_KEY), true); } catch (e) { }
+  try { firebase.appCheck(ar).activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(APPCHECK_KEY), true); } catch (e) { }
+  AUTH_INV = firebase.auth(ai); AUTH_RH = firebase.auth(ar);
+}
+async function acToken() { if (!AC) return null; try { const t = await AC.getToken(); return t && t.token; } catch (e) { return null; } }
+/* lectura REST (GET) — nunca se usa PUT/PATCH/DELETE en esta app */
+async function leer(ruta, user) {
+  const h = {}; const t = await acToken(); if (t) h['X-Firebase-AppCheck'] = t;
+  let q = ''; if (user) { const it = await user.getIdToken(); q = '?auth=' + encodeURIComponent(it); }
+  const r = await fetch(DB + '/' + ruta + '.json' + q, { cache: 'no-store', headers: h });
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' en ' + ruta);
+  return r.json();
+}
+const mailInv = u => String(u || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') + '@inv19h.app';
+const mailRh = u => String(u || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') + '@rh19h.app';
+const ROL_INV_OK = ['master'], ROL_RH_OK = ['master', 'director'];
+async function perfil(sis) {
+  const A = sis === 'inv' ? AUTH_INV : AUTH_RH; const u = A.currentUser; if (!u) return null;
+  try { const p = await leer((sis === 'inv' ? 'inv' : 'rh') + '/usuarios/' + u.uid, u); return p && p.activo !== false ? Object.assign({ uid: u.uid }, p) : null; } catch (e) { return null; }
+}
+async function entrar(sis, usuario, pwd) {
+  const A = sis === 'inv' ? AUTH_INV : AUTH_RH;
+  await A.signInWithEmailAndPassword((sis === 'inv' ? mailInv : mailRh)(usuario), pwd);
+  const p = await perfil(sis);
+  const ok = p && (sis === 'inv' ? ROL_INV_OK : ROL_RH_OK).includes(p.rol);
+  if (!ok) { await A.signOut(); throw new Error(sis === 'inv' ? 'Ese usuario de Inventarios no es master.' : 'Ese usuario de RH no es master ni Dirección.'); }
+  return p;
+}
+const esperaAuth = A => new Promise(res => { const off = A.onAuthStateChanged(u => { off(); res(u); }); });
+
+/* ---------- estado ---------- */
+const S = { lic: null, inv: null, rh: null, d: {}, err: {}, ts: 0, cargando: false };
+
+/* ================= ARRANQUE ================= */
+async function boot() {
+  try {
+    const r = await fetch(DB + '/licencia.json', { cache: 'no-store' }); const l = await r.json(); S.lic = l;
+    const app = l && l.apps && l.apps[APP_ID];
+    if (!licViva(l)) return bloqueo(l && l.activa === true ? 'La licencia general venció.' : 'El sistema está desactivado desde tu Panel de Licencia.');
+    if (app && (typeof app === 'object' ? !licViva(app) : app !== true)) return bloqueo('El Centro de Mando está desactivado desde tu Panel de Licencia.');
+  } catch (e) { return bloqueo('No se pudo validar la licencia. Revisa tu internet y vuelve a intentar.', true); }
+  initFirebase();
+  await Promise.all([esperaAuth(AUTH_INV), esperaAuth(AUTH_RH)]);
+  const [pi, pr] = await Promise.all([perfil('inv'), perfil('rh')]);
+  S.inv = pi && ROL_INV_OK.includes(pi.rol) ? pi : null;
+  S.rh = pr && ROL_RH_OK.includes(pr.rol) ? pr : null;
+  if (!S.inv && !S.rh) return pantallaLogin();
+  arrancar();
+}
+function bloqueo(msg, reintentar) {
+  $('#root').innerHTML = `<div class="gate"><div style="font-size:42px">🔒</div><h1>Centro de Mando no disponible</h1><p class="mut">${esc(msg)}</p>${reintentar ? '<button class="btn pri" onclick="location.reload()">Reintentar</button>' : ''}</div>`;
+}
+function pantallaLogin() {
+  $('#root').innerHTML = `<div class="gate"><img src="clientes/img/logo-petfood.png" alt="Los 19 Hermanos Pet Food">
+    <h1>Centro de Mando Gerencial</h1><p class="mut small" style="margin:0">Entra con tu usuario <b>master de Inventarios</b> o <b>master / Dirección de RH</b>.</p>
+    <input id="lu" placeholder="Usuario" autocomplete="username" autocapitalize="none" value="${esc(lsGet('cm_ult') || '')}">
+    <input id="lp" type="password" placeholder="Contraseña" autocomplete="current-password">
+    <div class="err" id="le"></div><button class="btn pri" id="lb">Entrar</button>
+    <p class="mut small" style="margin-top:14px">Solo lectura · no modifica ningún dato de tus apps.</p></div>`;
+  const go = async () => {
+    const u = $('#lu').value.trim(), p = $('#lp').value; if (!u || !p) return;
+    const b = $('#lb'); b.disabled = true; b.textContent = 'Entrando…'; $('#le').textContent = '';
+    let ok = false, msg = '';
+    for (const sis of ['inv', 'rh']) { try { S[sis] = await entrar(sis, u, p); ok = true; } catch (e) { if (!msg && e && e.message && !/auth\//.test(e.code || '')) msg = e.message; } }
+    if (ok) { lsSet('cm_ult', u); arrancar(); return; }
+    b.disabled = false; b.textContent = 'Entrar'; $('#le').textContent = msg || 'Usuario o contraseña incorrectos.';
+  };
+  $('#lb').onclick = go; $('#lp').onkeydown = e => { if (e.key === 'Enter') go(); };
+}
+async function salir() { if (!confirm('¿Cerrar sesión del Centro de Mando en este equipo?')) return; await AUTH_INV.signOut(); await AUTH_RH.signOut(); location.reload(); }
+
+/* ================= CARGA DE DATOS ================= */
+function arrancar() {
+  const quien = (S.inv && S.inv.nombre) || (S.rh && S.rh.nombre) || 'Gerencia';
+  $('#root').innerHTML = `<header><img src="clientes/img/logo-19h.png" alt="19 Hermanos"><div class="t"><b>Centro de Mando · Gerencia Comercial</b><span id="hsub">${esc(quien)} · cargando…</span></div>
+    <button class="btn sm" id="bref" title="Actualizar">⟳</button><button class="btn sm" onclick="salir()" title="Cerrar sesión">Salir</button></header>
+    <main><div class="card wide" id="c-alertas" style="margin-bottom:14px"><h2>🚨 Lo que requiere tu atención</h2><div class="alerts"><div class="empty"><span class="spin"></span> Reuniendo información…</div></div></div>
+    <div class="grid">
+      <div class="card wide" id="c-ventas"></div>
+      <div class="card" id="c-clientes"></div>
+      <div class="card" id="c-embarques"></div>
+      <div class="card" id="c-bascula"></div>
+      <div class="card" id="c-pt"></div>
+      <div class="card" id="c-inv"></div>
+      <div class="card" id="c-rh"></div>
+      <div class="card wide" id="c-apps"></div>
+    </div></main>
+    <footer>Solo lectura: esta pantalla consulta lo que publican tus apps y no modifica ningún dato. Se actualiza sola cada 2 minutos.</footer>`;
+  $('#bref').onclick = cargar;
+  pintarApps();
+  cargar();
+  setInterval(() => { if (!document.hidden) cargar(); }, REFRESH_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - S.ts > REFRESH_MS) cargar(); });
+}
+async function cargar() {
+  if (S.cargando) return; S.cargando = true; $('#bref').innerHTML = '<span class="spin"></span>';
+  const tareas = {
+    ventas: cargarVentas, emb: () => Promise.all([leer('embarques'), leer('skan/_cuadre/bascula')]).then(a => ({ emb: a[0] || {}, pes: a[1] || {} })),
+    bas: () => leer('cuadreBascula/entradas'), pt: () => Promise.all([leer('skan/_proyeccion'), leer('skan/_proyedit')]).then(a => ({ p: a[0], e: a[1] || {} })),
+    inv: cargarInv, rh: cargarRh, cli: cargarCli
+  };
+  await Promise.all(Object.entries(tareas).map(([k, f]) => Promise.resolve().then(f).then(v => { S.d[k] = v; delete S.err[k]; }).catch(e => { S.err[k] = (e && e.message) || 'Error'; })));
+  S.ts = Date.now(); S.cargando = false; $('#bref').textContent = '⟳';
+  const quien = (S.inv && S.inv.nombre) || (S.rh && S.rh.nombre) || 'Gerencia';
+  $('#hsub').textContent = quien + ' · actualizado ' + hhmm(S.ts);
+  pintarTodo();
+}
+async function cargarVentas() {
+  const idx = await leer('skan/_index'); const vs = (idx && idx.vendors) || [];
+  const out = {}; await Promise.all(vs.map(k => leer('skan/' + encodeURIComponent(k)).then(p => { if (p && (p.ventas || p.rows)) out[k] = p; }).catch(() => { })));
+  let sc = null; try { sc = await leer('skan/_alertasSinCompra'); } catch (e) { }
+  return { idx: idx || {}, v: out, sc };
+}
+async function cargarInv() {
+  const u = AUTH_INV.currentUser; if (!u || !S.inv) return null;
+  const nodos = ['catalogo', 'fisico', 'pt', 'llegadas', 'silos', 'silosLect', 'notasCompra'];
+  const r = await Promise.all(nodos.map(n => leer('inv/' + n, u).catch(() => ({}))));
+  const o = {}; nodos.forEach((n, i) => o[n] = r[i] || {}); return o;
+}
+async function cargarRh() {
+  const u = AUTH_RH.currentUser; if (!u || !S.rh) return null;
+  const [emp, sol, ch] = await Promise.all([leer('rh/empleados', u), leer('rh/solicitudes', u).catch(() => ({})), leer('rh/checadas/' + hoyISO(), u).catch(() => ({}))]);
+  return { emp: emp || {}, sol: sol || {}, ch: ch || {} };
+}
+async function cargarCli() {
+  let s = null; try { s = JSON.parse(lsGet(CLI_LS) || 'null'); } catch (e) { }
+  if (!s || !s.token || (s.exp && s.exp < Date.now())) return { sinSesion: true };
+  const r = await fetch(CLI_API, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Cli-Sesion': s.token }, body: JSON.stringify({ modo: 'staff', accion: 'bandeja', datos: {} }) });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) return { sinSesion: true };
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+/* ================= CÁLCULOS ================= */
+function calcVentas(D) {
+  if (!D || !D.v) return null;
+  const keys = Object.keys(D.v); if (!keys.length) return null;
+  const cur = Array(12).fill(0), prior = Array(12).fill(0), dia = {}; let pdia = {}, g = 0, cy = 0, py = 0, upd = D.idx.updatedStr || '';
+  const R = { cartera: 0, clientes: 0, activos: 0, riesgoN: 0, riesgoSac: 0, fugaN: 0, fugaSac: 0, retBase: 0, retKeep: 0, premSac: 0, totSac: 0 }; let hayRes = false;
+  let nuevos = 0, nuevosMeta = 0; const sinCompra = [], fuga = [];
+  const porV = [];
+  keys.forEach(k => {
+    const p = D.v[k], V = p.ventas || {};
+    g = V.gTarget != null ? V.gTarget : g; cy = V.cy || cy; py = V.py || py; upd = upd || p.updatedStr;
+    for (let i = 0; i < 12; i++) { cur[i] += num(V.cur && V.cur[i]); prior[i] += num(V.prior && V.prior[i]); }
+    if (V.dia) for (const mm in V.dia) { const a = V.dia[mm] || []; dia[mm] = dia[mm] || Array(31).fill(0); for (let d = 0; d < 31; d++) dia[mm][d] += num(a[d]); }
+    if (V.priorDaily && Object.keys(V.priorDaily).length) pdia = V.priorDaily;
+    if (p.res) { hayRes = true; Object.keys(R).forEach(x => R[x] += num(p.res[x])); }
+    const A = p.alertas || {}; if (A.nuevos) { nuevos += num(A.nuevos.count); nuevosMeta += num(A.nuevos.meta); }
+    (A.sinCompra || []).forEach(x => sinCompra.push(Object.assign({ v: p.v || k }, x)));
+    (A.fuga || []).forEach(x => fuga.push(Object.assign({ v: p.v || k }, x)));
+    porV.push({ k, n: p.v || k, V });
+  });
+  const hoy = new Date(); const m = (cy && cy !== hoy.getFullYear()) ? 12 : hoy.getMonth() + 1; const mi = m - 1;
+  const dArr = dia[m] || dia[String(m)] || null;
+  let corte = 0; if (dArr) for (let d = 30; d >= 0; d--) if (dArr[d] > 0) { corte = d + 1; break; }
+  const diasMes = new Date(cy || hoy.getFullYear(), m, 0).getDate();
+  const mtd = cur[mi];
+  const pArr = pdia[m] || pdia[String(m)] || null;
+  const sumTo = (a, n) => { let s = 0; for (let d = 0; d < n; d++) s += num(a[d]); return s; };
+  const priorMtd = corte ? (pArr ? sumTo(pArr, corte) : prior[mi] * corte / diasMes) : 0;
+  const metaMes = prior[mi] * (1 + g);
+  const hT = corte ? habiles(cy || hoy.getFullYear(), m, corte) : 0, hM = habiles(cy || hoy.getFullYear(), m, diasMes);
+  const proy = hT ? mtd / hT * hM : null;
+  let ytd = 0, pytd = 0; for (let i = 0; i < mi; i++) { ytd += cur[i]; pytd += prior[i]; } ytd += mtd; pytd += priorMtd;
+  const vend = porV.filter(x => x.n !== '(sin asignar)').map(x => {
+    const c = num(x.V.cur && x.V.cur[mi]), pr = num(x.V.prior && x.V.prior[mi]);
+    // la base diaria del año anterior es de toda la empresa: se prorratea por vendedor con su peso en el mes
+    const prMtd = corte ? pr * (priorMtd / (prior[mi] || 1)) : 0;
+    const meta = pr * (1 + g); const pj = hT ? c / hT * hM : null;
+    let y = 0, py2 = 0; for (let i = 0; i < mi; i++) { y += num(x.V.cur && x.V.cur[i]); py2 += num(x.V.prior && x.V.prior[i]); } y += c; py2 += prMtd;
+    return { n: x.n, c, pr, prMtd, meta, pj, av: meta > 0 && pj != null ? pj / meta : null, crec: prMtd > 0 ? c / prMtd - 1 : null, ytdCrec: py2 > 0 ? y / py2 - 1 : null };
+  }).sort((a, b) => (b.av == null ? -9 : b.av) - (a.av == null ? -9 : a.av));
+  sinCompra.sort((a, b) => num(b.prom) - num(a.prom)); fuga.sort((a, b) => num(b.perd) - num(a.perd));
+  return { m, cy, py, g, corte, diasMes, mtd, priorMtd, metaMes, proy, hT, hM, ytd, pytd, R: hayRes ? R : null, nuevos, nuevosMeta, sinCompra, fuga, vend, upd, cur, prior, sc: D.sc };
+}
+function calcEmb(D) {
+  if (!D) return null; const hoy = hoyISO();
+  const todos = vals(D.emb).filter(r => r && !r.cancelado);
+  const isDesp = r => r.despachado === true || r.despachado === '1' || r.despachado === 1;
+  const h = todos.filter(r => (r.fechaCarga || r.fechaProg) === hoy || r.fechaProg === hoy);
+  const st = r => isDesp(r) || (r.inicioCarga && r.finCarga) ? 'lib' : (r.inicioCarga ? 'car' : (r.colocacion ? 'col' : 'pro'));
+  const c = { pro: 0, col: 0, car: 0, lib: 0 }; let kgLib = 0, kgProg = 0;
+  h.forEach(r => { const s = st(r); c[s]++; kgProg += num(r.peso || r.kilos); if (s === 'lib') kgLib += num(r.kilos || r.peso); });
+  const sinPesar = todos.filter(r => isDesp(r) && !D.pes[r._k] && (r.fechaCarga || r.fechaProg || '') >= hoyMenos(31));
+  const incid = todos.filter(r => r.entregaEstado === 'incidencia');
+  return { h, c, kgLib, kgProg, sinPesar, incid, hoy };
+}
+function hoyMenos(d) { const x = new Date(); x.setDate(x.getDate() - d); return hoyISO(x); }
+function calcBas(D) {
+  if (!D) return null; const L = vals(D).filter(e => e && !e.del);
+  const est = e => !e.com ? 'pc' : !e.inv ? 'pi' : !e.cal ? 'pq' : (e.cal.estado === 'rechazado' ? 'rq' : 'ok');
+  const c = { pc: 0, pi: 0, pq: 0, rq: 0, ok: 0 }; L.forEach(e => c[est(e)]++);
+  const hoy = hoyISO(); const deHoy = L.filter(e => hoyISO(new Date(num(e.ts))) === hoy);
+  const viejas = L.filter(e => est(e) !== 'ok' && est(e) !== 'rq' && Date.now() - num(e.ts) > 48 * 3600e3);
+  return { c, deHoy: deHoy.length, kgHoy: deHoy.reduce((a, e) => a + num(e.bas && e.bas.neto), 0), viejas: viejas.length, total: L.length };
+}
+function calcPT(D) {
+  if (!D || !D.p || !D.p.families) return null; const g = num(D.p.gTarget), minD = num(D.p.minDias) || 0;
+  const pk = k => String(k || '').replace(/\./g, '_');   // igual que proyEditKey() de ventas.html
+  const fam = D.p.families.map(f => {
+    const e = D.e[pk(f.famKey)] || D.e[f.famKey] || {};
+    const stock = e.stockActual != null && (!e.stockActualTs || e.stockActualTs > num(D.p.ts)) ? num(e.stockActual) : f.stockActual;
+    const pace = num(f.paceDiario) * (1 + g);
+    const dias = stock != null && pace > 0 ? stock / pace : f.diasCobertura;
+    return { n: f.familia, stock, dias, min: num(f.minStock), pace: f.paceMensual };
+  }).filter(f => f.pace > 0);
+  return { fam: fam.sort((a, b) => (a.dias == null ? 1e9 : a.dias) - (b.dias == null ? 1e9 : b.dias)), minD, upd: D.p.updatedStr, hasStock: D.p.hasStock };
+}
+function calcInv(D) {
+  if (!D || !window.INV || !INV.alerta) return null; const I = window.INV; const hoy = hoyISO();
+  const items = vals(D.catalogo).map(x => Object.assign({ id: x._k }, x)).filter(x => x.activo !== false && x.planear && num(x.consumo) > 0);
+  const blq = I.silosBloqueados ? I.silosBloqueados(D.silos, D.silosLect) : {};
+  const silenciado = id => { const n = vals(D.notasCompra && D.notasCompra[id]).sort((a, b) => b.ts - a.ts).find(x => x.alerta === 'off' || x.alerta === 'on'); return !!(n && n.alerta === 'off' && !(n.hasta && n.hasta <= hoy)); };
+  const al = items.filter(it => !silenciado(it.id)).map(it => {
+    const f0 = I.fis(it.id, D.fisico, D.pt); const q = blq[it.id] || 0; const f = q ? Object.assign({}, f0, { total: Math.max(0, f0.total - q) }) : f0;
+    return Object.assign({ it }, I.alerta(it, f, I.transito(it.id, D.llegadas)));
+  });
+  const ord = { 'CRÍTICO': 0, 'RIESGO': 1, 'SALUDABLE': 2 };
+  al.sort((a, b) => ord[a.crit] - ord[b.crit] || a.alcance - b.alcance);
+  return { al, crit: al.filter(a => a.crit === 'CRÍTICO'), riesgo: al.filter(a => a.crit === 'RIESGO'), oc: al.filter(a => a.status === 'COLOCAR OC') };
+}
+function calcRh(D) {
+  if (!D) return null; const E = vals(D.emp).filter(e => e.estatus !== 'baja');
+  const pend = []; Object.keys(D.sol || {}).forEach(eid => vals(D.sol[eid]).forEach(s => { if (String(s.estado || '').indexOf('pendiente') === 0) pend.push(Object.assign({ eid }, s)); }));
+  const conCheck = Object.keys(D.ch || {}).filter(eid => vals(D.ch[eid]).some(c => !c.anulada)).length;
+  const nom = id => { const e = D.emp[id]; return e ? e.nombre : id; };
+  const TIPO = { VAC: 'Vacaciones', HE: 'Tiempo extra', INC: 'Incapacidad', LPA: 'Permiso', LUT: 'Luto', CMD: 'Comisión' };
+  return { act: E.length, pend: pend.map(s => ({ n: nom(s.eid), t: TIPO[s.tipo] || s.tipo || 'Solicitud', d: s.desde || '' })), conCheck };
+}
+
+/* ================= PINTAR ================= */
+const kpi = (l, v, s, c) => `<div class="kpi ${c || ''}"><div class="l">${l}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
+const errBox = k => `<div class="empty">⚠️ No se pudo leer (${esc(S.err[k])}).</div>`;
+const barra = (r, c, mk) => `<div class="bar ${c}"><i style="width:${Math.max(0, Math.min(100, r * 100)).toFixed(1)}%"></i>${mk != null ? `<span class="mk" style="left:${Math.min(100, mk * 100)}%"></span>` : ''}</div>`;
+const lnk = (href, t) => `<a class="btn sm" href="${href}" target="_blank" rel="noopener">${t} ↗</a>`;
+
+function pintarTodo() {
+  const V = calcVentas(S.d.ventas), E = calcEmb(S.d.emb), B = calcBas(S.d.bas), P = calcPT(S.d.pt), I = calcInv(S.d.inv), H = calcRh(S.d.rh), C = S.d.cli;
+  pintarVentas(V); pintarCli(C); pintarEmb(E); pintarBas(B); pintarPT(P); pintarInv(I); pintarRh(H); pintarAlertas(V, E, B, P, I, H, C);
+}
+function pintarVentas(V) {
+  const el = $('#c-ventas');
+  if (S.err.ventas) { el.innerHTML = '<h2>🛒 Ventas Pet Food</h2>' + errBox('ventas'); return; }
+  if (!V) { el.innerHTML = '<h2>🛒 Ventas Pet Food</h2><div class="empty">Aún no hay ventas publicadas. Se publican desde ventas.html al cargar el reporte de Odoo.</div>'; return; }
+  const crecM = V.priorMtd > 0 ? V.mtd / V.priorMtd - 1 : null, crecY = V.pytd > 0 ? V.ytd / V.pytd - 1 : null;
+  const avProy = V.metaMes > 0 && V.proy != null ? V.proy / V.metaMes : null;
+  const R = V.R; const ret = R && R.retBase ? R.retKeep / R.retBase : null, mix = R && R.totSac ? R.premSac / R.totSac : null;
+  let h = `<h2>🛒 Ventas Pet Food · ${MES[V.m - 1]} ${V.cy || ''}<span class="src">Datos publicados ${esc(V.upd || '')}${V.corte ? ' · venta al día ' + V.corte : ''}<br>Meta: año anterior ${pct(V.g, 0)} (configurada en ventas)</span></h2>
+  <div class="kpis">
+    ${kpi('Sacos del mes', fmt(V.mtd), 'vs ' + fmt(V.priorMtd) + ' mismo periodo ' + (V.py || 'AA'), crecM == null ? '' : (crecM >= V.g ? 'ok' : crecM >= 0 ? 'warn' : 'bad'))}
+    ${kpi('Crecimiento mes', pct(crecM), 'meta ' + pct(V.g, 0), crecM == null ? '' : (crecM >= V.g ? 'ok' : crecM >= 0 ? 'warn' : 'bad'))}
+    ${kpi('Proyección cierre', fmt(V.proy), V.hT ? `${V.hT} de ${V.hM} días hábiles (L-S)` : 'sin venta del mes', avProy == null ? '' : sem(avProy, 1, .9))}
+    ${kpi('Meta del mes', fmt(V.metaMes), avProy == null ? '' : 'proyección al ' + Math.round(avProy * 100) + '%', 'gold')}
+    ${kpi('Acumulado año', fmt(V.ytd), pct(crecY) + ' vs ' + (V.py || 'AA'), crecY == null ? '' : (crecY >= V.g ? 'ok' : crecY >= 0 ? 'warn' : 'bad'))}
+    ${R ? kpi('Retención', ret == null ? '—' : Math.round(ret * 100) + '%', fmt(R.retKeep) + ' de ' + fmt(R.retBase) + ' clientes', ret == null ? '' : sem(ret, .85, .7)) : ''}
+    ${R ? kpi('Mix Premium', mix == null ? '—' : Math.round(mix * 100) + '%', fmt(R.premSac) + ' sacos premium') : ''}
+    ${kpi('Clientes nuevos', fmt(V.nuevos), 'meta ' + fmt(V.nuevosMeta), V.nuevosMeta ? sem(V.nuevos / V.nuevosMeta, 1, .6) : '')}
+  </div>`;
+  h += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">`;
+  h += `<div><div class="mut small" style="margin-bottom:8px">Avance por vendedor · proyección del mes vs meta (marca blanca = 100%)</div><div class="rows">` +
+    (V.vend.length ? V.vend.map(x => `<div class="row"><span class="n" title="${esc(x.n)}">${esc(x.n)}</span>${barra(x.av == null ? 0 : x.av / 1.3, x.av == null ? '' : sem(x.av, 1, .9), 1 / 1.3)}<span class="p">${x.av == null ? '—' : Math.round(x.av * 100) + '%'}</span></div>`).join('') : '<div class="empty">Sin vendedores publicados.</div>') + `</div></div>`;
+  h += `<div><div class="mut small" style="margin-bottom:6px">Sacos por mes · ${V.cy || ''} vs ${V.py || ''}</div>${graficaMeses(V)}</div>`;
+  h += `</div>`;
+  if (R) h += `<div class="kpis" style="margin-top:12px">${kpi('En riesgo (30-365 d sin compra)', fmt(R.riesgoN), fmt(R.riesgoSac) + ' sacos/mes en juego', R.riesgoN ? 'warn' : 'ok')}${kpi('Fuga (bajan su compra)', fmt(R.fugaN), fmt(R.fugaSac) + ' sacos perdidos', R.fugaN ? 'bad' : 'ok')}${kpi('Clientes activos (<30 d)', fmt(R.activos), 'de ' + fmt(R.clientes) + ' en cartera')}</div>`;
+  const top = V.sinCompra.slice(0, 6);
+  if (top.length) h += `<div class="mut small" style="margin-top:6px">Clientes clave sin compra (mayor volumen primero)</div><ul class="list">${top.map(c => `<li><span>${esc(c.n)} <span class="mut">· ${esc(c.v)}</span></span><span>${c.dias == null ? '—' : c.dias + ' días'} · ${fmt(c.prom)} sacos/mes</span></li>`).join('')}</ul>`;
+  h += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${lnk('maestra.html', '👔 Abrir app de gerencia')}${lnk('ventas.html', '📊 Programa de ventas')}</div>`;
+  el.innerHTML = h;
+}
+function graficaMeses(V) {
+  const W = 340, H = 130, pl = 6, pb = 18; const n = 12; const mx = Math.max(1, ...V.cur, ...V.prior); const bw = (W - pl * 2) / n;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sacos por mes">`;
+  for (let i = 0; i < n; i++) {
+    const x = pl + i * bw; const hp = (H - pb - 6) * V.prior[i] / mx, hc = (H - pb - 6) * V.cur[i] / mx;
+    s += `<rect x="${x + bw * .12}" y="${H - pb - hp}" width="${bw * .36}" height="${hp}" rx="2" fill="rgba(255,255,255,.22)"><title>${MES[i]} ${V.py}: ${fmt(V.prior[i])}</title></rect>`;
+    s += `<rect x="${x + bw * .5}" y="${H - pb - hc}" width="${bw * .36}" height="${hc}" rx="2" fill="${i === V.m - 1 ? '#f6c45c' : '#E8A020'}"><title>${MES[i]} ${V.cy}: ${fmt(V.cur[i])}</title></rect>`;
+    s += `<text x="${x + bw / 2}" y="${H - 5}" fill="#9fb0c8" font-size="9" text-anchor="middle">${MES[i].slice(0, 3)}</text>`;
+  }
+  return s + `</svg><div class="small mut"><span style="color:#E8A020">■</span> ${V.cy || ''} &nbsp; <span style="color:rgba(255,255,255,.4)">■</span> ${V.py || ''}</div>`;
+}
+function pintarCli(C) {
+  const el = $('#c-clientes'); let h = '<h2>📱 App de clientes · prepedidos</h2>';
+  if (S.err.cli) h += errBox('cli');
+  else if (!C || C.sinSesion) {
+    h += `<div class="empty">Para ver los prepedidos entra con tu usuario del personal de Clientes (el de Gerencia). Es la misma sesión de la consola del personal.</div>
+    <div class="mini"><input id="cu" placeholder="Usuario (ej. GERENCIA)" autocapitalize="characters"><input id="cp" type="password" inputmode="numeric" placeholder="PIN" maxlength="8"><div class="err" id="ce"></div><button class="btn" id="cb">Conectar Clientes</button></div>`;
+  } else {
+    const c = C.cont || {};
+    h += `<div class="pipe"><div><b style="color:${c.enviado ? 'var(--warn)' : 'inherit'}">${fmt(c.enviado)}</b><span>Por validar (vendedor)</span></div><div><b style="color:${c.confirmado ? 'var(--warn)' : 'inherit'}">${fmt(c.confirmado)}</b><span>Por fincar en Odoo</span></div><div><b>${fmt(c.fincado)}</b><span>Fincados · por cargar</span></div><div><b style="color:var(--ok)">${fmt(c.liberado)}</b><span>Liberados · por facturar</span></div></div>
+    <div class="kpis" style="margin-top:10px">${kpi('Registros por validar', fmt(C.pendientesRegistro), 'clientes nuevos en la app', C.pendientesRegistro ? 'warn' : '')}${kpi('Mensajes sin leer', fmt(C.mensajesSinLeer), 'de clientes a gerencia', C.mensajesSinLeer ? 'warn' : '')}</div>`;
+    const ab = (C.pedidos || []).filter(p => p.estado === 'enviado' || p.estado === 'confirmado').slice(0, 5);
+    if (ab.length) h += `<ul class="list">${ab.map(p => `<li><span>${esc(p.skanName || p.razonSocial || p.contacto || '')} <span class="mut">· ${esc(p.vendedorNombre || '')}</span></span><span>${p.estado === 'enviado' ? 'por validar' : 'por fincar'} · ${hhmm(p.creado)}</span></li>`).join('')}</ul>`;
+  }
+  h += `<div style="margin-top:10px">${lnk('clientes/personal.html', '🧑‍💼 Consola del personal')}</div>`;
+  el.innerHTML = h;
+  const b = $('#cb'); if (b) {
+    const go = async () => {
+      b.disabled = true; $('#ce').textContent = '';
+      try {
+        const r = await fetch(CLI_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modo: 'login', accion: '', datos: { usuario: $('#cu').value.trim(), pin: $('#cp').value.trim() } }) });
+        const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'No se pudo entrar');
+        lsSet(CLI_LS, JSON.stringify({ token: j.token, yo: j.yo, exp: j.exp || 0 })); S.d.cli = await cargarCli(); pintarTodo();
+      } catch (e) { b.disabled = false; $('#ce').textContent = e.message; }
+    };
+    b.onclick = go; $('#cp').onkeydown = e => { if (e.key === 'Enter') go(); };
+  }
+}
+function pintarEmb(E) {
+  const el = $('#c-embarques'); let h = '<h2>🚛 Embarques de hoy<span class="src">Programador · Cargadores</span></h2>';
+  if (S.err.emb) h += errBox('emb');
+  else if (!E) h += '<div class="empty">Sin datos.</div>';
+  else {
+    const t = E.h.length;
+    h += `<div class="pipe"><div><b>${E.c.pro}</b><span>Programadas</span></div><div><b style="color:var(--info)">${E.c.col}</b><span>Colocadas</span></div><div><b style="color:var(--warn)">${E.c.car}</b><span>Cargando</span></div><div><b style="color:var(--ok)">${E.c.lib}</b><span>Liberadas</span></div></div>
+    <div style="margin:10px 0 4px" class="small mut">Avance del día: ${E.c.lib} de ${t} unidades</div>${barra(t ? E.c.lib / t : 0, 'ok')}
+    <div class="kpis" style="margin-top:10px">${kpi('Toneladas liberadas', fmt(E.kgLib / 1000, 1), 'de ' + fmt(E.kgProg / 1000, 1) + ' t programadas')}${kpi('Liberadas sin pesar', fmt(E.sinPesar.length), 'últimos 31 días · báscula', E.sinPesar.length ? 'warn' : 'ok')}${kpi('Incidencias de entrega', fmt(E.incid.length), 'reportadas por clientes', E.incid.length ? 'bad' : 'ok')}</div>`;
+    const enCurso = E.h.filter(r => !(r.despachado === true || r.despachado === '1' || r.despachado === 1) && !(r.inicioCarga && r.finCarga)).sort((a, b) => String(a.horaProg || '').localeCompare(String(b.horaProg || ''))).slice(0, 6);
+    if (enCurso.length) h += `<ul class="list">${enCurso.map(r => `<li><span>${esc(r.horaProg || '--:--')} · ${esc(r.cliente || '')}</span><span>${esc(r.eco || r.tipo || '')} · ${r.inicioCarga ? 'cargando desde ' + esc(r.inicioCarga) : (r.colocacion ? 'colocada' : 'programada')}</span></li>`).join('')}</ul>`;
+  }
+  h += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${lnk('programador.html', '🗓️ Programador')}${lnk('index.html', '📦 Cargadores')}</div>`;
+  el.innerHTML = h;
+}
+function pintarBas(B) {
+  const el = $('#c-bascula'); let h = '<h2>⚖️ Báscula · entradas de materia prima<span class="src">Cuadre de Báscula</span></h2>';
+  if (S.err.bas) h += errBox('bas');
+  else if (!B) h += '<div class="empty">Sin datos.</div>';
+  else {
+    h += `<div class="kpis">${kpi('Entradas hoy', fmt(B.deHoy), fmt(B.kgHoy / 1000, 1) + ' t netas')}${kpi('Pend. compras', fmt(B.c.pc), 'sin factura', B.c.pc ? 'warn' : 'ok')}${kpi('Pend. inventarios', fmt(B.c.pi), '', B.c.pi ? 'warn' : 'ok')}${kpi('Pend. calidad', fmt(B.c.pq), '', B.c.pq ? 'warn' : 'ok')}${kpi('Rechazos calidad', fmt(B.c.rq), 'histórico', B.c.rq ? 'bad' : '')}${kpi('Atoradas +48 h', fmt(B.viejas), 'sin cerrar su cuadre', B.viejas ? 'bad' : 'ok')}</div>`;
+  }
+  h += `<div>${lnk('https://barbagomezricardo-cloud.github.io/cuadre-bascula/Cuadre_Bascula_licenciado.html', '⚖️ Abrir báscula')}</div>`;
+  el.innerHTML = h;
+}
+function pintarPT(P) {
+  const el = $('#c-pt'); let h = '<h2>📦 Producto terminado · días de inventario</h2>';
+  if (S.err.pt) h += errBox('pt');
+  else if (!P) h += '<div class="empty">Aún no hay proyección publicada (pestaña Proyección de ventas.html).</div>';
+  else if (!P.fam.some(f => f.stock != null)) h += '<div class="empty">La proyección se publicó sin inventario real. Captúralo en la pestaña Proyección del programador para ver los días de cobertura.</div>';
+  else {
+    const ref = Math.max(P.minD || 15, 1) * 2;
+    h += `<div class="mut small" style="margin-bottom:8px">Días de cobertura al ritmo de venta${P.minD ? ' · mínimo ' + P.minD + ' días (marca blanca)' : ''} · ${esc(P.upd || '')}</div><div class="rows">` +
+      P.fam.slice(0, 9).map(f => { const c = f.dias == null ? '' : (P.minD ? (f.dias >= P.minD ? 'ok' : f.dias >= P.minD * .6 ? 'warn' : 'bad') : ''); return `<div class="row"><span class="n" title="${esc(f.n)}">${esc(f.n)}</span>${barra(f.dias == null ? 0 : f.dias / ref, c, P.minD ? P.minD / ref : null)}<span class="p">${f.dias == null ? '—' : fmt(f.dias, 0) + ' d'}</span></div>`; }).join('') + `</div>`;
+  }
+  h += `<div style="margin-top:10px">${lnk('programador.html', '📈 Proyección')}</div>`;
+  el.innerHTML = h;
+}
+function pintarInv(I) {
+  const el = $('#c-inv'); let h = '<h2>🏭 Materias primas y empaque · alertas de compra</h2>';
+  if (!S.inv) h += conectarHtml('inv', 'Inventarios', 'Conecta tu usuario master de Inventarios para ver las alertas de compra.');
+  else if (S.err.inv) h += errBox('inv');
+  else if (!I) h += '<div class="empty">Sin datos.</div>';
+  else {
+    h += `<div class="kpis">${kpi('Críticos', fmt(I.crit.length), 'se acaban antes de que llegue un pedido', I.crit.length ? 'bad' : 'ok')}${kpi('En riesgo', fmt(I.riesgo.length), 'bajo stock mínimo', I.riesgo.length ? 'warn' : 'ok')}${kpi('Colocar OC', fmt(I.oc.length), 'sin orden de compra que lo cubra', I.oc.length ? 'warn' : 'ok')}</div>`;
+    const top = I.al.filter(a => a.crit !== 'SALUDABLE').slice(0, 6);
+    h += top.length ? `<ul class="list">${top.map(a => `<li><span><span class="pill ${a.crit === 'CRÍTICO' ? 'p-bad' : 'p-warn'}">${a.crit}</span> ${esc(a.it.nombre)}</span><span>${isFinite(a.alcance) ? Math.round(a.alcance) + ' días' : '—'}</span></li>`).join('')}</ul>` : '<div class="empty">✅ Todo saludable.</div>';
+  }
+  h += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${lnk('inventarios/inventarios/index.html', '📋 Inventarios')}</div>`;
+  el.innerHTML = h; bindConectar('inv');
+}
+function pintarRh(H) {
+  const el = $('#c-rh'); let h = '<h2>👥 Recursos Humanos · hoy</h2>';
+  if (!S.rh) h += conectarHtml('rh', 'RH', 'Conecta tu usuario master o de Dirección de RH para ver asistencia y solicitudes.');
+  else if (S.err.rh) h += errBox('rh');
+  else if (!H) h += '<div class="empty">Sin datos.</div>';
+  else {
+    h += `<div class="kpis">${kpi('Plantilla activa', fmt(H.act), '')}${kpi('Checaron hoy', fmt(H.conCheck), H.act ? Math.round(H.conCheck / H.act * 100) + '% de la plantilla' : '')}${kpi('Solicitudes por autorizar', fmt(H.pend.length), 'vacaciones, permisos, tiempo extra', H.pend.length ? 'warn' : 'ok')}</div>`;
+    if (H.pend.length) h += `<ul class="list">${H.pend.slice(0, 6).map(s => `<li><span>${esc(s.n)}</span><span>${esc(s.t)}${s.d ? ' · ' + esc(s.d) : ''}</span></li>`).join('')}</ul>`;
+    h += '<div class="small mut" style="margin-top:6px">El detalle de retardos, faltas y descansos está en la app de RH.</div>';
+  }
+  h += `<div style="margin-top:10px">${lnk('rh/index.html', '👥 Abrir RH')}</div>`;
+  el.innerHTML = h; bindConectar('rh');
+}
+function conectarHtml(sis, nom, txt) {
+  return `<div class="empty">${txt}</div><div class="mini"><input id="${sis}-u" placeholder="Usuario de ${nom}" autocapitalize="none"><input id="${sis}-p" type="password" placeholder="Contraseña"><div class="err" id="${sis}-e"></div><button class="btn" id="${sis}-b">Conectar ${nom}</button></div>`;
+}
+function bindConectar(sis) {
+  const b = $('#' + sis + '-b'); if (!b) return;
+  const go = async () => {
+    b.disabled = true; $('#' + sis + '-e').textContent = '';
+    try { S[sis] = await entrar(sis, $('#' + sis + '-u').value.trim(), $('#' + sis + '-p').value); S.d[sis] = await (sis === 'inv' ? cargarInv() : cargarRh()); delete S.err[sis]; pintarTodo(); }
+    catch (e) { b.disabled = false; $('#' + sis + '-e').textContent = /auth\//.test(e.code || '') ? 'Usuario o contraseña incorrectos.' : e.message; }
+  };
+  b.onclick = go; $('#' + sis + '-p').onkeydown = e => { if (e.key === 'Enter') go(); };
+}
+function pintarAlertas(V, E, B, P, I, H, C) {
+  const A = [];
+  const add = (lvl, t, href) => A.push({ lvl, t, href });
+  if (V) {
+    const avP = V.metaMes > 0 && V.proy != null ? V.proy / V.metaMes : null;
+    if (avP != null && avP < 1) add(avP < .9 ? 'bad' : 'warn', `Ventas: la proyección de ${MES[V.m - 1]} (${fmt(V.proy)} sacos) va al ${Math.round(avP * 100)}% de la meta.`, 'maestra.html');
+    const bajos = V.vend.filter(x => x.av != null && x.av < .9); if (bajos.length) add('warn', `${bajos.length} vendedor(es) proyectan menos del 90% de su meta: ${bajos.slice(0, 3).map(x => esc(x.n)).join(', ')}${bajos.length > 3 ? '…' : ''}.`, 'maestra.html');
+    if (V.R && V.R.fugaN) add('warn', `${fmt(V.R.fugaN)} clientes bajan su compra (${fmt(V.R.fugaSac)} sacos perdidos).`, 'maestra.html');
+    const pub = S.d.ventas && S.d.ventas.idx && S.d.ventas.idx.updatedStr; if (pub) { const m = pub.match(/(\d+)\/(\d+)\/(\d+)/); if (m) { const d = new Date(+m[3], +m[2] - 1, +m[1]); const dd = Math.floor((Date.now() - d) / 864e5); if (dd >= 2) add('warn', `Las ventas se publicaron hace ${dd} días (${esc(pub)}). Carga el reporte de Odoo en ventas.html.`, 'ventas.html'); } }
+  }
+  if (C && !C.sinSesion && C.cont) { if (C.cont.enviado) add('warn', `${C.cont.enviado} prepedido(s) de clientes esperan validación del vendedor.`, 'clientes/personal.html'); if (C.cont.confirmado) add('warn', `${C.cont.confirmado} pedido(s) confirmados por fincar en Odoo.`, 'clientes/personal.html'); if (C.pendientesRegistro) add('warn', `${C.pendientesRegistro} cliente(s) nuevo(s) por validar en la app.`, 'clientes/personal.html'); if (C.mensajesSinLeer) add('warn', `${C.mensajesSinLeer} mensaje(s) de clientes sin leer.`, 'clientes/personal.html'); }
+  if (E) { if (E.incid.length) add('bad', `${E.incid.length} incidencia(s) de entrega reportadas.`, 'maestra.html'); if (E.sinPesar.length) add('warn', `${E.sinPesar.length} unidad(es) liberadas sin pesaje en báscula.`, 'programador.html'); if (E.c.car) add('ok', `${E.c.car} unidad(es) cargando en este momento.`, 'index.html'); }
+  if (B && B.viejas) add('bad', `${B.viejas} entrada(s) de materia prima con más de 48 h sin cerrar su cuadre.`, 'https://barbagomezricardo-cloud.github.io/cuadre-bascula/Cuadre_Bascula_licenciado.html');
+  if (P && P.minD) { const b = P.fam.filter(f => f.dias != null && f.dias < P.minD); if (b.length) add(b.some(f => f.dias < P.minD * .6) ? 'bad' : 'warn', `Producto terminado bajo el mínimo de ${P.minD} días: ${b.slice(0, 3).map(f => esc(f.n) + ' (' + fmt(f.dias) + ' d)').join(', ')}${b.length > 3 ? '…' : ''}.`, 'programador.html'); }
+  if (I && I.crit.length) add('bad', `${I.crit.length} material(es) en nivel crítico de compra: ${I.crit.slice(0, 3).map(a => esc(a.it.nombre)).join(', ')}${I.crit.length > 3 ? '…' : ''}.`, 'inventarios/inventarios/index.html');
+  if (H && H.pend.length) add('warn', `${H.pend.length} solicitud(es) de RH esperan autorización.`, 'rh/index.html');
+  const ord = { bad: 0, warn: 1, ok: 2 }; A.sort((a, b) => ord[a.lvl] - ord[b.lvl]);
+  $('#c-alertas .alerts').innerHTML = A.length ? A.map(a => `<div class="alert ${a.lvl}"><span>${a.t}</span>${a.href ? `<a href="${a.href}" target="_blank" rel="noopener">Ir ↗</a>` : ''}</div>`).join('') : '<div class="alert ok">✅ Sin pendientes críticos en este momento.</div>';
+}
+function pintarApps() {
+  const g = (t, L) => `<h3>${t}</h3>` + L.map(a => `<a class="app" href="${a[0]}" target="_blank" rel="noopener"><span class="ic">${a[1]}</span><b>${a[2]}</b><span>${a[3]}</span></a>`).join('');
+  $('#c-apps').innerHTML = '<h2>🚀 Tus apps en un clic</h2><div class="apps">' +
+    g('Comercial', [['ventas.html', '📊', 'Ventas', 'Carga de Odoo y publicación'], ['maestra.html', '👔', 'Gerencia', 'Vista de todos los vendedores'], ['clientes/personal.html', '🧑‍💼', 'Clientes · personal', 'Prepedidos, registros y mensajes'], ['clientes/', '📱', 'App de clientes', 'Lo que ve el cliente']]) +
+    g('Logística', [['programador.html', '🗓️', 'Programador', 'Embarques, fletes y proyección'], ['index.html', '📦', 'Cargadores', 'Carga en andén y liberación'], ['https://barbagomezricardo-cloud.github.io/cuadre-bascula/Cuadre_Bascula_licenciado.html', '⚖️', 'Báscula', 'Entradas de materia prima'], ['https://barbagomezricardo-cloud.github.io/calculadora-matrices/', '🧮', 'Calculadora', 'Matrices']]) +
+    g('Planta', [['inventarios/inventarios/index.html', '📋', 'Inventarios', 'Programa principal'], ['inventarios/inventarios/almacen.html', '🏷️', 'Almacén', 'Tablet del almacenista'], ['inventarios/inventarios/produccion.html', '🏭', 'Producción', 'Solicitudes de insumos']]) +
+    g('Personal', [['rh/index.html', '👥', 'Recursos Humanos', 'Plantilla, incidencias y tiempo extra'], ['rh/checador.html', '⏱️', 'Checador', 'Kiosco de asistencia'], ['rh/empleado.html', '🙋', 'Portal del empleado', 'Vacaciones y permisos']]) +
+    '</div><div class="small mut" style="margin-top:8px">Las apps de cada vendedor no se listan aquí a propósito: abrir su link en este equipo lo dejaría registrado como su dispositivo.</div>';
+}
+
+boot();
+</script>
+</body>
+</html>
