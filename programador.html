@@ -2510,7 +2510,7 @@ function cuadCompute(P){
   const gc=k=>{ let o=cli.get(k); if(!o){ o={k,name:'',c:0,b:0,inv:0,fac:0,cSinB:0,bSinC:0}; cli.set(k,o);} return o; };
   const gl=k=>{ let o=lot.get(k); if(!o){ o={k,pk:'',lote:'',name:'',c:0,b:0,inv:0,cSinB:0,bSinC:0}; lot.set(k,o);} return o; };
   let cPend=0, sacVac=0, sacVacF=0, cSinB=0, bSinC=0, nCSinB=0, nBSinC=0;
-  const _sv=pk=>/^02SAC/i.test(String(pk||''));      // costales vacíos vendidos en Odoo: no son producto, no pasan por báscula ni Cargadores
+  const _sv=pk=>/^02(SAC|PRO)/i.test(String(pk||''));   // 02PRO = costal impreso (ej. 02PRO89)      // costales vacíos vendidos en Odoo: no son producto, no pasan por báscula ni Cargadores
   /* Cada área cuenta SU documento: Cargadores = lo que liberó (marcó despachado) · Báscula = lo que pesó.
      Si una va adelante de la otra el desfase se ve (no se esconde) y se separa del error real de captura. */
   cus.forEach(cu=>{ const nc=normNom(cu.u.r.cliente), hasB=!!cu.u.b, lib=!cu.u.noProg&&isDesp(cu.u.r);
@@ -3049,7 +3049,7 @@ const difDias=(a,b)=>Math.abs(Math.round((new Date(a+'T12:00:00')-new Date(b+'T1
 const hash=s=>{ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return String(h); };
 const keySafe=s=>String(s).replace(/[^A-Za-z0-9_-]/g,'_');       // claves válidas para Firebase (sin / . # $ [ ])
 function lotemapOdoo(){ const raw=CUAD.odoodata&&CUAD.odoodata._lotes; return raw?(safeJSON(raw)||{}):{}; }
-const esSacoVacio=pk=>/^02SAC/i.test(pk);          // costales vacíos que se venden/regalan: no son producto terminado
+const esSacoVacio=pk=>/^02(SAC|PRO)/i.test(pk);          // costales vacíos que se venden/regalan: no son producto terminado
 function mapLineas(arr){   // [{pk,lote,q}] → Map pk|lote
   const m=new Map(); arr.forEach(x=>{ if(!x.q)return; const nl=normLote(x.lote), k=x.pk+'|'+nl; const o=m.get(k)||{pk:x.pk,lote:nl,nl,q:0}; o.q+=x.q; m.set(k,o); }); return m; }
 const capLineas=items=>mapLineas(asArr(items).map(x=>({pk:pkey(x.cod||x.prod),lote:x.lote,q:Number(x.sacos)||0})).filter(x=>x.pk));
