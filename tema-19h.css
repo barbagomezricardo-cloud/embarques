@@ -8,7 +8,7 @@
   --papel:#FBF7F2; --blanco:#FFFFFF; --linea:#EADFD3; --linea-2:#F3ECE4;
   --f19:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --fd19:"Archivo",system-ui,sans-serif;
   /* variables de las apps anteriores, ya en el tema nuevo */
-  --navy:#FFFFFF; --gold:#DE0A14; --bg:#FBF7F2; --mid:#FFFFFF; --wa:#25D366;
+  --navy:#281E12; --navy-bg:#FFFFFF; --gold:#C8102E; --bg:#FBF7F2; --mid:#FFFFFF; --wa:#178540;
 }
 html,body{background:var(--papel)!important;color:var(--tinta);font-family:var(--f19)!important;-webkit-font-smoothing:antialiased}
 h1,h2,h3,.logo,.kpi-val,.big{font-family:var(--fd19)}
@@ -32,4 +32,13 @@ body>header button *{color:var(--rojo)!important}
 ::-webkit-scrollbar-thumb{background:#D9CBBB;border-radius:8px}
 ::-webkit-scrollbar-track{background:transparent}
 @media (max-width:560px){.sellos19 span{width:34px;height:34px}.sellos19 img{width:30px;height:30px}}
-:root{--light:#281E12;--white:#FFFFFF;--gray:#8C8178}
+:root{--light:#281E12;--white:#FFFFFF;--gray:#6F6357}
+/* etiquetas de nivel sobre su color: un poco de sombra para que la letra blanca se lea siempre */
+.lv,.tier-pill,.badge{text-shadow:0 1px 1px rgba(0,0,0,.28)}
+.tier-PLATINO,.tier-ORO,.tier-DIAMANTE,.tier-DIAMANTE_PLUS{text-shadow:none}
+/* encabezado compacto en celular */
+@media (max-width:560px){
+  body>header{gap:8px!important;padding:10px 12px!important}
+  body>header h1{font-size:15px!important;line-height:1.15}
+  body>header .sub,body>header .header-sub{font-size:11px!important;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+}
