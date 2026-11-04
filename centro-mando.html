@@ -11,10 +11,18 @@
 <link rel="icon" href="clientes/img/favicon.png">
 <link rel="apple-touch-icon" href="clientes/img/icono-180.png">
 <link rel="manifest" href="centro-mando.webmanifest">
+<script src="tema-19h.js"></script>
 <style>
 :root{--bg:#FBF7F2;--bg2:#FBF7F2;--card:#FFFFFF;--line:#EADFD3;--tx:#281E12;--mut:#6F6357;--gold:#DE0A14;--gold2:#DE0A14;--rojo:#DE0A14;--rojo-o:#A80810;--rojo-s:#FDE8E9;
   --ok:#1D7A45;--warn:#A35F00;--bad:#C8102E;--info:#1F4E8C;--r:16px;--sh:0 1px 2px rgba(40,30,18,.06),0 6px 20px rgba(40,30,18,.07);
-  --font:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--fd:"Archivo",system-ui,sans-serif}
+  --font:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--fd:"Archivo",system-ui,sans-serif;--bar0:#F3ECE4;--prev:#D9CBBB}
+:root[data-theme="dark"]{--bg:#17120D;--bg2:#2B231B;--card:#221B14;--line:#3A3027;--tx:#F4ECE3;--mut:#A89C90;--gold:#FF6A72;--gold2:#FF6A72;--rojo-s:#3B1214;--ok:#5CC98A;--warn:#F0B357;--bad:#FF7A80;--info:#8FB4EA;--sh:0 1px 2px rgba(0,0,0,.35);--bar0:#3A3027;--prev:#5A4E42;color-scheme:dark}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17120D;--bg2:#2B231B;--card:#221B14;--line:#3A3027;--tx:#F4ECE3;--mut:#A89C90;--gold:#FF6A72;--gold2:#FF6A72;--rojo-s:#3B1214;--ok:#5CC98A;--warn:#F0B357;--bad:#FF7A80;--info:#8FB4EA;--sh:0 1px 2px rgba(0,0,0,.35);--bar0:#3A3027;--prev:#5A4E42;color-scheme:dark}}
+:root[data-theme="dark"] header{background:var(--rojo-o)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) header{background:var(--rojo-o)}}
+:root[data-theme="dark"] .p-bad{background:#3B1214;color:#FF8A8F}:root[data-theme="dark"] .p-warn{background:#33270F;color:#F0B357}:root[data-theme="dark"] .p-ok{background:#16301F;color:#6EE7A0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .p-bad{background:#3B1214;color:#FF8A8F}:root:not([data-theme="light"]) .p-warn{background:#33270F;color:#F0B357}:root:not([data-theme="light"]) .p-ok{background:#16301F;color:#6EE7A0}}
+:root[data-theme="dark"] .gate input,:root[data-theme="dark"] .mini input{background:#1C1610}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 var(--font);-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
 h1,h2,h3,.kpi .v,.pipe b,header .t b{font-family:var(--fd)}
@@ -41,7 +49,7 @@ main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
 .kpi .v{font-size:22px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
 .kpi .s{font-size:12px;color:var(--mut)}
 .kpi.ok .v{color:var(--ok)}.kpi.warn .v{color:var(--warn)}.kpi.bad .v{color:var(--bad)}.kpi.gold .v{color:var(--gold2)}
-.bar{height:8px;background:#F3ECE4;border-radius:9px;overflow:hidden;position:relative}
+.bar{height:8px;background:var(--bar0);border-radius:9px;overflow:hidden;position:relative}
 .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:9px;background:var(--gold)}
 .bar.ok i{background:var(--ok)}.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}
 .bar .mk{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--tx);opacity:.55}
@@ -80,6 +88,10 @@ main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
 .mini .btn{justify-content:center;margin-top:8px}
 .empty{color:var(--mut);font-size:13px;padding:6px 0}
 .chart{width:100%;height:auto;display:block}
+#tema19h-menu{position:fixed;z-index:99999;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:14px;padding:10px;display:grid;gap:6px;min-width:170px;box-shadow:0 10px 30px rgba(40,30,18,.2);font-family:var(--font)}
+#tema19h-menu b{font:800 12px var(--fd);text-transform:uppercase;letter-spacing:.05em;color:var(--mut);padding:0 4px}
+#tema19h-menu button{border:1px solid var(--line);background:var(--bg2);color:var(--tx);border-radius:10px;padding:8px 10px;font:700 13.5px var(--font);text-align:left;cursor:pointer}
+#tema19h-menu button[aria-pressed="true"]{background:var(--rojo);border-color:var(--rojo);color:#fff}
 footer{max-width:1200px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-size:12px}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-1px}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -213,7 +225,7 @@ async function salir() { if (!confirm('¿Cerrar sesión del Centro de Mando en e
 function arrancar() {
   const quien = (S.inv && S.inv.nombre) || (S.rh && S.rh.nombre) || 'Gerencia';
   $('#root').innerHTML = `<header><div class="sellos19"><span><img src="clientes/img/logo-19h.png" alt="Los 19 Hermanos"></span><span><img src="clientes/img/logo-petfood.png" alt="Pet Food"></span></div><div class="t"><b>Centro de Mando · Gerencia Comercial</b><span id="hsub">${esc(quien)} · cargando…</span></div>
-    <button class="btn sm" id="bref" title="Actualizar">⟳</button><button class="btn sm" onclick="salir()" title="Cerrar sesión">Salir</button></header>
+    <button class="btn sm" id="bref" title="Actualizar">⟳</button><button class="btn sm" id="tema19h-btn" title="Apariencia: automático, claro u oscuro" onclick="event.stopPropagation();Tema19H.menu(this)">🌗</button><button class="btn sm" onclick="salir()" title="Cerrar sesión">Salir</button></header>
     <main><div class="card wide" id="c-alertas" style="margin-bottom:14px"><h2>🚨 Lo que requiere tu atención</h2><div class="alerts"><div class="empty"><span class="spin"></span> Reuniendo información…</div></div></div>
     <div class="grid">
       <div class="card wide" id="c-ventas"></div>
@@ -227,6 +239,7 @@ function arrancar() {
     </div></main>
     <footer>Solo lectura: esta pantalla consulta lo que publican tus apps y no modifica ningún dato. Se actualiza sola cada 2 minutos.</footer>`;
   $('#bref').onclick = cargar;
+  try { Tema19H.aplicar(Tema19H.leer()); } catch (e) { }
   pintarApps();
   cargar();
   setInterval(() => { if (!document.hidden) cargar(); }, REFRESH_MS);
@@ -414,11 +427,11 @@ function graficaMeses(V) {
   let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sacos por mes">`;
   for (let i = 0; i < n; i++) {
     const x = pl + i * bw; const hp = (H - pb - 6) * V.prior[i] / mx, hc = (H - pb - 6) * V.cur[i] / mx;
-    s += `<rect x="${x + bw * .12}" y="${H - pb - hp}" width="${bw * .36}" height="${hp}" rx="2" fill="#D9CBBB"><title>${MES[i]} ${V.py}: ${fmt(V.prior[i])}</title></rect>`;
+    s += `<rect x="${x + bw * .12}" y="${H - pb - hp}" width="${bw * .36}" height="${hp}" rx="2" fill="var(--prev)"><title>${MES[i]} ${V.py}: ${fmt(V.prior[i])}</title></rect>`;
     s += `<rect x="${x + bw * .5}" y="${H - pb - hc}" width="${bw * .36}" height="${hc}" rx="2" fill="${i === V.m - 1 ? '#A80810' : '#DE0A14'}"><title>${MES[i]} ${V.cy}: ${fmt(V.cur[i])}</title></rect>`;
-    s += `<text x="${x + bw / 2}" y="${H - 5}" fill="#8C8178" font-size="9" text-anchor="middle">${MES[i].slice(0, 3)}</text>`;
+    s += `<text x="${x + bw / 2}" y="${H - 5}" fill="var(--mut)" font-size="9" text-anchor="middle">${MES[i].slice(0, 3)}</text>`;
   }
-  return s + `</svg><div class="small mut"><span style="color:#DE0A14">■</span> ${V.cy || ''} &nbsp; <span style="color:#D9CBBB">■</span> ${V.py || ''}</div>`;
+  return s + `</svg><div class="small mut"><span style="color:#DE0A14">■</span> ${V.cy || ''} &nbsp; <span style="color:var(--prev)">■</span> ${V.py || ''}</div>`;
 }
 function pintarCli(C) {
   const el = $('#c-clientes'); let h = '<h2>📱 App de clientes · prepedidos</h2>';

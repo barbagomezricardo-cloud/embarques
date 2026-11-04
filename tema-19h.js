@@ -42,5 +42,5 @@
     h.appendChild(b); aplicar(leer());
   }
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', boton); else boton();
-  W.Tema19H = { aplicar: aplicar, leer: leer };
+  W.Tema19H = { aplicar: aplicar, leer: leer, menu: menu };
 })(window, document);

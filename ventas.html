@@ -1559,7 +1559,7 @@ function renderClienteTable(){
     // El botón se ve SIEMPRE, aunque estés en modo visor: si no, parece que la función no
     // existe. En visor sale con candado y, al tocarlo, autorizarDescEsp pide la contraseña.
     const descBtn=`<div style="margin-top:2px;display:flex;gap:3px;flex-wrap:wrap"><button onclick="autorizarDescEsp('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?'Autorizar un descuento especial por dirección':'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?'var(--kb4C1D95)':'var(--kbFFFFFF)'};color:${_puedeEsp?'var(--kt281E12)':'var(--kt6F6357)'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?'⚡ especial':'🔒 especial'}</button>`
-      +`<button onclick="toggleBloqueoDesc('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?(_bloq?'Quitar el bloqueo: volver a costearle el % de descuento':'Bloquearlo para el % de descuento (igual que en Odoo): recibe promoción/bonificación en vez de %'):'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?(_bloq?'var(--kb7F1D1D)':'var(--kbFFFFFF)'):'var(--kbFFFFFF)'};color:${_puedeEsp?(_bloq?'var(--ktA80810)':'var(--kt6F6357)'):'var(--kt6F6357)'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?(_bloq?'🚫 bloqueado':'🔓 bloquear'):'🔒 bloquear'}</button></div>`;
+      +`<button onclick="toggleBloqueoDesc('${c.nombre.replace(/'/g,"\\'")}')" title="${_puedeEsp?(_bloq?'Quitar el bloqueo: volver a costearle el % de descuento':'Bloquearlo para el % de descuento (igual que en Odoo): recibe promoción/bonificación en vez de %'):'Modo visor: toca para iniciar sesión de super-usuario'}" style="background:${_puedeEsp?(_bloq?'var(--kb7F1D1D)':'var(--kbFFFFFF)'):'var(--kbFFFFFF)'};color:${_puedeEsp?(_bloq?'var(--ktFECACA)':'var(--kt6F6357)'):'var(--kt6F6357)'};border:none;border-radius:5px;padding:1px 6px;font-size:.6rem;cursor:pointer">${_puedeEsp?(_bloq?'🚫 bloqueado':'🔓 bloquear'):'🔒 bloquear'}</button></div>`;
     return `<tr>
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${c.nombre}">${nombreBtn}</td>
       <td style="text-align:right;font-weight:700;color:var(--gold-t)">${fmt(c.promMes)}</td>
@@ -1567,7 +1567,7 @@ function renderClienteTable(){
       <td><span class="tier-pill tier-${TIER_KEY[c.nivel]||c.nivel}">${TIER_ICONS[c.nivel]||''} ${c.nivel}</span></td>
       <td style="color:var(--kt1D7A45);font-size:.72rem" title="▲ ganó bono crecimiento · ◆ ganó bono premium · máx ${c.descMax.toFixed(1)}%">${descTxt}${descBtn}</td>
       <td style="color:var(--kt8A5000);font-size:.72rem">${c.promoSacos>0?fmt(c.promoSacos):'—'}</td>
-      <td><span class="seg-pill" style="background:${segC[c.seg]||'var(--kbEADFD3)'};color:${c.seg==='VIP'?'var(--kt281E12)':'var(--kt281E12)'}">${segL[c.seg]||c.seg}</span></td>
+      <td><span class="seg-pill" style="background:${segC[c.seg]||'var(--kbEADFD3)'};color:${c.seg==='VIP'?'var(--ktFFFFFF)':'var(--ktFFFFFF)'}">${segL[c.seg]||c.seg}</span></td>
       <td style="text-align:center;font-weight:700;color:${diasColor}">${diasTxt}</td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;color:var(--kt5A4E42)" title="${c.topProd}">${c.topProd.length>20?c.topProd.substring(0,20)+'…':c.topProd}</td>
       <td style="text-align:center;font-size:.7rem">${c.activos.map(m=>MES_NOM[m]).join(' ')}</td>
