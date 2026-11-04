@@ -477,7 +477,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
         <div class="field bsnp" style="display:none"><label>Pedido</label><input id="bs_ped"></div>
         <div class="field bsnp" style="display:none"><label>Fecha</label><input type="date" id="bs_fecha"></div>
         <div class="sech full">⚖️ Pesaje</div>
-        <div class="field"><label>Folio de báscula *</label><input id="bs_folio" style="text-transform:uppercase"></div>
+        <div class="field"><label>Folio de báscula *</label><input id="bs_folio" style="text-transform:uppercase" placeholder="Folio de Odoo · ej. S029504" maxlength="7"></div>
         <div class="field"><label>Báscula: quién registra *</label><input id="bs_oper" placeholder="Nombre"></div>
         <div class="field"><label>Placa</label><input id="bs_placa" style="text-transform:uppercase"></div>
         <div class="field"><label>Eco / unidad</label><input id="bs_eco" style="text-transform:uppercase"></div>
@@ -2334,7 +2334,9 @@ function cuadUnits(){
   DATA.forEach(r=>{ if(r.cancelado){ const b0=CUAD.bascula[r.id]; if(b0&&(b0.generado||b0.estimado||b0.sinOdoo)) seen.add(r.id); return; }   // embarque cancelado: su pesaje GENERADO (sin ticket real) ya no cuenta; uno con ticket real sí se sigue mostrando como «sin programa»
     const b=CUAD.bascula[r.id]||null; seen.add(r.id);
     if(!(isDesp(r)||b)) return;                 // lo que aún no sale ni se pesa no entra al cuadre
-    out.push({id:r.id,r,b,noProg:false,fecha:fechaEmb(r),per:perEmb(fechaEmb(r),b)}); });
+    /* perCont: periodo contable fijado por el master para que el mes cuadre con Odoo cuando la unidad salió un día
+       pero Odoo la liberó/facturó en el mes siguiente (corte de mes mal hecho). La fecha física de salida no se toca. */
+    out.push({id:r.id,r,b,noProg:false,fecha:fechaEmb(r),per:(/^\d{4}-\d{2}$/.test(r.perCont||'')?r.perCont:perEmb(fechaEmb(r),b))}); });
   Object.entries(CUAD.bascula).forEach(([id,b])=>{ if(seen.has(id)||!b) return;
     const r={id,pedido:b.pedido||'',cliente:b.cliente||'(sin cliente)',eco:b.eco||'',peso:0,fechaProg:b.fecha,fechaCarga:b.fecha,lotes:[],noProg:true};
     out.push({id,r,b,noProg:true,fecha:b.fecha||'',per:perEmb(b.fecha||'',b)}); });
@@ -2723,7 +2725,9 @@ function saveBasc(){
   if(!id){ toast('Elige el pedido programado (o usa «Unidad no programada»)'); return; }
   const r=bsNoProg?null:DATA.find(x=>x.id===id); const prev=CUAD.bascula[id]||null;
   const lock=prev?bascBloqueado(prev,r):''; if(lock&&!isMaster&&!isBasc){ toast('🔒 '+lock); return; }
-  const folio=g('bs_folio').toUpperCase(); if(!folio){ toast('Captura el folio de báscula'); return; }
+  const folio=g('bs_folio').toUpperCase().replace(/\s+/g,''); if(!folio){ toast('Captura el folio de báscula'); return; }
+  // el folio debe ser el MISMO que queda en Odoo (formato S + 6 dígitos, ej. S029504) para poder cruzar báscula ↔ Odoo
+  if(!/^S\d{6}$/.test(folio)&&!(prev&&String(prev.folio||'').toUpperCase()===folio)){ toast('El folio debe ser el de Odoo: S + 6 dígitos (ej. S029504)',5000); return; }
   const oper=(isBasc&&bascName&&!(prev&&prev.oper))?bascName:g('bs_oper'); if(!oper){ toast('Captura el nombre de quien pesa y registra (para saber quién capturó)'); return; }
   const dup=Object.entries(CUAD.bascula).find(([k,x])=>k!==id&&x&&String(x.folio||'').toUpperCase()===folio); if(dup){ toast('🚫 El folio '+folio+' ya está en otro pesaje ('+(dup[1].pedido||(DATA.find(x=>x.id===dup[0])||{}).pedido||dup[0])+')',5000); return; }
   const bruto=Number(g('bs_bruto'))||0, tara=Number(g('bs_tara'))||0; if(!(bruto>0&&tara>=0&&bruto>tara)){ toast('Captura peso bruto y tara (el bruto debe ser mayor)'); return; }
@@ -3721,7 +3725,7 @@ function cuadPasosHtml(cu,r,b,id){
 /* ================= TABLERO «¿ESTÁN LAS ÁREAS A LA PAR?» ================= */
 function cuadStepsHtml(D){
   const P=D.P, cus=D.cus, cfg=cuadCfg();
-  const progs=DATA.filter(r=>!r.cancelado&&perDe(fechaEmb(r))===P);
+  const progs=DATA.filter(r=>!r.cancelado&&((/^\d{4}-\d{2}$/.test(r.perCont||'')?r.perCont:perDe(fechaEmb(r)))===P));
   const progRez=progs.filter(r=>!isDesp(r)&&!CUAD.bascula[r.id]&&fechaEmb(r)&&fechaEmb(r)<TODAY);
   const despCarg=cus.filter(c=>!c.u.noProg&&isDesp(c.u.r)&&fechaEmb(c.u.r)>=lotesDesde());
   const cargOk=despCarg.filter(c=>lotesDe(c.u.r).length), cargPend=despCarg.filter(c=>!lotesDe(c.u.r).length);
