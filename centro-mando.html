@@ -4,30 +4,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Centro de Mando 19H</title>
-<meta name="theme-color" content="#0b1a2e">
+<meta name="theme-color" content="#DE0A14">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Mando 19H">
 <link rel="icon" href="clientes/img/favicon.png">
 <link rel="apple-touch-icon" href="clientes/img/icono-180.png">
 <link rel="manifest" href="centro-mando.webmanifest">
 <style>
-:root{--bg:#0b1a2e;--bg2:#102540;--card:#13294a;--line:rgba(255,255,255,.09);--tx:#eef3fa;--mut:#9fb0c8;--gold:#E8A020;--gold2:#f6c45c;
-  --ok:#2fbf71;--warn:#f0a92a;--bad:#ef5350;--info:#4aa3ff;--r:14px}
+:root{--bg:#FBF7F2;--bg2:#FBF7F2;--card:#FFFFFF;--line:#EADFD3;--tx:#281E12;--mut:#8C8178;--gold:#DE0A14;--gold2:#DE0A14;--rojo:#DE0A14;--rojo-o:#A80810;--rojo-s:#FDE8E9;
+  --ok:#1D7A45;--warn:#A35F00;--bad:#C8102E;--info:#1F4E8C;--r:16px;--sh:0 1px 2px rgba(40,30,18,.06),0 6px 20px rgba(40,30,18,.07);
+  --font:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--fd:"Archivo",system-ui,sans-serif}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 var(--font);-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.kpi .v,.pipe b,header .t b{font-family:var(--fd)}
 a{color:inherit}
-header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#0b1a2e 70%,rgba(11,26,46,.92));border-bottom:1px solid var(--line);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px}
-header img{height:34px;width:auto;background:#fff;border-radius:8px;padding:3px}
+header{position:sticky;top:0;z-index:5;background:var(--rojo);color:#fff;box-shadow:0 2px 10px rgba(168,8,16,.25);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:12px}
+.sellos19{display:flex;align-items:center;flex:none}.sellos19 span{width:42px;height:42px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.35)}.sellos19 span+span{margin-left:-12px}.sellos19 img{width:38px;height:38px;object-fit:contain}
+header .btn{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.35);color:#fff}header .btn:hover{background:rgba(255,255,255,.26);border-color:#fff}
 header .t{flex:1;min-width:0}
 header .t b{display:block;font-size:16px;letter-spacing:.2px}
-header .t span{font-size:12px;color:var(--mut)}
+header .t span{font-size:12px;color:#fff;opacity:.88}
 .btn{appearance:none;border:1px solid var(--line);background:var(--bg2);color:var(--tx);border-radius:10px;padding:8px 12px;font:600 13px system-ui,sans-serif;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-.btn:hover{border-color:var(--gold)}
-.btn.pri{background:var(--gold);border-color:var(--gold);color:#1b1200}
+.btn:hover{border-color:var(--rojo)}
+.btn.pri{background:var(--rojo);border-color:var(--rojo);color:#fff}
 .btn.sm{padding:5px 9px;font-size:12px}
 main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 14px 12px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 14px 12px;min-width:0;box-shadow:var(--sh)}
 .card h2{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
 .card h2 .src{margin-left:auto;font:500 11px system-ui;color:var(--mut);text-align:right}
 .card.wide{grid-column:1/-1}
@@ -37,10 +41,10 @@ main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
 .kpi .v{font-size:22px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
 .kpi .s{font-size:12px;color:var(--mut)}
 .kpi.ok .v{color:var(--ok)}.kpi.warn .v{color:var(--warn)}.kpi.bad .v{color:var(--bad)}.kpi.gold .v{color:var(--gold2)}
-.bar{height:8px;background:rgba(255,255,255,.08);border-radius:9px;overflow:hidden;position:relative}
+.bar{height:8px;background:#F3ECE4;border-radius:9px;overflow:hidden;position:relative}
 .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:9px;background:var(--gold)}
 .bar.ok i{background:var(--ok)}.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}
-.bar .mk{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;opacity:.7}
+.bar .mk{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--tx);opacity:.55}
 .rows{display:flex;flex-direction:column;gap:9px}
 .row{display:grid;grid-template-columns:minmax(90px,1.1fr) 2fr auto;gap:10px;align-items:center;font-size:13px}
 .row .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -54,7 +58,7 @@ main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
 .list li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .list li span:last-child{color:var(--mut);white-space:nowrap}
 .pill{display:inline-block;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700}
-.p-bad{background:rgba(239,83,80,.18);color:#ff8a80}.p-warn{background:rgba(240,169,42,.18);color:#ffc865}.p-ok{background:rgba(47,191,113,.18);color:#6ee7a6}
+.p-bad{background:#FDE8E9;color:#A80810}.p-warn{background:#FCF0DC;color:#A35F00}.p-ok{background:#E3F3EA;color:#1D7A45}
 .mut{color:var(--mut)}.small{font-size:12px}
 .alerts{display:flex;flex-direction:column;gap:6px}
 .alert{display:flex;gap:10px;align-items:center;background:var(--bg2);border-left:4px solid var(--warn);border-radius:9px;padding:8px 10px;font-size:13.5px}
@@ -62,22 +66,22 @@ main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
 .alert a{margin-left:auto;font-size:12px;color:var(--gold2);white-space:nowrap}
 .apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .app{display:flex;flex-direction:column;gap:2px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px;text-decoration:none}
-.app:hover{border-color:var(--gold)}
+.app:hover{border-color:var(--rojo)}
 .app b{font-size:13.5px}.app span{font-size:11.5px;color:var(--mut)}
 .app .ic{font-size:20px}
 .apps h3{grid-column:1/-1;margin:8px 0 0;font-size:12px;color:var(--gold2);text-transform:uppercase;letter-spacing:.5px}
-.gate{max-width:380px;margin:9vh auto;padding:22px;background:var(--card);border:1px solid var(--line);border-radius:18px;text-align:center}
-.gate img{height:58px;background:#fff;border-radius:10px;padding:4px}
+.gate{max-width:380px;margin:9vh auto;padding:22px;background:var(--card);border:1px solid var(--line);border-radius:18px;text-align:center;box-shadow:var(--sh);border-top:5px solid var(--rojo)}
+.gate img{height:70px}
 .gate h1{font-size:19px;margin:14px 0 4px}
 .gate input,.mini input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--tx);font-size:15px;margin-top:8px}
 .gate .btn{width:100%;justify-content:center;margin-top:12px;padding:11px}
-.err{color:#ff8a80;font-size:13px;min-height:1.2em;margin-top:8px}
+.err{color:#C8102E;font-size:13px;min-height:1.2em;margin-top:8px}
 .mini{display:flex;flex-direction:column;gap:2px;margin-top:6px}
 .mini .btn{justify-content:center;margin-top:8px}
 .empty{color:var(--mut);font-size:13px;padding:6px 0}
 .chart{width:100%;height:auto;display:block}
 footer{max-width:1200px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-size:12px}
-.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--mut);border-top-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-1px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-1px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (max-width:520px){.grid{grid-template-columns:1fr}.kpi .v{font-size:19px}header .t b{font-size:14.5px}.row{grid-template-columns:minmax(80px,1fr) 1.4fr auto}}
 </style>
@@ -208,7 +212,7 @@ async function salir() { if (!confirm('¿Cerrar sesión del Centro de Mando en e
 /* ================= CARGA DE DATOS ================= */
 function arrancar() {
   const quien = (S.inv && S.inv.nombre) || (S.rh && S.rh.nombre) || 'Gerencia';
-  $('#root').innerHTML = `<header><img src="clientes/img/logo-19h.png" alt="19 Hermanos"><div class="t"><b>Centro de Mando · Gerencia Comercial</b><span id="hsub">${esc(quien)} · cargando…</span></div>
+  $('#root').innerHTML = `<header><div class="sellos19"><span><img src="clientes/img/logo-19h.png" alt="Los 19 Hermanos"></span><span><img src="clientes/img/logo-petfood.png" alt="Pet Food"></span></div><div class="t"><b>Centro de Mando · Gerencia Comercial</b><span id="hsub">${esc(quien)} · cargando…</span></div>
     <button class="btn sm" id="bref" title="Actualizar">⟳</button><button class="btn sm" onclick="salir()" title="Cerrar sesión">Salir</button></header>
     <main><div class="card wide" id="c-alertas" style="margin-bottom:14px"><h2>🚨 Lo que requiere tu atención</h2><div class="alerts"><div class="empty"><span class="spin"></span> Reuniendo información…</div></div></div>
     <div class="grid">
@@ -395,7 +399,7 @@ function pintarVentas(V) {
     ${kpi('Clientes nuevos', fmt(V.nuevos), 'meta ' + fmt(V.nuevosMeta), V.nuevosMeta ? sem(V.nuevos / V.nuevosMeta, 1, .6) : '')}
   </div>`;
   h += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">`;
-  h += `<div><div class="mut small" style="margin-bottom:8px">Avance por vendedor · proyección del mes vs meta (marca blanca = 100%)</div><div class="rows">` +
+  h += `<div><div class="mut small" style="margin-bottom:8px">Avance por vendedor · proyección del mes vs meta (la marca es el 100%)</div><div class="rows">` +
     (V.vend.length ? V.vend.map(x => `<div class="row"><span class="n" title="${esc(x.n)}">${esc(x.n)}</span>${barra(x.av == null ? 0 : x.av / 1.3, x.av == null ? '' : sem(x.av, 1, .9), 1 / 1.3)}<span class="p">${x.av == null ? '—' : Math.round(x.av * 100) + '%'}</span></div>`).join('') : '<div class="empty">Sin vendedores publicados.</div>') + `</div></div>`;
   h += `<div><div class="mut small" style="margin-bottom:6px">Sacos por mes · ${V.cy || ''} vs ${V.py || ''}</div>${graficaMeses(V)}</div>`;
   h += `</div>`;
@@ -410,11 +414,11 @@ function graficaMeses(V) {
   let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sacos por mes">`;
   for (let i = 0; i < n; i++) {
     const x = pl + i * bw; const hp = (H - pb - 6) * V.prior[i] / mx, hc = (H - pb - 6) * V.cur[i] / mx;
-    s += `<rect x="${x + bw * .12}" y="${H - pb - hp}" width="${bw * .36}" height="${hp}" rx="2" fill="rgba(255,255,255,.22)"><title>${MES[i]} ${V.py}: ${fmt(V.prior[i])}</title></rect>`;
-    s += `<rect x="${x + bw * .5}" y="${H - pb - hc}" width="${bw * .36}" height="${hc}" rx="2" fill="${i === V.m - 1 ? '#f6c45c' : '#E8A020'}"><title>${MES[i]} ${V.cy}: ${fmt(V.cur[i])}</title></rect>`;
-    s += `<text x="${x + bw / 2}" y="${H - 5}" fill="#9fb0c8" font-size="9" text-anchor="middle">${MES[i].slice(0, 3)}</text>`;
+    s += `<rect x="${x + bw * .12}" y="${H - pb - hp}" width="${bw * .36}" height="${hp}" rx="2" fill="#D9CBBB"><title>${MES[i]} ${V.py}: ${fmt(V.prior[i])}</title></rect>`;
+    s += `<rect x="${x + bw * .5}" y="${H - pb - hc}" width="${bw * .36}" height="${hc}" rx="2" fill="${i === V.m - 1 ? '#A80810' : '#DE0A14'}"><title>${MES[i]} ${V.cy}: ${fmt(V.cur[i])}</title></rect>`;
+    s += `<text x="${x + bw / 2}" y="${H - 5}" fill="#8C8178" font-size="9" text-anchor="middle">${MES[i].slice(0, 3)}</text>`;
   }
-  return s + `</svg><div class="small mut"><span style="color:#E8A020">■</span> ${V.cy || ''} &nbsp; <span style="color:rgba(255,255,255,.4)">■</span> ${V.py || ''}</div>`;
+  return s + `</svg><div class="small mut"><span style="color:#DE0A14">■</span> ${V.cy || ''} &nbsp; <span style="color:#D9CBBB">■</span> ${V.py || ''}</div>`;
 }
 function pintarCli(C) {
   const el = $('#c-clientes'); let h = '<h2>📱 App de clientes · prepedidos</h2>';
@@ -475,7 +479,7 @@ function pintarPT(P) {
   else if (!P.fam.some(f => f.stock != null)) h += '<div class="empty">La proyección se publicó sin inventario real. Captúralo en la pestaña Proyección del programador para ver los días de cobertura.</div>';
   else {
     const ref = Math.max(P.minD || 15, 1) * 2;
-    h += `<div class="mut small" style="margin-bottom:8px">Días de cobertura al ritmo de venta${P.minD ? ' · mínimo ' + P.minD + ' días (marca blanca)' : ''} · ${esc(P.upd || '')}</div><div class="rows">` +
+    h += `<div class="mut small" style="margin-bottom:8px">Días de cobertura al ritmo de venta${P.minD ? ' · mínimo ' + P.minD + ' días' : ''} · ${esc(P.upd || '')}</div><div class="rows">` +
       P.fam.slice(0, 9).map(f => { const c = f.dias == null ? '' : (P.minD ? (f.dias >= P.minD ? 'ok' : f.dias >= P.minD * .6 ? 'warn' : 'bad') : ''); return `<div class="row"><span class="n" title="${esc(f.n)}">${esc(f.n)}</span>${barra(f.dias == null ? 0 : f.dias / ref, c, P.minD ? P.minD / ref : null)}<span class="p">${f.dias == null ? '—' : fmt(f.dias, 0) + ' d'}</span></div>`; }).join('') + `</div>`;
   }
   h += `<div style="margin-top:10px">${lnk('programador.html', '📈 Proyección')}</div>`;
