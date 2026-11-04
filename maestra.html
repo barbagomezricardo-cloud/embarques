@@ -1,6 +1,7 @@
 <!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Silver Kan — Gerencia (Maestra)</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="seguridad-19h.js"></script>
 <style>
 :root{--navy:#1A2E5A;--gold:#E8A020;--bg:#0F1E3C;--mid:#162340;--green:#22c55e;--red:#ef4444;--amber:#f59e0b}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -632,14 +633,14 @@ function fetchMContactoPend(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).
 // ── Modo edición para gerencia (misma contraseña de super-usuario que ventas.html) ──
 // Por defecto maestra.html es de solo lectura (la puede ver más gente); con esta
 // contraseña Ricardo puede, si quiere, editar o borrar el contacto de un cliente aquí mismo.
-const SUPER_PWD='Poseidon201085';   // ← debe ser LA MISMA que en ventas.html
+// Contraseña de super-usuario: la misma de ventas.html, verificada cifrada con seguridad-19h.js (ya no está en el código).
 let M_SUPER=false;
 function unlockMSuper(){
   if(M_SUPER){M_SUPER=false;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}return;}
   var p=prompt('Contraseña de super-usuario (la misma de ventas.html):');
   if(p===null)return;
-  if(p===SUPER_PWD){M_SUPER=true;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}}
-  else alert('Contraseña incorrecta.');
+  if(!window.Seguridad19H){alert('No se cargó el módulo de seguridad (seguridad-19h.js). Abre la app desde su link de GitHub.');return;}
+  Seguridad19H.verificar(p).then(function(r){ if(r.ok){M_SUPER=true;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}} if(r.aviso)alert(r.aviso); });
 }
 function parseLatLon(text){
   text=(text||'').trim(); if(!text)return null;

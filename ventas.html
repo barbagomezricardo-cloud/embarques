@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="seguridad-19h.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--navy:#1A2E5A;--gold:#E8A020;--white:#fff;--light:#F0F4FA;--red:#C00000;--green:#1A7A3F;--gray:#6B7280;--amber:#D97706;--bg:#0F1E3C;--mid:#162340;--wa:#25D366}
@@ -909,7 +910,7 @@ function handleFile(file){
   document.getElementById('dropzone').style.display='none';
   document.getElementById('loading').style.display='flex';
   document.getElementById('load-msg').textContent='Leyendo '+file.name+'...';
-  setTimeout(()=>{const r=new FileReader();r.onload=e=>processExcel(e.target.result,file.name);r.onerror=()=>{alert('Error al leer el archivo.');resetDash();};r.readAsArrayBuffer(file);},50);
+  setTimeout(()=>{const r=new FileReader();r.onload=e=>{const _buf=e.target.result; processExcel(_buf,file.name); guardarUltimoOdoo(_buf,file.name);};r.onerror=()=>{alert('Error al leer el archivo.');resetDash();};r.readAsArrayBuffer(file);},50);
 }
 
 // ── PROCESS EXCEL ─────────────────────────────────────────────────────────────
@@ -1392,7 +1393,7 @@ function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDa
     const prodCatalog={}; for(const c of clients){ for(const p in (c.prods||{})) prodCatalog[p]=(prodCatalog[p]||0)+(c.prods[p]||0); }
     DATA={clients,meses,mesTotal,peakMes,byEstado,byVendedor,totalSacos,mapping,promoMesTon:promoMesTon||{},dataYear:(LAST_DATA_YEAR||0),diaMes:(LAST_DIAMES||{}),diaMesVend,esDiario:LAST_ESDIARIO,completos:_completos,prodCatalog,tieneMontoReal:!!window.LAST_TIENE_MONTO,tieneSubtotalSinIva:!!window.LAST_TIENE_SUBTOTAL,excluidaProd:window.LAST_EXCLUIDA_PROD||{},todosMesSacos:window.LAST_TODOS_MES_SACOS||{},todosMesVal:window.LAST_TODOS_MES_VAL||{},todosMesValSinIva:window.LAST_TODOS_MES_VALSINIVA||{},todosProdMesSacos:window.LAST_TODOS_PROD_MES_SACOS||{},todosProdMesValSinIva:window.LAST_TODOS_PROD_MES_VALSINIVA||{},todosMesCot:window.LAST_TODOS_MES_COT||{},todosMesDesc:window.LAST_TODOS_MES_DESC||{},dupList:window.LAST_DUP_LIST||[],dupMes:window.LAST_DUP_MES||{},lineas:window.LAST_LINEAS||[],fname:fname};
     try{const _b={};for(const _c of clients){const _kk=nkey(_c.nombre);const _mm=Array(12).fill(0);for(const _x in _c.mesData)_mm[_x-1]=_c.mesData[_x];_b[_kk]={m:_mm,t:Math.round(clientTons(_c)*100)/100,tm:clientTonsMes(_c).map(function(x){return Math.round(x*100)/100;})};}if(LAST_DATA_YEAR)localStorage.setItem('baseline04mas_'+LAST_DATA_YEAR,JSON.stringify(_b));if(LAST_DATA_YEAR&&LAST_DIAMES&&Object.keys(LAST_DIAMES).length)localStorage.setItem('baseline04mas_daym_'+LAST_DATA_YEAR,JSON.stringify(LAST_DIAMES));
-      if(typeof pushBaselineCloud==='function')pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
+      if(typeof pushBaselineCloud==='function'&&!window._RESTAURANDO_ODOO)pushBaselineCloud(LAST_DATA_YEAR);}catch(e){}
     try{if(typeof autoPublishCloud==='function')autoPublishCloud();}catch(e){}
     document.getElementById('load-msg').textContent='Dibujando dashboard...';
     setTimeout(()=>{ renderDashboard(fname); try{ if(typeof autoPublishResumenSemanal==='function') autoPublishResumenSemanal(); }catch(e){} },50);
@@ -6752,7 +6753,8 @@ async function skFetch(url, opts){
   return fetch(url, opts);
 }
 /* ===== ROL: super-usuario (edita/publica) vs visor (solo ver/filtrar) ===== */
-const SUPER_PWD='Poseidon201085';   // ← CONTRASEÑA DE SUPER-USUARIO. Cámbiala por la que quieras.
+// La contraseña de super-usuario ya NO está en el código: se verifica cifrada con seguridad-19h.js
+// (se cambia desde el Panel de Licencia → «🔑 Contraseña de super-usuario»).
 let SK_SUPER=false;
 function reqSuper(){ if(!SK_SUPER){ alert('🔒 Modo visor: solo el super-usuario puede editar, borrar o publicar.\nToca el botón de la cabecera e ingresa la contraseña.'); return false; } return true; }
 var VISOR_TABS=['grafica','vendedores','seguimiento']; // lo único que ve un usuario normal
@@ -6778,7 +6780,8 @@ function applyRole(){
 function toggleSuper(){ setTimeout(function(){try{renderMapeoTable();}catch(e){}try{renderCorteBar();}catch(e){}},60);
   if(SK_SUPER){ SK_SUPER=false; applyRole(); return; }
   var p=prompt('Contraseña de super-usuario (para editar configuración, mapeo y publicar):'); if(p===null) return;
-  if(p===SUPER_PWD){ SK_SUPER=true; applyRole(); } else { alert('Contraseña incorrecta.'); }
+  if(!window.Seguridad19H){ alert('No se cargó el módulo de seguridad (seguridad-19h.js). Abre la app desde su link de GitHub.'); return; }
+  Seguridad19H.verificar(p).then(function(r){ if(r.ok){ SK_SUPER=true; applyRole(); } if(r.aviso) alert(r.aviso); });
 }
 function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app)c.app=SK_APP; if(!c.master)c.master=SK_MASTER; return c;}
 function saveCloudCfg(){ if(!reqSuper())return;const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));pushConfigCloud(true);renderCodesPanel();}
@@ -7268,7 +7271,7 @@ function renderCodesPanel(){
   h+='<div style="font-size:.74rem;color:#94a3b8;margin-bottom:8px">Configúralo una sola vez. Cada que cargues Odoo, los datos (ya sanitizados — NUNCA el archivo financiero) se publican solos y la app de cada vendedor se actualiza sola desde su link fijo, en cualquier celular.</div>';
   h+='<div style="display:grid;grid-template-columns:1fr;gap:6px;margin-bottom:8px">';
   h+='<input id="cl-db" placeholder="URL Realtime Database (https://xxxxx-default-rtdb.firebaseio.com)" value="'+esc(cfg.db)+'" style="background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem">';
-  h+='<input id="cl-sec" placeholder="Secreto de la base (Database secret de Firebase)" value="'+esc(cfg.secret)+'" style="background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem">';
+  h+='<input id="cl-sec" type="password" autocomplete="off" placeholder="Secreto de la base (Database secret de Firebase)" value="'+esc(cfg.secret)+'" style="background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem">';
   h+='<input id="cl-app" placeholder="URL donde subiste la app de VENDEDOR (https://tuproyecto.netlify.app/App_Vendedor_04MAS.html)" value="'+esc(cfg.app)+'" style="background:#0b1628;border:1px solid #24304f;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem">';
   h+='<input id="cl-master" placeholder="URL donde subiste la App MAESTRA (https://tuproyecto.netlify.app/App_Maestra_04MAS.html) — solo para ti y dirección" value="'+esc(cfg.master||'')+'" style="background:#0b1628;border:1px solid #7c5cff;border-radius:6px;color:#cbd5e1;padding:7px;font-size:.72rem">';
   h+='</div>';
@@ -7662,7 +7665,32 @@ function renderProyeccion(){
 renderMapeoTable();
 applyRole();   // arranca en modo visor (config/mapeo/publicar ocultos hasta super-usuario)
 // Jala la configuración desde la nube (si existe) para que cualquier navegador abra "listo"
-syncConfigCloud(function(){ try{renderMapeoTable();applyRole();}catch(e){} });
+syncConfigCloud(function(){ try{renderMapeoTable();applyRole();}catch(e){} try{restaurarUltimoOdoo();}catch(e){} });
+// ── Última carga de Odoo: al recargar o volver a abrir, se sigue mostrando lo último que cargaste
+//    en ESTE equipo (se guarda en IndexedDB). No publica nada a la nube: solo la vuelve a mostrar.
+function guardarUltimoOdoo(buf,name){   // se guarda solo si el archivo sí se pudo leer (hay datos en pantalla)
+  setTimeout(function(){ try{
+    if(typeof DATA==='undefined'||!DATA)return;
+    _idbSet('ultimoOdoo',{buf:buf,name:name,ts:Date.now()}).catch(function(){});
+    var hs=document.querySelector('.header-sub'); if(hs) hs.textContent='📄 Carga actual: '+name+' · se conserva aunque recargues o cierres la página';
+  }catch(e){} },400);
+}
+function restaurarUltimoOdoo(){
+  if(typeof DATA!=='undefined'&&DATA)return;
+  _idbGet('ultimoOdoo').then(function(o){
+    if(!o||!o.buf||(typeof DATA!=='undefined'&&DATA))return;
+    var f=new Date(o.ts||Date.now()), p=function(n){return ('0'+n).slice(-2);};
+    var cuando=p(f.getDate())+'/'+p(f.getMonth()+1)+'/'+f.getFullYear()+' '+p(f.getHours())+':'+p(f.getMinutes());
+    document.getElementById('dropzone').style.display='none';
+    document.getElementById('loading').style.display='flex';
+    document.getElementById('load-msg').textContent='Abriendo tu última carga: '+o.name+' ('+cuando+')…';
+    setTimeout(function(){
+      window._RESTAURANDO_ODOO=true;
+      try{ processExcel(o.buf,o.name); }finally{ window._RESTAURANDO_ODOO=false; }
+      var hs=document.querySelector('.header-sub'); if(hs) hs.innerHTML='📄 Mostrando tu última carga: <b>'+String(o.name).replace(/[<>&]/g,'')+'</b> · '+cuando+' — carga un reporte nuevo para actualizar';
+    },60);
+  }).catch(function(){});
+}
 syncBaselinesCloud();   // recupera del respaldo la base de años anteriores si este navegador no la tiene
 // ── Candado de licencia: si apagas licencia/activa en tu Firebase, el tablero se bloquea ──
 (function(){try{skFetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(!(l&&l.activa===true)){document.body.innerHTML='<div style="max-width:460px;margin:70px auto;text-align:center;font-family:-apple-system,Segoe UI,sans-serif;color:#e8eef7"><div style="font-size:46px">🔒</div><h2 style="color:#E8A020;margin:12px 0">Servicio no disponible</h2><p style="color:#94a3b8">Este tablero está desactivado temporalmente.</p></div>';}}).catch(function(){});}catch(e){}})();
