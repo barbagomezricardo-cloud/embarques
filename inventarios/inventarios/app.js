@@ -1308,6 +1308,69 @@
       I.toast('Avisos activados en este dispositivo ✔', 'ok');
     } catch (e) { I.toast('No se pudo activar: ' + e.message, 'err'); }
   }
+  /* Reinicio de operación (solo master): eliges qué borrar. Siempre descarga un respaldo antes.
+     Usuarios, licencia y configuración nunca se borran (para no quedarte fuera del programa). */
+  const RESET_GRUPOS = [
+    { id: 'exist', t: 'Existencias (físico MDE/insumos y PT)', on: true, nodos: ['fisico', 'pt'] },
+    { id: 'movs', t: 'Movimientos, cortes de PT y manufacturas', on: true, nodos: ['movimientos', 'ptCortes', 'manufacturas'] },
+    { id: 'conteos', t: 'Conteos cíclicos', on: true, hijos: ['conteos'] },
+    { id: 'prod', t: 'Entregas y solicitudes de producción', on: true, hijos: ['entregas', 'solicitudes'] },
+    { id: 'silos', t: 'Silos: nivel actual e historial (los silos se quedan)', on: true, nodos: ['silosLect', 'silosHist'] },
+    { id: 'odoo', t: 'Último teórico de Odoo cargado', on: true, nodos: ['odoo'] },
+    { id: 'llegRec', t: 'Llegadas ya recibidas o canceladas', on: true, llegadas: 'cerradas' },
+    { id: 'proy', t: 'Proyección de compra: OC fincadas, por comprar y por recibir + notas de compra', on: false, llegadas: 'pendientes', nodos: ['notasCompra'] },
+    { id: 'cat', t: 'Catálogo completo (artículos, PT, silos, densidades, consumo de Odoo)', on: false, nodos: ['catalogo', 'catalogoPT', 'silos', 'densidades', 'config/consumoOdoo', 'meta/seed'] }
+  ];
+  async function reiniciarOperacion() {
+    if (!can('master')) return I.toast('Solo el master puede reiniciar', 'err');
+    let sel = [];
+    const r = await I.modal('Reiniciar inventarios', `<div class="warn">Esta acción no se puede deshacer desde el programa. Antes de borrar se descarga un respaldo completo.</div>
+      <p class="small"><b>¿Qué quieres borrar?</b></p>
+      ${RESET_GRUPOS.map(g => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0"><input type="checkbox" data-rg="${g.id}" ${g.on ? 'checked' : ''}> <span>${esc(g.t)}</span></label>`).join('')}
+      <div class="row" style="margin:8px 0"><button class="btn sm" id="rs-op">Solo operación</button><button class="btn sm danger" id="rs-all">Todo (desde cero)</button></div>
+      <p class="muted small">Usuarios, licencia y configuración nunca se borran.</p>
+      <label>Escribe <b>REINICIAR</b> para confirmar<input id="rs-c" autocapitalize="characters" autocomplete="off"></label>`,
+      [{ t: 'Cancelar', v: 0 }, { t: '🧹 Respaldar y reiniciar', c: 'danger', v: 1, antes: ov => {
+        sel = $$('[data-rg]', ov).filter(c => c.checked).map(c => c.dataset.rg);
+        if (!sel.length) { I.toast('Elige al menos una opción', 'err'); return false; }
+        if ($('#rs-c', ov).value.trim().toUpperCase() !== 'REINICIAR') { I.toast('Escribe REINICIAR para confirmar', 'err'); return false; }
+      } }],
+      { onOpen: ov => {
+        $('#rs-op', ov).onclick = () => $$('[data-rg]', ov).forEach(c => c.checked = RESET_GRUPOS.find(g => g.id === c.dataset.rg).on);
+        $('#rs-all', ov).onclick = () => $$('[data-rg]', ov).forEach(c => c.checked = true);
+      } });
+    if (r.v !== 1) return;
+    const grupos = RESET_GRUPOS.filter(g => sel.includes(g.id));
+    const desdeCero = grupos.length === RESET_GRUPOS.length;
+    try {
+      I.toast('Generando respaldo…');
+      const NODOS = ['fisico', 'pt', 'movimientos', 'ptCortes', 'manufacturas', 'conteos', 'entregas', 'solicitudes', 'silosLect', 'silosHist', 'odoo', 'llegadas', 'notasCompra', 'catalogo', 'catalogoPT', 'silos', 'densidades', 'config', 'meta'];
+      const datos = {};
+      for (const n of NODOS) { try { datos[n] = (await DB.get(n)) || null; } catch (e) { datos[n] = null; } }
+      const ts = Date.now();
+      const archivo = 'Respaldo_inventarios_' + hoyISO() + '_' + new Date(ts).toTimeString().slice(0, 5).replace(':', '') + '.json';
+      const blob = new Blob([JSON.stringify({ fecha: new Date(ts).toISOString(), por: USER.nombre, borrar: sel, datos }, null, 1)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = archivo; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      if (!(await I.confirmar('Confirmar reinicio', 'Se descargó el respaldo <b>' + esc(archivo) + '</b>. Verifica que esté en tus Descargas.<br><br>Se borrará:<br>• ' + grupos.map(g => esc(g.t)).join('<br>• ') + '<br><br>¿Continuar?', 'Sí, borrar'))) return I.toast('Reinicio cancelado — no se borró nada');
+      const fallos = [];
+      for (const g of grupos) {
+        const up = {};
+        (g.nodos || []).forEach(n => up[n] = null);
+        (g.hijos || []).forEach(n => Object.keys(datos[n] || {}).forEach(k => up[n + '/' + k] = null));
+        if (g.llegadas) Object.keys(datos.llegadas || {}).forEach(k => {
+          const e = (datos.llegadas[k] || {}).estado, cerrada = e === 'recibido' || e === 'cancelado';
+          if ((g.llegadas === 'cerradas') === cerrada) up['llegadas/' + k] = null;
+        });
+        if (!Object.keys(up).length) continue;
+        try { await DB.update(up); } catch (e) { fallos.push(g.t + ' (' + e.message + ')'); }
+      }
+      try { await I.mov({ tipo: 'sistema', nota: (desdeCero ? 'Reinicio total desde cero' : 'Reinicio parcial: ' + grupos.map(g => g.t).join('; ')) + '. Respaldo: ' + archivo + (fallos.length ? '. Sin permiso para: ' + fallos.join('; ') : '') }); } catch (e) { }
+      if (fallos.length) I.modal('Reinicio incompleto', '<p>No se pudo borrar:</p><p class="small">• ' + fallos.map(esc).join('<br>• ') + '</p><p class="muted small">Lo demás sí se borró. Tienes el respaldo ' + esc(archivo) + '.</p>');
+      else I.toast('Reinicio listo ✔ — ' + (desdeCero ? 'el programa quedó en cero; carga tu catálogo y existencias.' : 'ya puedes cargar la existencia actual.'), 'ok');
+    } catch (e) { I.toast('No se pudo reiniciar: ' + e.message, 'err'); }
+  }
+
   VIEWS.config = {
     mount(el) {
       el.innerHTML = `<div class="grid g2" style="align-items:start">
@@ -1326,7 +1389,11 @@
         <div class="row" style="margin-top:8px"><button class="btn pri" id="av-s">Guardar</button><button class="btn" id="av-n">🔔 Activar en este dispositivo</button><button class="btn" id="av-t">Enviar aviso de prueba</button></div></div>
       <div class="card"><div class="card-h"><h2>📦 Catálogo</h2></div><div id="cf-seed"></div></div>
       <div class="card"><div class="card-h"><h2>🔐 Licencia y conexión</h2></div><div id="cf-lic" class="small"></div></div>
+      <div class="card"><div class="card-h"><h2>🧹 Reiniciar inventarios</h2></div>
+        <p class="muted small">Para cuando se pierde el control: eliges qué borrar (solo operación, también la proyección de compra o todo desde cero, incluso el catálogo). Antes de borrar se descarga un respaldo completo (JSON). Usuarios, licencia y configuración nunca se borran.</p>
+        <div class="row" style="margin-top:8px"><button class="btn danger" id="cf-rst">🧹 Reiniciar…</button></div></div>
       </div>`;
+      $('#cf-rst').onclick = reiniciarOperacion;
       $('#cf-s').onclick = async () => { await DB.update({ 'config/recordatorio/hora': $('#cf-h').value || '08:00', 'config/recordatorio/activo': $('#cf-a').checked, 'config/recordatorio/dias': $$('[data-dw]').filter(c => c.checked).map(c => +c.dataset.dw) }); I.toast('Guardado ✔', 'ok'); };
       $('#cf-t').onclick = async () => { try { const j = await I.fn('invAdmin', { accion: 'notifPrueba' }); I.toast('Enviada a ' + (j.enviados || 0) + ' dispositivo(s)', 'ok'); } catch (e) { I.toast(e.message, 'err'); } };
       const av = Object.assign({ monto: 10000, pct: 20, activo: true }, S.config.avisoAjuste || {});
