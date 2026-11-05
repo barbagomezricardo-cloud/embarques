@@ -1368,7 +1368,16 @@
           });
           if (Object.keys(up).length) pasos.push(['llegadas', up]);
         }
-        for (const [n, up] of pasos) { try { await DB.update(up); } catch (e) { fallos.push(n + ' (' + e.message + ')'); } }
+        for (const [n, up] of pasos) {
+          try { await DB.update(up); }
+          catch (e) {
+            /* Si las reglas no dejan borrar el nodo entero, se intenta registro por registro */
+            const v = valor(n), hijos = (v && typeof v === 'object' && !Array.isArray(v) && up[n] === null) ? Object.keys(v) : [];
+            let malos = hijos.length ? 0 : 1;
+            for (const k of hijos) { try { await DB.update({ [n + '/' + k]: null }); } catch (e2) { malos++; } }
+            if (malos) fallos.push(n + (hijos.length ? ' (' + malos + ' de ' + hijos.length + ' registros sin permiso)' : ' (' + e.message + ')'));
+          }
+        }
       }
       try { await I.mov({ tipo: 'sistema', nota: (desdeCero ? 'Reinicio total desde cero' : 'Reinicio parcial: ' + grupos.map(g => g.t).join('; ')) + '. Respaldo: ' + archivo + (fallos.length ? '. Sin permiso para: ' + fallos.join('; ') : '') }); } catch (e) { }
       if (fallos.length) I.modal('Reinicio incompleto', '<p>No se pudo borrar:</p><p class="small">• ' + fallos.map(esc).join('<br>• ') + '</p><p class="muted small">Lo demás sí se borró. Tienes el respaldo ' + esc(archivo) + '.</p>');
