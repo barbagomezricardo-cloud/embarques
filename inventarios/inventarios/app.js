@@ -1354,16 +1354,21 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 60000);
       if (!(await I.confirmar('Confirmar reinicio', 'Se descargó el respaldo <b>' + esc(archivo) + '</b>. Verifica que esté en tus Descargas.<br><br>Se borrará:<br>• ' + grupos.map(g => esc(g.t)).join('<br>• ') + '<br><br>¿Continuar?', 'Sí, borrar'))) return I.toast('Reinicio cancelado — no se borró nada');
       const fallos = [];
+      const valor = ruta => ruta.split('/').reduce((o, k) => (o == null ? null : o[k]), datos);
+      const vacio = v => v == null || (typeof v === 'object' && !Object.keys(v).length);
       for (const g of grupos) {
-        const up = {};
-        (g.nodos || []).forEach(n => up[n] = null);
-        (g.hijos || []).forEach(n => Object.keys(datos[n] || {}).forEach(k => up[n + '/' + k] = null));
-        if (g.llegadas) Object.keys(datos.llegadas || {}).forEach(k => {
-          const e = (datos.llegadas[k] || {}).estado, cerrada = e === 'recibido' || e === 'cancelado';
-          if ((g.llegadas === 'cerradas') === cerrada) up['llegadas/' + k] = null;
-        });
-        if (!Object.keys(up).length) continue;
-        try { await DB.update(up); } catch (e) { fallos.push(g.t + ' (' + e.message + ')'); }
+        const pasos = [];
+        (g.nodos || []).forEach(n => { if (!vacio(valor(n))) pasos.push([n, { [n]: null }]); });
+        (g.hijos || []).forEach(n => { const up = {}; Object.keys(datos[n] || {}).forEach(k => up[n + '/' + k] = null); if (Object.keys(up).length) pasos.push([n, up]); });
+        if (g.llegadas) {
+          const up = {};
+          Object.keys(datos.llegadas || {}).forEach(k => {
+            const e = (datos.llegadas[k] || {}).estado, cerrada = e === 'recibido' || e === 'cancelado';
+            if ((g.llegadas === 'cerradas') === cerrada) up['llegadas/' + k] = null;
+          });
+          if (Object.keys(up).length) pasos.push(['llegadas', up]);
+        }
+        for (const [n, up] of pasos) { try { await DB.update(up); } catch (e) { fallos.push(n + ' (' + e.message + ')'); } }
       }
       try { await I.mov({ tipo: 'sistema', nota: (desdeCero ? 'Reinicio total desde cero' : 'Reinicio parcial: ' + grupos.map(g => g.t).join('; ')) + '. Respaldo: ' + archivo + (fallos.length ? '. Sin permiso para: ' + fallos.join('; ') : '') }); } catch (e) { }
       if (fallos.length) I.modal('Reinicio incompleto', '<p>No se pudo borrar:</p><p class="small">• ' + fallos.map(esc).join('<br>• ') + '</p><p class="muted small">Lo demás sí se borró. Tienes el respaldo ' + esc(archivo) + '.</p>');
