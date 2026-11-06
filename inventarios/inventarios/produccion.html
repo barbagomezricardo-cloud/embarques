@@ -4,17 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Producción · Solicitud de empaque</title>
-<meta name="theme-color" content="#0b1622">
+<meta name="theme-color" content="#DE0A14">
+<script src="tema-19h.js?v=20261106b"></script>
 <link rel="manifest" href="manifest-produccion.json">
 <link rel="icon" href="icons/icono-192.png">
 <link rel="apple-touch-icon" href="icons/icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="stylesheet" href="estilos.css?v=20261012e">
+<link rel="stylesheet" href="estilos.css?v=20261106b">
 </head>
 <body class="app-ui">
 <div id="app"><div class="login"><div class="muted">Cargando…</div></div></div>
 <script src="config.js"></script>
-<script src="core.js?v=20261012e"></script>
+<script src="core.js?v=20261106b"></script>
 <script>
 /* =====================================================================
    APP DE PRODUCCIÓN
@@ -50,7 +51,7 @@
 
   function shell() {
     $('#app').innerHTML = `${I.DEMO ? '<div class="demo-bar">MODO DEMO</div>' : ''}
-      <header class="top"><div class="top-in"><div class="brand"><div class="logo">🏭</div><div>Producción<small>${esc(USER.nombre)}</small></div></div><span class="sp"></span><button class="btn sm" id="ntf" title="Notificaciones">🔔</button><button class="btn sm" id="out">Salir</button></div></header>
+      <header class="top"><div class="top-in"><div class="brand"><div class="sello"><img src="img/logo-19h.png" alt="Los 19 Hermanos"></div><div class="sello"><img src="img/logo-petfood.png" alt="División Pet Food"></div><div><b>Producción</b><small>${esc(USER.nombre)}</small></div></div><span class="sp"></span><button class="btn sm" id="ntf" title="Notificaciones">🔔</button><button class="btn sm" id="out">Salir</button><button type="button" class="btn sm" id="tema19h-btn" title="Apariencia: automático, claro u oscuro" aria-label="Apariencia">${window.Tema19H ? Tema19H.icono() : '🌗'}</button></div><div class="estrellas" aria-hidden="true">★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div></header>
       <div class="app-main" id="main"></div>
       <nav class="tabs-bottom" style="--x:0">${[['recibir', '📥', 'Recibir'], ['pedido', '📝', 'Pedido de hoy'], ['pt', '🏭', 'Mi almacén PT'], ['hist', '🕘', 'Historial']].map(([k, i, t]) => `<button data-t="${k}"><span>${i}</span>${t}<b class="cnt hide" data-cnt="${k}" style="position:absolute;margin-left:28px;margin-top:-4px;background:var(--red);color:#fff;border-radius:9px;font-size:11px;padding:0 6px"></b></button>`).join('')}</nav>`;
     $('#out').onclick = () => AUTH.logout();

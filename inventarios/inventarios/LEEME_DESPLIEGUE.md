@@ -98,3 +98,9 @@ Sin este paso, la app de producción igual muestra el recordatorio en pantalla y
 - **Conteos cíclicos:** incluyen materias de silo (se captura el vacío del láser y el sistema calcula kg); alcance por familias o artículos; "Ajustar alcance", "Terminar con lo capturado" y "Cancelar conteo".
 - **Catálogo:** columnas 📋 Contar (app almacén) y 🏭 Solicitar (app producción), con cambio masivo para lo filtrado.
 - **Usuario Compras:** ve Tablero, Silos, Proyección y Alertas; puede registrar OC colocadas (entran como fincadas) y agregar notas/estatus de seguimiento. No edita existencias.
+
+## Cambios 6-nov-2026
+- **Físico por almacén:** columnas MDE, MP, INS y PT con el total; «Editar por almacén» ajusta cada almacén por separado (nota obligatoria, un movimiento en bitácora por almacén que cambie).
+- **Semáforo de pedidos en la proyección:** azul = fincado en tiempo · morado = fincado atrasado · verde azulado = por fincar en tiempo · naranja = por fincar, vence pronto · rojo = por fincar con fecha límite vencida · ⏳ = cambio por acordar. Fecha límite para fincar = llegada − lead time; el aviso sale 15 días antes (config/diasAvisoFincar).
+- **Compras ↔ Inventarios en equipo:** altas, fincar, mover fecha/cantidad y cancelar se envían como propuesta; la proyección se mueve hasta que el otro lado la acepta. Avisos en el Tablero, contador en la pestaña Proyección y aviso en pantalla. Las recepciones de almacén le avisan a compras.
+- **Tema 19 Hermanos** (blanco y rojo con logos) con modo automático, claro y oscuro en las tres apps (principal, almacén y producción).
