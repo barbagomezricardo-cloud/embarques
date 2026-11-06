@@ -1467,10 +1467,13 @@ function prodMesHtml(c){
   var h='<details style="margin:2px 16px 16px;border:1px solid var(--kdF3ECE4);border-radius:12px;background:var(--kbFBFCFF);overflow:hidden"><summary style="cursor:pointer;padding:11px 13px;font-weight:800;color:var(--kt281E12);font-size:13px">📦 Compras por producto y mes</summary><div style="overflow-x:auto;padding:0 8px 10px"><table style="border-collapse:collapse;width:100%"><thead><tr><th style="'+TH+';text-align:left">Producto</th>';
   months.forEach(function(m){h+='<th style="'+TH+'">'+(MESA[m]||m)+'</th>';});
   h+='<th style="'+TH+';color:var(--kt8A5000)">Total</th></tr></thead><tbody>';
-  var colTot={};
-  prods.forEach(function(p){var rt=0;h+='<tr><td style="'+TD+';text-align:left;max-width:160px;overflow:hidden;text-overflow:ellipsis">'+p+'</td>';months.forEach(function(m){var q=(c.pm[p]&&c.pm[p][m])||0;rt+=q;colTot[m]=(colTot[m]||0)+q;h+='<td style="'+TD+'">'+(q?fmt(q):'·')+'</td>';});h+='<td style="'+TD+';font-weight:800;color:var(--kt8A5000)">'+fmt(rt)+'</td></tr>';});
-  var gt=0;h+='<tr><td style="'+TD+';text-align:left;font-weight:800">Total</td>';months.forEach(function(m){gt+=colTot[m]||0;h+='<td style="'+TD+';font-weight:800">'+fmt(colTot[m]||0)+'</td>';});h+='<td style="'+TD+';font-weight:900;color:var(--kt8A5000)">'+fmt(gt)+'</td></tr>';
-  h+='</tbody></table></div></details>';
+  // % de cada producto sobre lo que el cliente compró ese mes (columna) y sobre lo que va comprado en el año (Total)
+  var colTot={}, gt=0; prods.forEach(function(p){months.forEach(function(m){var q=(c.pm[p]&&c.pm[p][m])||0;colTot[m]=(colTot[m]||0)+q;gt+=q;});});
+  var PS='display:block;font-size:9.5px;font-weight:700;color:var(--kt8A5000);opacity:.85';
+  function pc(q,t){ if(!q||!t) return ''; var v=q/t*100; return '<span style="'+PS+'">'+(v>=99.95?'100':v<0.1?'<0.1':v.toFixed(1))+'%</span>'; }
+  prods.forEach(function(p){var rt=0;h+='<tr><td style="'+TD+';text-align:left;max-width:160px;overflow:hidden;text-overflow:ellipsis">'+p+'</td>';months.forEach(function(m){var q=(c.pm[p]&&c.pm[p][m])||0;rt+=q;h+='<td style="'+TD+'">'+(q?fmt(q)+pc(q,colTot[m]):'·')+'</td>';});h+='<td style="'+TD+';font-weight:800;color:var(--kt8A5000)">'+fmt(rt)+pc(rt,gt)+'</td></tr>';});
+  h+='<tr><td style="'+TD+';text-align:left;font-weight:800">Total</td>';months.forEach(function(m){h+='<td style="'+TD+';font-weight:800">'+fmt(colTot[m]||0)+'</td>';});h+='<td style="'+TD+';font-weight:900;color:var(--kt8A5000)">'+fmt(gt)+'</td></tr>';
+  h+='</tbody></table><div style="font-size:10.5px;color:var(--kt5A4E42);padding:6px 4px 0">% = participación del producto en los sacos que compró el cliente ese mes; en Total, en lo que va del año.</div></div></details>';
   return h;
 }
 
