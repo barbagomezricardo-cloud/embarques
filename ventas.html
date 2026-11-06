@@ -14,6 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="seguridad-19h.js"></script>
+<script src="bonos-19h.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--navy:#FBF7F2;--gold:#C8102E;--white:#fff;--light:#F0F4FA;--red:#C00000;--green:#1A7A3F;--gray:#6F6357;--amber:#8A5000;--bg:#FFFFFF;--mid:#FFFFFF;--wa:#1D7A45}
@@ -252,7 +253,7 @@ table.tend tr:hover td{background:rgba(222,10,20,.07)}
     <div class="kpi"><div class="kpi-val" id="k-peak">—</div><div class="kpi-lbl">Mes pico</div><div class="kpi-sub" id="k-peak-sub"></div></div>
   </div>
   <div class="tabs">
-<div class="tabgrp"><div class="glbl">Dirección</div><div class="gtabs"><div class="tab" data-tab="tablero" onclick="showTab('tablero')">📊 Tablero</div></div></div><div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="productos" onclick="showTab('productos')">📦 Productos</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp"><div class="glbl">Producción</div><div class="gtabs"><div class="tab" data-tab="proyeccion" onclick="showTab('proyeccion')">🏭 Proyección</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
+<div class="tabgrp"><div class="glbl">Dirección</div><div class="gtabs"><div class="tab" data-tab="tablero" onclick="showTab('tablero')">📊 Tablero</div><div class="tab" data-tab="bonos" onclick="showTab('bonos')">💵 Bonos</div></div></div><div class="tabgrp"><div class="glbl">Ventas</div><div class="gtabs"><div class="tab active" data-tab="mapa" onclick="showTab('mapa')">🗺 Mapa</div><div class="tab" data-tab="clientes" onclick="showTab('clientes')">👥 Clientes</div><div class="tab" data-tab="vendedores" onclick="showTab('vendedores')">📦 Vendedores</div><div class="tab" data-tab="tendencia" onclick="showTab('tendencia')">📊 Tendencia</div><div class="tab" data-tab="grafica" onclick="showTab('grafica')">📈 Gráfica</div><div class="tab" data-tab="productos" onclick="showTab('productos')">📦 Productos</div><div class="tab" data-tab="scorecard" onclick="showTab('scorecard')">🏆 Scorecard</div></div></div><div class="tabgrp"><div class="glbl">Promoción</div><div class="gtabs"><div class="tab" data-tab="objetivos" onclick="showTab('objetivos')">🎯 Objetivos</div><div class="tab" data-tab="metas" onclick="showTab('metas')">📋 Metas x cliente</div><div class="tab" data-tab="seguimiento" onclick="showTab('seguimiento')">📊 Seguimiento</div><div class="tab" data-tab="equilibrio" onclick="showTab('equilibrio')">💰 Equilibrio</div><div class="tab" data-tab="rentabilidad" onclick="showTab('rentabilidad')">💵 Rentabilidad</div></div></div><div class="tabgrp"><div class="glbl">Riesgo y nuevos</div><div class="gtabs"><div class="tab" data-tab="riesgo" onclick="showTab('riesgo')">🚨 Riesgo</div><div class="tab" data-tab="alertas" onclick="showTab('alertas')">🔔 Alertas</div><div class="tab" data-tab="fuga" onclick="showTab('fuga')">📉 Fuga lenta</div><div class="tab" data-tab="nuevos" onclick="showTab('nuevos')">🆕 Nuevos</div></div></div><div class="tabgrp"><div class="glbl">Prospección</div><div class="gtabs"><div class="tab" data-tab="prospec" onclick="showTab('prospec')">🎯 Prospección</div><div class="tab" data-tab="ruta" onclick="showTab('ruta')">🗺 Ruta</div></div></div><div class="tabgrp"><div class="glbl">Producción</div><div class="gtabs"><div class="tab" data-tab="proyeccion" onclick="showTab('proyeccion')">🏭 Proyección</div></div></div><div class="tabgrp" id="grp-config" style="display:none"><div class="glbl">Configuración</div><div class="gtabs"><div class="tab" data-tab="mapeo" onclick="showTab('mapeo')">🗂 Mapeo</div><div class="tab" data-tab="config" onclick="showTab('config')">⚙ Config</div></div></div>
   </div>
 
   <!-- MAPA -->
@@ -331,6 +332,7 @@ table.tend tr:hover td{background:rgba(222,10,20,.07)}
   </div>
 
   <!-- VENDEDORES -->
+  <div class="pane" id="pane-bonos"><div id="bn-root"></div></div>
   <div class="pane" id="pane-vendedores"><div id="vend-content" style="width:100%;overflow-y:auto"></div></div>
 
   <!-- EN RIESGO -->
@@ -1443,6 +1445,7 @@ function renderDashboard(fname){
 
   renderMap();renderClienteTable();renderVendedores();renderScorecard();renderFuga();renderRiesgo();renderAlertas();renderTendencia();renderConfig();renderMapeoTable();computeYoY();renderObjetivos();renderNuevos();renderMetas();renderGrafica();
   try{tbFillSelects();renderTablero();}catch(e){console.error('tablero:',e);}
+  try{var _pb=document.getElementById('pane-bonos');if(_pb&&_pb.classList.contains('active')&&typeof renderBonos==='function')renderBonos();}catch(e){console.error('bonos:',e);}
   // Auto-notificación al cargar datos
   pedirPermisoNotificacion();
   setTimeout(()=>{
@@ -4437,6 +4440,7 @@ function showTab(name){
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
   const pn=document.getElementById('pane-'+name); if(pn)pn.classList.add('active');
   if(name==='tablero'&&typeof renderTablero==='function')renderTablero();
+  if(name==='bonos'&&typeof renderBonos==='function')renderBonos();
   if(name==='prospec'&&typeof renderProspec==='function')renderProspec();
   if(name==='alertas'&&typeof fetchEntregasLive==='function')fetchEntregasLive();
   if(name==='mapeo'&&typeof renderMapeoTable==='function')renderMapeoTable();
@@ -4716,7 +4720,7 @@ function renderProductos(){
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','alertasAutoCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas','costos04mas','mesDesc04mas','cierreCatOv04mas','proyCfg04mas'];
+var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','alertasAutoCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas','costos04mas','mesDesc04mas','cierreCatOv04mas','proyCfg04mas','bonos04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
