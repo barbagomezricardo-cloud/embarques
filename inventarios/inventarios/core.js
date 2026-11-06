@@ -223,8 +223,8 @@
     } catch (e) { return { ok: true, aviso: 'Sin verificación de licencia: ' + e.message }; }
   }
   function pantallaBloqueo(msg) {
-    document.body.innerHTML = '<div style="max-width:460px;margin:70px auto;text-align:center;font-family:system-ui,Segoe UI,sans-serif;color:#e8eef7;padding:20px"><div style="font-size:46px">🔒</div><h2 style="color:#E8A020;margin:12px 0">Servicio no disponible</h2><p style="color:#94a3b8">' + esc(msg) + '</p></div>';
-    document.body.style.background = '#0b1622';
+    document.body.innerHTML = '<div style="max-width:460px;margin:70px auto;text-align:center;font-family:system-ui,Segoe UI,sans-serif;color:#281E12;padding:20px"><div style="font-size:46px">🔒</div><h2 style="color:#E8A020;margin:12px 0">Servicio no disponible</h2><p style="color:#94a3b8">' + esc(msg) + '</p></div>';
+    document.body.style.background = '#FBF7F2';
   }
 
   /* ------------------------------------------------------------------ */
@@ -354,7 +354,7 @@
   /* Tránsito fincado (OC ya colocadas) desde el mes actual */
   INV.transito = function (id, llegadas, opts) {
     const mk = mesKey(); let fin = 0, porComprar = 0;
-    vals(llegadas).forEach(l => { if (l.itemId !== id || l.estado === 'recibido' || l.estado === 'cancelado') return; if (l.mes && l.mes < addMes(mk, -1)) return; if (l.estado === 'fincado') fin += num(l.cant); else if (l.estado === 'por_comprar') porComprar += num(l.cant); });
+    vals(llegadas).forEach(l => { if (l.itemId !== id || l.estado === 'recibido' || l.estado === 'cancelado' || l.estado === 'propuesta') return; if (l.mes && l.mes < addMes(mk, -1)) return; if (l.estado === 'fincado') fin += num(l.cant); else if (l.estado === 'por_comprar') porComprar += num(l.cant); });
     return { fincado: fin, porComprar };
   };
 
@@ -387,7 +387,7 @@
      (el mes en curso arranca del físico de hoy)                               */
   INV.proyeccion = function (it, f, llegadas, nMeses, incluirPorComprar) {
     const mk0 = mesKey(); const cons = num(it.consumo); const ss = cons * (it.ss == null ? 0.3 : num(it.ss));
-    const arr = {}; vals(llegadas).forEach(l => { if (l.itemId !== it.id || l.estado === 'recibido' || l.estado === 'cancelado') return; if (l.estado === 'por_comprar' && !incluirPorComprar) return; const m = (l.mes && l.mes < mk0) ? mk0 : l.mes; arr[m] = arr[m] || { fin: 0, pc: 0, notas: [] }; if (l.estado === 'fincado') arr[m].fin += num(l.cant); else arr[m].pc += num(l.cant); arr[m].notas.push(l); });
+    const arr = {}; vals(llegadas).forEach(l => { if (l.itemId !== it.id || l.estado === 'recibido' || l.estado === 'cancelado' || l.estado === 'propuesta') return; if (l.estado === 'por_comprar' && !incluirPorComprar) return; const m = (l.mes && l.mes < mk0) ? mk0 : l.mes; arr[m] = arr[m] || { fin: 0, pc: 0, notas: [] }; if (l.estado === 'fincado') arr[m].fin += num(l.cant); else arr[m].pc += num(l.cant); arr[m].notas.push(l); });
     let stock = f.total; const out = []; let quiebre = null, bajoSS = null;
     for (let i = 0; i < (nMeses || 15); i++) {
       const m = addMes(mk0, i); const a = arr[m] || { fin: 0, pc: 0, notas: [] };
@@ -414,7 +414,7 @@
     const cons = num(it.consumo), consDia = cons / 30, ss = cons * (it.ss == null ? 0.3 : num(it.ss));
     const arr = {};
     vals(llegadas).forEach(l => {
-      if (l.itemId !== it.id || l.estado === 'recibido' || l.estado === 'cancelado') return; if (l.estado === 'por_comprar' && !incluirPorComprar) return;
+      if (l.itemId !== it.id || l.estado === 'recibido' || l.estado === 'cancelado' || l.estado === 'propuesta') return; if (l.estado === 'por_comprar' && !incluirPorComprar) return;
       let fch = l.fecha || (l.mes ? l.mes + '-15' : null); if (!fch) return; if (fch < h0) fch = h0;
       const a = arr[fch] = arr[fch] || { fin: 0, pc: 0, notas: [] }; if (l.estado === 'fincado') a.fin += num(l.cant); else a.pc += num(l.cant); a.notas.push(l);
     });
@@ -556,7 +556,7 @@
     cont.innerHTML = `
     <div class="login">
       <div class="login-card">
-        <div class="login-logo">${opts.icono || '📦'}</div>
+        <div class="login-logos"><img src="img/logo-19h.png" alt="Los 19 Hermanos"><img src="img/logo-petfood.png" alt="División Pet Food"></div>
         <h1>${esc(opts.titulo || 'Inventarios Pet Food')}</h1>
         <p class="muted">${esc(CFG.EMPRESA || '')}</p>
         ${DEMO ? '<div class="demo-badge">MODO DEMO · usuarios: master, jefe, compras, almacen, produccion · contraseña: demo</div>' : ''}

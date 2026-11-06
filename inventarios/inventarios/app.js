@@ -22,7 +22,7 @@
     { id: 'manuf', t: '🏭 Manufactura', roles: ['master', 'jefe'], cnt: () => vals(S.manufacturas).filter(m => m.estado === 'por_validar').length },
     { id: 'fisico', t: '📋 Físico y conteos', roles: ['master', 'jefe'], cnt: () => vals(S.conteos).filter(c => c.estado === 'confirmado').length },
     { id: 'silos', t: '🛢️ Silos', roles: ['master', 'jefe', 'compras'] },
-    { id: 'proyeccion', t: '📈 Proyección', roles: ['master', 'jefe', 'compras'] },
+    { id: 'proyeccion', t: '📈 Proyección', roles: ['master', 'jefe', 'compras'], todos: true, cnt: () => cntEquipo() },
     { id: 'alertas', t: '🚨 Alertas de compra', roles: ['master', 'jefe', 'compras'] },
     { id: 'odoo', t: '🔄 Odoo', roles: ['master', 'jefe'] },
     { id: 'catalogo', t: '🗂️ Catálogo', roles: ['master', 'jefe'] },
@@ -51,6 +51,7 @@
       return;
     }
     shell(); subscribe();
+    setTimeout(() => { try { const a = porResponder().length, f = porFincar().filter(l => l.dl < 0).length; if (a || f) I.toast('🤝 ' + [a ? a + ' propuesta' + (a > 1 ? 's' : '') + ' por acordar' : '', f ? f + ' pedido' + (f > 1 ? 's' : '') + ' por fincar con fecha vencida' : ''].filter(Boolean).join(' · '), 'err'); } catch (e) { } }, 2500);
   });
 
   function subscribe() {
@@ -71,17 +72,19 @@
       ${I.DEMO ? '<div class="demo-bar">MODO DEMO — datos de prueba que viven solo en este navegador. Quita ?demo=1 de la dirección para trabajar con los datos reales.</div>' : ''}
       <header class="top">
         <div class="top-in">
-          <div class="brand"><div class="logo">📦</div><div>Inventarios Pet Food<small>${esc(I.CFG.EMPRESA || '')}</small></div></div>
+          <div class="brand"><div class="sello"><img src="img/logo-19h.png" alt="Los 19 Hermanos"></div><div class="sello"><img src="img/logo-petfood.png" alt="División Pet Food"></div><div><b>Inventarios Pet Food</b><small>${esc(I.CFG.EMPRESA || '')}</small></div></div>
           <div class="sp"></div>
           <span class="chip"><b>${esc(USER.nombre)}</b> · ${esc(I.ROLES[USER.rol].nombre)}</span>
           <button class="btn sm ghost" id="b-pass" title="Cambiar mi contraseña">🔑</button>
           <button class="btn sm" id="b-out">Salir</button>
-        </div>
+          <button type="button" class="btn sm" id="tema19h-btn" title="Apariencia: automático, claro u oscuro" aria-label="Apariencia">${window.Tema19H ? Tema19H.icono() : '🌗'}</button>
+        </div><div class="estrellas" aria-hidden="true">★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>
         <nav class="nav" id="nav">${tabs.map(t => `<button data-t="${t.id}">${t.t}<span class="cnt hide"></span></button>`).join('')}</nav>
       </header>
       <main id="main"></main>`;
     $('#b-out').onclick = () => AUTH.logout();
     $('#b-pass').onclick = cambiarMiPass;
+    if (window.Tema19H) { $('#tema19h-btn').onclick = e => { e.stopPropagation(); Tema19H.menu(e.currentTarget); }; Tema19H.aplicar(Tema19H.leer()); }
     $$('#nav button').forEach(b => b.onclick = () => { TAB = b.dataset.t; try { localStorage.setItem('inv_tab', TAB); } catch (e) { } mounted = null; render(true); });
     mounted = null; render(true);
   }
@@ -104,13 +107,14 @@
     $$('#nav button').forEach(b => {
       b.classList.toggle('on', b.dataset.t === TAB);
       const t = TABS.find(x => x.id === b.dataset.t); const c = $('.cnt', b);
-      if (t && t.cnt && editor()) { const n = t.cnt(); c.textContent = n; c.classList.toggle('hide', !n); }
+      if (t && t.cnt && (editor() || t.todos)) { const n = t.cnt(); c.textContent = n; c.classList.toggle('hide', !n); }
     });
     const V = VIEWS[TAB]; if (!V) return;
     const main = $('#main');
     if (mounted !== TAB) { main.innerHTML = ''; if (V.mount) V.mount(main); mounted = TAB; }
     try { V.update(main); } catch (e) { console.error(e); }
     refreshDL();
+    try { avisarNovedades(); } catch (e) { }
   }
   let dlSig = '';
   function refreshDL() {
@@ -173,7 +177,7 @@
       let avance = '';
       if (conteo) { const tot = conteoItems(conteo).length, cap = conteoItems(conteo).filter(it => conteoCapturado(conteo, it.id)).length; avance = `${cap}/${tot}`; }
       const vacio = !Object.keys(S.catalogo).length;
-      el.innerHTML = (vacio ? `<div class="card" style="border-color:var(--acc);margin-bottom:12px"><h2>👋 Primer arranque</h2><p>La base está vacía. ${can('master') ? 'Carga el catálogo, las existencias, consumos, lead times, silos, pedidos fincados y el reporte de Odoo que vienen de tus archivos de Excel.' : 'Pide al master que haga la carga inicial.'}</p>${can('master') ? '<button class="btn pri" id="seed-go">Cargar datos iniciales de mis archivos</button>' : ''}</div>` : '') + `
+      el.innerHTML = panelEquipo() + (vacio ? `<div class="card" style="border-color:var(--acc);margin-bottom:12px"><h2>👋 Primer arranque</h2><p>La base está vacía. ${can('master') ? 'Carga el catálogo, las existencias, consumos, lead times, silos, pedidos fincados y el reporte de Odoo que vienen de tus archivos de Excel.' : 'Pide al master que haga la carga inicial.'}</p>${can('master') ? '<button class="btn pri" id="seed-go">Cargar datos iniciales de mis archivos</button>' : ''}</div>` : '') + `
       ${manPend.length ? `<div class="card" style="border-color:var(--amb);margin-bottom:12px"><div class="row"><b>🏭 ${manPend.length} registro(s) de manufactura por validar</b><span class="muted small grow">${esc(manPend.slice(0, 2).map(m => (m.por && m.por.nombre) + ': ' + manufTxt(m)).join(' · '))}</span><button class="btn sm pri" data-go="manuf">Validar</button></div></div>` : ''}
       <div class="grid g4">
         <div class="kpi red"><div class="l">Colocar OC</div><div class="v">${oc.length}</div><div class="s">${cr.length} críticos</div></div>
@@ -198,6 +202,7 @@
         <div class="card"><div class="card-h"><h3>🛢️ Silos</h3><span class="sp"></span><button class="btn sm" data-go="silos">Detalle</button></div><div class="mini">${silosGrid(true)}</div></div>
       </div>`;
       $$('[data-go]', el).forEach(b => b.onclick = () => { TAB = b.dataset.go; mounted = null; render(true); });
+      bindEquipo(el);
       const sg = $('#seed-go', el); if (sg) sg.onclick = async () => { sg.disabled = true; try { await I.cargarSemilla(true); I.toast('Carga inicial lista ✔', 'ok'); } catch (e) { I.toast('Error: ' + e.message, 'err'); sg.disabled = false; } };
     }
   };
@@ -211,7 +216,7 @@
     const mias = vals(S.llegadas).filter(l => l.origen === 'compras' && l.estado === 'fincado').sort((a, b) => String(a.mes).localeCompare(b.mes));
     const prox = vals(S.llegadas).filter(l => l.estado === 'fincado' || l.estado === 'por_comprar').sort((a, b) => String(a.mes).localeCompare(b.mes)).slice(0, 12);
     const L = al.filter(a => a.status !== 'SUFICIENTE').sort((a, b) => critOrder[a.crit] - critOrder[b.crit] || a.alcance - b.alcance).slice(0, 12);
-    el.innerHTML = `<div class="grid g4">
+    el.innerHTML = panelEquipo() + `<div class="grid g4" style="margin-top:12px">
       <div class="kpi red"><div class="l">Colocar OC</div><div class="v">${al.filter(a => a.status === 'COLOCAR OC').length}</div><div class="s">${al.filter(a => a.crit === 'CRÍTICO').length} críticos</div></div>
       <div class="kpi blu"><div class="l">Cubiertos con OC</div><div class="v">${al.filter(a => a.status === 'CUBIERTO CON OC').length}</div></div>
       <div class="kpi amb"><div class="l">Mis OC en tránsito</div><div class="v">${mias.length}</div><div class="s">registradas por compras</div></div>
@@ -221,12 +226,12 @@
           ${L.length ? `<div class="tw" style="max-height:none;border:0"><table><tbody>${L.map(a => `<tr><td><span class="b ${I.critClass(a.crit)}">${a.crit}</span></td><td>${esc(a.it.nombre)}<div class="tiny muted">${a.sugerido > 0 ? 'sugerido ' + fmt(a.sugerido) + ' ' + esc(a.it.unidad) : ''}${segTxt(a.it.id)}</div></td><td class="num small">${isFinite(a.alcance) ? fmt(a.alcance, 0) + ' días' : ''}</td><td>${botonesCompra(a.it.id)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin alertas 🎉</div>'}
         </div>
         <div class="card"><div class="card-h"><h3>🚚 Próximas llegadas</h3><span class="sp"></span><button class="btn sm" data-go="proyeccion">Proyección</button></div>
-          ${prox.length ? `<div class="tw" style="max-height:none;border:0"><table><tbody>${prox.map(l => `<tr><td>${fLleg(l)}</td><td>${esc(lbl(l.itemId))}<div class="tiny muted">${esc(l.proveedor || '')} ${l.oc ? '· OC ' + esc(l.oc) : ''}</div></td><td class="num">${fmt(l.cant)}</td><td><span class="b ${l.estado === 'fincado' ? 'b-blu' : 'b-amb'}">${l.estado === 'fincado' ? 'fincado' : 'por comprar'}</span>${l.origen === 'compras' ? ' <span class="b b-gry">compras</span>' : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin llegadas programadas</div>'}
+          ${prox.length ? `<div class="tw" style="max-height:none;border:0"><table><tbody>${prox.map(l => `<tr><td>${fLleg(l)}</td><td>${esc(lbl(l.itemId))}<div class="tiny muted">${esc(l.proveedor || '')} ${l.oc ? '· OC ' + esc(l.oc) : ''}</div></td><td class="num">${fmt(l.cant)}</td><td>${chipEst(l)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sin llegadas programadas</div>'}
         </div>
         <div class="card"><div class="card-h"><h3>🛢️ Silos</h3><span class="sp"></span><button class="btn sm" data-go="silos">Detalle</button></div><div class="mini">${silosGrid(true)}</div></div>
       </div>`;
     $$('[data-go]', el).forEach(b => b.onclick = () => { TAB = b.dataset.go; mounted = null; render(true); });
-    bindCompra(el);
+    bindCompra(el); bindEquipo(el);
   }
   /* Seguimiento de compras: registrar OC (entra a la proyección como fincado) y notas por artículo */
   const notasDe = id => vals(S.notasCompra && S.notasCompra[id]).sort((a, b) => b.ts - a.ts);
@@ -256,6 +261,140 @@
     await I.modal('Seguimiento de compra · ' + item(id).nombre, `<div style="max-height:40vh;overflow:auto;margin-bottom:10px">${n.map(x => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row"><b>${esc(x.por)}</b><span class="muted small">${fFecha(x.ts)}</span>${x.estatus ? `<span class="b b-blu">${esc(I.ESTATUS_COMPRA[x.estatus] || x.estatus)}</span>` : ''}</div><div>${esc(x.texto || '')}</div></div>`).join('') || '<div class="empty small">Sin notas todavía</div>'}</div>
       <label>Estatus<select id="nc-e"><option value="">— sin cambio —</option>${Object.keys(I.ESTATUS_COMPRA).map(k => `<option value="${k}">${I.ESTATUS_COMPRA[k]}</option>`).join('')}</select></label><label>Nota<textarea id="nc-t" placeholder="Proveedor, fecha comprometida, precio, motivo de retraso…"></textarea></label>`, [{ t: 'Cerrar' }, { t: 'Agregar nota', c: 'pri', antes: async ov => { const t = $('#nc-t', ov).value.trim(), e = $('#nc-e', ov).value; if (!t && !e) { I.toast('Escribe una nota o elige un estatus', 'err'); return false; } await DB.push('notasCompra/' + id, { texto: t, estatus: e || null, por: USER.nombre, rol: USER.rol, ts: Date.now() }); I.toast('Nota guardada ✔', 'ok'); } }]);
   }
+
+
+  /* ================================================================
+     EQUIPO COMPRAS ↔ INVENTARIOS
+     Ningún pedido (alta, cambio de fecha/cantidad, fincar o cancelar) mueve la proyección
+     hasta que el otro lado lo acepta. Cada propuesta y respuesta queda como nota de seguimiento
+     y le aparece como alerta al otro lado (pestaña Proyección, Tablero y aviso en pantalla).
+     ================================================================ */
+  const lado = () => can('compras') ? 'compras' : 'inventarios';
+  const LADO_TXT = { compras: 'Compras', inventarios: 'Inventarios' };
+  const EST_TXT = { fincado: 'Fincado', por_comprar: 'Por comprar', recibido: 'Recibido', cancelado: 'Cancelado', propuesta: 'Propuesta' };
+  const CAMPOS = { cant: 'Cantidad', fecha: 'Llegada', fechaOC: 'Fecha OC', estado: 'Estado', proveedor: 'Proveedor', oc: 'OC', nota: 'Nota' };
+  const abierta = l => l.estado === 'fincado' || l.estado === 'por_comprar';
+  const fLl = l => l.fecha || (l.mes ? l.mes + '-15' : '');
+  const diasA = iso => iso ? Math.round((new Date(iso + 'T12:00:00') - new Date(hoyISO() + 'T12:00:00')) / 86400000) : null;
+  const limFincar = l => { const f = fLl(l); if (!f) return ''; const d = new Date(f + 'T12:00:00'); d.setDate(d.getDate() - I.ltDias(item(l.itemId))); return hoyISO(d); };
+  const DIAS_AVISO = () => num(S.config && S.config.diasAvisoFincar) || 15;
+  /* Semáforo de cada pedido */
+  const EST = {
+    venc: { t: 'Por fincar · fecha límite vencida', c: 'var(--st-venc)', p: 5 },
+    atr: { t: 'Fincado atrasado · no ha llegado', c: 'var(--st-atr)', p: 4 },
+    xven: { t: 'Por fincar · vence pronto', c: 'var(--st-xven)', p: 3 },
+    pc: { t: 'Por fincar · en tiempo', c: 'var(--st-pc)', p: 2 },
+    fin: { t: 'Fincado · llega en tiempo', c: 'var(--st-fin)', p: 1 }
+  };
+  const estLleg = l => { if (l.estado === 'fincado') { const f = fLl(l); return f && f < hoyISO() ? 'atr' : 'fin'; } if (l.estado === 'por_comprar') { const d = diasA(limFincar(l)); return d == null ? 'pc' : d < 0 ? 'venc' : d <= DIAS_AVISO() ? 'xven' : 'pc'; } return null; };
+  const chipEst = l => { const e = estLleg(l); return e ? `<span class="b st-chip st-${e}">${EST[e].t}</span>` : `<span class="b b-gry">${EST_TXT[l.estado] || l.estado}</span>`; };
+  /* Celda de la proyección: color del pedido más urgente que llega en ese período */
+  const cellArr = notas => { if (!notas || !notas.length) return { cls: '', ico: '', tip: '' }; let w = null; notas.forEach(n => { const e = estLleg(n); if (e && (!w || EST[e].p > EST[w].p)) w = e; }); const pend = notas.some(n => n.prop && n.prop.ts); return { cls: w ? 'arr-' + w : 'cell-arr', ico: pend ? '<span class="pend-ico" title="Cambio pendiente de acuerdo">⏳</span>' : '', tip: notas.map(n => fmt(n.cant) + ' · ' + (EST[estLleg(n)] ? EST[estLleg(n)].t : EST_TXT[n.estado]) + (n.oc ? ' · OC ' + n.oc : '') + (n.prop && n.prop.ts ? ' · ⏳ ' + LADO_TXT[n.prop.lado] + ' propone cambio' : '')).join('\n') }; };
+  const leyendaEst = () => `<div class="leg-est">${Object.keys(EST).reverse().map(k => `<span><i style="background:${EST[k].c}"></i>${EST[k].t}</span>`).join('')}<span>⏳ cambio por acordar</span><span><i style="background:var(--ambbg);border:1px solid var(--amb)"></i>bajo seguridad</span><span><i style="background:var(--redbg);border:1px solid var(--red)"></i>desabasto</span></div>`;
+
+  const propsPend = () => vals(S.llegadas).filter(l => l.prop && l.prop.ts);
+  const porResponder = () => propsPend().filter(l => l.prop.lado !== lado());
+  const misPropuestas = () => propsPend().filter(l => l.prop.lado === lado());
+  const porFincar = () => vals(S.llegadas).filter(l => l.estado === 'por_comprar' && S.catalogo[l.itemId]).map(l => Object.assign(l, { lim: limFincar(l), dl: diasA(limFincar(l)) })).filter(l => l.dl != null && l.dl <= DIAS_AVISO()).sort((a, b) => a.dl - b.dl);
+  const atrasados = () => vals(S.llegadas).filter(l => l.estado === 'fincado' && S.catalogo[l.itemId] && fLl(l) && fLl(l) < hoyISO()).sort((a, b) => fLl(a).localeCompare(fLl(b)));
+  const valTxt = (c, v) => c === 'cant' ? fmt(v) : (c === 'fecha' || c === 'fechaOC') ? (v ? fDia(v) : '—') : c === 'estado' ? (EST_TXT[v] || v) : (v || '—');
+  const propTxt = l => { const p = l.prop; if (!p) return ''; if (p.tipo === 'alta') return 'Nuevo pedido: ' + fmt(p.datos.cant) + ' ' + (EST_TXT[p.datos.estado] || '').toLowerCase() + ', llega ' + fDia(p.datos.fecha) + (p.datos.oc ? ' · OC ' + p.datos.oc : ''); if (p.tipo === 'cancelar') return 'Cancelar el pedido' + (p.motivo ? ': ' + p.motivo : ''); return Object.keys(p.datos || {}).map(c => (CAMPOS[c] || c) + ' ' + valTxt(c, (p.antes || {})[c]) + ' → ' + valTxt(c, p.datos[c])).join(' · '); };
+  const nota = (itemId, o) => DB.push('notasCompra/' + itemId, Object.assign({ lado: lado(), por: USER.nombre, rol: USER.rol, ts: Date.now() }, o));
+
+  async function proponer(k, l, nuevo, tipo, motivo) {
+    const base = { lado: lado(), por: USER.nombre, rol: USER.rol, ts: Date.now() };
+    let p, texto;
+    if (tipo === 'alta') { p = Object.assign({ tipo }, base, { datos: nuevo }); texto = 'propone ' + propTxt({ prop: p }); k = await DB.push('llegadas', Object.assign({}, nuevo, { estado: 'propuesta', prop: p })); }
+    else if (tipo === 'cancelar') { p = Object.assign({ tipo }, base, { motivo: motivo || '' }); texto = 'propone cancelar ' + fmt(l.cant) + ' que llega ' + fDia(fLl(l)) + (motivo ? ': ' + motivo : ''); await DB.update({ ['llegadas/' + k + '/prop']: p }); }
+    else {
+      const datos = {}, antes = {};
+      Object.keys(CAMPOS).forEach(c => { const a = l[c] == null ? '' : l[c], b = nuevo[c] == null ? '' : nuevo[c]; if (String(a) !== String(b)) { datos[c] = b; antes[c] = a; } });
+      if (!Object.keys(datos).length) { I.toast('No cambiaste nada', 'err'); return false; }
+      p = Object.assign({ tipo }, base, { datos, antes }); texto = 'propone: ' + propTxt({ prop: p }); await DB.update({ ['llegadas/' + k + '/prop']: p });
+    }
+    await nota(l.itemId || nuevo.itemId, { evento: 'propuesta', llegadaId: k || null, texto: '🤝 ' + LADO_TXT[lado()] + ' ' + texto });
+    I.toast('Propuesta enviada a ' + LADO_TXT[lado() === 'compras' ? 'inventarios' : 'compras'] + ' ✔ — la proyección se mueve cuando la acepten', 'ok');
+  }
+  async function responder(k, acepta, motivo) {
+    const l = S.llegadas[k]; if (!l || !l.prop) return;
+    const p = l.prop, ts = Date.now(), up = {}, P = 'llegadas/' + k;
+    if (p.lado === lado()) return I.toast('Esta propuesta es tuya; la debe responder ' + LADO_TXT[p.lado === 'compras' ? 'inventarios' : 'compras'], 'err');
+    if (acepta) {
+      if (p.tipo === 'alta') { Object.keys(p.datos || {}).forEach(c => up[P + '/' + c] = p.datos[c]); if (p.datos.estado === 'fincado' || p.datos.oc) up[P + '/origen'] = 'compras'; }
+      else if (p.tipo === 'cancelar') up[P + '/estado'] = 'cancelado';
+      else { Object.keys(p.datos || {}).forEach(c => up[P + '/' + c] = p.datos[c]); if (p.datos.fecha) up[P + '/mes'] = String(p.datos.fecha).slice(0, 7); }
+    } else if (p.tipo === 'alta') up[P + '/estado'] = 'cancelado';
+    up[P + '/prop'] = null;
+    up[P + '/acuerdo'] = { res: acepta ? 'aceptado' : 'rechazado', tipo: p.tipo, propuso: p.por, ladoPropuso: p.lado, respondio: USER.nombre, lado: lado(), motivo: motivo || '', ts };
+    up[P + '/ts'] = ts;
+    await DB.update(up);
+    await nota(l.itemId, { evento: acepta ? 'acepta' : 'rechaza', llegadaId: k, texto: (acepta ? '✅ ' : '❌ ') + LADO_TXT[lado()] + (acepta ? ' aceptó' : ' rechazó') + ' la propuesta de ' + p.por + ': ' + propTxt(l) + (motivo ? ' · Motivo: ' + motivo : '') });
+    I.toast(acepta ? 'Acordado ✔ — la proyección ya lo considera' : 'Propuesta rechazada', 'ok');
+  }
+  async function retirar(k) {
+    const l = S.llegadas[k]; if (!l || !l.prop) return;
+    if (l.prop.tipo === 'alta') await DB.remove('llegadas/' + k); else await DB.update({ ['llegadas/' + k + '/prop']: null });
+    await nota(l.itemId, { evento: 'retira', llegadaId: k, texto: '↩️ ' + LADO_TXT[lado()] + ' retiró su propuesta: ' + propTxt(l) });
+    I.toast('Propuesta retirada', 'ok');
+  }
+  async function preguntarRechazo(k) {
+    await I.modal('Rechazar propuesta', `<p class="small">${esc(propTxt(S.llegadas[k] || {}))}</p><label>Motivo (le llega al otro lado)<textarea id="rz-m"></textarea></label>`, [{ t: 'Cancelar' }, { t: 'Rechazar', c: 'danger', antes: async ov => { const m = $('#rz-m', ov).value.trim(); if (!m) { I.toast('Escribe el motivo', 'err'); return false; } await responder(k, false, m); } }]);
+  }
+  async function pedirCancelar(k) {
+    const l = S.llegadas[k];
+    await I.modal('Proponer cancelación', `<p><b>${esc(lbl(l.itemId))}</b> · ${fmt(l.cant)} · llega ${fDia(fLl(l))}</p><label>Motivo<textarea id="cn-m"></textarea></label><p class="tiny muted">Se cancela cuando ${LADO_TXT[lado() === 'compras' ? 'inventarios' : 'compras']} lo acepte.</p>`, [{ t: 'Volver' }, { t: 'Proponer cancelación', c: 'danger', antes: async ov => { const m = $('#cn-m', ov).value.trim(); if (!m) { I.toast('Escribe el motivo', 'err'); return false; } await proponer(k, l, null, 'cancelar', m); } }]);
+  }
+
+  /* Lista de pedidos con semáforo y acciones (se usa en Proyección y en el Tablero) */
+  function filaPedido(l, conArt) {
+    const p = l.prop && l.prop.ts ? l.prop : null, mio = p && p.lado === lado(), f = fLl(l), dl = l.estado === 'por_comprar' ? diasA(limFincar(l)) : null, dll = diasA(f);
+    const acc = p ? (mio ? `<span class="tiny muted">esperando a ${LADO_TXT[p.lado === 'compras' ? 'inventarios' : 'compras']}</span> <button class="btn sm ghost" data-pret="${l._k}">Retirar</button>` : `<button class="btn sm ok" data-pac="${l._k}">✔ Aceptar</button> <button class="btn sm danger" data-prz="${l._k}">Rechazar</button>`)
+      : (l.estado === 'propuesta' ? '' : `${l.estado === 'por_comprar' ? `<button class="btn sm pri" data-pfi="${l._k}" title="Registrar la OC">✅ Fincar</button> ` : ''}<button class="btn sm" data-ped="${l._k}" title="Proponer cambio de fecha, cantidad o datos">✎ Mover</button> <button class="btn sm ghost" data-pcn="${l._k}" title="Proponer cancelación">✕</button>`);
+    return `<tr><td>${conArt ? esc(lbl(l.itemId)) + '<div class="tiny muted">' : '<div class="tiny muted">'}${esc(l.proveedor || '')}${l.oc ? ' · OC ' + esc(l.oc) : ''}${l.fechaOC ? ' · OC del ' + fDia(l.fechaOC) : ''}</div></td>
+      <td>${l.estado === 'propuesta' ? '<span class="b b-gry">nuevo · por acordar</span>' : chipEst(l)}</td>
+      <td>${f ? fDia(f) : '—'}${l.fecha ? '' : '<span class="tiny muted"> (estimada)</span>'}<div class="tiny muted">${dll == null ? '' : dll < 0 ? (l.estado === 'fincado' ? 'atrasado ' + (-dll) + ' d' : '') : 'en ' + dll + ' d'}</div></td>
+      <td class="num">${fmt(l.estado === 'propuesta' && p ? p.datos.cant : l.cant)}${num(l.recibido) ? `<div class="tiny muted">recibido ${fmt(l.recibido)}</div>` : ''}</td>
+      <td>${dl == null ? '' : `${fDia(limFincar(l))}<div class="tiny" style="color:${EST[estLleg(l)].c}">${dl < 0 ? 'vencida hace ' + (-dl) + ' d' : 'faltan ' + dl + ' d'}</div>`}</td>
+      <td class="small">${p ? `<div class="prop-box"><b>⏳ ${esc(LADO_TXT[p.lado])} (${esc(p.por)})</b> ${esc(propTxt(l))}<div class="tiny muted">${fFecha(p.ts)}</div></div>` : (l.acuerdo ? `<span class="tiny muted">${l.acuerdo.res === 'aceptado' ? '✅ acordado' : '❌ rechazado'} con ${esc(l.acuerdo.respondio)} · ${fFecha(l.acuerdo.ts)}</span>` : '')}</td>
+      <td style="white-space:nowrap">${puedeComprar() ? acc : ''}</td></tr>`;
+  }
+  const tablaPedidos = (ls, conArt) => ls.length ? `<div class="tw" style="max-height:none"><table><thead><tr><th>${conArt ? 'Artículo' : 'Proveedor / OC'}</th><th>Semáforo</th><th>Llegada</th><th class="num">Cantidad</th><th>Fincar antes de</th><th>Acuerdo</th><th></th></tr></thead><tbody>${ls.map(l => filaPedido(l, conArt)).join('')}</tbody></table></div>` : '<div class="empty">Sin pedidos</div>';
+  function bindPedidos(el) {
+    $$('[data-pac]', el).forEach(b => b.onclick = async () => { b.disabled = true; try { await responder(b.dataset.pac, true); } catch (e) { I.toast('Sin permiso: ' + e.message, 'err'); b.disabled = false; } });
+    $$('[data-prz]', el).forEach(b => b.onclick = () => preguntarRechazo(b.dataset.prz));
+    $$('[data-pret]', el).forEach(b => b.onclick = () => retirar(b.dataset.pret));
+    $$('[data-pcn]', el).forEach(b => b.onclick = () => pedirCancelar(b.dataset.pcn));
+    $$('[data-ped]', el).forEach(b => b.onclick = () => editarLlegada(b.dataset.ped, S.llegadas[b.dataset.ped].itemId));
+    $$('[data-pfi]', el).forEach(b => b.onclick = () => editarLlegada(b.dataset.pfi, S.llegadas[b.dataset.pfi].itemId, false, 'fincar'));
+  }
+  /* Novedades del otro lado (propuestas, respuestas y recepciones) que aún no ves */
+  const vistoKey = () => 'inv_visto_' + (USER && USER.uid);
+  const visto = () => { try { return +localStorage.getItem(vistoKey()) || 0; } catch (e) { return 0; } };
+  const novedades = () => { const v = visto(), out = []; Object.keys(S.notasCompra || {}).forEach(id => vals(S.notasCompra[id]).forEach(n => { if (n.evento && n.lado && n.lado !== lado() && n.ts > v) out.push(Object.assign({ itemId: id }, n)); })); return out.sort((a, b) => b.ts - a.ts); };
+  let toastTs = Date.now();
+  function avisarNovedades() {
+    const nv = novedades().filter(n => n.ts > toastTs); if (!nv.length) return;
+    toastTs = Math.max.apply(null, nv.map(n => n.ts));
+    I.toast('🔔 ' + (nv.length > 1 ? nv.length + ' novedades de ' : '') + LADO_TXT[nv[0].lado] + ': ' + item(nv[0].itemId).nombre + ' — ' + String(nv[0].texto || '').replace(/^\S+\s/, '').slice(0, 90), 'ok');
+  }
+  const cntEquipo = () => porResponder().length + porFincar().filter(l => l.dl < 0 || l.dl <= 7).length + novedades().length;
+  /* Panel del Tablero: lo que me toca acordar, lo que hay que fincar y lo que no ha llegado */
+  function panelEquipo() {
+    const pr = porResponder(), mp = misPropuestas(), pf = porFincar(), at = atrasados(), nv = novedades();
+    if (!pr.length && !mp.length && !pf.length && !at.length && !nv.length) return '';
+    return `<div class="card eq-card"><div class="card-h"><h3>🤝 Compras ↔ Inventarios</h3><span class="sp"></span><button class="btn sm" data-go="proyeccion">Ir a Proyección</button></div>
+      <div class="grid g4" style="margin-bottom:10px">
+        <div class="kpi ${pr.length ? 'red' : 'grn'}"><div class="l">Por acordar contigo</div><div class="v">${pr.length}</div><div class="s">propuestas de ${LADO_TXT[lado() === 'compras' ? 'inventarios' : 'compras']}</div></div>
+        <div class="kpi ${pf.some(l => l.dl < 0) ? 'red' : pf.length ? 'amb' : 'grn'}"><div class="l">Por fincar ≤ ${DIAS_AVISO()} días</div><div class="v">${pf.length}</div><div class="s">${pf.filter(l => l.dl < 0).length} con fecha vencida</div></div>
+        <div class="kpi ${at.length ? 'amb' : 'grn'}" style="--x:0"><div class="l">Fincados atrasados</div><div class="v" style="color:${at.length ? EST.atr.c : ''}">${at.length}</div><div class="s">ya debían haber llegado</div></div>
+        <div class="kpi ${mp.length ? 'blu' : ''}"><div class="l">Mis propuestas en espera</div><div class="v">${mp.length}</div><div class="s">esperando respuesta</div></div>
+      </div>
+      ${nv.length ? `<div class="nov"><div class="row"><b>🔔 Novedades de ${LADO_TXT[lado() === 'compras' ? 'inventarios' : 'compras']}</b><span class="sp"></span><button class="btn sm ghost" id="nv-ok">Marcar como visto</button></div>${nv.slice(0, 8).map(n => `<div class="small" style="padding:4px 0;border-top:1px solid var(--line)"><span class="muted">${fFecha(n.ts)}</span> · <b>${esc(item(n.itemId).nombre)}</b> · ${esc(n.texto || '')}</div>`).join('')}</div>` : ''}
+      ${pr.length ? `<h4 style="margin:12px 0 6px">Te toca responder</h4>${tablaPedidos(pr, true)}` : ''}
+      ${pf.length || at.length ? `<h4 style="margin:12px 0 6px">Urgentes: por fincar y atrasados</h4>${tablaPedidos(pf.concat(at).filter(l => !(l.prop && l.prop.ts && l.prop.lado !== lado())), true)}` : ''}
+    </div>`;
+  }
+  function bindEquipo(el) { bindPedidos(el); const b = $('#nv-ok', el); if (b) b.onclick = () => { try { localStorage.setItem(vistoKey(), Date.now()); } catch (e) { } render(true); }; }
 
   /* ---------- ENTRADAS AL MDE ---------- */
   VIEWS.entradas = {
@@ -295,6 +434,7 @@
           await DB.update({ ['fisico/' + id + '/ts']: Date.now(), ['fisico/' + id + '/por']: USER.nombre, ['fisico/' + id + '/origen']: 'entrada' });
           const lle = $('#en-lle').value;
           if (lle) { const l = S.llegadas[lle]; const rest = num(l.cant) - q; await DB.update(rest > 0 ? { ['llegadas/' + lle + '/cant']: rest, ['llegadas/' + lle + '/recibido']: num(l.recibido) + q } : { ['llegadas/' + lle + '/estado']: 'recibido', ['llegadas/' + lle + '/recibido']: num(l.recibido) + q, ['llegadas/' + lle + '/recibidoTs']: Date.now() }); }
+          if (lle) { const l0 = S.llegadas[lle] || {}; try { await nota(id, { evento: 'recibido', llegadaId: lle, texto: '📦 Inventarios recibió ' + fmt(q) + ' ' + (item(id).unidad || '') + (l0.oc ? ' de la OC ' + l0.oc : '') + (num(l0.cant) - q > 0 ? ' · quedan ' + fmt(num(l0.cant) - q) + ' por llegar' : ' · pedido completo') }); } catch (e) { } }
           await I.mov({ tipo: 'entrada', itemId: id, cant: q, pacas: num($('#en-pac').value) || null, proveedor: $('#en-prov').value.trim(), doc: $('#en-doc').value.trim(), llegadaId: lle || null, fecha: $('#en-f').value || hoyISO(), nota: $('#en-n').value.trim(), antes, despues: antes + q, odoo: false });
           I.toast('Entrada registrada ✔', 'ok');
           ['#en-it', '#en-q', '#en-pac', '#en-doc', '#en-n'].forEach(s => $(s).value = ''); refreshInfo();
@@ -550,23 +690,27 @@
   /* Ajuste manual con nota obligatoria (físico MDE o PT) */
   /* Ajuste del físico: lo que se captura ES el físico total (lo que realmente se encontró en todas las ubicaciones).
      El PT de la app se conserva como parte de ese total y el almacén toma el resto; no se le vuelve a sumar nada. */
+  /* Ajuste por almacén: se captura lo que hay en el almacén principal (MDE, MP o insumos otros) y en el almacén de insumos PT; el total es la suma. */
   async function ajustarFisico(id) {
-    const it = item(id), f = F(id), actual = f.total;
-    await I.modal('Ajustar existencia física', `<p><b>${esc(I.itemLabel(it))}</b></p><p class="muted small">Físico actual: <b>${fmt(actual)}</b> ${esc(it.unidad)}${f.pt ? ` (incluye ${fmt(f.pt)} en almacén de insumos PT)` : ''}</p><label>Existencia física real (lo que encontraste, total)<input id="aj-v" class="in-num" value="${actual}"></label><p class="tiny muted">Es el total físico; no se le suma el PT. La comparación contra Odoo usa la suma de todos sus almacenes.</p><label>Nota del ajuste (obligatoria, queda en bitácora)<textarea id="aj-n"></textarea></label>`, [{ t: 'Cancelar' }, {
+    const it = item(id), f = F(id), alm = I.almacen(it.familia);
+    await I.modal('Ajustar existencia por almacén', `<p><b>${esc(I.itemLabel(it))}</b></p><div class="form"><label>${esc(alm.nombre)} <span class="b b-gry">${alm.cod}</span><input id="aj-m" class="in-num" inputmode="decimal" value="${f.mde}"></label><label>Almacén de insumos PT <span class="b b-gry">PT</span><input id="aj-p" class="in-num" inputmode="decimal" value="${f.pt}"></label></div><div class="aj-tot">Total físico: <b id="aj-t">${fmt(f.total)}</b> ${esc(it.unidad || '')} <span class="muted small" id="aj-d"></span></div><label>Nota del ajuste (obligatoria, queda en bitácora)<textarea id="aj-n"></textarea></label><p class="tiny muted">Solo se registra el almacén que cambie. La proyección y las alertas usan el total.</p>`, [{ t: 'Cancelar' }, {
       t: 'Guardar ajuste', c: 'pri', antes: async ov => {
-        const v = num($('#aj-v', ov).value), n = $('#aj-n', ov).value.trim();
-        if (v < 0) { I.toast('La existencia no puede ser negativa', 'err'); return false; }
+        const m = Math.round(num($('#aj-m', ov).value) * 1000) / 1000, p = Math.round(num($('#aj-p', ov).value) * 1000) / 1000, n = $('#aj-n', ov).value.trim();
+        if (m < 0 || p < 0) { I.toast('La existencia no puede ser negativa', 'err'); return false; }
+        if (m === f.mde && p === f.pt) { I.toast('No cambiaste ninguna existencia', 'err'); return false; }
         if (!n) { I.toast('La nota es obligatoria', 'err'); return false; }
-        const ts = Date.now(), pt = Math.min(f.pt, v), up = { ['fisico/' + id + '/mde']: Math.round((v - pt) * 1000) / 1000, ['fisico/' + id + '/ts']: ts, ['fisico/' + id + '/por']: USER.nombre, ['fisico/' + id + '/origen']: 'ajuste', ['fisico/' + id + '/nota']: n };
-        if (pt !== f.pt) { up['pt/' + id + '/cant'] = pt; up['pt/' + id + '/ts'] = ts; up['pt/' + id + '/origen'] = 'ajuste'; }
+        const ts = Date.now(), up = {};
+        if (m !== f.mde) Object.assign(up, { ['fisico/' + id + '/mde']: m, ['fisico/' + id + '/ts']: ts, ['fisico/' + id + '/por']: USER.nombre, ['fisico/' + id + '/origen']: 'ajuste', ['fisico/' + id + '/nota']: n });
+        if (p !== f.pt) Object.assign(up, { ['pt/' + id + '/cant']: p, ['pt/' + id + '/ts']: ts, ['pt/' + id + '/origen']: 'ajuste' });
         await DB.update(up);
-        await I.mov({ tipo: 'ajuste', donde: 'total', itemId: id, antes: actual, despues: v, cant: v - actual, nota: n });
-        I.toast('Ajuste guardado y registrado en bitácora ✔', 'ok');
+        if (m !== f.mde) await I.mov({ tipo: 'ajuste', donde: alm.cod, itemId: id, antes: f.mde, despues: m, cant: m - f.mde, nota: n });
+        if (p !== f.pt) await I.mov({ tipo: 'ajuste', donde: 'pt', itemId: id, antes: f.pt, despues: p, cant: p - f.pt, nota: n });
+        I.toast('Ajuste guardado por almacén y registrado en bitácora ✔', 'ok');
       }
-    }]);
+    }], { onOpen: ov => { const u = () => { const t = num($('#aj-m', ov).value) + num($('#aj-p', ov).value); $('#aj-t', ov).textContent = fmt(t); const d = t - f.total; $('#aj-d', ov).textContent = Math.abs(d) > 0.0005 ? '(' + (d > 0 ? '+' : '') + fmt(d) + ' vs actual)' : ''; }; $('#aj-m', ov).oninput = u; $('#aj-p', ov).oninput = u; } });
   }
   async function ajustarCant(id, donde) {
-    if (donde !== 'pt') return ajustarFisico(id);
+    return ajustarFisico(id);
     const it = item(id), f = F(id); const actual = donde === 'pt' ? f.pt : f.mde;
     await I.modal('Ajustar ' + (donde === 'pt' ? 'almacén PT' : 'existencia en almacén'), `<p><b>${esc(I.itemLabel(it))}</b></p><p class="muted small">Actual: ${fmt(actual)} ${esc(it.unidad)}</p><label>Nueva existencia<input id="aj-v" class="in-num" value="${actual}"></label><label>Nota del ajuste (obligatoria, queda en bitácora)<textarea id="aj-n"></textarea></label>`, [{ t: 'Cancelar' }, {
       t: 'Guardar ajuste', c: 'pri', antes: async ov => {
@@ -601,17 +745,21 @@
   function fisicoView(body) {
     if (VIEWS.fisico._m !== 'fis') {
       body.innerHTML = `<div class="card"><div class="card-h"><h2>Existencia física</h2><span class="sp"></span><select id="fi-fam" style="max-width:240px">${famOpts(UI.fisFam, true)}</select><input id="fi-q" placeholder="Buscar…" style="max-width:220px" value="${esc(UI.fisQ)}"><button class="btn sm" id="fi-x">Exportar Excel</button></div>
-      <p class="muted small">Físico total = lo que realmente se encontró (lo que capturas en Editar o en un conteo); no se le suma nada. La columna PT solo indica cuánto de ese total está en el almacén de insumos PT. Odoo (teórico) = suma de todos sus almacenes. Es la base de la proyección y de las alertas de compra. Los ajustes manuales piden nota y quedan en bitácora.</p><div id="fi-tab"></div></div>`;
+      <p class="muted small">Cada almacén muestra lo que hay en él: MDE (empaque), MP (materias primas), INS (insumos otros) y PT (almacén de insumos para producto terminado). Físico total = la suma de los almacenes. Con <b>Editar por almacén</b> ajustas cada uno por separado. Odoo (teórico) = suma de todos sus almacenes. Es la base de la proyección y de las alertas de compra. Los ajustes manuales piden nota y quedan en bitácora.</p><div id="fi-tab"></div></div>`;
       $('#fi-fam').onchange = e => { UI.fisFam = e.target.value; render(true); };
       $('#fi-q').oninput = I.debounce(e => { UI.fisQ = $('#fi-q').value; render(true); }, 200);
-      $('#fi-x').onclick = () => { const filas = [['Código', 'Artículo', 'Familia', 'Unidad', 'Almacén', 'Almacén (código)', 'PT', 'Físico total', 'Odoo teórico', 'Diferencia', 'Actualizado', 'Por', 'Origen']]; fisRows().forEach(r => filas.push([r.it.codigo, r.it.nombre, r.it.familia, r.it.unidad, r.f.mde, I.almacen(r.it.familia).cod, r.f.pt, r.f.total, r.q, r.q == null ? '' : r.f.total - r.q, fFecha(r.fx.ts), r.fx.por || '', r.fx.origen || ''])); I.exportXlsx('Existencia_fisica_' + hoyISO() + '.xlsx', [{ nombre: 'Físico', filas }]); };
+      $('#fi-x').onclick = () => { const filas = [['Código', 'Artículo', 'Familia', 'Unidad', 'MDE', 'MP', 'INS', 'PT', 'Físico total', 'Odoo teórico', 'Diferencia', 'Actualizado', 'Por', 'Origen']]; fisRows().forEach(r => { const c = I.almacen(r.it.familia).cod; filas.push([r.it.codigo, r.it.nombre, r.it.familia, r.it.unidad, c === 'MDE' ? r.f.mde : '', c === 'MP' ? r.f.mde : '', c === 'INS' ? r.f.mde : '', r.f.pt, r.f.total, r.q, r.q == null ? '' : r.f.total - r.q, fFecha(r.fx.ts), r.fx.por || '', r.fx.origen || '']); }); I.exportXlsx('Existencia_fisica_' + hoyISO() + '.xlsx', [{ nombre: 'Físico', filas }]); };
       VIEWS.fisico._m = 'fis';
     }
-    let fam = null;
-    $('#fi-tab', body).innerHTML = `<div class="tw"><table><thead><tr><th>Artículo</th><th>Ubicación</th><th class="num">Físico total</th><th class="num" title="Parte del físico total que está en el almacén de insumos PT">de ello en PT</th><th class="num" title="Suma de todos los almacenes del último reporte de Odoo">Odoo (teórico)</th><th class="num">Dif.</th><th>Actualizado</th><th></th></tr></thead><tbody>${fisRows().map(r => {
-      const g = r.it.familia !== fam ? `<tr class="grp"><td colspan="9">${I.FAM_ICO[r.it.familia] || ''} ${esc(r.it.familia)}</td></tr>` : ''; fam = r.it.familia;
+    let fam = null; const R = fisRows(), ALM = [['MDE', 'Empaque'], ['MP', 'Materias primas'], ['INS', 'Insumos otros'], ['PT', 'Insumos PT']];
+    const res = {}; ALM.forEach(([c]) => res[c] = { n: 0, v: 0 }); let vt = 0;
+    R.forEach(r => { const c = I.almacen(r.it.familia).cod, k = costo(r.it.id); if (r.f.mde) { res[c].n++; res[c].v += r.f.mde * k; } if (r.f.pt) { res.PT.n++; res.PT.v += r.f.pt * k; } vt += r.f.total * k; });
+    const cel = (r, c) => { const own = I.almacen(r.it.familia).cod; if (c === 'PT') return r.f.pt ? fmt(r.f.pt) : '<span class="muted">—</span>'; return own === c ? `<b>${fmt(r.f.mde)}</b>` : ''; };
+    $('#fi-tab', body).innerHTML = `<div class="grid g4" style="margin-bottom:12px">${ALM.map(([c, t]) => `<div class="kpi"><div class="l">${c} · ${t}</div><div class="v">${vt ? money(res[c].v) : res[c].n}</div><div class="s">${vt ? res[c].n + ' artículos con existencia' : 'artículos con existencia (sin costo de Odoo cargado)'}</div></div>`).join('')}<div class="kpi blu"><div class="l">Total físico (suma de almacenes)</div><div class="v">${vt ? money(vt) : R.length}</div><div class="s">${vt ? R.length + ' artículos · a costo Odoo' : 'artículos · carga Odoo para ver el valor'}</div></div></div>
+    <div class="tw"><table class="t-fis"><thead><tr><th>Artículo</th><th>Ubicación</th>${ALM.map(([c, t]) => `<th class="num" title="${t}">${c}</th>`).join('')}<th class="num tot">Físico total</th><th class="num" title="Suma de todos los almacenes del último reporte de Odoo">Odoo (teórico)</th><th class="num">Dif.</th><th>Actualizado</th><th></th></tr></thead><tbody>${R.map(r => {
+      const g = r.it.familia !== fam ? `<tr class="grp"><td colspan="12">${I.FAM_ICO[r.it.familia] || ''} ${esc(r.it.familia)} · ${esc(I.almacen(r.it.familia).nombre)}</td></tr>` : ''; fam = r.it.familia;
       const d = r.q == null ? null : r.f.total - r.q;
-      return g + `<tr><td>${esc(I.itemLabel(r.it))}${r.it.fuente === 'silo' ? ' <span class="b b-blu">silo</span>' : ''}</td><td class="tiny muted"><span class="b b-gry">${I.almacen(r.it.familia).cod}</span> ${esc((r.it.ubic || []).join(', '))}</td><td class="num ${r.f.total < 0 ? 'neg' : ''}"><b>${fmt(r.f.total)}</b> <span class="tiny muted">${esc(r.it.unidad)}</span></td><td class="num muted">${r.f.pt ? fmt(r.f.pt) : ''}</td><td class="num muted">${r.q == null ? '' : fmt(r.q)}</td><td class="num ${d && Math.abs(d) > 0.5 ? (d < 0 ? 'neg' : 'low') : ''}">${d == null ? '' : fmt(d)}</td><td class="tiny muted">${fFecha(r.fx.ts)}<br>${esc(r.fx.origen || '')}${r.fx.por ? ' · ' + esc(r.fx.por) : ''}</td><td><button class="btn sm" data-aj="${r.it.id}">Editar</button></td></tr>`;
+      return g + `<tr><td>${esc(I.itemLabel(r.it))}${r.it.fuente === 'silo' ? ' <span class="b b-blu">silo</span>' : ''}</td><td class="tiny muted">${esc((r.it.ubic || []).join(', '))}</td>${ALM.map(([c]) => `<td class="num">${cel(r, c)}</td>`).join('')}<td class="num tot ${r.f.total < 0 ? 'neg' : ''}"><b>${fmt(r.f.total)}</b> <span class="tiny muted">${esc(r.it.unidad)}</span></td><td class="num muted">${r.q == null ? '' : fmt(r.q)}</td><td class="num ${d && Math.abs(d) > 0.5 ? (d < 0 ? 'neg' : 'low') : ''}">${d == null ? '' : fmt(d)}</td><td class="tiny muted">${fFecha(r.fx.ts)}<br>${esc(r.fx.origen || '')}${r.fx.por ? ' · ' + esc(r.fx.por) : ''}</td><td><button class="btn sm" data-aj="${r.it.id}">Editar por almacén</button></td></tr>`;
     }).join('')}</tbody></table></div>`;
     $$('[data-aj]', body).forEach(b => b.onclick = () => ajustarCant(b.dataset.aj, 'mde'));
   }
@@ -845,8 +993,8 @@
         <select id="py-v" style="max-width:130px" title="Vista de la proyección"><option value="mes" ${pv() === 'mes' ? 'selected' : ''}>📅 Por mes</option><option value="dia" ${pv() === 'dia' ? 'selected' : ''}>🗓️ Por día</option></select>
         <select id="py-m" style="max-width:120px">${pyHoriz()}</select>
         <label style="margin:0"><input type="checkbox" id="py-pc" ${UI.proyPC ? 'checked' : ''}> incluir "por comprar"</label><button class="btn sm ${UI.proySil ? '' : 'ghost'}" id="py-sil" title="Artículos excluidos de alertas (temporada)">🔕</button><button class="btn sm" id="py-img" title="Descarga una imagen PNG de la proyección por familia (todas las familias si el filtro está en 'Todas')">📷 Capturas por familia</button><button class="btn sm pri" id="py-rd" title="Descarga el reporte para Dirección en HTML con el filtro actual">📄 Reporte Dirección</button><button class="btn sm ghost" id="py-x" title="Exporta la tabla a Excel">Excel</button></div>
-        <p class="muted small">Parte del físico de hoy, suma llegadas y resta el consumo de cada período (mes o día; consumo diario = mensual ÷ 30). El lead time es uno solo: meses × 30 = días. <span class="b b-amb">ámbar</span> bajo seguridad · <span class="b b-red">rojo</span> desabasto · azul = llega material. Toca un artículo para ver el detalle.</p>
-        <div id="py-tab"></div></div><div id="py-det"></div>`;
+        <p class="muted small">Parte del físico de hoy, suma llegadas y resta el consumo de cada período (mes o día; consumo diario = mensual ÷ 30). El lead time es uno solo: meses × 30 = días. La línea de color debajo de la cifra es el semáforo del pedido que llega ese período. Toca un artículo para ver el detalle.</p>${leyendaEst()}
+        <div id="py-tab"></div></div><div id="py-det"></div><div id="py-eq"></div>`;
       $('#py-fam').onchange = e => { UI.proyFam = e.target.value; render(true); };
       $('#py-q').oninput = I.debounce(() => { UI.proyQ = $('#py-q').value; render(true); }, 200);
       $('#py-m').onchange = e => { if (pv() === 'dia') UI.proyDias = +e.target.value; else UI.proyMeses = +e.target.value; render(true); };
@@ -855,7 +1003,7 @@
       $('#py-img').onclick = () => capturaProy();
       $('#py-rd').onclick = () => reporteDireccion();
       $('#py-sil').onclick = () => { UI.proySil = !UI.proySil; UI.proyItem = null; $('#py-sil').classList.toggle('ghost', !UI.proySil); render(true); };
-      $('#py-x').onclick = () => { const rows = proyRows(); const ms = rows[0] ? rows[0].p.meses.map(m => mesLabel(m.mes)) : []; const filas = [['Código', 'Artículo', 'Físico hoy', 'Consumo mensual', 'Lead time (meses)', 'Lead time (días)', 'Stock seguridad'].concat(ms).concat(['Quiebre', 'Pedir a más tardar'])]; rows.forEach(r => filas.push([r.it.codigo, r.it.nombre, r.f.total, num(r.it.consumo), num(r.it.lt), I.ltDias(r.it), r.p.ss].concat(r.p.meses.map(m => Math.round(m.stock))).concat([r.p.quiebre ? mesLabel(r.p.quiebre) : '', r.p.pedirAntes ? hoyISO(r.p.pedirAntes) : '']))); const ll = [['Artículo', 'Mes', 'Cantidad', 'Estado', 'Proveedor', 'OC', 'Nota']]; vals(S.llegadas).filter(l => l.estado !== 'recibido').forEach(l => ll.push([lbl(l.itemId), l.mes, l.cant, l.estado, l.proveedor || '', l.oc || '', l.nota || ''])); I.exportXlsx('Proyeccion_' + hoyISO() + '.xlsx', [{ nombre: 'Proyección', filas }, { nombre: 'Llegadas', filas: ll }]); };
+      $('#py-x').onclick = () => { const rows = proyRows(); const ms = rows[0] ? rows[0].p.meses.map(m => mesLabel(m.mes)) : []; const filas = [['Código', 'Artículo', 'Físico hoy', 'Consumo mensual', 'Lead time (meses)', 'Lead time (días)', 'Stock seguridad'].concat(ms).concat(['Quiebre', 'Pedir a más tardar'])]; rows.forEach(r => filas.push([r.it.codigo, r.it.nombre, r.f.total, num(r.it.consumo), num(r.it.lt), I.ltDias(r.it), r.p.ss].concat(r.p.meses.map(m => Math.round(m.stock))).concat([r.p.quiebre ? mesLabel(r.p.quiebre) : '', r.p.pedirAntes ? hoyISO(r.p.pedirAntes) : '']))); const ll = [['Artículo', 'Fecha de llegada', 'Mes', 'Cantidad', 'Estado', 'Semáforo', 'Fincar antes de', 'Fecha OC', 'Proveedor', 'OC', 'Nota', 'Propuesta pendiente']]; vals(S.llegadas).filter(abierta).forEach(l => ll.push([lbl(l.itemId), fLl(l), l.mes, l.cant, l.estado, (EST[estLleg(l)] || {}).t || '', l.estado === 'por_comprar' ? limFincar(l) : '', l.fechaOC || '', l.proveedor || '', l.oc || '', l.nota || '', l.prop && l.prop.ts ? LADO_TXT[l.prop.lado] + ': ' + propTxt(l) : ''])); I.exportXlsx('Proyeccion_' + hoyISO() + '.xlsx', [{ nombre: 'Proyección', filas }, { nombre: 'Llegadas', filas: ll }]); };
     },
     update(el) {
       const rows = proyRows(), nSil = proyBase().filter(it => silencio(it.id)).length;
@@ -869,12 +1017,23 @@
       const sel = rows.find(r => r.it.id === UI.proyItem);
       $('#py-det', el).innerHTML = sel ? proyDetalle(sel) : '<div class="card muted small">Toca un artículo para ver su gráfica, las llegadas programadas y registrar pedidos.</div>';
       if (sel) bindProyDet(sel);
+      const eqb = $('#py-eq', el); if (eqb) { eqb.innerHTML = proyPedidos(rows); bindPedidos(eqb); }
     }
   };
+  /* Pedidos del filtro actual: lo que se acuerda, se finca y se mueve entre compras e inventarios */
+  function proyPedidos(rows) {
+    const ids = new Set(proyBase().map(it => it.id)), ls = vals(S.llegadas).filter(l => ids.has(l.itemId) && (abierta(l) || l.estado === 'propuesta'));
+    const ord = l => (l.prop && l.prop.ts && l.prop.lado !== lado() ? 0 : 1) * 100 + (6 - ((EST[estLleg(l)] || {}).p || 0));
+    ls.sort((a, b) => ord(a) - ord(b) || String(fLl(a)).localeCompare(String(fLl(b))));
+    const n = k => ls.filter(l => estLleg(l) === k).length;
+    return `<div class="card" style="margin-top:12px"><div class="card-h"><h2>🚚 Pedidos: fincados, por fincar y por acordar</h2><span class="sp"></span>${Object.keys(EST).map(k => n(k) ? `<span class="b st-chip st-${k}">${n(k)} · ${EST[k].t}</span>` : '').join(' ')}${porResponder().length ? `<span class="b b-red">⏳ ${porResponder().length} por acordar contigo</span>` : ''}</div>
+      <p class="muted small">Ningún cambio mueve la proyección hasta que ${lado() === 'compras' ? 'inventarios' : 'compras'} lo acepte (y viceversa). Usa <b>✅ Fincar</b> cuando ya colocaste la OC, <b>✎ Mover</b> para cambiar fecha o cantidad y <b>✕</b> para proponer cancelar. Aviso de fincar: ${DIAS_AVISO()} días antes de la fecha límite (llegada − lead time).</p>
+      ${tablaPedidos(ls, true)}</div>`;
+  }
   const pyHoriz = () => pv() === 'dia' ? [15, 30, 45, 60, 90, 120].map(n => `<option ${n === pdias() ? 'selected' : ''} value="${n}">${n} días</option>`).join('') : [6, 12, 15, 18, 24].map(n => `<option ${n === UI.proyMeses ? 'selected' : ''} value="${n}">${n} meses</option>`).join('');
   /* Vista por día: misma tabla y colores, una columna por día */
-  const proyTablaDia = rows => `<div class="tw"><table class="t-proy"><thead><tr><th>Artículo</th><th class="num">Físico hoy</th><th class="num">Consumo/día</th><th class="num">Lead time</th>${rows[0].pd.dias.map(d => `<th class="num" style="${d.dow === 0 || d.dow === 6 ? 'opacity:.7' : ''}">${diaLbl(d.fecha)}</th>`).join('')}<th>Pedir a más tardar</th></tr></thead><tbody>${rows.map(r => `<tr data-pi="${r.it.id}" style="cursor:pointer" class="${UI.proyItem === r.it.id ? 'sel' : ''}"><td><b>${esc(r.it.nombre)}</b><div class="tiny muted">${esc(r.it.codigo)}</div>${UI.proySil && silencio(r.it.id) ? `<div class="tiny"><span class="b b-gry">🔕 ${esc(silencio(r.it.id).motivo || 'sin alerta')}</span> ${puedeComprar() ? `<button class="btn sm" data-rea="${r.it.id}">🔔 Volver a alertar</button>` : ''}</div>` : ''}</td><td class="num">${fmt(r.f.total)}</td><td class="num">${fmt(num(r.it.consumo) / 30)}</td><td class="num">${ltTxt(r.it)}</td>${r.pd.dias.map(d => `<td class="num ${d.negativo ? 'cell-red' : d.bajoSS ? 'cell-amb' : ''} ${d.llega ? 'cell-arr' : ''}" title="${d.llega ? esc('Llega: ' + d.notas.map(n => fmt(n.cant) + ' (' + (n.estado === 'fincado' ? 'fincado' : 'por comprar') + ') ' + (n.oc || n.nota || '')).join('; ')) : ''}">${fmt(d.stock, 0)}</td>`).join('')}<td>${r.pd.pedirAntes ? `<span class="b ${r.pd.pedirAntes < new Date() ? 'b-red' : 'b-amb'}">${fDia(hoyISO(r.pd.pedirAntes))}</span>` : '<span class="b b-grn">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
-  const proyTabla = (rows, ms) => `<div class="tw"><table class="t-proy"><thead><tr><th>Artículo</th><th class="num">Físico hoy</th><th class="num">Consumo/mes</th><th class="num">LT</th>${ms.map(m => `<th class="num">${mesLabel(m.mes)}</th>`).join('')}<th>Pedir a más tardar</th></tr></thead><tbody>${rows.map(r => `<tr data-pi="${r.it.id}" style="cursor:pointer" class="${UI.proyItem === r.it.id ? 'sel' : ''}"><td><b>${esc(r.it.nombre)}</b><div class="tiny muted">${esc(r.it.codigo)}</div>${UI.proySil && silencio(r.it.id) ? `<div class="tiny"><span class="b b-gry">🔕 ${esc(silencio(r.it.id).motivo || 'sin alerta')}</span>${silencio(r.it.id).hasta ? ' · vuelve el ' + fDia(silencio(r.it.id).hasta) : ''} ${puedeComprar() ? `<button class="btn sm" data-rea="${r.it.id}">🔔 Volver a alertar</button>` : ''}</div>` : ''}</td><td class="num">${fmt(r.f.total)}</td><td class="num">${fmt(num(r.it.consumo))}</td><td class="num">${ltTxt(r.it)}</td>${r.p.meses.map(m => `<td class="num ${m.negativo ? 'cell-red' : m.bajoSS ? 'cell-amb' : ''} ${m.llega ? 'cell-arr' : ''}" title="${m.llega ? esc('Llega: ' + m.notas.map(n => fmt(n.cant) + ' (' + (n.estado === 'fincado' ? 'fincado' : 'por comprar') + ') ' + (n.oc || n.nota || '')).join('; ')) : ''}">${fmt(m.stock, 0)}</td>`).join('')}<td>${r.p.pedirAntes ? `<span class="b ${r.p.pedirAntes < new Date() ? 'b-red' : 'b-amb'}">${fDia(hoyISO(r.p.pedirAntes))}</span>` : '<span class="b b-grn">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  const proyTablaDia = rows => `<div class="tw"><table class="t-proy"><thead><tr><th>Artículo</th><th class="num">Físico hoy</th><th class="num">Consumo/día</th><th class="num">Lead time</th>${rows[0].pd.dias.map(d => `<th class="num" style="${d.dow === 0 || d.dow === 6 ? 'opacity:.7' : ''}">${diaLbl(d.fecha)}</th>`).join('')}<th>Pedir a más tardar</th></tr></thead><tbody>${rows.map(r => `<tr data-pi="${r.it.id}" style="cursor:pointer" class="${UI.proyItem === r.it.id ? 'sel' : ''}"><td><b>${esc(r.it.nombre)}</b><div class="tiny muted">${esc(r.it.codigo)}</div>${UI.proySil && silencio(r.it.id) ? `<div class="tiny"><span class="b b-gry">🔕 ${esc(silencio(r.it.id).motivo || 'sin alerta')}</span> ${puedeComprar() ? `<button class="btn sm" data-rea="${r.it.id}">🔔 Volver a alertar</button>` : ''}</div>` : ''}</td><td class="num">${fmt(r.f.total)}</td><td class="num">${fmt(num(r.it.consumo) / 30)}</td><td class="num">${ltTxt(r.it)}</td>${r.pd.dias.map(d => `<td class="num ${d.negativo ? 'cell-red' : d.bajoSS ? 'cell-amb' : ''} ${d.llega ? cellArr(d.notas).cls : ''}" title="${d.llega ? esc('Llega:\n' + cellArr(d.notas).tip) : ''}">${fmt(d.stock, 0)}${d.llega ? cellArr(d.notas).ico : ''}</td>`).join('')}<td>${r.pd.pedirAntes ? `<span class="b ${r.pd.pedirAntes < new Date() ? 'b-red' : 'b-amb'}">${fDia(hoyISO(r.pd.pedirAntes))}</span>` : '<span class="b b-grn">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  const proyTabla = (rows, ms) => `<div class="tw"><table class="t-proy"><thead><tr><th>Artículo</th><th class="num">Físico hoy</th><th class="num">Consumo/mes</th><th class="num">LT</th>${ms.map(m => `<th class="num">${mesLabel(m.mes)}</th>`).join('')}<th>Pedir a más tardar</th></tr></thead><tbody>${rows.map(r => `<tr data-pi="${r.it.id}" style="cursor:pointer" class="${UI.proyItem === r.it.id ? 'sel' : ''}"><td><b>${esc(r.it.nombre)}</b><div class="tiny muted">${esc(r.it.codigo)}</div>${UI.proySil && silencio(r.it.id) ? `<div class="tiny"><span class="b b-gry">🔕 ${esc(silencio(r.it.id).motivo || 'sin alerta')}</span>${silencio(r.it.id).hasta ? ' · vuelve el ' + fDia(silencio(r.it.id).hasta) : ''} ${puedeComprar() ? `<button class="btn sm" data-rea="${r.it.id}">🔔 Volver a alertar</button>` : ''}</div>` : ''}</td><td class="num">${fmt(r.f.total)}</td><td class="num">${fmt(num(r.it.consumo))}</td><td class="num">${ltTxt(r.it)}</td>${r.p.meses.map(m => `<td class="num ${m.negativo ? 'cell-red' : m.bajoSS ? 'cell-amb' : ''} ${m.llega ? cellArr(m.notas).cls : ''}" title="${m.llega ? esc('Llega:\n' + cellArr(m.notas).tip) : ''}">${fmt(m.stock, 0)}${m.llega ? cellArr(m.notas).ico : ''}</td>`).join('')}<td>${r.p.pedirAntes ? `<span class="b ${r.p.pedirAntes < new Date() ? 'b-red' : 'b-amb'}">${fDia(hoyISO(r.p.pedirAntes))}</span>` : '<span class="b b-grn">OK</span>'}</td></tr>`).join('')}</tbody></table></div>`;
   /* Capturas de la proyección: una imagen PNG por familia (la familia elegida, o todas si el filtro está en "todas") */
   async function capturaProy() {
     const b = $('#py-img'); b.disabled = true; const t0 = b.textContent; b.textContent = '⏳ Generando…';
@@ -985,14 +1144,14 @@ ${bars ? `<section><h2>Volumen programado por mes de llegada</h2><p class="sub">
     const y = v => P.t + (H - P.t - P.b) * (1 - (v - mn) / ((mx - mn) || 1)); const x = i => P.l + (W - P.l - P.r) * (i + 0.5) / ms.length;
     const pts = [[P.l, y(r.f.total)]].concat(ms.map((m, i) => [x(i), y(m.stock)]));
     const ticks = 4; let g = '';
-    for (let i = 0; i <= ticks; i++) { const v = mn + (mx - mn) * i / ticks; g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#1f3347"/><text x="${P.l - 8}" y="${y(v) + 4}" fill="#94a3b8" font-size="11" text-anchor="end">${fmt(v, 0)}</text>`; }
+    for (let i = 0; i <= ticks; i++) { const v = mn + (mx - mn) * i / ticks; g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)"/><text x="${P.l - 8}" y="${y(v) + 4}" style="fill:var(--muted)" font-size="11" text-anchor="end">${fmt(v, 0)}</text>`; }
     const bw = (W - P.l - P.r) / ms.length * 0.5;
-    const bars = ms.map((m, i) => m.llega ? `<rect x="${x(i) - bw / 2}" y="${y(Math.max(0, mn) + m.llega) < P.t ? P.t : y(mn + m.llega)}" width="${bw}" height="${Math.max(2, y(mn) - y(mn + m.llega))}" fill="${m.porComprar ? 'rgba(240,180,41,.35)' : 'rgba(78,168,255,.35)'}"><title>Llega ${fmt(m.llega)}</title></rect>` : '').join('');
+    const bars = ms.map((m, i) => m.llega ? `<rect x="${x(i) - bw / 2}" y="${y(Math.max(0, mn) + m.llega) < P.t ? P.t : y(mn + m.llega)}" width="${bw}" height="${Math.max(2, y(mn) - y(mn + m.llega))}" style="fill:${m.porComprar ? 'var(--st-pc)' : 'var(--st-fin)'};opacity:.35"><title>Llega ${fmt(m.llega)}</title></rect>` : '').join('');
     return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Proyección de ${esc(r.it.nombre)}">${g}${bars}
-      ${mn < 0 ? `<line x1="${P.l}" x2="${W - P.r}" y1="${y(0)}" y2="${y(0)}" stroke="#ef5a5a" stroke-width="1.5"/>` : ''}
-      <line x1="${P.l}" x2="${W - P.r}" y1="${y(r.p.ss)}" y2="${y(r.p.ss)}" stroke="#f0b429" stroke-dasharray="5 4"/><text x="${W - P.r}" y="${y(r.p.ss) - 5}" fill="#f0b429" font-size="11" text-anchor="end">stock de seguridad</text>
-      <polyline fill="none" stroke="#E8A020" stroke-width="2.5" points="${pts.map(p => p.join(',')).join(' ')}"/>
-      ${ms.map((m, i) => `<circle cx="${x(i)}" cy="${y(m.stock)}" r="3.5" fill="${m.negativo ? '#ef5a5a' : m.bajoSS ? '#f0b429' : '#E8A020'}"><title>${lab(m.mes)}: ${fmt(m.stock, 0)}</title></circle>${i % paso === 0 ? `<text x="${x(i)}" y="${H - 12}" fill="#94a3b8" font-size="11" text-anchor="middle">${lab(m.mes)}</text>` : ''}`).join('')}
+      ${mn < 0 ? `<line x1="${P.l}" x2="${W - P.r}" y1="${y(0)}" y2="${y(0)}" style="stroke:var(--red)" stroke-width="1.5"/>` : ''}
+      <line x1="${P.l}" x2="${W - P.r}" y1="${y(r.p.ss)}" y2="${y(r.p.ss)}" style="stroke:var(--amb)" stroke-dasharray="5 4"/><text x="${W - P.r}" y="${y(r.p.ss) - 5}" style="fill:var(--amb)" font-size="11" text-anchor="end">stock de seguridad</text>
+      <polyline fill="none" style="stroke:var(--rojo)" stroke-width="2.5" points="${pts.map(p => p.join(',')).join(' ')}"/>
+      ${ms.map((m, i) => `<circle cx="${x(i)}" cy="${y(m.stock)}" r="3.5" style="fill:${m.negativo ? 'var(--red)' : m.bajoSS ? 'var(--amb)' : 'var(--rojo)'}"><title>${lab(m.mes)}: ${fmt(m.stock, 0)}</title></circle>${i % paso === 0 ? `<text x="${x(i)}" y="${H - 12}" style="fill:var(--muted)" font-size="11" text-anchor="middle">${lab(m.mes)}</text>` : ''}`).join('')}
     </svg>`;
   }
   function proyDetalle(r) {
@@ -1003,7 +1162,7 @@ ${bars ? `<section><h2>Volumen programado por mes de llegada</h2><p class="sub">
       ${editor() ? `<div class="row" style="margin-bottom:8px"><span class="muted small">Lead time (meses = días):</span>${ltPair(r.it, 70)}<button class="btn sm" id="py-ltg">Guardar lead time</button></div>` : ''}
       <div class="chart">${chartSVG(r)}</div>
       <div class="card-h" style="margin-top:12px"><h3>Llegadas programadas (pedidos fincados y por comprar)</h3></div>
-      <div class="tw" style="max-height:none"><table><thead><tr><th>Llegada estimada</th><th class="num">Cantidad</th><th>Estado</th><th>Proveedor</th><th>OC</th><th>Nota</th>${puedeComprar() ? '<th></th>' : ''}</tr></thead><tbody>${ll.map(l => `<tr><td>${fLleg(l)}</td><td class="num">${fmt(l.cant)}${l.recibido ? `<div class="tiny muted">recibido ${fmt(l.recibido)}</div>` : ''}</td><td><span class="b ${l.estado === 'fincado' ? 'b-blu' : l.estado === 'por_comprar' ? 'b-amb' : l.estado === 'recibido' ? 'b-grn' : 'b-gry'}">${l.estado === 'por_comprar' ? 'por comprar' : l.estado}</span></td><td>${esc(l.proveedor || '')}</td><td>${esc(l.oc || '')}${l.fechaOC ? `<div class="tiny muted">${fDia(l.fechaOC)}</div>` : ''}</td><td class="small">${esc(l.nota || '')}${l.origen === 'compras' ? ' <span class="b b-gry">compras</span>' : ''}</td>${puedeComprar() ? `<td>${editor() || (l.origen === 'compras' && l.estado !== 'recibido') ? `<button class="btn sm" data-le="${l._k}">✎</button>` : ''}</td>` : ''}</tr>`).join('') || '<tr><td colspan="7" class="empty">Sin llegadas programadas</td></tr>'}</tbody></table></div>
+      <div class="tw" style="max-height:none"><table><thead><tr><th>Llegada estimada</th><th class="num">Cantidad</th><th>Estado</th><th>Proveedor</th><th>OC</th><th>Nota</th>${puedeComprar() ? '<th></th>' : ''}</tr></thead><tbody>${ll.map(l => `<tr><td>${fLleg(l)}</td><td class="num">${fmt(l.cant)}${l.recibido ? `<div class="tiny muted">recibido ${fmt(l.recibido)}</div>` : ''}</td><td>${l.estado === 'propuesta' ? '<span class="b b-gry">nuevo · por acordar</span>' : abierta(l) ? chipEst(l) : `<span class="b ${l.estado === 'recibido' ? 'b-grn' : 'b-gry'}">${EST_TXT[l.estado] || l.estado}</span>`}${l.prop && l.prop.ts ? `<div class="tiny" style="margin-top:3px">⏳ ${esc(LADO_TXT[l.prop.lado])}: ${esc(propTxt(l))}</div>` : ''}</td><td>${esc(l.proveedor || '')}</td><td>${esc(l.oc || '')}${l.fechaOC ? `<div class="tiny muted">${fDia(l.fechaOC)}</div>` : ''}</td><td class="small">${esc(l.nota || '')}${l.origen === 'compras' ? ' <span class="b b-gry">compras</span>' : ''}</td>${puedeComprar() ? `<td>${abierta(l) || (l.prop && l.prop.ts) ? `<button class="btn sm" data-le="${l._k}">✎</button>` : ''}</td>` : ''}</tr>`).join('') || '<tr><td colspan="7" class="empty">Sin llegadas programadas</td></tr>'}</tbody></table></div>
       ${puedeComprar() ? `<div class="row" style="margin-top:8px"><button class="btn pri" id="ll-new">${can('compras') ? '🛒 Registrar orden de compra' : '+ Registrar pedido / llegada'}</button><button class="btn" data-nt="${r.it.id}">💬 Notas y estatus${notasDe(r.it.id).length ? ' (' + notasDe(r.it.id).length + ')' : ''}</button>${a.sugerido > 0 ? `<span class="muted small">Sugerido hoy: <b>${fmt(a.sugerido)}</b> ${esc(r.it.unidad)}</span>` : ''}</div>${notasDe(r.it.id).slice(0, 3).map(x => `<div class="small" style="margin-top:6px"><b>${esc(x.por)}</b> <span class="muted">${fFecha(x.ts)}</span> ${x.estatus ? `<span class="b b-blu">${esc(I.ESTATUS_COMPRA[x.estatus] || x.estatus)}</span>` : ''} ${esc(x.texto || '')}</div>`).join('')}` : ''}
     </div>`;
   }
@@ -1014,13 +1173,31 @@ ${bars ? `<section><h2>Volumen programado por mes de llegada</h2><p class="sub">
     const n = $('#ll-new'); if (n) n.onclick = () => editarLlegada(null, r.it.id, can('compras'));
     $$('[data-nt]').forEach(b => b.onclick = () => notasCompra(b.dataset.nt));
   }
-  async function editarLlegada(k, itemId, comoCompra) {
+  async function editarLlegada(k, itemId, comoCompra, modo) {
+    const L = k ? S.llegadas[k] : null;
+    if (L && L.prop && L.prop.ts) {
+      const p = L.prop, mio = p.lado === lado();
+      const r = await I.modal('Pedido con propuesta pendiente', `<p><b>${esc(lbl(itemId))}</b></p><div class="prop-box"><b>⏳ ${esc(LADO_TXT[p.lado])} (${esc(p.por)}) · ${fFecha(p.ts)}</b><br>${esc(propTxt(L))}</div><p class="small muted" style="margin-top:8px">${mio ? 'Es tu propuesta; espera la respuesta o retírala para hacer otra.' : 'Respóndela antes de proponer otro cambio.'}</p>`, mio ? [{ t: 'Cerrar' }, { t: 'Retirar mi propuesta', v: 'ret', c: 'danger' }] : [{ t: 'Cerrar' }, { t: 'Rechazar', v: 'rz', c: 'danger' }, { t: '✔ Aceptar', v: 'ac', c: 'ok' }]);
+      if (r.v === 'ret') await retirar(k); else if (r.v === 'ac') await responder(k, true); else if (r.v === 'rz') await preguntarRechazo(k);
+      return;
+    }
     const esCompras = can('compras') || (!!comoCompra && !k);
     const it = item(itemId); const a = I.alerta(it, Fd(itemId), I.transito(itemId, S.llegadas));
-    const l = k ? S.llegadas[k] : { itemId, cant: esCompras && a.sugerido > 0 ? Math.round(a.sugerido) : '', mes: mesKey(new Date(Date.now() + Math.max(1, I.ltDias(it)) * 86400000)), fecha: hoyISO(new Date(Date.now() + Math.max(1, I.ltDias(it)) * 86400000)), fechaOC: esCompras ? hoyISO() : '', estado: esCompras ? 'fincado' : 'por_comprar', proveedor: '', oc: '', nota: '' };
-    const estados = can('compras') ? [['fincado', 'OC colocada (fincado)'], ['cancelado', 'Cancelada']] : [['fincado', 'Fincado (OC colocada)'], ['por_comprar', 'Por comprar (planeado)'], ['recibido', 'Recibido'], ['cancelado', 'Cancelado']];
-    await I.modal(k ? 'Editar llegada' : (esCompras ? 'Registrar orden de compra' : 'Nueva llegada / pedido'), `<p><b>${esc(lbl(itemId))}</b></p>${esCompras ? '<p class="muted small">Entra a la proyección como pedido fincado y se cierra cuando inventarios registra la entrada del material.</p>' : ''}<div class="form"><label>Cantidad (${esc(it.unidad || '')})<input id="ll-q" class="in-num" value="${l.cant}"></label><label>Fecha de la OC<input id="ll-fo" type="date" value="${l.fechaOC || ''}"></label><label>Fecha estimada de llegada<input id="ll-f" type="date" value="${l.fecha || (l.mes ? l.mes + '-15' : '')}"></label><label>Estado<select id="ll-e">${estados.map(([v, t]) => `<option value="${v}" ${l.estado === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label>Proveedor<input id="ll-p" value="${esc(l.proveedor || '')}"></label><label>Número de OC<input id="ll-oc" value="${esc(l.oc || '')}"></label><label class="full">Nota<input id="ll-n" value="${esc(l.nota || '')}"></label></div>`, [{ t: 'Cancelar' }].concat(k && editor() ? [{ t: 'Eliminar', c: 'danger', antes: async () => { await DB.remove('llegadas/' + k); I.toast('Eliminada', 'ok'); } }] : []).concat([{ t: 'Guardar', c: 'pri', antes: async ov => { const o = { itemId, cant: num($('#ll-q', ov).value), fecha: $('#ll-f', ov).value, mes: ($('#ll-f', ov).value || '').slice(0, 7), fechaOC: $('#ll-fo', ov).value, estado: $('#ll-e', ov).value, proveedor: $('#ll-p', ov).value.trim(), oc: $('#ll-oc', ov).value.trim(), nota: $('#ll-n', ov).value.trim(), ts: Date.now(), por: USER.nombre }; if (!(o.cant > 0) || !o.fecha) { I.toast('Cantidad y fecha estimada de llegada son obligatorias', 'err'); return false; } if (esCompras || (l.origen === 'compras')) o.origen = 'compras'; try { if (k) await DB.update({ ['llegadas/' + k]: Object.assign({}, l, o, { _k: null }) }); else await DB.push('llegadas', o); if (esCompras && !k) await DB.push('notasCompra/' + itemId, { texto: 'OC registrada: ' + fmt(o.cant) + ' ' + (it.unidad || '') + (o.oc ? ' · OC ' + o.oc : '') + (o.proveedor ? ' · ' + o.proveedor : '') + ' · llega ' + fDia(o.fecha), estatus: 'oc', por: USER.nombre, rol: USER.rol, ts: Date.now() }); I.toast('Guardado ✔', 'ok'); } catch (x) { I.toast('Sin permiso: ' + x.message, 'err'); return false; } } }]));
+    const fx = hoyISO(new Date(Date.now() + Math.max(1, I.ltDias(it)) * 86400000));
+    const l = L ? Object.assign({}, L) : { itemId, cant: esCompras && a.sugerido > 0 ? Math.round(a.sugerido) : '', mes: fx.slice(0, 7), fecha: fx, fechaOC: esCompras ? hoyISO() : '', estado: esCompras ? 'fincado' : 'por_comprar', proveedor: '', oc: '', nota: '' };
+    if (modo === 'fincar') { l.estado = 'fincado'; if (!l.fechaOC) l.fechaOC = hoyISO(); }
+    const estados = can('compras') ? (l.estado === 'por_comprar' ? [['por_comprar', 'Por comprar (planeado)'], ['fincado', 'OC colocada (fincado)']] : [['fincado', 'OC colocada (fincado)']]) : [['fincado', 'Fincado (OC colocada)'], ['por_comprar', 'Por comprar (planeado)'], ['recibido', 'Recibido']];
+    const otro = LADO_TXT[lado() === 'compras' ? 'inventarios' : 'compras'];
+    const titulo = modo === 'fincar' ? 'Fincar pedido (registrar OC)' : k ? 'Mover / editar pedido' : (esCompras ? 'Registrar orden de compra' : 'Nuevo pedido por comprar');
+    await I.modal(titulo, `<p><b>${esc(lbl(itemId))}</b></p><div class="note" style="margin-bottom:10px">🤝 Se envía como <b>propuesta</b> a ${otro}. La proyección se mueve hasta que la acepte.</div>${L ? `<p class="tiny muted">Actual: ${fmt(L.cant)} · llega ${fDia(fLl(L))} · ${EST_TXT[L.estado] || L.estado}${L.oc ? ' · OC ' + esc(L.oc) : ''}</p>` : ''}<div class="form"><label>Cantidad (${esc(it.unidad || '')})<input id="ll-q" class="in-num" value="${l.cant}"></label><label>Fecha de la OC<input id="ll-fo" type="date" value="${l.fechaOC || ''}"></label><label>Fecha estimada de llegada<input id="ll-f" type="date" value="${l.fecha || (l.mes ? l.mes + '-15' : '')}"></label><label>Estado<select id="ll-e">${estados.map(([v, t]) => `<option value="${v}" ${l.estado === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label>Proveedor<input id="ll-p" value="${esc(l.proveedor || '')}"></label><label>Número de OC<input id="ll-oc" value="${esc(l.oc || '')}"></label><label class="full">Nota / motivo del cambio<input id="ll-n" value="${esc(l.nota || '')}"></label></div><p class="tiny muted" id="ll-lim"></p>`, [{ t: 'Cancelar' }].concat(k ? [{ t: 'Proponer cancelación', c: 'danger', antes: async () => { setTimeout(() => pedirCancelar(k), 0); } }] : []).concat([{ t: 'Enviar propuesta', c: 'pri', antes: async ov => {
+      const o = { itemId, cant: num($('#ll-q', ov).value), fecha: $('#ll-f', ov).value, mes: ($('#ll-f', ov).value || '').slice(0, 7), fechaOC: $('#ll-fo', ov).value, estado: $('#ll-e', ov).value, proveedor: $('#ll-p', ov).value.trim(), oc: $('#ll-oc', ov).value.trim(), nota: $('#ll-n', ov).value.trim() };
+      if (!(o.cant > 0) || !o.fecha) { I.toast('Cantidad y fecha estimada de llegada son obligatorias', 'err'); return false; }
+      if (o.estado === 'fincado' && !o.oc) { I.toast('Para fincar captura el número de OC', 'err'); return false; }
+      try { if (k) { if (await proponer(k, L, o, 'cambio') === false) return false; } else { o.por = USER.nombre; o.ts = Date.now(); if (esCompras) o.origen = 'compras'; await proponer(null, null, o, 'alta'); } }
+      catch (x) { I.toast('Sin permiso: ' + x.message, 'err'); return false; }
+    } }]), { onOpen: ov => { const upd = () => { const f = $('#ll-f', ov).value, e = $('#ll-e', ov).value; if (!f || e !== 'por_comprar') { $('#ll-lim', ov).textContent = ''; return; } const lim = limFincar({ itemId, fecha: f }), d = diasA(lim); $('#ll-lim', ov).textContent = 'Para llegar el ' + fDia(f) + ' hay que fincar a más tardar el ' + fDia(lim) + ' (lead time ' + I.ltDias(it) + ' días) · ' + (d < 0 ? 'ya venció hace ' + (-d) + ' días' : 'faltan ' + d + ' días'); }; $('#ll-f', ov).oninput = upd; $('#ll-e', ov).onchange = upd; upd(); } });
   }
+
 
   /* ---------- ALERTAS DE COMPRA ---------- */
   VIEWS.alertas = {
