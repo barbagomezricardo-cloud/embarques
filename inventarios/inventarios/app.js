@@ -844,7 +844,7 @@
         <select id="py-fam" style="max-width:230px">${famOpts(UI.proyFam, true)}</select><input id="py-q" placeholder="Buscar…" style="max-width:180px" value="${esc(UI.proyQ)}">
         <select id="py-v" style="max-width:130px" title="Vista de la proyección"><option value="mes" ${pv() === 'mes' ? 'selected' : ''}>📅 Por mes</option><option value="dia" ${pv() === 'dia' ? 'selected' : ''}>🗓️ Por día</option></select>
         <select id="py-m" style="max-width:120px">${pyHoriz()}</select>
-        <label style="margin:0"><input type="checkbox" id="py-pc" ${UI.proyPC ? 'checked' : ''}> incluir "por comprar"</label><button class="btn sm ${UI.proySil ? '' : 'ghost'}" id="py-sil" title="Artículos excluidos de alertas (temporada)">🔕</button><button class="btn sm" id="py-img" title="Descarga una imagen PNG de la proyección por familia (todas las familias si el filtro está en 'Todas')">📷 Capturas por familia</button><button class="btn sm" id="py-x">Exportar</button></div>
+        <label style="margin:0"><input type="checkbox" id="py-pc" ${UI.proyPC ? 'checked' : ''}> incluir "por comprar"</label><button class="btn sm ${UI.proySil ? '' : 'ghost'}" id="py-sil" title="Artículos excluidos de alertas (temporada)">🔕</button><button class="btn sm" id="py-img" title="Descarga una imagen PNG de la proyección por familia (todas las familias si el filtro está en 'Todas')">📷 Capturas por familia</button><button class="btn sm pri" id="py-rd" title="Descarga el reporte para Dirección en HTML con el filtro actual">📄 Reporte Dirección</button><button class="btn sm ghost" id="py-x" title="Exporta la tabla a Excel">Excel</button></div>
         <p class="muted small">Parte del físico de hoy, suma llegadas y resta el consumo de cada período (mes o día; consumo diario = mensual ÷ 30). El lead time es uno solo: meses × 30 = días. <span class="b b-amb">ámbar</span> bajo seguridad · <span class="b b-red">rojo</span> desabasto · azul = llega material. Toca un artículo para ver el detalle.</p>
         <div id="py-tab"></div></div><div id="py-det"></div>`;
       $('#py-fam').onchange = e => { UI.proyFam = e.target.value; render(true); };
@@ -853,6 +853,7 @@
       $('#py-v').onchange = e => { UI.proyVista = e.target.value; $('#py-m').innerHTML = pyHoriz(); render(true); };
       $('#py-pc').onchange = e => { UI.proyPC = e.target.checked; render(true); };
       $('#py-img').onclick = () => capturaProy();
+      $('#py-rd').onclick = () => reporteDireccion();
       $('#py-sil').onclick = () => { UI.proySil = !UI.proySil; UI.proyItem = null; $('#py-sil').classList.toggle('ghost', !UI.proySil); render(true); };
       $('#py-x').onclick = () => { const rows = proyRows(); const ms = rows[0] ? rows[0].p.meses.map(m => mesLabel(m.mes)) : []; const filas = [['Código', 'Artículo', 'Físico hoy', 'Consumo mensual', 'Lead time (meses)', 'Lead time (días)', 'Stock seguridad'].concat(ms).concat(['Quiebre', 'Pedir a más tardar'])]; rows.forEach(r => filas.push([r.it.codigo, r.it.nombre, r.f.total, num(r.it.consumo), num(r.it.lt), I.ltDias(r.it), r.p.ss].concat(r.p.meses.map(m => Math.round(m.stock))).concat([r.p.quiebre ? mesLabel(r.p.quiebre) : '', r.p.pedirAntes ? hoyISO(r.p.pedirAntes) : '']))); const ll = [['Artículo', 'Mes', 'Cantidad', 'Estado', 'Proveedor', 'OC', 'Nota']]; vals(S.llegadas).filter(l => l.estado !== 'recibido').forEach(l => ll.push([lbl(l.itemId), l.mes, l.cant, l.estado, l.proveedor || '', l.oc || '', l.nota || ''])); I.exportXlsx('Proyeccion_' + hoyISO() + '.xlsx', [{ nombre: 'Proyección', filas }, { nombre: 'Llegadas', filas: ll }]); };
     },
@@ -899,6 +900,79 @@
       I.toast(n ? n + ' imagen' + (n > 1 ? 'es' : '') + ' descargada' + (n > 1 ? 's' : '') + ' ✔' : 'No hay artículos que capturar', n ? 'ok' : 'err');
     } catch (e) { I.toast('No se pudo generar la imagen: ' + e.message, 'err'); }
     UI.proyFam = prevF; UI.proySil = prevS; UI.proyItem = prevI; b.disabled = false; b.textContent = t0;
+  }
+  /* Reporte para Dirección (HTML descargable): respeta el filtro de familia, la búsqueda, el horizonte y "incluir por comprar".
+     Usa las fechas exactas de cada pedido (fecha de llegada y fecha de OC) y la proyección POR DÍA para quiebre y «pedir a más tardar». */
+  function reporteDireccion() {
+    const rows = proyRows();
+    if (!rows.length) return I.toast('No hay artículos en la proyección con este filtro', 'err');
+    const hoy = hoyISO(), H = UI.proyMeses, hoyD = new Date(hoy + 'T12:00:00');
+    const dDif = iso => Math.round((new Date(iso + 'T12:00:00') - hoyD) / 86400000);
+    const fD = iso => { if (!iso) return '—'; const [y, m, d] = iso.split('-'); return (+d) + '-' + I.MESES[(+m) - 1].toLowerCase() + '-' + y.slice(2); };
+    const addD = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return hoyISO(d); };
+    const ids = new Set(rows.map(r => r.it.id));
+    const R = rows.map(r => Object.assign({}, r, { pdx: I.proyeccionDia(r.it, r.f, S.llegadas, H * 30, UI.proyPC) }));
+    const lleg = vals(S.llegadas).filter(l => ids.has(l.itemId) && (l.estado === 'fincado' || (l.estado === 'por_comprar' && UI.proyPC))).map(l => {
+      const it = item(l.itemId), f = l.fecha || (l.mes ? l.mes + '-15' : ''), pend = Math.max(0, num(l.cant));
+      return Object.assign({}, l, { it, f, estim: !l.fecha, pend, lim: l.estado === 'por_comprar' && f ? addD(f, -I.ltDias(it)) : '' });
+    }).filter(l => l.pend > 0).sort((a, b) => String(a.f).localeCompare(String(b.f)));
+    const tr = lleg.filter(l => l.estado === 'fincado'), pc = lleg.filter(l => l.estado === 'por_comprar');
+    const sum = a => a.reduce((s, x) => s + x.pend, 0);
+    const al = R.filter(r => r.pdx.quiebre).map(r => { const pa = r.pdx.pedirAntes ? hoyISO(r.pdx.pedirAntes) : ''; const ult = r.p.meses[r.p.meses.length - 1]; return { r, q: r.pdx.quiebre, pa, dias: pa ? dDif(pa) : null, falt: ult && ult.stock < 0 ? -ult.stock : 0 }; }).sort((a, b) => (a.dias == null ? 1e9 : a.dias) - (b.dias == null ? 1e9 : b.dias));
+    const pcUrg = pc.filter(l => l.lim && dDif(l.lim) <= 30), pcVenc = pc.filter(l => l.lim && dDif(l.lim) < 0), trAtr = tr.filter(l => l.f && l.f < hoy), alVenc = al.filter(a => a.dias != null && a.dias < 0);
+    const pill = (cls, t) => `<span class="pill p-${cls}">${t}</span>`;
+    const plazo = d => d == null ? '' : d < 0 ? pill('red', 'Vencida · ' + (-d) + ' d') : d <= 30 ? pill('amber', d + ' días') : pill('green', d + ' días');
+    const nom = it => `${esc(it.nombre)}<div class="code">${esc(it.codigo || '')}</div>`;
+    const fam = UI.proyFam || 'Todas las familias';
+    const filtro = [fam, UI.proyQ ? 'búsqueda «' + UI.proyQ + '»' : '', H + ' meses', UI.proyPC ? 'incluye por comprar' : 'solo fincados'].filter(Boolean).join(' · ');
+    /* Volumen por mes de llegada */
+    const byM = {}; lleg.forEach(l => { const m = (l.f || '').slice(0, 7); if (!m) return; byM[m] = byM[m] || { f: 0, p: 0 }; byM[m][l.estado === 'fincado' ? 'f' : 'p'] += l.pend; });
+    const mx = Math.max(1, ...Object.values(byM).map(v => v.f + v.p));
+    const bars = Object.keys(byM).sort().map(k => { const v = byM[k]; return `<div class="bar"><div class="lb"><b>${mesLabel(k)}</b> · ${fmt(v.f + v.p, 0)}</div><div class="tr">${v.f ? `<div class="fl" style="width:${v.f / mx * 100}%;background:var(--blue)">${fmt(v.f, 0)}</div>` : ''}${v.p ? `<div class="fl" style="width:${v.p / mx * 100}%;background:var(--amber)">${fmt(v.p, 0)}</div>` : ''}</div></div>`; }).join('');
+    /* Mapa de cobertura (meses de inventario al cierre de cada mes) */
+    const ms = R[0].p.meses.map(m => m.mes);
+    const ord = R.slice().sort((a, b) => String(a.pdx.quiebre || '9999').localeCompare(String(b.pdx.quiebre || '9999')));
+    const heat = `<tr><th></th>${ms.map(m => `<th>${mesLabel(m)}</th>`).join('')}</tr>` + ord.map(r => `<tr><td class="nm">${esc(r.it.nombre)}</td>${r.p.meses.map(m => { const c = m.negativo ? 'c2' : m.bajoSS ? 'c1' : 'c0', cov = num(r.it.consumo) ? m.stock / num(r.it.consumo) : 0; return `<td class="${c} ${m.fincado ? 'arrF' : m.porComprar ? 'arrP' : ''}" title="${esc(r.it.nombre)} · ${mesLabel(m.mes)}: ${fmt(m.stock, 0)}${m.llega ? ' · llega ' + fmt(m.llega, 0) : ''}">${cov >= 24 ? '24+' : cov.toFixed(1)}</td>`; }).join('')}</tr>`).join('');
+    /* Propuesta automática */
+    const acc = [];
+    if (pcVenc.length) acc.push(`colocar de inmediato ${pcVenc.length === 1 ? 'la OC' : 'las OC'} por comprar cuya fecha límite ya pasó según su lead time: ${pcVenc.map(l => `<b>${esc(l.it.nombre)}</b> (${fmt(l.pend, 0)} para el ${fD(l.f)})`).join(', ')}`);
+    if (alVenc.length) acc.push(`atender ${alVenc.map(a => `<b>${esc(a.r.it.nombre)}</b> (quiebre el ${fD(a.q)})`).join(', ')}, cuya fecha para pedir ya pasó`);
+    if (trAtr.length) acc.push(`dar seguimiento con el proveedor a ${trAtr.map(l => `la OC ${esc(l.oc || 's/n')} de <b>${esc(l.it.nombre)}</b> (esperada el ${fD(l.f)})`).join(', ')}, aún pendiente de recepción`);
+    if (pcUrg.length > pcVenc.length) acc.push(`programar en los próximos 30 días ${pcUrg.filter(l => dDif(l.lim) >= 0).map(l => `<b>${esc(l.it.nombre)}</b> (OC antes del ${fD(l.lim)})`).join(', ')}`);
+    const nota = acc.length ? `<b>Propuesta para consideración de Dirección.</b> Someto a consideración: ${acc.map((a, i) => `(${i + 1}) ${a}`).join('; ')}.` : `<b>Situación para Dirección.</b> Con los pedidos programados, ninguna compra tiene fecha límite vencida ni próxima en los siguientes 30 días.`;
+    const sinFecha = lleg.some(l => l.estim) ? '<p class="sub">* Pedido registrado solo con mes; se toma el día 15 como fecha estimada.</p>' : '';
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abasto ${esc(fam)} · ${fD(hoy)}</title>
+<style>:root{--navy:#14284b;--ink:#1d2433;--mut:#6b7385;--line:#e4e7ee;--bg:#f5f6f9;--blue:#2f6fd6;--blueL:#e6eefb;--amber:#c98500;--amberL:#fdf1d8;--red:#c8342b;--redL:#fbe3e1;--green:#2e8a57;--greenL:#e3f3ea}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--navy);color:#fff;padding:28px 32px 56px}header .k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.7}header h1{margin:6px 0 4px;font-size:24px}header p{margin:0;opacity:.8;font-size:13px}
+main{max-width:1200px;margin:0 auto;padding:0 24px 48px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:-36px}
+.kpi{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 2px 8px rgba(20,40,75,.08);border-top:4px solid var(--c)}.kpi .l{font-size:12px;color:var(--mut);font-weight:500}.kpi .v{font-size:28px;font-weight:700;margin:4px 0 2px;color:var(--c)}.kpi .s{font-size:12px;color:var(--mut)}
+section{background:#fff;border-radius:12px;padding:20px 22px;margin-top:20px;box-shadow:0 1px 3px rgba(20,40,75,.06)}h2{font-size:16px;margin:0 0 4px;color:var(--navy)}.sub{margin:0 0 14px;color:var(--mut);font-size:12.5px}
+table{width:100%;border-collapse:collapse}th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600}td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}.n{text-align:right;font-variant-numeric:tabular-nums}tr:last-child td{border-bottom:0}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap}.p-blue{background:var(--blueL);color:var(--blue)}.p-amber{background:var(--amberL);color:var(--amber)}.p-red{background:var(--redL);color:var(--red)}.p-green{background:var(--greenL);color:var(--green)}
+.code{color:var(--mut);font-size:11.5px}.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}.empty{color:var(--mut);padding:14px 0}
+.bar{display:flex;align-items:center;gap:10px;margin:7px 0}.bar .lb{width:200px;font-size:12.5px;flex-shrink:0}.bar .tr{flex:1;height:22px;background:#f0f2f6;border-radius:4px;display:flex;overflow:hidden}.bar .fl{height:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;color:#fff;font-size:11px;font-weight:600;white-space:nowrap}
+.heat{overflow-x:auto}.heat table{min-width:900px}.heat td{padding:0;border:2px solid #fff;height:30px;text-align:center;font-size:10.5px;font-weight:600}.heat td.nm{text-align:left;padding:0 10px 0 0;font-weight:500;font-size:12px;white-space:nowrap;border:0;border-bottom:1px solid var(--line)}.heat th{text-align:center;padding:6px 2px}
+.c0{background:var(--greenL);color:var(--green)}.c1{background:var(--amberL);color:var(--amber)}.c2{background:var(--redL);color:var(--red)}.arrF{outline:2px solid var(--blue);outline-offset:-3px}.arrP{outline:2px dashed var(--amber);outline-offset:-3px}
+.leg{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:12px}.leg span{display:flex;align-items:center;gap:6px}.sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+.note{background:#fff;border-left:4px solid var(--navy);padding:14px 18px;border-radius:8px;font-size:13px;line-height:1.6;margin-top:20px}.note b{color:var(--navy)}footer{color:var(--mut);font-size:11.5px;text-align:center;margin-top:24px}
+@media(max-width:860px){.kpis{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}.bar .lb{width:120px}}@media print{body{background:#fff}section,.kpi{box-shadow:none;border:1px solid var(--line)}}</style></head><body>
+<header><div class="k">${esc(I.CFG.EMPRESA || '')}</div><h1>Abasto de ${esc(fam === 'Todas las familias' ? 'insumos' : fam.toLowerCase())}: pedidos en tránsito y compras por colocar</h1><p>${esc(filtro)} · Existencias al ${fFecha(ultimaAct())} · Generado el ${fFecha(Date.now())} por ${esc(USER.nombre)}</p></header>
+<main><div class="kpis">
+<div class="kpi" style="--c:var(--blue)"><div class="l">En tránsito (fincado)</div><div class="v">${tr.length} OC</div><div class="s">${fmt(sum(tr), 0)} por recibir${trAtr.length ? ' · ' + trAtr.length + ' atrasada' + (trAtr.length > 1 ? 's' : '') : ''}</div></div>
+<div class="kpi" style="--c:var(--amber)"><div class="l">Por comprar</div><div class="v">${pc.length} pedido${pc.length === 1 ? '' : 's'}</div><div class="s">${fmt(sum(pc), 0)} planeado</div></div>
+<div class="kpi" style="--c:var(--red)"><div class="l">OC a colocar en ≤ 30 días</div><div class="v">${pcUrg.length}</div><div class="s">${pcVenc.length ? pcVenc.length + ' con fecha límite vencida' : 'ninguna vencida'}</div></div>
+<div class="kpi" style="--c:var(--navy)"><div class="l">Artículos con quiebre</div><div class="v">${al.length} de ${R.length}</div><div class="s">${alVenc.length ? alVenc.length + ' con fecha de pedido vencida' : 'ninguno con fecha vencida'}</div></div></div>
+<div class="two"><section><h2>Pedidos pendientes por llegar</h2><p class="sub">Órdenes de compra fincadas, aún no recibidas</p>${tr.length ? `<table><tr><th>Artículo</th><th>Fecha OC</th><th>Llegada</th><th class="n">Por recibir</th><th>OC</th><th>Estatus</th></tr>${tr.map(l => `<tr><td>${nom(l.it)}${l.proveedor ? `<div class="code">${esc(l.proveedor)}</div>` : ''}</td><td>${fD(l.fechaOC)}</td><td>${fD(l.f)}${l.estim ? '*' : ''}</td><td class="n">${fmt(l.pend, 0)}${num(l.recibido) ? `<div class="code">recibido ${fmt(l.recibido, 0)}</div>` : ''}</td><td>${esc(l.oc || '—')}</td><td>${l.f < hoy ? pill('red', 'Atrasada ' + (-dDif(l.f)) + ' d') : pill('blue', 'En ' + dDif(l.f) + ' d')}</td></tr>`).join('')}</table>` : '<div class="empty">Sin pedidos fincados pendientes</div>'}</section>
+<section><h2>Pedidos por comprar</h2><p class="sub">Planeados en la proyección, sin OC colocada. Fecha límite = fecha de llegada − lead time del artículo</p>${pc.length ? `<table><tr><th>Artículo</th><th>Llegada</th><th class="n">Cantidad</th><th>Colocar OC antes de</th></tr>${pc.map(l => `<tr><td>${nom(l.it)}<div class="code">LT ${I.ltDias(l.it)} días${l.proveedor ? ' · ' + esc(l.proveedor) : ''}</div></td><td>${fD(l.f)}${l.estim ? '*' : ''}</td><td class="n">${fmt(l.pend, 0)}</td><td>${fD(l.lim)}<br>${plazo(dDif(l.lim))}</td></tr>`).join('')}</table>` : '<div class="empty">Sin pedidos por comprar</div>'}</section></div>${sinFecha}
+${bars ? `<section><h2>Volumen programado por mes de llegada</h2><p class="sub">Azul = fincado · ámbar = por comprar</p>${bars}</section>` : ''}
+<section><h2>Artículos que requieren compra adicional</h2><p class="sub">Aun con los pedidos programados llegan a quiebre. «Pedir a más tardar» = primer día bajo stock de seguridad − lead time</p>${al.length ? `<table><tr><th>Artículo</th><th class="n">Físico hoy</th><th class="n">Consumo/mes</th><th>Quiebre</th><th>Pedir a más tardar</th><th class="n">Faltante al cierre</th><th>Prioridad</th></tr>${al.map(a => `<tr><td>${nom(a.r.it)}</td><td class="n">${fmt(a.r.f.total, 0)}</td><td class="n">${fmt(a.r.it.consumo, 0)}</td><td>${fD(a.q)}</td><td>${fD(a.pa)}</td><td class="n">${a.falt ? fmt(a.falt, 0) : '—'}</td><td>${plazo(a.dias)}</td></tr>`).join('')}</table>` : '<div class="empty">Ningún artículo llega a quiebre en el horizonte</div>'}</section>
+<section><h2>Mapa de cobertura por artículo</h2><p class="sub">Meses de inventario proyectado al cierre de cada mes (inventario ÷ consumo mensual)</p><div class="heat"><table>${heat}</table></div>
+<div class="leg"><span><i class="sw c0"></i>Arriba de stock de seguridad</span><span><i class="sw c1"></i>Debajo de stock de seguridad</span><span><i class="sw c2"></i>Quiebre</span><span><i class="sw" style="outline:2px solid var(--blue);outline-offset:-2px"></i>Llega fincado</span><span><i class="sw" style="outline:2px dashed var(--amber);outline-offset:-2px"></i>Llega por comprar</span></div></section>
+<div class="note">${nota}</div><footer>Programa de Inventarios Pet Food · ${esc(filtro)} · Cifras en la unidad de cada artículo</footer></main></body></html>`;
+    const a = document.createElement('a'); a.download = 'Reporte_Direccion_' + (UI.proyFam || 'Todas').replace(/[^A-Za-z0-9]+/g, '_') + '_' + hoy + '.html';
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' })); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    I.toast('Reporte para Dirección descargado ✔', 'ok');
   }
   /* La proyección oculta los artículos excluidos de alertas (temporada); el botón 🔕 los muestra para reactivarlos */
   const proyBase = () => { const q = UI.proyQ.toLowerCase(); return items(true).filter(it => it.planear && num(it.consumo) > 0 && (!UI.proyFam || it.familia === UI.proyFam) && (!q || I.itemLabel(it).toLowerCase().includes(q))); };
