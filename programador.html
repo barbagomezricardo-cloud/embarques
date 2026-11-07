@@ -2492,8 +2492,12 @@ function odooRows(P,kind){
   /* copia local más vieja que la de la nube (otro equipo subió un reporte nuevo) → bajarla otra vez */
   if(meta&&raw&&meta.ts&&odTsGet(P,kind)<meta.ts&&fb&&fbCuad){ delete _odooCache[P+'|'+kind]; cuadFetchOdoo(P); return null; }
   if(!raw) return null; const k=P+'|'+kind; if(_odooCache[k]) return _odooCache[k];
-  const d=safeJSON(raw); if(!d) return null; _odooCache[k]=d; return d;
+  const d=safeJSON(raw); if(!d) return null;
+  /* la copia local dice ser del reporte nuevo pero trae otro número de renglones que la nube → está vieja: bajarla otra vez (una vez) */
+  if(meta&&meta.n&&d.rows&&d.rows.length!==meta.n&&fb&&fbCuad&&!_odRefetched[k]){ _odRefetched[k]=1; delete _odooCache[k]; delete CUAD.odoodata[P]; _fetching[P]=false; cuadFetchOdoo(P); return null; }
+  _odooCache[k]=d; return d;
 }
+const _odRefetched={};
 const _fetching={};
 function odTsGet(P,kind){ const t=CUAD.odoodata._ts; return (t&&t[P+'|'+kind])||0; }
 function odTsSet(P,kind){ const m=CUAD.odoo[P]&&CUAD.odoo[P][kind]; if(!CUAD.odoodata._ts||typeof CUAD.odoodata._ts!=='object') CUAD.odoodata._ts={}; CUAD.odoodata._ts[P+'|'+kind]=(m&&m.ts)||Date.now(); cuadSaveOdooLocal(); }
