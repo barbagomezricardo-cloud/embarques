@@ -3072,7 +3072,7 @@ const esSacoVacio=pk=>/^02(SAC|PRO)/i.test(pk)||esSemiCuadre(pk);
 function esSemiCuadre(pk){ return /^02CROQ0*37$/i.test(String(pk||'').replace(/\s+/g,'')); }          // costales vacíos que se venden/regalan: no son producto terminado
 function mapLineas(arr){   // [{pk,lote,q}] → Map pk|lote
   const m=new Map(); arr.forEach(x=>{ if(!x.q)return; const nl=normLote(x.lote), k=x.pk+'|'+nl; const o=m.get(k)||{pk:x.pk,lote:nl,nl,q:0}; o.q+=x.q; m.set(k,o); }); return m; }
-const capLineas=items=>mapLineas(asArr(items).map(x=>({pk:pkey(x.cod||x.prod),lote:x.lote,q:Number(x.sacos)||0})).filter(x=>x.pk));
+const capLineas=items=>mapLineas(asArr(items).map(x=>({pk:pkey(x.cod||x.prod),lote:x.lote,q:Number(x.sacos)||0})).filter(x=>x.pk&&!esSemiCuadre(x.pk)));   // el semiterminado (02CROQ037) tampoco se concilia
 function odLineas(picks){ const a=[]; picks.forEach(p=>p.l.forEach(([pk,l,q])=>{ if(!esSacoVacio(pk)) a.push({pk,lote:l,q}); })); return mapLineas(a); }
 // diferencias entre lo capturado y lo que salió en Odoo (tipos: cant, prod, prodcant, lote, sobra, falta)
 function difLineas(cap,od,tol){
