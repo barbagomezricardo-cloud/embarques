@@ -102,6 +102,18 @@ print("\n  Copia esta tabla: los NIP no se vuelven a mostrar. Al entrar, cada ve
   exit 0
 fi
 
+if [ "$FASE" = "actualizar" ]; then
+  paso "Actualizando embAdmin (acceso a Cuadre de báscula y panel por programa)"
+  LLAVE="$(llave)"; [ -z "$LLAVE" ] && { echo "No pude leer la llave CLI_MAESTRO."; exit 1; }
+  CARP=""; for f in $(find "$HOME" -maxdepth 4 -name index.js -path '*functions*' -not -path '*/node_modules/*' 2>/dev/null); do grep -q "require('./acceso')" "$f" && { CARP="$(dirname "$f")"; break; }; done
+  [ -z "$CARP" ] && { aviso "No encontré tu carpeta de funciones."; exit 1; }
+  curl -sfL "$RAW/acceso/funciones/acceso.js" -o "$CARP/acceso.js" || { echo "No pude descargar acceso.js"; exit 1; }
+  (cd "$CARP/.." && firebase deploy --only functions:embAdmin --force) || { aviso "El despliegue falló. Mándame el error."; exit 1; }
+  sleep 5; llamar '{"accion":"directorio"}'; echo
+  ok "Listo. Avísame para publicar el panel nuevo."
+  exit 0
+fi
+
 if [ "$FASE" = "ola3" ]; then
   paso "Ola 3 · 1/2 Servidor: embAdmin y cliApi"
   LLAVE="$(llave)"; [ -z "$LLAVE" ] && { echo "No pude leer la llave CLI_MAESTRO."; exit 1; }
