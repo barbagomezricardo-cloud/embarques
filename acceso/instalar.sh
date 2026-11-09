@@ -104,10 +104,22 @@ done
 echo "Carpeta: $CARP"
 for a in "acceso/funciones/acceso.js:acceso.js" "clientes/funciones/clientes.js:clientes.js" "clientes/funciones/cli-core.js:cli-core.js"; do
   src="${a%%:*}"; dst="${a##*:}"
-  [ -f "$CARP/$dst" ] && cp "$CARP/$dst" "$CARP/$dst.antes-acceso"
+  [ -f "$CARP/$dst" ] && [ ! -f "$CARP/$dst.antes-acceso" ] && cp "$CARP/$dst" "$CARP/$dst.antes-acceso"
   curl -sfL "$RAW/$src" -o "$CARP/$dst" || { echo "No pude descargar $src"; exit 1; }
 done
 grep -q "require('./acceso')" "$CARP/index.js" || { cp "$CARP/index.js" "$CARP/index.js.antes-acceso"; printf "\n// Acceso 19H (usuarios de Programador y Cargadores)\nObject.assign(exports, require('./acceso'));\n" >> "$CARP/index.js"; }
+# Google retiró Node.js 20 (30-oct-2026): se pasa la carpeta de funciones a Node.js 22
+python3 - "$CARP" <<'PY'
+import json,os,sys
+c=sys.argv[1]; pj=os.path.join(c,'package.json'); fj=os.path.join(c,'..','firebase.json')
+d=json.load(open(pj)); d.setdefault('engines',{})['node']='22'; json.dump(d,open(pj,'w'),indent=2)
+if os.path.exists(fj):
+    f=json.load(open(fj)); fs=f.get('functions'); fs=fs if isinstance(fs,list) else [fs] if fs else []
+    for x in fs:
+        if isinstance(x,dict) and x.get('runtime'): x['runtime']='nodejs22'
+    json.dump(f,open(fj,'w'),indent=2)
+print('Node.js 22 listo en package.json')
+PY
 (cd "$CARP" && npm install --silent >/dev/null 2>&1) && ok "Dependencias listas"
 cd "$CARP/.."
 firebase use "$PROY" >/dev/null 2>&1 || true
