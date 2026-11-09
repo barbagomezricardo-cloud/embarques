@@ -26,7 +26,7 @@ const VIEJOS = ['pwd', 'masterPwd', 'pwdBascula', 'staffUsers', 'bascUsers', 'us
 
 function clave(t) {
   return String(t || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-    .replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 30);
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
 }
 function falla(msg) { const e = new Error(msg); e.publico = true; return e; }
 function igualSeguro(a, b) {
@@ -45,7 +45,7 @@ async function licenciaOk() {
 async function claveLibre(base) {
   let k = clave(base) || 'usuario', n = 1;
   const dir = (await db.ref('acceso/directorio').once('value')).val() || {};
-  while (dir[k]) { n++; k = clave(base).slice(0, 27) + '.' + n; }
+  while (dir[k]) { n++; k = clave(base).slice(0, 27) + '_' + n; }
   return k;
 }
 
@@ -100,10 +100,10 @@ async function migrar(d) {
       hechos.push({nombre, usuario: r.key, rol: prog || 'cargador'});
     } catch (e) { omitidos.push(nombre + ' (' + e.message + ')'); }
   };
-  if (c.pwd) await intentar('Superusuario (contraseña general)', 'su', false, c.pwd);
+  if (c.pwd) await intentar('Superusuario general', 'su', false, c.pwd);
   for (const u of arr(c.staffUsers)) await intentar(u.name, u.rol === 'cons' ? 'cons' : 'su', false, u.pwd);
   for (const u of arr(c.bascUsers)) await intentar(u.name, 'basc', false, u.pwd);
-  if (c.pwdBascula) await intentar('Báscula (contraseña compartida)', 'basc', false, c.pwdBascula);
+  if (c.pwdBascula) await intentar('Báscula compartida', 'basc', false, c.pwdBascula);
   for (const u of arr(c.users)) await intentar(u.name, null, true, u.pin);
   await bitacora('instalación', 'Migración de ' + hechos.length + ' cuentas');
   return {hechos, omitidos};
