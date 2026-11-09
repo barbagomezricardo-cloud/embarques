@@ -22,7 +22,7 @@ const DOMINIO = '@emb19h.app';
 const PRE = 'emb19h:';
 const ROLES = ['master', 'su', 'cons', 'basc'];
 const ROLES_GER = ['master', 'su', 'visor'];
-const ORIGENES = ['https://barbagomezricardo-cloud.github.io', 'http://localhost:8090', 'http://localhost:8092'];
+const ORIGENES = ['https://barbagomezricardo-cloud.github.io', 'http://localhost:8090', 'http://localhost:8092', 'null'];   // 'null' = Panel de Licencia abierto como archivo local (igual exige token de master)
 const VIEJOS = ['pwd', 'masterPwd', 'pwdBascula', 'staffUsers', 'bascUsers', 'users'];
 
 function clave(t) {
