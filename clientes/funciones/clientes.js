@@ -148,7 +148,12 @@ exports.cliApi = onRequest(
         out = {token: firmar(Object.assign({}, ses, {exp})), yo: ses, exp};
       } else if (modo === 'loginProg') {
         if (!(await licenciaOk('clientes_personal'))) return res.status(423).json({error: 'Módulo apagado desde el Panel de Licencia.'});
-        const ses = await core.progLogin(datos && datos.pwd);
+        let ses;
+        if (datos && datos.idToken) {
+          let dec;
+          try { dec = await admin.auth().verifyIdToken(String(datos.idToken), true); } catch (e) { return res.status(401).json({error: 'Tu sesión expiró. Entra de nuevo.', code: 'sin_sesion'}); }
+          ses = await core.progLoginUid(dec.uid);
+        } else ses = await core.progLogin(datos && datos.pwd);
         const exp = Date.now() + 7 * 24 * 3600 * 1000;
         out = {token: firmar(Object.assign({}, ses, {exp})), yo: {u: ses.u, nombre: ses.nombre, rol: ses.rol, vk: ''}, exp};
       } else if (modo === 'staff') {

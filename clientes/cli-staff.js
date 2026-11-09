@@ -157,10 +157,15 @@
   function guardaSesion(r) { S.ses = { token: r.token, yo: r.yo, exp: r.exp || 0 }; lss(LS_SES, JSON.stringify(S.ses)); S.filtro = null; S.bandeja = null; S.ultimoConteo = -1; }
   function formLogin(cont, alEntrar) {
     if (MODO_PROG) {
-      cont.innerHTML = '<div class="clis-login"><img src="' + BASE + 'img/logo-petfood.png" alt=""><h3>Fletes y clientes</h3><p class="clis-mut" style="margin:0">Escribe tu contraseña de superusuario o master del programador.</p>' +
-        '<input id="clis-p" type="password" placeholder="Contraseña" autocomplete="current-password"><div class="clis-mini" id="clis-e" style="color:var(--r);min-height:1em"></div><button class="clis-btn" id="clis-in">Entrar</button></div>';
-      var goP = function () { var b = $('#clis-in', cont); b.disabled = true; api('loginProg', '', { pwd: $('#clis-p', cont).value }).then(function (r) { guardaSesion(r); alEntrar(); }).catch(function (e) { b.disabled = false; $('#clis-e', cont).textContent = e.error || 'No se pudo entrar.'; }); };
-      $('#clis-in', cont).onclick = goP; $('#clis-p', cont).onkeydown = function (e) { if (e.key === 'Enter') goP(); };
+      cont.innerHTML = '<div class="clis-login"><img src="' + BASE + 'img/logo-petfood.png" alt=""><h3>Fletes y clientes</h3><p class="clis-mut" style="margin:0">Se abre con tu sesión del programador (superusuario o master).</p>' +
+        '<div class="clis-mini" id="clis-e" style="color:var(--r);min-height:1em"></div><button class="clis-btn" id="clis-in">Entrar con mi sesión</button></div>';
+      var goP = function () {
+        var b = $('#clis-in', cont); b.disabled = true;
+        var tok = (W.Acceso19H && W.Acceso19H.token) ? W.Acceso19H.token() : Promise.resolve('');
+        tok.then(function (t) { if (!t) throw { error: 'Primero entra al programador con tu usuario.' }; return api('loginProg', '', { idToken: t }); })
+          .then(function (r) { guardaSesion(r); alEntrar(); }).catch(function (e) { b.disabled = false; $('#clis-e', cont).textContent = e.error || 'No se pudo entrar.'; });
+      };
+      $('#clis-in', cont).onclick = goP;
       return;
     }
     cont.innerHTML = '<div class="clis-login"><img src="' + BASE + 'img/logo-petfood.png" alt="Los 19 Hermanos División Pet Food"><h3>Clientes · acceso del personal</h3><p class="clis-mut" style="margin:0">Entra con tu usuario y el PIN que te asignó la gerencia.</p>' +
@@ -653,9 +658,12 @@
     }).catch(function (e) { console.warn('Clientes:', e); });
   }
   // Lo llama programador.html al entrar con su contraseña: abre la sesión del módulo sin pedirla otra vez.
-  function loginProgramador(pwd) {
-    if (!MODO_PROG || !pwd) return Promise.resolve();
-    return listo().then(function () { return api('loginProg', '', { pwd: pwd }); }).then(function (r) {
+  // Acceso 19H: recibe {idToken} de la sesión del programador (ya no la contraseña)
+  function loginProgramador(cred) {
+    if (!MODO_PROG || !cred) return Promise.resolve();
+    var datos = (typeof cred === 'object') ? { idToken: cred.idToken } : { pwd: cred };
+    if (!datos.idToken && !datos.pwd) return Promise.resolve();
+    return listo().then(function () { return api('loginProg', '', datos); }).then(function (r) {
       guardaSesion(r); refrescarBandeja(true);
       S.montajes.forEach(function (m) { if (D.body.contains(m)) montarFletes(m); });
     }).catch(function () {});

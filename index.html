@@ -187,10 +187,10 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 <div class="modal" id="turnoModal">
   <div class="modalc">
     <h3>👤 Iniciar turno</h3>
-    <p class="hint">Selecciona tu usuario e ingresa tu PIN. Solo usuarios autorizados por el supervisor pueden registrar.</p>
+    <p class="hint">Selecciona tu usuario e ingresa tu NIP. Si es tu primera vez con el nuevo acceso, usa tu PIN de siempre: te pedirá crear tu NIP nuevo de 6 números.</p>
     <select id="turnoName" style="width:100%;font-size:16px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px;margin-bottom:9px"></select>
-    <input id="turnoPin" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')doTurno()">
-    <div id="turnoErr" style="color:var(--late);font-size:13px;margin-top:6px;display:none">Usuario o PIN incorrecto</div>
+    <input id="turnoPin" type="password" inputmode="numeric" placeholder="NIP" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')doTurno()">
+    <div id="turnoErr" style="color:var(--late);font-size:13px;margin-top:6px;display:none">Usuario o NIP incorrecto</div>
     <button class="bigbtn bg-start" onclick="doTurno()">Entrar</button>
     <button class="bigbtn bg-dis" onclick="document.getElementById('turnoModal').classList.remove('show')">Cancelar</button>
   </div>
@@ -260,6 +260,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 
 <div class="toast" id="toast"></div>
 
+<script src="acceso-19h.js"></script>
 <script>
 /* 👇 PEGA AQUÍ LA MISMA CONFIGURACIÓN DE FIREBASE QUE EL PROGRAMADOR.
    Reemplaza  null  por el objeto { ... } (debe incluir "databaseURL").
@@ -276,7 +277,7 @@ const FIREBASE_CONFIG = {
 };
 
 const DEFAULT_LIMITES={"NISSAN":30,"ISUZU":30,"TORTON":40,"TRAILER 30 TON":50,"TRAILER 34 TON":80};
-const APP_PIN="2468";   // PIN para abrir la configuración de conexión (cámbialo si quieres)
+
 let LIMITES={...DEFAULT_LIMITES};
 /* ---- TRAZABILIDAD: catálogo de productos (lo administra el programador en ⚙ Configuración; esta lista es solo la semilla) ---- */
 const PRODUCTOS_DEFAULT=[{cod:'04MAS001',name:'SILVER KAN PREMIUM +22% 25 KG',kg:25},{cod:'04MAS0019',name:'SILVER KAN PREMIUM 20 KGS',kg:20},{cod:'04MAS006',name:'SILVER CAT 15 KGS',kg:15},{cod:'04MAS007',name:'SILVER CAT 5 KGS',kg:5},{cod:'04MAS009',name:'KAN KAN 20 KGS',kg:20},{cod:'04MAS0020',name:'KAN KAN 25 KG',kg:25},{cod:'04MAS008',name:'MI BOOB 20 KGS',kg:20},{cod:'04MAS010',name:'PET FOOD 20 KG (R)',kg:20},{cod:'04MAS003',name:'SILVER KAN 18% 25 KGS',kg:25},{cod:'04MAS002',name:'SILVER KAN 18% 5 KGS',kg:5},{cod:'04MAS004',name:'SILVER KAN CACHORRO 20 KGS',kg:20},{cod:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',kg:5}];
@@ -672,7 +673,7 @@ let pendingDispatch=null;
 /* ---- persistencia ---- */
 function persist(r){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fbData){ fbData.child(r.id).set(JSON.parse(JSON.stringify(r))); } }
 function loadLocal(){
-  try{ const c=localStorage.getItem(CFG_KEY); if(c){ const o=JSON.parse(c); if(o.limites)LIMITES=o.limites; if(o.users)USERS=o.users; if(o.motivos&&o.motivos.length){ MOTIVOS=o.motivos; rebuildMotivoMap(); } applyTrazaCfg(o); } }catch(e){}
+  try{ const c=localStorage.getItem(CFG_KEY); if(c){ const o=JSON.parse(c); if(o.limites)LIMITES=o.limites; if(o.motivos&&o.motivos.length){ MOTIVOS=o.motivos; rebuildMotivoMap(); } applyTrazaCfg(o); } }catch(e){}
   try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=JSON.parse(d); return; } }catch(e){}
   DATA=[];
 }
@@ -683,13 +684,22 @@ function getAppCfg(){ try{ const s=localStorage.getItem(APPCFG_KEY); if(s) retur
 function initFirebase(){
   const cfg=getAppCfg();
   if(!cfg||!cfg.databaseURL){ setConn('local','Local'); return; }
-  loadFbScripts(()=>{ try{
-    if(!fb){ fb=firebase.initializeApp(cfg,'carg'+Date.now()); if(RECAPTCHA_SITE_KEY){ try{ firebase.appCheck(fb).activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true); }catch(e){ console.error('appCheck:',e); } } }
-    const db=firebase.database(fb); fbData=db.ref('embarques'); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
+  Acceso19H.iniciar({firebase:cfg, recaptcha:RECAPTCHA_SITE_KEY}).then(()=>{ try{
+    fb=Acceso19H.app();   // Acceso 19H: la misma app donde inicia turno cada cargador (lleva su sesión a la base)
+    const db=firebase.database(fb); fbData=db.ref('embarques');
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
-    fbCfg.on('value',snap=>{ const v=snap.val(); if(v){ if(v.limites)LIMITES=v.limites; if(v.users)USERS=v.users; if(v.motivos&&v.motivos.length){ MOTIVOS=v.motivos; rebuildMotivoMap(); } applyTrazaCfg(v); if('servClientes' in v){ SERV_OVERRIDES=v.servClientes||null; render(); } if(currentUser && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } } });
-  }catch(e){ console.error(e); setConn('local','Local (error)'); } });
+    // ¿ya había un turno abierto en este celular? (la sesión de Firebase se conserva)
+    Acceso19H.sesionActual('carg',{nip:true}).then(p=>{ if(p){ turnoAbierto(p); } else if(currentUser){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } });
+  }catch(e){ console.error(e); setConn('local','Local (error)'); } }).catch(()=>setConn('local','Sin internet'));
+}
+let _cfgOn=false;
+function conectarCfg(){   // Acceso 19H: /config y /audit ya solo se abren con sesión
+  if(_cfgOn||!fb) return; _cfgOn=true;
+  const db=firebase.database(fb); fbCfg=db.ref('config'); fbAudit=db.ref('audit');
+  fbCfg.on('value',snap=>{ const v=snap.val(); if(v){ if(v.limites)LIMITES=v.limites; if(v.motivos&&v.motivos.length){ MOTIVOS=v.motivos; rebuildMotivoMap(); } applyTrazaCfg(v); if('servClientes' in v){ SERV_OVERRIDES=v.servClientes||null; }
+    try{ const o=Object.assign({},v); ['pwd','masterPwd','pwdBascula','staffUsers','bascUsers','users'].forEach(k=>delete o[k]); localStorage.setItem(CFG_KEY,JSON.stringify(o)); }catch(e){}
+    render(); } }, ()=>{ _cfgOn=false; });
 }
 let fbLoaded=false;
 // App Check (protección anti-abuso, OPCIONAL y apagada por defecto): misma nota que en
@@ -703,22 +713,38 @@ function loadFbScripts(cb){ if(fbLoaded||window.firebase){fbLoaded=true;return c
   }; s2.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s2); };
   s1.onerror=()=>setConn('local','Sin internet'); document.head.appendChild(s1);
 }
-function openCfg(){ document.getElementById('pinInput').value=''; document.getElementById('pinErr').style.display='none'; document.getElementById('pinModal').classList.add('show'); setTimeout(()=>document.getElementById('pinInput').focus(),50); }
-function checkPin(){ if(document.getElementById('pinInput').value===APP_PIN){ document.getElementById('pinModal').classList.remove('show'); const c=getAppCfg(); document.getElementById('cfgFb').value=c?JSON.stringify(c,null,2):''; document.getElementById('cfgModal').classList.add('show'); } else document.getElementById('pinErr').style.display='block'; }
+function openCfg(){ if(!currentUser){ toast('Inicia turno para ver la conexión 👤'); return; } const c=getAppCfg(); document.getElementById('cfgFb').value=c?JSON.stringify(c,null,2):''; document.getElementById('cfgModal').classList.add('show'); }
+function checkPin(){ document.getElementById('pinModal').classList.remove('show'); openCfg(); }
 function saveCfg(){ const t=document.getElementById('cfgFb').value.trim(); if(!t){ localStorage.removeItem(APPCFG_KEY); document.getElementById('cfgModal').classList.remove('show'); toast('Modo local'); setConn('local','Local'); return; } try{ const o=JSON.parse(t); localStorage.setItem(APPCFG_KEY,JSON.stringify(o)); document.getElementById('cfgModal').classList.remove('show'); toast('Guardado, conectando…'); initFirebase(); }catch(e){ toast('JSON inválido'); } }
 
 /* ---- turno / usuario ---- */
 function updateTurnoBtn(){ const b=document.getElementById('turnoBtn'); if(currentUser){ b.textContent='👤 '+currentUser+' · salir'; b.classList.add('on'); } else { b.textContent='👤 Iniciar turno'; b.classList.remove('on'); } }
-function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentUser+'? Ya no podrás registrar hasta iniciar de nuevo.')){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); toast('Turno cerrado'); } } else {
-    if(!USERS.length){ toast('El supervisor aún no ha creado usuarios'); return; }
-    const sel=document.getElementById('turnoName'); sel.innerHTML=USERS.map(u=>`<option value="${u.name}">${u.name}</option>`).join('');
+function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentUser+'? Ya no podrás registrar hasta iniciar de nuevo.')){ Acceso19H.salir().then(()=>{ try{localStorage.removeItem(USER_KEY);}catch(e){} location.reload(); }); } } else {
+    const sel=document.getElementById('turnoName'); sel.innerHTML='<option value="">Cargando…</option>';
     document.getElementById('turnoPin').value=''; document.getElementById('turnoErr').style.display='none';
-    document.getElementById('turnoModal').classList.add('show'); setTimeout(()=>document.getElementById('turnoPin').focus(),50);
+    document.getElementById('turnoModal').classList.add('show');
+    Acceso19H.directorio('carg').then(L=>{
+      if(!L.length){ sel.innerHTML='<option value="">El supervisor aún no ha creado usuarios</option>'; return; }
+      let ult=''; try{ ult=localStorage.getItem('carg_ult_usuario')||''; }catch(e){}
+      sel.innerHTML='<option value="">— Elige tu nombre —</option>'+L.map(u=>`<option value="${u.key}"${u.key===ult?' selected':''}>${u.nombre.replace(/</g,'&lt;')}</option>`).join('');
+      setTimeout(()=>document.getElementById('turnoPin').focus(),50);
+    }).catch(()=>{ sel.innerHTML='<option value="">Sin internet</option>'; });
   } }
-function doTurno(){ const n=document.getElementById('turnoName').value; const pin=document.getElementById('turnoPin').value.trim();
-  const u=USERS.find(x=>x.name===n && String(x.pin)===pin);
-  if(!u){ document.getElementById('turnoErr').style.display='block'; return; }
-  currentUser=n; try{localStorage.setItem(USER_KEY,n);}catch(e){} document.getElementById('turnoModal').classList.remove('show'); updateTurnoBtn(); render(); toast('Turno iniciado: '+n); }
+function turnoAbierto(p){
+  currentUser=p.nombre; try{localStorage.setItem(USER_KEY,p.nombre);}catch(e){}
+  conectarCfg(); updateTurnoBtn(); render();
+  Acceso19H.vigilar(q=>{ if(!q||q.activo!==true||q.carg!==true){ toast('Tu usuario fue dado de baja'); Acceso19H.salir().then(()=>location.reload()); } });
+}
+let _turnoBusy=false;
+function doTurno(){ if(_turnoBusy) return; const key=document.getElementById('turnoName').value; const pin=document.getElementById('turnoPin').value.trim();
+  const er=document.getElementById('turnoErr');
+  if(!key||!pin){ er.textContent='Elige tu nombre y escribe tu NIP'; er.style.display='block'; return; }
+  _turnoBusy=true; er.style.display='none';
+  Acceso19H.entrar(key,pin,'carg',{nip:true}).then(p=>{
+    try{ localStorage.setItem('carg_ult_usuario',key); }catch(e){}
+    document.getElementById('turnoModal').classList.remove('show'); turnoAbierto(p); toast('Turno iniciado: '+p.nombre);
+  }).catch(e=>{ er.textContent=e.message||'Usuario o NIP incorrecto'; er.style.display='block'; }).then(()=>{ _turnoBusy=false; });
+}
 function requireTurno(){ if(!currentUser){ toast('Inicia turno para registrar 👤'); turnoClick(); return false; } return true; }
 /* ---- auditoría de la app (quién movió qué) ---- */
 function appAudit(r, field, label, from, to){
@@ -734,7 +760,6 @@ document.getElementById('sheet').addEventListener('click',e=>{ if(e.target.id===
 try{ currentUser=localStorage.getItem(USER_KEY)||null; }catch(e){}
 document.getElementById('theDate').value=todayISO();
 loadLocal();
-if(currentUser && USERS.length && !USERS.some(u=>u.name===currentUser)){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} }
 updateTurnoBtn();
 initFirebase();
 render();
