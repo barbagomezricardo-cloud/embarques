@@ -168,6 +168,12 @@
       $('#clis-in', cont).onclick = goP;
       return;
     }
+    if (W.Acceso19H && W.Acceso19H.perfil && W.Acceso19H.perfil()) {   // Acceso 19H: tu usuario único abre Clientes sin PIN aparte
+      cont.innerHTML = '<div class="clis-login"><p class="clis-mut">Entrando con tu usuario…</p><div class="clis-mini" id="clis-e" style="color:var(--r);min-height:1em"></div></div>';
+      W.Acceso19H.token().then(function (t) { return api('loginProg', '', { idToken: t }); }).then(function (r) { guardaSesion(r); alEntrar(); })
+        .catch(function (e) { var x = $('#clis-e', cont); if (x) x.textContent = (e && e.error) || 'Tu usuario no tiene acceso a Clientes.'; });
+      return;
+    }
     cont.innerHTML = '<div class="clis-login"><img src="' + BASE + 'img/logo-petfood.png" alt="Los 19 Hermanos División Pet Food"><h3>Clientes · acceso del personal</h3><p class="clis-mut" style="margin:0">Entra con tu usuario y el PIN que te asignó la gerencia.</p>' +
       '<input id="clis-u" placeholder="Usuario" autocomplete="username" value="' + esc(lsg('cliStaffUlt') || usuarioSugerido()) + '">' +
       '<input id="clis-p" placeholder="PIN" inputmode="numeric" type="password" autocomplete="current-password" maxlength="8">' +
