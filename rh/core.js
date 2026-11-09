@@ -204,7 +204,13 @@
     };
     return {
       onChange(cb) { cbs.add(cb); if (ready) setTimeout(() => cb(last), 0); return () => cbs.delete(cb); },
-      async login(usuario, pass) { try { await auth.signInWithEmailAndPassword(userEmail(usuario), pass); } catch (e) { throw new Error(errMsg(e)); } },
+      async login(usuario, pass) {
+        try { await auth.signInWithEmailAndPassword(userEmail(usuario), pass); }
+        catch (e) {   // Acceso 19H: el mismo usuario y contraseña de todas tus apps (si el master te dio acceso aquí)
+          const k = String(usuario || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+          try { await auth.signInWithEmailAndPassword(k + '@emb19h.app', 'emb19h:' + pass); } catch (e2) { throw new Error(errMsg(e)); }
+        }
+      },
       async logout() { await auth.signOut(); },
       async crearUsuario(d) {
         const sec = firebase.initializeApp(CFG.FIREBASE, 'sec' + Date.now());
@@ -227,7 +233,7 @@
         creando = false;
         return cred.user.uid;
       },
-      async cambiarPass(nueva) { try { await auth.currentUser.updatePassword(nueva); } catch (e) { if (/requires-recent-login/.test(e.code)) throw new Error('Por seguridad cierra sesión, vuelve a entrar y repite el cambio.'); throw new Error(errMsg(e)); } },
+      async cambiarPass(nueva) { try { const eu = (auth.currentUser.email || '').endsWith('@emb19h.app'); await auth.currentUser.updatePassword((eu ? 'emb19h:' : '') + nueva); } catch (e) { if (/requires-recent-login/.test(e.code)) throw new Error('Por seguridad cierra sesión, vuelve a entrar y repite el cambio.'); throw new Error(errMsg(e)); } },
       async token() { return auth.currentUser ? auth.currentUser.getIdToken() : ''; },
       get user() { return cur; }
     };

@@ -155,7 +155,7 @@ exports.cliApi = onRequest(
           ses = await core.progLoginUid(dec.uid);
         } else ses = await core.progLogin(datos && datos.pwd);
         const exp = Date.now() + 7 * 24 * 3600 * 1000;
-        out = {token: firmar(Object.assign({}, ses, {exp})), yo: {u: ses.u, nombre: ses.nombre, rol: ses.rol, vk: ''}, exp};
+        out = {token: firmar(Object.assign({}, ses, {exp})), yo: {u: ses.u, nombre: ses.nombre, rol: ses.rol, vk: ses.vk || ''}, exp};
       } else if (modo === 'staff') {
         if (!(await licenciaOk('clientes_personal'))) return res.status(423).json({error: 'Módulo apagado desde el Panel de Licencia.'});
         const ses = verificar(req.get('x-cli-sesion'));

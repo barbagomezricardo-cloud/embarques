@@ -169,7 +169,12 @@ const mailInv = u => String(u || '').trim().toLowerCase().replace(/[^a-z0-9._-]/
 const mailRh = u => String(u || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') + '@rh19h.app';
 const ROL_INV_OK = ['master'], ROL_RH_OK = ['master', 'director'];
 async function perfil(sis) {
-  const A = sis === 'inv' ? AUTH_INV : AUTH_RH; const u = A.currentUser; if (!u) return null;
+  const A = sis === 'inv' ? AUTH_INV : AUTH_RH; const u = A.currentUser;
+  if (!u) {   // Acceso 19H: si tu usuario único tiene rol en Inventarios/RH, se usa ese
+    const ap = window.Acceso19H && Acceso19H.perfil(); const uid = ap && Acceso19H.app() && Acceso19H.app().auth().currentUser && Acceso19H.app().auth().currentUser.uid;
+    if (!uid) return null;
+    try { const p = await leer((sis === 'inv' ? 'inv' : 'rh') + '/usuarios/' + uid, null); return p && p.activo !== false ? Object.assign({ uid }, p) : null; } catch (e) { return null; }
+  }
   try { const p = await leer((sis === 'inv' ? 'inv' : 'rh') + '/usuarios/' + u.uid, u); return p && p.activo !== false ? Object.assign({ uid: u.uid }, p) : null; } catch (e) { return null; }
 }
 async function entrar(sis, usuario, pwd) {
@@ -268,13 +273,13 @@ async function cargarVentas() {
   return { idx: idx || {}, v: out, sc };
 }
 async function cargarInv() {
-  const u = AUTH_INV.currentUser; if (!u || !S.inv) return null;
+  const u = AUTH_INV.currentUser || null; if (!S.inv) return null;   // sin sesión de Inventarios se usa la de Acceso 19H
   const nodos = ['catalogo', 'fisico', 'pt', 'llegadas', 'silos', 'silosLect', 'notasCompra'];
   const r = await Promise.all(nodos.map(n => leer('inv/' + n, u).catch(() => ({}))));
   const o = {}; nodos.forEach((n, i) => o[n] = r[i] || {}); return o;
 }
 async function cargarRh() {
-  const u = AUTH_RH.currentUser; if (!u || !S.rh) return null;
+  const u = AUTH_RH.currentUser || null; if (!S.rh) return null;   // sin sesión de RH se usa la de Acceso 19H
   const [emp, sol, ch] = await Promise.all([leer('rh/empleados', u), leer('rh/solicitudes', u).catch(() => ({})), leer('rh/checadas/' + hoyISO(), u).catch(() => ({}))]);
   return { emp: emp || {}, sol: sol || {}, ch: ch || {} };
 }

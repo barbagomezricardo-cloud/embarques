@@ -28,6 +28,8 @@
   var SDK = 'https://www.gstatic.com/firebasejs/10.12.0/';
   var ROLES_PROG = { master: 'Master', su: 'Superusuario', cons: 'Consulta (solo ver)', basc: 'Báscula' };
   var ROLES_GER = { master: 'Master', su: 'Super-usuario', visor: 'Visor' };
+  var ROLES_INV = { master: 'Master', jefe: 'Jefe de inventarios', compras: 'Compras', almacenista: 'Almacenista', produccion: 'Producción' };
+  var ROLES_RH = { master: 'Master', rh: 'Recursos Humanos', director: 'Dirección', jefe: 'Jefe de área' };
 
   var S = { app: null, auth: null, db: null, listo: null, perfil: null, uid: null, vig: null, tok: '', tokT: 0, ac: null };
   var _ses = {}; _ses.p = new Promise(function (r) { _ses.r = r; });
@@ -276,13 +278,15 @@
     css();
     if (!S.perfil || S.perfil.prog !== 'master') { cont.innerHTML = '<p class="hint">Solo el master administra usuarios.</p>'; return; }
     cont.innerHTML = '<p class="hint" style="margin-top:0">Cargando usuarios…</p>';
-    leer('acceso/usuarios').then(function (o) {
+    Promise.all([leer('acceso/usuarios'), admin('roles', {}).then(function (j) { return j.roles || {}; }).catch(function () { return {}; })]).then(function (res) {
+      var o = res[0], RS = res[1];
       var L = Object.keys(o || {}).map(function (uid) { return Object.assign({ uid: uid }, o[uid]); })
         .sort(function (a, b) { return (a.activo === false) - (b.activo === false) || String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+      var opX = function (T, v) { return '<option value="">—</option>' + Object.keys(T).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + T[k] + '</option>'; }).join(''); };
       var opG = function (v) { return '<option value="">— sin acceso —</option>' + Object.keys(ROLES_GER).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + ROLES_GER[k] + '</option>'; }).join(''); };
       var opR = function (v) { return '<option value="">— sin acceso —</option>' + Object.keys(ROLES_PROG).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + ROLES_PROG[k] + '</option>'; }).join(''); };
       var h = '<p class="hint" style="margin-top:0">Cada persona entra con su <b>usuario</b> y su contraseña. Nadie (ni tú) puede ver contraseñas: si alguien la olvida, tócale <b>Restablecer</b> y te doy una temporal para dársela; al entrar, el sistema le pide crear la suya.</p>' +
-        '<table class="acc19-t"><tr><th>Nombre / usuario</th><th>Programador</th><th>Cargadores</th><th>Ventas y Maestra</th><th>App Vendedor (clave)</th><th>Estado</th><th></th></tr>';
+        '<table class="acc19-t"><tr><th>Nombre / usuario</th><th>Programador</th><th>Cargadores</th><th>Ventas y Maestra</th><th>App Vendedor (clave)</th><th>Inventarios</th><th>RH</th><th>Estado</th><th></th></tr>';
       L.forEach(function (u) {
         var yo = u.uid === S.uid;
         h += '<tr data-uid="' + esc(u.uid) + '"' + (u.activo === false ? ' style="opacity:.5"' : '') + '><td><b>' + esc(u.nombre) + '</b><br><span style="opacity:.7">' + esc(u.key) + '</span></td>' +
@@ -290,6 +294,8 @@
           '<td><input type="checkbox" class="acc19-rc"' + (u.carg ? ' checked' : '') + (yo ? ' disabled' : '') + '></td>' +
           '<td><select class="acc19-rg"' + (yo ? ' disabled' : '') + '>' + opG(u.ger || '') + '</select></td>' +
           '<td><input class="acc19-rv" style="width:110px" placeholder="ej. ARMANDO" value="' + esc(u.vend || '') + '"' + (yo ? ' disabled' : '') + '></td>' +
+          '<td><select class="acc19-ri"' + (yo ? ' disabled' : '') + '>' + opX(ROLES_INV, (RS[u.uid] || {}).inv || '') + '</select></td>' +
+          '<td><select class="acc19-rr"' + (yo ? ' disabled' : '') + '>' + opX(ROLES_RH, (RS[u.uid] || {}).rh || '') + '</select></td>' +
           '<td>' + (u.activo === false ? 'Baja' : (u.debeCambiar ? '<span class="acc19-chip">Debe cambiar</span>' : 'Activo')) + '</td>' +
           '<td style="white-space:nowrap">' + (yo ? '<span style="opacity:.7">tú</span>' :
             '<button data-a="guardar">Guardar</button><button data-a="reset">Restablecer</button><button data-a="' + (u.activo === false ? 'alta' : 'baja') + '">' + (u.activo === false ? 'Reactivar' : 'Dar de baja') + '</button>') + '</td></tr>';
@@ -299,6 +305,8 @@
         '<label style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="acc19-nc"> Cargadores</label>' +
         '<div><div class="hint">Ventas y Maestra</div><select id="acc19-ng">' + opG('') + '</select></div>' +
         '<div><div class="hint">App Vendedor (clave)</div><input id="acc19-nv" style="width:110px" placeholder="ej. ARMANDO"></div>' +
+        '<div><div class="hint">Inventarios</div><select id="acc19-ni">' + opX(ROLES_INV, '') + '</select></div>' +
+        '<div><div class="hint">RH</div><select id="acc19-nr">' + opX(ROLES_RH, '') + '</select></div>' +
         '<button id="acc19-add">＋ Crear usuario</button></div><div id="acc19-msg" class="hint"></div>';
       cont.innerHTML = h;
       var msg = function (t) { cont.querySelector('#acc19-msg').innerHTML = t; };
@@ -310,8 +318,9 @@
           var tr = b.closest('tr'), uid = tr.getAttribute('data-uid'), u = L.filter(function (x) { return x.uid === uid; })[0], a = b.getAttribute('data-a');
           var prog = tr.querySelector('.acc19-rp').value || null, carg = tr.querySelector('.acc19-rc').checked;
           var ger = tr.querySelector('.acc19-rg').value || null, vend = tr.querySelector('.acc19-rv').value.trim().toUpperCase() || null;
+          var inv = tr.querySelector('.acc19-ri').value || null, rh = tr.querySelector('.acc19-rr').value || null;
           var p;
-          if (a === 'guardar') p = admin('actualizar', { uid: uid, prog: prog, carg: carg, ger: ger, vend: vend }).then(function () { msg('Guardado: ' + esc(u.nombre)); });
+          if (a === 'guardar') p = admin('actualizar', { uid: uid, prog: prog, carg: carg, ger: ger, vend: vend, inv: inv, rh: rh }).then(function () { msg('Guardado: ' + esc(u.nombre)); });
           else if (a === 'reset') {
             if (!confirm('¿Restablecer la contraseña de ' + u.nombre + '? La actual deja de servir.')) return;
             var nip = !u.prog && !u.ger; var tmp = temporal(nip);
@@ -326,10 +335,11 @@
       cont.querySelector('#acc19-add').onclick = function () {
         var n = cont.querySelector('#acc19-nn').value.trim(), prog = cont.querySelector('#acc19-np').value || null, carg = cont.querySelector('#acc19-nc').checked;
         var ger = cont.querySelector('#acc19-ng').value || null, vend = cont.querySelector('#acc19-nv').value.trim().toUpperCase() || null;
+        var inv = cont.querySelector('#acc19-ni').value || null, rh = cont.querySelector('#acc19-nr').value || null;
         if (!n) { msg('Escribe el nombre.'); return; }
-        if (!prog && !carg && !ger && !vend) { msg('Elige al menos un acceso.'); return; }
-        var nip = !prog && !ger, tmp = temporal(nip), bt = this; bt.disabled = true;
-        admin('crear', { nombre: n, prog: prog, carg: carg, ger: ger, vend: vend, temporal: tmp }).then(function (j) { panel(cont); setTimeout(function () { var m = cont.querySelector('#acc19-msg'); if (m) entrega(n, j.key, tmp, nip); }, 400); })
+        if (!prog && !carg && !ger && !vend && !inv && !rh) { msg('Elige al menos un acceso.'); return; }
+        var nip = !prog && !ger && !inv && !rh, tmp = temporal(nip), bt = this; bt.disabled = true;
+        admin('crear', { nombre: n, prog: prog, carg: carg, ger: ger, vend: vend, inv: inv, rh: rh, temporal: tmp }).then(function (j) { panel(cont); setTimeout(function () { var m = cont.querySelector('#acc19-msg'); if (m) entrega(n, j.key, tmp, nip); }, 400); })
           .catch(function (e) { bt.disabled = false; msg('⚠️ ' + esc(e.message)); });
       };
     }).catch(function (e) { cont.innerHTML = '<p class="hint">No se pudieron leer los usuarios: ' + esc(e.message) + '</p>'; });
@@ -339,7 +349,7 @@
     iniciar: iniciar, app: function () { return S.app; }, db: function () { return S.db; },
     directorio: directorio, entrar: entrar, sesionActual: sesionActual, salir: salir, vigilar: vigilar,
     cambiar: cambiar, pedirCambio: pedirCambio, admin: admin, token: token, panel: panel,
-    puerta: puerta, esperarSesion: esperarSesion, tokenGuardado: tokenGuardado, appCheckToken: appCheckToken, ROLES_GER: ROLES_GER,
+    puerta: puerta, esperarSesion: esperarSesion, ROLES_INV: ROLES_INV, ROLES_RH: ROLES_RH, tokenGuardado: tokenGuardado, appCheckToken: appCheckToken, ROLES_GER: ROLES_GER,
     perfil: function () { return S.perfil; }, clave: clave, ROLES_PROG: ROLES_PROG
   };
 })(window);

@@ -22,6 +22,16 @@ const DOMINIO = '@emb19h.app';
 const PRE = 'emb19h:';
 const ROLES = ['master', 'su', 'cons', 'basc'];
 const ROLES_GER = ['master', 'su', 'visor'];
+const ROLES_INV = ['master', 'jefe', 'compras', 'almacenista', 'produccion'];
+const ROLES_RH = ['master', 'rh', 'director', 'jefe'];
+/* Ola 3: el mismo usuario entra a Inventarios y RH. Su rol ahí vive en inv/usuarios/{uid} y rh/usuarios/{uid} */
+async function rolSistema(sis, uid, p, rol) {
+  const ok = sis === 'inv' ? ROLES_INV : ROLES_RH;
+  const ref = db.ref(sis + '/usuarios/' + uid);
+  if (!ok.includes(rol)) { const a = (await ref.once('value')).val(); if (a && a.acceso) await ref.update({activo: false}); return null; }
+  await ref.update({usuario: p.key, nombre: p.nombre, rol, activo: p.activo !== false, acceso: true, creado: Date.now()});
+  return rol;
+}
 const ORIGENES = ['https://barbagomezricardo-cloud.github.io', 'http://localhost:8090', 'http://localhost:8092', 'null'];   // 'null' = Panel de Licencia abierto como archivo local (igual exige token de master)
 const VIEJOS = ['pwd', 'masterPwd', 'pwdBascula', 'staffUsers', 'bascUsers', 'users'];
 
@@ -63,11 +73,11 @@ function validarTemporal(t, nip) {
 }
 
 function limpiaVend(v) { v = String(v || '').trim().toUpperCase().replace(/[.#$\[\]\/]/g, '').slice(0, 40); return v || null; }
-async function crearCuenta({nombre, key, prog, carg, ger, vend, pass, debeCambiar, por}) {
+async function crearCuenta({nombre, key, prog, carg, ger, vend, pass, debeCambiar, por, otros}) {
   nombre = String(nombre || '').trim().slice(0, 60);
   if (!nombre) throw falla('Falta el nombre.');
   prog = ROLES.includes(prog) ? prog : null; carg = carg === true; ger = ROLES_GER.includes(ger) ? ger : null; vend = limpiaVend(vend);
-  if (!prog && !carg && !ger && !vend) throw falla('Elige al menos un acceso.');
+  if (!prog && !carg && !ger && !vend && !otros) throw falla('Elige al menos un acceso.');
   key = key ? clave(key) : await claveLibre(nombre);
   const email = key + DOMINIO;
   let user = null;
@@ -134,6 +144,25 @@ async function ola2() {
   return {masters: masters.length, hechos, omitidos};
 }
 
+async function ola3() {
+  const us = (await db.ref('acceso/usuarios').once('value')).val() || {};
+  const hechos = [];
+  for (const uid of Object.keys(us).filter((u) => us[u].prog === 'master' && us[u].activo !== false)) {
+    await rolSistema('inv', uid, us[uid], 'master'); await rolSistema('rh', uid, us[uid], 'master');
+    hechos.push(us[uid].nombre);
+  }
+  await bitacora('instalación', 'Ola 3: master vinculado a Inventarios y RH');
+  return {hechos};
+}
+/* Para el panel: roles de Inventarios y RH de cada usuario de Acceso */
+async function rolesSistemas() {
+  const [i, r] = await Promise.all([db.ref('inv/usuarios').once('value'), db.ref('rh/usuarios').once('value')]);
+  const out = {}; const I = i.val() || {}, R = r.val() || {};
+  Object.keys(I).forEach((u) => { if (I[u].acceso && I[u].activo !== false) (out[u] = out[u] || {}).inv = I[u].rol; });
+  Object.keys(R).forEach((u) => { if (R[u].acceso && R[u].activo !== false) (out[u] = out[u] || {}).rh = R[u].rol; });
+  return {roles: out};
+}
+
 async function cerrar() {
   const up = {}; VIEJOS.forEach((k) => { up['config/' + k] = null; });
   await db.ref().update(up);
@@ -151,9 +180,14 @@ async function quien(req) {
 }
 
 async function accionMaster(yo, accion, d) {
+  if (accion === 'roles') return rolesSistemas();
   if (accion === 'crear') {
-    const nip = !ROLES.includes(d.prog) && !ROLES_GER.includes(d.ger);
-    const r = await crearCuenta({nombre: d.nombre, prog: d.prog, carg: d.carg === true, ger: d.ger, vend: d.vend, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre});
+    const otros = ROLES_INV.includes(d.inv) || ROLES_RH.includes(d.rh);
+    const nip = !ROLES.includes(d.prog) && !ROLES_GER.includes(d.ger) && !otros;
+    const r = await crearCuenta({nombre: d.nombre, prog: d.prog, carg: d.carg === true, ger: d.ger, vend: d.vend, otros, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre});
+    const pc = {key: r.key, nombre: d.nombre};
+    if (d.inv) await rolSistema('inv', r.uid, pc, d.inv);
+    if (d.rh) await rolSistema('rh', r.uid, pc, d.rh);
     await bitacora(yo.nombre, 'Creó a ' + d.nombre + ' (' + r.key + ')');
     return r;
   }
@@ -177,9 +211,12 @@ async function accionMaster(yo, accion, d) {
     if ('carg' in d) n.carg = d.carg === true ? true : null;
     if ('ger' in d) n.ger = ROLES_GER.includes(d.ger) ? d.ger : null;
     if ('vend' in d) n.vend = limpiaVend(d.vend);
+    if ('inv' in d) await rolSistema('inv', uid, Object.assign({}, p, n), d.inv);
+    if ('rh' in d) await rolSistema('rh', uid, Object.assign({}, p, n), d.rh);
+    if ('activo' in n) { for (const sis of ['inv', 'rh']) { const r = db.ref(sis + '/usuarios/' + uid); const a = (await r.once('value')).val(); if (a && a.acceso) await r.update({activo: n.activo}); } }
     if ('activo' in d) n.activo = d.activo === true;
     const q = Object.assign({}, p, n);
-    if (q.activo && !q.prog && !q.carg && !q.ger && !q.vend) throw falla('Debe tener al menos un acceso (o dale de baja).');
+    if (q.activo && !q.prog && !q.carg && !q.ger && !q.vend && !ROLES_INV.includes(d.inv) && !ROLES_RH.includes(d.rh)) throw falla('Debe tener al menos un acceso (o dale de baja).');
     await ref.update(n);
     await admin.auth().updateUser(uid, {disabled: q.activo === false});
     if ('activo' in n || 'prog' in n || 'ger' in n || 'vend' in n) await admin.auth().revokeRefreshTokens(uid);
@@ -205,6 +242,7 @@ exports.embAdmin = onRequest(
       if (llave) {
         if (!igualSeguro(llave, CLI_MAESTRO.value())) { await new Promise((r) => setTimeout(r, 1200)); res.status(401).json({ok: false, message: 'Llave maestra incorrecta.'}); return; }
         if (accion === 'migrar') { res.json(Object.assign({ok: true}, await migrar(datos || {}))); return; }
+        if (accion === 'ola3') { res.json(Object.assign({ok: true}, await ola3())); return; }
         if (accion === 'ola2') { res.json(Object.assign({ok: true}, await ola2())); return; }
         if (accion === 'cerrar') { res.json(Object.assign({ok: true}, await cerrar())); return; }
         if (accion === 'estado') {

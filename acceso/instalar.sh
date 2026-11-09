@@ -102,6 +102,22 @@ print("\n  Copia esta tabla: los NIP no se vuelven a mostrar. Al entrar, cada ve
   exit 0
 fi
 
+if [ "$FASE" = "ola3" ]; then
+  paso "Ola 3 · 1/2 Servidor: embAdmin y cliApi"
+  LLAVE="$(llave)"; [ -z "$LLAVE" ] && { echo "No pude leer la llave CLI_MAESTRO."; exit 1; }
+  CARP=""; for f in $(find "$HOME" -maxdepth 4 -name index.js -path '*functions*' -not -path '*/node_modules/*' 2>/dev/null); do grep -q "require('./acceso')" "$f" && { CARP="$(dirname "$f")"; break; }; done
+  [ -z "$CARP" ] && { aviso "No encontré tu carpeta de funciones."; exit 1; }
+  for a in "acceso/funciones/acceso.js:acceso.js" "clientes/funciones/clientes.js:clientes.js" "clientes/funciones/cli-core.js:cli-core.js"; do
+    curl -sfL "$RAW/${a%%:*}" -o "$CARP/${a##*:}" || { echo "No pude descargar ${a%%:*}"; exit 1; }
+  done
+  (cd "$CARP/.." && firebase deploy --only functions:embAdmin,functions:cliApi --force) || { aviso "El despliegue falló. Mándame el error."; exit 1; }
+  sleep 5
+  paso "Ola 3 · 2/2 Tu usuario master entra también a Inventarios, RH y Centro de Mando"
+  llamar '{"accion":"ola3"}'; echo
+  ok "Listo. Avísame para publicar las apps."
+  exit 0
+fi
+
 if [ "$FASE" = "cerrar2" ]; then
   paso "Ola 2 · Cerrando embarques, ventas (skan), visitas, candados y cuadre de báscula"
   reglas cerrar2 || exit 1
