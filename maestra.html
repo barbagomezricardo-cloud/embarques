@@ -67,6 +67,8 @@ input[type=file]{display:none}
 </style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="tema-19h.css">
 <script src="tema-19h.js"></script>
+<script src="acceso-19h.js"></script>
+<script>Acceso19H.puerta({app:"ger",titulo:"Gerencia · Pet Food",nip:false,recaptcha:"6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj"});</script>
 <meta name="theme-color" content="#DE0A14">
 </head>
 <body>
@@ -145,13 +147,12 @@ function _skInitAppCheck(){
 // sigue con un fetch normal — NUNCA bloquea ni rompe nada por su cuenta; el único que
 // puede bloquear de verdad es el control "Aplicado" del paso 4 de arriba, en Firebase.
 async function skFetch(url, opts){
+  // Acceso 19H: la base ya solo responde con sesión. Espera a que la persona entre y manda su token.
   try{
-    if(RECAPTCHA_SITE_KEY && typeof url==='string' && url.indexOf('.firebaseio.com')!==-1){
-      var ac=await _skInitAppCheck();
-      if(ac){
-        var tok=await ac.getToken().catch(function(){return null;});
-        if(tok&&tok.token){ opts=opts||{}; opts.headers=Object.assign({},opts.headers,{'X-Firebase-AppCheck':tok.token}); }
-      }
+    if(typeof url==='string' && url.indexOf('.firebaseio.com')!==-1 && window.Acceso19H){
+      await Acceso19H.esperarSesion();
+      if(url.indexOf('auth=')<0){ var t=await Acceso19H.token(); if(t) url+=(url.indexOf('?')>=0?'&':'?')+'auth='+encodeURIComponent(t); }
+      var ac=await Acceso19H.appCheckToken(); if(ac){ opts=opts||{}; opts.headers=Object.assign({},opts.headers,{'X-Firebase-AppCheck':ac}); }
     }
   }catch(e){ /* silencioso a propósito: nunca debe tumbar la sincronización */ }
   return fetch(url, opts);
@@ -647,10 +648,9 @@ function fetchMContactoPend(){var base=((typeof MDB!=='undefined'&&MDB)||SK_DB).
 let M_SUPER=false;
 function unlockMSuper(){
   if(M_SUPER){M_SUPER=false;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}return;}
-  var p=prompt('Contraseña de super-usuario (la misma de ventas.html):');
-  if(p===null)return;
-  if(!window.Seguridad19H){alert('No se cargó el módulo de seguridad (seguridad-19h.js). Abre la app desde su link de GitHub.');return;}
-  Seguridad19H.verificar(p).then(function(r){ if(r.ok){M_SUPER=true;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}} if(r.aviso)alert(r.aviso); });
+  var pf=window.Acceso19H&&Acceso19H.perfil();   // Acceso 19H: el permiso lo da tu usuario
+  if(!(pf&&(pf.ger==='master'||pf.ger==='su'))){ alert('Tu usuario es de consulta. Pide al master el permiso de super-usuario.'); return; }
+  M_SUPER=true;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}
 }
 function parseLatLon(text){
   text=(text||'').trim(); if(!text)return null;

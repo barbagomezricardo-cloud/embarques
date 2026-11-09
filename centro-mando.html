@@ -106,6 +106,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <!-- Fórmulas de alertas de compra: las mismas del programa de Inventarios (no se duplican) -->
 <script src="inventarios/inventarios/core.js"></script>
+<script src="acceso-19h.js"></script>
 <script>
 /* =====================================================================
    CENTRO DE MANDO GERENCIAL · Leche 19 Diecinueve Hermanos · Pet Food
@@ -159,6 +160,7 @@ async function acToken() { if (!AC) return null; try { const t = await AC.getTok
 async function leer(ruta, user) {
   const h = {}; const t = await acToken(); if (t) h['X-Firebase-AppCheck'] = t;
   let q = ''; if (user) { const it = await user.getIdToken(); q = '?auth=' + encodeURIComponent(it); }
+  else if (ruta !== 'licencia' && window.Acceso19H) { const it = await Acceso19H.token(); if (it) q = '?auth=' + encodeURIComponent(it); }   // Acceso 19H: ventas, embarques y báscula ya solo se leen con sesión
   const r = await fetch(DB + '/' + ruta + '.json' + q, { cache: 'no-store', headers: h });
   if (!r.ok) throw new Error('HTTP ' + r.status + ' en ' + ruta);
   return r.json();
@@ -191,6 +193,7 @@ async function boot() {
     if (!licViva(l)) return bloqueo(l && l.activa === true ? 'La licencia general venció.' : 'El sistema está desactivado desde tu Panel de Licencia.');
     if (app && (typeof app === 'object' ? !licViva(app) : app !== true)) return bloqueo('El Centro de Mando está desactivado desde tu Panel de Licencia.');
   } catch (e) { return bloqueo('No se pudo validar la licencia. Revisa tu internet y vuelve a intentar.', true); }
+  try { await Acceso19H.puerta({ app: 'ger', titulo: 'Centro de Mando' }); } catch (e) { return bloqueo('No se pudo validar tu usuario. Revisa tu internet.', true); }   // Acceso 19H: tu usuario master
   initFirebase();
   await Promise.all([esperaAuth(AUTH_INV), esperaAuth(AUTH_RH)]);
   const [pi, pr] = await Promise.all([perfil('inv'), perfil('rh')]);

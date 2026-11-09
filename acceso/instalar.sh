@@ -56,9 +56,18 @@ R['acceso']={
       "debeCambiar": {".write": "auth != null && auth.uid === $uid && newData.val() === false"},
       "ultimoAcceso": {".write": "auth != null && auth.uid === $uid && newData.isNumber()"}}},
   "bitacora": {".read": LIC+" && "+MASTER, ".write": False}}
-if fase=='cerrar':
+if fase in ('cerrar','cerrar2'):
   for n in ['config','audit','flota']:
     R[n]={".read": LIC+" && "+U, ".write": LIC+" && "+ESCRIBE}
+if fase=='cerrar2':   # ola 2: lo que leen Ventas, Maestra, Vendedor y Cuadre de báscula, solo con sesión
+  for n in ['embarques','skan','visits','locks','cuadreBascula']:
+    v=R.get(n) or {}
+    for op in ('.read','.write'):
+      e=v.get(op, LIC) if isinstance(v,dict) else LIC
+      e=LIC if e is True else e
+      if e is False: continue
+      if 'acceso/usuarios' not in e: v[op]='('+e+') && '+U
+    R[n]=v
 json.dump(d,open('/tmp/acc_rules_nuevas.json','w'),indent=2,ensure_ascii=False)
 PY
   R=$(curl -s -o /tmp/acc_put.json -w '%{http_code}' -X PUT --data-binary @/tmp/acc_rules_nuevas.json "$DB/.settings/rules.json?access_token=$TOKEN")
@@ -68,6 +77,37 @@ PY
 
 llave(){ firebase functions:secrets:access CLI_MAESTRO --project "$PROY" 2>/dev/null; }
 llamar(){ curl -s -X POST "$API" -H "Content-Type: application/json" -H "X-Cli-Maestro: $LLAVE" -d "$1"; }
+
+if [ "$FASE" = "ola2" ]; then
+  paso "Ola 2 · 1/1 Tu master en todas las apps y una cuenta por vendedor"
+  LLAVE="$(llave)"; [ -z "$LLAVE" ] && { echo "No pude leer la llave CLI_MAESTRO."; exit 1; }
+  if [ "${SINDESPLIEGUE:-}" != "1" ]; then
+    CARP=""; for f in $(find "$HOME" -maxdepth 4 -name index.js -path '*functions*' -not -path '*/node_modules/*' 2>/dev/null); do grep -q "require('./acceso')" "$f" && { CARP="$(dirname "$f")"; break; }; done
+    [ -z "$CARP" ] && { aviso "No encontré tu carpeta de funciones."; exit 1; }
+    curl -sfL "$RAW/acceso/funciones/acceso.js" -o "$CARP/acceso.js" || { echo "No pude descargar acceso.js"; exit 1; }
+    (cd "$CARP/.." && firebase deploy --only functions:embAdmin --force) || { aviso "El despliegue falló. Mándame el error."; exit 1; }
+    sleep 5
+  fi
+  llamar '{"accion":"ola2"}' | python3 -c '
+import json,sys
+r=json.load(sys.stdin)
+if not r.get("ok"): print("No se pudo:", r.get("message")); sys.exit(1)
+print("\n  Tu usuario master ya entra también a Ventas, Maestra y Cargadores.\n")
+print("  %-26s %-22s %-16s %s" % ("VENDEDOR","USUARIO","CARTERA","NIP TEMPORAL"))
+for h in r["hechos"]: print("  %-26s %-22s %-16s %s" % (h["nombre"][:26], h["usuario"], h["vend"], h["nip"]))
+if r.get("omitidos"): print("\n  Omitidos:", "; ".join(r["omitidos"]))
+print("\n  Copia esta tabla: los NIP no se vuelven a mostrar. Al entrar, cada vendedor crea el suyo.")
+' || exit 1
+  ok "Cuentas listas. Avísame para publicar Ventas, Maestra, Vendedor y Cuadre de báscula; luego corre FASE=cerrar2."
+  exit 0
+fi
+
+if [ "$FASE" = "cerrar2" ]; then
+  paso "Ola 2 · Cerrando embarques, ventas (skan), visitas, candados y cuadre de báscula"
+  reglas cerrar2 || exit 1
+  ok "Listo. Ya nada se lee sin usuario."
+  exit 0
+fi
 
 if [ "$FASE" = "cerrar" ]; then
   paso "1/3 Revisando estado"
