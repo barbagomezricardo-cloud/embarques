@@ -21,6 +21,7 @@ const CLI_MAESTRO = defineSecret('CLI_MAESTRO');
 const DOMINIO = '@emb19h.app';
 const PRE = 'emb19h:';
 const ROLES = ['master', 'su', 'cons', 'basc'];
+const ROLES_GER = ['master', 'su', 'visor'];
 const ORIGENES = ['https://barbagomezricardo-cloud.github.io', 'http://localhost:8090', 'http://localhost:8092'];
 const VIEJOS = ['pwd', 'masterPwd', 'pwdBascula', 'staffUsers', 'bascUsers', 'users'];
 
@@ -50,8 +51,8 @@ async function claveLibre(base) {
 }
 
 async function publicarDirectorio(uid, p) {
-  if (!p || p.activo === false || (!p.prog && !p.carg)) { await db.ref('acceso/directorio/' + p.key).remove(); return; }
-  const a = {}; if (p.prog) a.prog = true; if (p.carg) a.carg = true;
+  if (!p || p.activo === false || (!p.prog && !p.carg && !p.ger && !p.vend)) { await db.ref('acceso/directorio/' + p.key).remove(); return; }
+  const a = {}; if (p.prog) a.prog = true; if (p.carg) a.carg = true; if (p.ger) a.ger = true; if (p.vend || p.ger) a.vend = true;
   await db.ref('acceso/directorio/' + p.key).set({n: p.nombre, a});
 }
 
@@ -61,18 +62,19 @@ function validarTemporal(t, nip) {
   return t;
 }
 
-async function crearCuenta({nombre, key, prog, carg, pass, debeCambiar, por}) {
+function limpiaVend(v) { v = String(v || '').trim().toUpperCase().replace(/[.#$\[\]\/]/g, '').slice(0, 40); return v || null; }
+async function crearCuenta({nombre, key, prog, carg, ger, vend, pass, debeCambiar, por}) {
   nombre = String(nombre || '').trim().slice(0, 60);
   if (!nombre) throw falla('Falta el nombre.');
-  prog = ROLES.includes(prog) ? prog : null; carg = carg === true;
-  if (!prog && !carg) throw falla('Elige al menos un acceso.');
+  prog = ROLES.includes(prog) ? prog : null; carg = carg === true; ger = ROLES_GER.includes(ger) ? ger : null; vend = limpiaVend(vend);
+  if (!prog && !carg && !ger && !vend) throw falla('Elige al menos un acceso.');
   key = key ? clave(key) : await claveLibre(nombre);
   const email = key + DOMINIO;
   let user = null;
   try { user = await admin.auth().getUserByEmail(email); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
   if (user) await admin.auth().updateUser(user.uid, {password: PRE + pass, disabled: false, displayName: nombre});
   else user = await admin.auth().createUser({email, password: PRE + pass, displayName: nombre});
-  const p = {key, nombre, prog, carg: carg || null, activo: true, debeCambiar: debeCambiar !== false, creado: Date.now(), por: por || 'sistema'};
+  const p = {key, nombre, prog, carg: carg || null, ger, vend, activo: true, debeCambiar: debeCambiar !== false, creado: Date.now(), por: por || 'sistema'};
   await db.ref('acceso/usuarios/' + user.uid).set(p);
   await publicarDirectorio(user.uid, p);
   return {uid: user.uid, key};
@@ -109,6 +111,29 @@ async function migrar(d) {
   return {hechos, omitidos};
 }
 
+/* Ola 2: el master también entra a Ventas/Maestra; una cuenta por vendedor publicado (NIP temporal) */
+function nipAzar() { let n; do { n = String(100000 + require('crypto').randomInt(900000)); } while (/^(\d)\1+$/.test(n)); return n; }
+async function ola2() {
+  const us = (await db.ref('acceso/usuarios').once('value')).val() || {};
+  const masters = Object.keys(us).filter((u) => us[u].prog === 'master');
+  for (const uid of masters) { await db.ref('acceso/usuarios/' + uid).update({ger: 'master', carg: true}); await publicarDirectorio(uid, Object.assign({}, us[uid], {ger: 'master', carg: true})); }   // un solo usuario master para todas las apps
+  const idx = (await db.ref('skan/_index').once('value')).val() || {};
+  const vs = arr(idx.vendors).map(String);
+  const yaVend = new Set(Object.values(us).map((u) => u.vend).filter(Boolean));
+  const hechos = [], omitidos = [];
+  for (const v of vs) {
+    const clave_ = limpiaVend(v);
+    if (!clave_ || yaVend.has(clave_)) { omitidos.push(v + ' (ya tenía cuenta)'); continue; }
+    const nombre = v.charAt(0) + v.slice(1).toLowerCase();
+    if ((await db.ref('acceso/directorio/' + clave(nombre)).once('value')).exists()) { omitidos.push(v + ' (ya existe ' + clave(nombre) + ')'); continue; }
+    const tmp = nipAzar();
+    try { const r = await crearCuenta({nombre, vend: clave_, pass: tmp, debeCambiar: true, por: 'ola 2'}); hechos.push({nombre, usuario: r.key, vend: clave_, nip: tmp}); }
+    catch (e) { omitidos.push(v + ' (' + e.message + ')'); }
+  }
+  await bitacora('instalación', 'Ola 2: ' + hechos.length + ' vendedores');
+  return {masters: masters.length, hechos, omitidos};
+}
+
 async function cerrar() {
   const up = {}; VIEJOS.forEach((k) => { up['config/' + k] = null; });
   await db.ref().update(up);
@@ -127,8 +152,8 @@ async function quien(req) {
 
 async function accionMaster(yo, accion, d) {
   if (accion === 'crear') {
-    const nip = !ROLES.includes(d.prog);
-    const r = await crearCuenta({nombre: d.nombre, prog: d.prog, carg: d.carg === true, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre});
+    const nip = !ROLES.includes(d.prog) && !ROLES_GER.includes(d.ger);
+    const r = await crearCuenta({nombre: d.nombre, prog: d.prog, carg: d.carg === true, ger: d.ger, vend: d.vend, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre});
     await bitacora(yo.nombre, 'Creó a ' + d.nombre + ' (' + r.key + ')');
     return r;
   }
@@ -139,7 +164,7 @@ async function accionMaster(yo, accion, d) {
   const p = (await ref.once('value')).val();
   if (!p) throw falla('Ese usuario no existe.');
   if (accion === 'restablecer') {
-    const t = validarTemporal(d.temporal, !p.prog);
+    const t = validarTemporal(d.temporal, !p.prog && !p.ger);
     await admin.auth().updateUser(uid, {password: PRE + t});
     await admin.auth().revokeRefreshTokens(uid);
     await ref.update({debeCambiar: true, restablecido: Date.now()});
@@ -150,12 +175,14 @@ async function accionMaster(yo, accion, d) {
     const n = {};
     if ('prog' in d) n.prog = ROLES.includes(d.prog) ? d.prog : null;
     if ('carg' in d) n.carg = d.carg === true ? true : null;
+    if ('ger' in d) n.ger = ROLES_GER.includes(d.ger) ? d.ger : null;
+    if ('vend' in d) n.vend = limpiaVend(d.vend);
     if ('activo' in d) n.activo = d.activo === true;
     const q = Object.assign({}, p, n);
-    if (q.activo && !q.prog && !q.carg) throw falla('Debe tener al menos un acceso (o dale de baja).');
+    if (q.activo && !q.prog && !q.carg && !q.ger && !q.vend) throw falla('Debe tener al menos un acceso (o dale de baja).');
     await ref.update(n);
     await admin.auth().updateUser(uid, {disabled: q.activo === false});
-    if ('activo' in n || 'prog' in n) await admin.auth().revokeRefreshTokens(uid);
+    if ('activo' in n || 'prog' in n || 'ger' in n || 'vend' in n) await admin.auth().revokeRefreshTokens(uid);
     await publicarDirectorio(uid, q);
     await bitacora(yo.nombre, 'Actualizó a ' + p.nombre + ': ' + JSON.stringify(n));
     return {};
@@ -178,6 +205,7 @@ exports.embAdmin = onRequest(
       if (llave) {
         if (!igualSeguro(llave, CLI_MAESTRO.value())) { await new Promise((r) => setTimeout(r, 1200)); res.status(401).json({ok: false, message: 'Llave maestra incorrecta.'}); return; }
         if (accion === 'migrar') { res.json(Object.assign({ok: true}, await migrar(datos || {}))); return; }
+        if (accion === 'ola2') { res.json(Object.assign({ok: true}, await ola2())); return; }
         if (accion === 'cerrar') { res.json(Object.assign({ok: true}, await cerrar())); return; }
         if (accion === 'estado') {
           const us = (await db.ref('acceso/usuarios').once('value')).val() || {};

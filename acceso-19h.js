@@ -27,8 +27,10 @@
   var PRE = 'emb19h:';            // se antepone siempre: así un PIN corto cumple el mínimo de Google
   var SDK = 'https://www.gstatic.com/firebasejs/10.12.0/';
   var ROLES_PROG = { master: 'Master', su: 'Superusuario', cons: 'Consulta (solo ver)', basc: 'Báscula' };
+  var ROLES_GER = { master: 'Master', su: 'Super-usuario', visor: 'Visor' };
 
-  var S = { app: null, auth: null, db: null, listo: null, perfil: null, uid: null, vig: null };
+  var S = { app: null, auth: null, db: null, listo: null, perfil: null, uid: null, vig: null, tok: '', tokT: 0, ac: null };
+  var _ses = {}; _ses.p = new Promise(function (r) { _ses.r = r; });
 
   function esc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function clave(t) {
@@ -72,6 +74,9 @@
     if (!p || p.activo !== true) return false;
     if (app === 'prog') return !!ROLES_PROG[p.prog];
     if (app === 'carg') return p.carg === true;
+    if (app === 'ger') return !!ROLES_GER[p.ger];                                   // Ventas y Maestra
+    if (app === 'vend') return !!p.vend || !!ROLES_GER[p.ger];                      // App Vendedor
+    if (app === 'basc') return p.prog === 'master' || p.prog === 'su' || p.prog === 'basc';   // Cuadre de báscula
     return true;
   }
 
@@ -84,6 +89,7 @@
     });
   }
 
+  function esNip(p) { return !!p && !p.prog && !p.ger; }   // cargadores y vendedores: NIP de 6 números
   function cargarPerfil(uid) { return leer('acceso/usuarios/' + uid).then(function (p) { S.perfil = p; S.uid = uid; return p; }); }
 
   function msgError(e) {
@@ -104,7 +110,7 @@
     }).then(function (cred) { return cargarPerfil(cred.user.uid); }).then(function (p) {
       if (!permitido(p, app)) { return S.auth.signOut().then(function () { throw new Error(p && p.activo === false ? 'Tu usuario está dado de baja.' : 'Tu usuario no tiene acceso a esta app.'); }); }
       S.db.ref('acceso/usuarios/' + S.uid + '/ultimoAcceso').set(Date.now()).catch(function () {});
-      if (p.debeCambiar) return pedirCambio({ nip: op.nip, anterior: pass, nombre: p.nombre }).then(function () { return S.perfil; });
+      if (p.debeCambiar) return pedirCambio({ nip: esNip(p), anterior: pass, nombre: p.nombre }).then(function () { return S.perfil; });
       return p;
     });
   }
@@ -117,8 +123,8 @@
     }).then(function (u) {
       if (!u) return null;
       return cargarPerfil(u.uid).then(function (p) {
-        if (!permitido(p, app)) return S.auth.signOut().then(function () { return null; });
-        if (p.debeCambiar) return pedirCambio({ nip: op.nip, nombre: p.nombre }).then(function () { return S.perfil; });
+        if (!permitido(p, app)) return null;   // la sesión es compartida entre apps: no se cierra, solo se pide otro usuario
+        if (p.debeCambiar) return pedirCambio({ nip: esNip(p), nombre: p.nombre }).then(function () { return S.perfil; });
         return p;
       }).catch(function () { return null; });
     });
@@ -209,7 +215,53 @@
     }).then(function (r) { return r.json().catch(function () { return { ok: false, message: 'Respuesta inválida (' + r.status + ')' }; }); })
       .then(function (j) { if (!j.ok) throw new Error(j.message || 'No se pudo.'); return j; });
   }
-  function token() { var u = S.auth && S.auth.currentUser; return u ? u.getIdToken() : Promise.resolve(''); }
+  function token() {
+    var u = S.auth && S.auth.currentUser; if (!u) return Promise.resolve('');
+    if (S.tok && Date.now() - S.tokT < 40 * 60000) return Promise.resolve(S.tok);
+    return u.getIdToken(true).then(function (t) { S.tok = t; S.tokT = Date.now(); return t; });
+  }
+  function tokenGuardado() { return S.tok; }   // síncrono: el último token (se renueva cada 40 min con token())
+  function appCheckToken() {
+    try { if (!S.ac && W.firebase && W.firebase.appCheck) S.ac = W.firebase.appCheck(S.app); } catch (e) { S.ac = null; }
+    return S.ac ? S.ac.getToken().then(function (x) { return x && x.token; }).catch(function () { return ''; }) : Promise.resolve('');
+  }
+  function esperarSesion() { return _ses.p; }
+  function sesionLista(p) { token().then(function () { _ses.r(p); }); }
+
+  /* Pantalla de acceso para Ventas, Maestra, Vendedor y Cuadre de báscula:
+     cubre la app hasta que la persona entra (o ya tenía sesión en este equipo). */
+  function puerta(op) {
+    op = op || {}; css();
+    var ov = D.createElement('div'); ov.className = 'acc19-ov'; ov.style.background = 'rgba(245,240,235,.98)';
+    ov.innerHTML = '<div class="acc19-bx"><h3>' + esc(op.titulo || 'Entrar') + '</h3><p id="acc19-ph">Verificando sesión…</p>' +
+      '<select id="acc19-u" autocomplete="username"><option value="">Cargando…</option></select>' +
+      '<input type="password" id="acc19-p" ' + (op.nip ? 'inputmode="numeric" ' : '') + 'placeholder="' + (op.nip ? 'NIP' : 'Contraseña') + '" autocomplete="current-password">' +
+      '<div class="acc19-e" id="acc19-pe"></div><button id="acc19-pb">Entrar</button></div>';
+    var montar = function () { (D.body || D.documentElement).appendChild(ov); };
+    if (D.body) montar(); else D.addEventListener('DOMContentLoaded', montar);
+    var q = function (x) { return ov.querySelector(x); };
+    return iniciar({ recaptcha: op.recaptcha }).then(function () { return sesionActual(op.app, { nip: op.nip }); }).then(function (p) {
+      if (p) { ov.remove(); sesionLista(p); return p; }
+      q('#acc19-ph').textContent = 'Elige tu nombre y escribe tu ' + (op.nip ? 'NIP' : 'contraseña') + '.';
+      var LSK = 'acc19_ult_' + op.app;
+      directorio(op.app).then(function (L) {
+        var ult = ''; try { ult = localStorage.getItem(LSK) || ''; } catch (e) {}
+        q('#acc19-u').innerHTML = '<option value="">— Elige tu nombre —</option>' + L.map(function (u) { return '<option value="' + esc(u.key) + '"' + (u.key === ult ? ' selected' : '') + '>' + esc(u.nombre) + '</option>'; }).join('');
+      }).catch(function () { q('#acc19-u').innerHTML = '<option value="">Sin internet</option>'; });
+      return new Promise(function (ok) {
+        var go = function () {
+          var k = q('#acc19-u').value, pw = q('#acc19-p').value, b = q('#acc19-pb');
+          if (!k || !pw) { q('#acc19-pe').textContent = 'Elige tu nombre y escribe tu ' + (op.nip ? 'NIP' : 'contraseña') + '.'; return; }
+          b.disabled = true; q('#acc19-pe').textContent = '';
+          entrar(k, pw, op.app, { nip: op.nip }).then(function (p) {
+            try { localStorage.setItem(LSK, k); } catch (e) {}
+            ov.remove(); sesionLista(p); ok(p);
+          }).catch(function (e) { b.disabled = false; q('#acc19-pe').textContent = e.message; });
+        };
+        q('#acc19-pb').onclick = go; q('#acc19-p').onkeydown = function (e) { if (e.key === 'Enter') go(); };
+      });
+    }).catch(function () { q('#acc19-ph').textContent = 'Sin conexión a internet. Revisa y vuelve a cargar la página.'; throw new Error('sin internet'); });
+  }
 
   function temporal(nip) {
     var a = new Uint32Array(2); W.crypto.getRandomValues(a);
@@ -227,14 +279,17 @@
     leer('acceso/usuarios').then(function (o) {
       var L = Object.keys(o || {}).map(function (uid) { return Object.assign({ uid: uid }, o[uid]); })
         .sort(function (a, b) { return (a.activo === false) - (b.activo === false) || String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+      var opG = function (v) { return '<option value="">— sin acceso —</option>' + Object.keys(ROLES_GER).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + ROLES_GER[k] + '</option>'; }).join(''); };
       var opR = function (v) { return '<option value="">— sin acceso —</option>' + Object.keys(ROLES_PROG).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + ROLES_PROG[k] + '</option>'; }).join(''); };
       var h = '<p class="hint" style="margin-top:0">Cada persona entra con su <b>usuario</b> y su contraseña. Nadie (ni tú) puede ver contraseñas: si alguien la olvida, tócale <b>Restablecer</b> y te doy una temporal para dársela; al entrar, el sistema le pide crear la suya.</p>' +
-        '<table class="acc19-t"><tr><th>Nombre / usuario</th><th>Programador</th><th>Cargadores</th><th>Estado</th><th></th></tr>';
+        '<table class="acc19-t"><tr><th>Nombre / usuario</th><th>Programador</th><th>Cargadores</th><th>Ventas y Maestra</th><th>App Vendedor (clave)</th><th>Estado</th><th></th></tr>';
       L.forEach(function (u) {
         var yo = u.uid === S.uid;
         h += '<tr data-uid="' + esc(u.uid) + '"' + (u.activo === false ? ' style="opacity:.5"' : '') + '><td><b>' + esc(u.nombre) + '</b><br><span style="opacity:.7">' + esc(u.key) + '</span></td>' +
           '<td><select class="acc19-rp"' + (yo ? ' disabled' : '') + '>' + opR(u.prog || '') + '</select></td>' +
           '<td><input type="checkbox" class="acc19-rc"' + (u.carg ? ' checked' : '') + (yo ? ' disabled' : '') + '></td>' +
+          '<td><select class="acc19-rg"' + (yo ? ' disabled' : '') + '>' + opG(u.ger || '') + '</select></td>' +
+          '<td><input class="acc19-rv" style="width:110px" placeholder="ej. ARMANDO" value="' + esc(u.vend || '') + '"' + (yo ? ' disabled' : '') + '></td>' +
           '<td>' + (u.activo === false ? 'Baja' : (u.debeCambiar ? '<span class="acc19-chip">Debe cambiar</span>' : 'Activo')) + '</td>' +
           '<td style="white-space:nowrap">' + (yo ? '<span style="opacity:.7">tú</span>' :
             '<button data-a="guardar">Guardar</button><button data-a="reset">Restablecer</button><button data-a="' + (u.activo === false ? 'alta' : 'baja') + '">' + (u.activo === false ? 'Reactivar' : 'Dar de baja') + '</button>') + '</td></tr>';
@@ -242,6 +297,8 @@
       h += '</table><div class="acc19-f"><div><div class="hint">Nombre completo</div><input id="acc19-nn" placeholder="Ej. Juan Pérez – báscula"></div>' +
         '<div><div class="hint">Programador</div><select id="acc19-np">' + opR('') + '</select></div>' +
         '<label style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="acc19-nc"> Cargadores</label>' +
+        '<div><div class="hint">Ventas y Maestra</div><select id="acc19-ng">' + opG('') + '</select></div>' +
+        '<div><div class="hint">App Vendedor (clave)</div><input id="acc19-nv" style="width:110px" placeholder="ej. ARMANDO"></div>' +
         '<button id="acc19-add">＋ Crear usuario</button></div><div id="acc19-msg" class="hint"></div>';
       cont.innerHTML = h;
       var msg = function (t) { cont.querySelector('#acc19-msg').innerHTML = t; };
@@ -252,11 +309,12 @@
         b.onclick = function () {
           var tr = b.closest('tr'), uid = tr.getAttribute('data-uid'), u = L.filter(function (x) { return x.uid === uid; })[0], a = b.getAttribute('data-a');
           var prog = tr.querySelector('.acc19-rp').value || null, carg = tr.querySelector('.acc19-rc').checked;
+          var ger = tr.querySelector('.acc19-rg').value || null, vend = tr.querySelector('.acc19-rv').value.trim().toUpperCase() || null;
           var p;
-          if (a === 'guardar') p = admin('actualizar', { uid: uid, prog: prog, carg: carg }).then(function () { msg('Guardado: ' + esc(u.nombre)); });
+          if (a === 'guardar') p = admin('actualizar', { uid: uid, prog: prog, carg: carg, ger: ger, vend: vend }).then(function () { msg('Guardado: ' + esc(u.nombre)); });
           else if (a === 'reset') {
             if (!confirm('¿Restablecer la contraseña de ' + u.nombre + '? La actual deja de servir.')) return;
-            var nip = !u.prog; var tmp = temporal(nip);
+            var nip = !u.prog && !u.ger; var tmp = temporal(nip);
             p = admin('restablecer', { uid: uid, temporal: tmp }).then(function () { entrega(u.nombre, u.key, tmp, nip); });
           } else {
             if (a === 'baja' && !confirm('¿Dar de baja a ' + u.nombre + '? Ya no podrá entrar.')) return;
@@ -267,10 +325,11 @@
       });
       cont.querySelector('#acc19-add').onclick = function () {
         var n = cont.querySelector('#acc19-nn').value.trim(), prog = cont.querySelector('#acc19-np').value || null, carg = cont.querySelector('#acc19-nc').checked;
+        var ger = cont.querySelector('#acc19-ng').value || null, vend = cont.querySelector('#acc19-nv').value.trim().toUpperCase() || null;
         if (!n) { msg('Escribe el nombre.'); return; }
-        if (!prog && !carg) { msg('Elige al menos un acceso.'); return; }
-        var nip = !prog, tmp = temporal(nip), bt = this; bt.disabled = true;
-        admin('crear', { nombre: n, prog: prog, carg: carg, temporal: tmp }).then(function (j) { panel(cont); setTimeout(function () { var m = cont.querySelector('#acc19-msg'); if (m) entrega(n, j.key, tmp, nip); }, 400); })
+        if (!prog && !carg && !ger && !vend) { msg('Elige al menos un acceso.'); return; }
+        var nip = !prog && !ger, tmp = temporal(nip), bt = this; bt.disabled = true;
+        admin('crear', { nombre: n, prog: prog, carg: carg, ger: ger, vend: vend, temporal: tmp }).then(function (j) { panel(cont); setTimeout(function () { var m = cont.querySelector('#acc19-msg'); if (m) entrega(n, j.key, tmp, nip); }, 400); })
           .catch(function (e) { bt.disabled = false; msg('⚠️ ' + esc(e.message)); });
       };
     }).catch(function (e) { cont.innerHTML = '<p class="hint">No se pudieron leer los usuarios: ' + esc(e.message) + '</p>'; });
@@ -280,6 +339,7 @@
     iniciar: iniciar, app: function () { return S.app; }, db: function () { return S.db; },
     directorio: directorio, entrar: entrar, sesionActual: sesionActual, salir: salir, vigilar: vigilar,
     cambiar: cambiar, pedirCambio: pedirCambio, admin: admin, token: token, panel: panel,
+    puerta: puerta, esperarSesion: esperarSesion, tokenGuardado: tokenGuardado, appCheckToken: appCheckToken, ROLES_GER: ROLES_GER,
     perfil: function () { return S.perfil; }, clave: clave, ROLES_PROG: ROLES_PROG
   };
 })(window);
