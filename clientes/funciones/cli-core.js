@@ -512,7 +512,22 @@
         });
       });
     }
+    // Acceso 19H: el programador ya entró con su usuario de Firebase; aquí solo se revisa su rol
+    function rolProg(p) { return (p && p.activo === true) ? (p.prog === 'master' ? 'progmaster' : (p.prog === 'su' ? 'programacion' : '')) : ''; }
+    function progLoginUid(uid) {
+      return Promise.resolve(db.get('acceso/usuarios/' + uid)).then(function (p) {
+        var rol = rolProg(p);
+        if (!rol) throw err('credenciales', 'Tu usuario no tiene acceso a Fletes y clientes.', 403);
+        return { u: 'PROGRAMADOR', nombre: (p.nombre || 'Programación') + (rol === 'progmaster' ? ' · master' : ''), rol: rol, vk: '', prog: true, uid: uid };
+      });
+    }
     function sesionProg(ses) {
+      if (ses.uid) {
+        return Promise.resolve(db.get('acceso/usuarios/' + ses.uid)).then(function (p) {
+          if (rolProg(p) !== ses.rol) throw err('sin_sesion', 'Tu acceso cambió. Vuelve a entrar.', 401);
+          return { nombre: ses.nombre, rol: ses.rol, vk: '', activo: true, pinVer: ses.v || 1 };
+        });
+      }
       return Promise.resolve(db.get('config')).then(function (c) {
         c = c || {}; var pw = ses.rol === 'progmaster' ? c.masterPwd : c.pwd;
         if (!pw) throw err('sin_sesion', 'Tu sesión terminó. Vuelve a entrar.', 401);
@@ -926,7 +941,7 @@
       return Promise.reject(err('accion', 'Acción no válida'));
     }
 
-    return { cliente: cliente, staff: staff, staffLogin: staffLogin, progLogin: progLogin, maestro: maestro, onEmbarque: onEmbarque, preciosCliente: preciosCliente };
+    return { cliente: cliente, staff: staff, staffLogin: staffLogin, progLogin: progLogin, progLoginUid: progLoginUid, maestro: maestro, onEmbarque: onEmbarque, preciosCliente: preciosCliente };
   }
 
   return {

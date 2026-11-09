@@ -142,7 +142,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   body.gated #gateOverlay{display:flex}
   body.gated header,body.gated main,body.gated #alertBanners,body.gated #roleBar,body.gated footer{display:none!important}
   .gatebox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px 24px;width:min(380px,100%);text-align:center}
-  .gatebox h1{font-size:19px;margin:6px 0 4px}.gatebox input{width:100%;margin-top:14px;text-align:center;font-size:16px}
+  .gatebox h1{font-size:19px;margin:6px 0 4px}.gatebox input,.gatebox select{width:100%;margin-top:14px;text-align:center;font-size:16px}
   .gatebox button{width:100%;margin-top:12px;padding:11px}
   /* barra de avisos por rol */
   #roleBar{display:flex;flex-direction:column;gap:6px;padding:0 18px}
@@ -458,7 +458,8 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 <!-- PANTALLA DE ACCESO (al abrir) -->
 <div id="gateOverlay"><div class="gatebox">
   <div style="font-size:34px">🚚</div><h1>Programador de embarques</h1>
-  <div class="hint" style="margin:0">Escribe tu contraseña para entrar</div>
+  <div class="hint" style="margin:0" id="gateHint">Elige tu usuario y escribe tu contraseña</div>
+  <select id="gateUser" autocomplete="username" style="width:100%;margin-top:10px"><option value="">Cargando usuarios…</option></select>
   <input type="password" id="gatePwd" placeholder="Contraseña" autocomplete="current-password" onkeydown="if(event.key==='Enter')gateGo()">
   <div id="gateErr" style="color:var(--late);font-size:13px;margin-top:8px;display:none"></div>
   <button class="primary" id="gateBtn" onclick="gateGo()">Entrar</button>
@@ -576,31 +577,17 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <hr style="border-color:var(--line);margin:16px 0">
       <h3 style="margin:0 0 8px;font-size:13px">Seguridad y datos</h3>
       <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
-        <div class="field"><label>Cambiar contraseña</label><input type="text" id="cfgPwd" placeholder="Nueva contraseña"></div>
-        <button class="ghost" onclick="savePwd()">Actualizar contraseña</button>
+        <button class="ghost" onclick="cambiarMiPwd()">🔑 Cambiar mi contraseña</button>
         <button class="ghost" onclick="resetData()">↺ Restablecer a datos de ejemplo</button>
         <button class="ghost" style="color:var(--late);border-color:var(--late)" onclick="clearAll()">🗑️ Vaciar todo (empezar de cero)</button>
       </div>
       <div id="masterCfg" style="display:none;margin-top:10px;padding:10px;border:1px dashed var(--late);border-radius:8px">
         <div style="font-size:12px;color:var(--late);margin-bottom:6px">🕵️ Área master (solo tú ves esto)</div>
-        <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
-          <div class="field"><label>Cambiar contraseña MASTER</label><input type="text" id="cfgMasterPwd" placeholder="Nueva contraseña master"></div>
-          <button class="ghost" onclick="saveMasterPwd()">Actualizar master</button>
-        </div>
-        <hr style="border-color:var(--line);margin:12px 0">
-        <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">👤 Usuarios del programa — superusuarios y consulta</div>
-        <p class="hint" style="margin-top:0"><b>Superusuario</b>: programa, edita y sube reportes (igual que la contraseña de superusuario), con su nombre en Auditoría. <b>Consulta</b>: entra y ve todo (programación, tablero, cuadre, trazabilidad), pero no puede crear, editar, borrar ni configurar. Cada quien con su propia contraseña; si quitas o cambias un usuario, su sesión se cierra sola.</p>
-        <div id="staffUsersBody" style="margin-bottom:10px"></div>
-        <hr style="border-color:var(--line);margin:12px 0">
-        <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">👥 Usuarios de la app (cargadores) — nombre y PIN</div>
-        <p class="hint" style="margin-top:0">Solo estos usuarios podrán registrar en la app, con su PIN. Se sincronizan a los celulares.</p>
-        <div id="usersBody"></div>
+        <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">👤 Usuarios · Programador (master, superusuario, consulta, báscula) y app de Cargadores</div>
+        <div id="accesoPanel" style="margin-bottom:10px"></div>
         <hr style="border-color:var(--line);margin:12px 0">
         <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">⚖️ Báscula y cuadre</div>
-        <p class="hint" style="margin-top:0">Cada persona de báscula tiene su propio usuario y contraseña (se escribe en «🔒 Superusuario / Master»): solo ve su registro de pesaje, el cuadre y el cierre, y su nombre queda grabado en cada pesaje que captura. Solo el master crea, cambia o quita usuarios.</p>
-        <div id="bascUsersBody" style="margin-bottom:10px"></div>
         <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
-          <div class="field"><label>Contraseña compartida de báscula (opcional)</label><input type="text" id="cfgPwdBasc" placeholder="Déjala vacía si usas usuarios"></div>
           <div class="field"><label>Control de lotes en Cargadores desde</label><input type="date" id="cfgLotesDesde" style="width:150px" title="Antes de esta fecha Cargadores no registraba lotes: se llenan desde Odoo. Desde esta fecha se respeta lo que ellos capturan. Vacío = primer día con lotes capturados."></div>
           <div class="field"><label>Tolerancia báscula (kg)</label><input type="number" id="cfgBascTolKg" min="0" style="width:110px"></div>
           <div class="field"><label>Programado vs cargado, informativo (±%)</label><input type="number" id="cfgCuadTolProg" min="0" style="width:110px"></div>
@@ -734,6 +721,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 <div class="toast" id="toast"></div>
 <footer id="footer">Programador de embarques · modo local. Conecta Firebase en ⚙ Configuración para sincronizar con la app de cargadores.</footer>
 
+<script src="acceso-19h.js"></script>
 <script>
 /* ============================================================
    👇 PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE (una sola vez)
@@ -786,7 +774,7 @@ const MOTIVOS_DEFAULT = [
   {cod:"SEG-01",desc:"Revisión de seguridad / inspección"},
   {cod:"MASC-01",desc:"Mascotas/planta lo manda tarde"},
 ];
-let CFG = { limites:{...DEFAULT_LIMITES}, semV:15, semA:30, pwd:"admin123", masterPwd:"master-2026", firebase:null, users:[{name:"CARGADOR 1",pin:"1111"}], motivos:MOTIVOS_DEFAULT.map(m=>({...m})), productos:null, lotesObligatorios:true, tolLotesPct:5 };
+let CFG = { limites:{...DEFAULT_LIMITES}, semV:15, semA:30, firebase:null, motivos:MOTIVOS_DEFAULT.map(m=>({...m})), productos:null, lotesObligatorios:true, tolLotesPct:5 };
 // lista de motivos vigente: la de CFG si ya tiene algo, si no la semilla por defecto
 function motivosActuales(){ return (CFG.motivos&&CFG.motivos.length)?CFG.motivos:MOTIVOS_DEFAULT; }
 // mapa código -> descripción, para mostrar el motivo específico en tablero y tabla; se
@@ -1566,22 +1554,13 @@ function toggleLock(){
   if(unlocked||isBasc||isCons){ gateLogout(); return; }
   else { gateShow(); }
 }
-function doLogin(){
-  const v=document.getElementById('pwd').value;
-  if(CFG.masterPwd && v===CFG.masterPwd){ unlocked=true; isMaster=true; isBasc=false; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Acceso master ✓'); }
-  else if(v===CFG.pwd){ unlocked=true; isMaster=false; isBasc=false; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Superusuario habilitado ✓'); }
-  else if((CFG.staffUsers||[]).some(u=>u.pwd===v)){ const su=CFG.staffUsers.find(u=>u.pwd===v); gateApply({r:su.rol==='cons'?'cons':'su',n:su.name}); try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:_hx(v),r:su.rol==='cons'?'cons':'su',n:su.name})); }catch(x){} document.getElementById('loginOverlay').classList.remove('show'); toast((su.rol==='cons'?'Consulta: ':'Superusuario: ')+su.name+' ✓'); }
-  else if((CFG.bascUsers||[]).some(u=>u.pwd===v)){ const bu=CFG.bascUsers.find(u=>u.pwd===v); unlocked=false; isMaster=false; isBasc=true; bascName=bu.name; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Báscula: '+bu.name+' ✓'); setView('bascula'); }
-  else if(CFG.pwdBascula && v===CFG.pwdBascula){ unlocked=false; isMaster=false; isBasc=true; bascName=''; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Usuario de báscula ✓'); setView('bascula'); }
-  else document.getElementById('pwdErr').style.display='block';
-}
+function doLogin(){ document.getElementById('loginOverlay').classList.remove('show'); gateShow(); }   // Acceso 19H: todo entra por la pantalla de usuario
 function applyLock(){
   document.querySelectorAll('[data-prot]').forEach(el=>{ const m=el.hasAttribute('data-master'); el.classList.toggle('show', m?isMaster:unlocked); });
   const b=document.getElementById('lockBtn'); b.classList.toggle('open',unlocked||isBasc||isCons); b.textContent=unlocked?(isMaster?'🕵️ Master activo':'🔓 '+(userName||'Superusuario')+' · salir'):(isBasc?'⚖️ Báscula activa · salir':(isCons?'👁️ Consulta: '+(userName||'usuario')+' · salir':'🔒 Superusuario / Master'));
   document.body.classList.toggle('basc',isBasc);
   { const tc=document.getElementById('tabConc'); if(tc) tc.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='conc') setView('tabla'); const ts=document.getElementById('tabSol'); if(ts) ts.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='sol') setView('tabla'); try{ _avCounts=null; refreshAvisos(); }catch(e){} }
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
-  if(isBasc && bascName && typeof _cfgSynced!=='undefined' && _cfgSynced && !(CFG.bascUsers||[]).some(u=>u.name===bascName)){ unlocked=false; isMaster=false; isBasc=false; bascName=''; toast('Tu usuario de báscula fue dado de baja'); applyLock(); return; }
   // pestaña de auditoría: solo visible para master
   const at=document.getElementById('tabAudit'); if(at) at.style.display=isMaster?'inline-flex':'none';
   const pm=document.getElementById('masterCfg'); if(pm) pm.style.display=isMaster?'block':'none';
@@ -1622,8 +1601,7 @@ function buildCfg(){
   document.getElementById('cfgSemV').value=CFG.semV; document.getElementById('cfgSemA').value=CFG.semA;
   document.getElementById('cfgLotesReq').checked=lotesReq(); document.getElementById('cfgTolLot').value=tolLot();
   document.getElementById('cfgFb').value=CFG.firebase?JSON.stringify(CFG.firebase,null,2):'';
-  buildUsers();
-  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgPwdBasc',CFG.pwdBascula||''); S('cfgLotesDesde',CFG.lotesDesde||''); buildBascUsers(); buildStaffUsers(); S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
+  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgLotesDesde',CFG.lotesDesde||''); if(isMaster){ const ap=document.getElementById('accesoPanel'); if(ap) Acceso19H.panel(ap); } S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
 }
 function buildUsers(){
   const ub=document.getElementById('usersBody'); if(!ub) return;
@@ -1660,33 +1638,9 @@ function saveConfig(){
   { const nr=document.getElementById('cfgLotesReq').checked, nt=Math.max(0,Number(document.getElementById('cfgTolLot').value)||0);
     if(nr!==lotesReq()) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'lotesObligatorios',label:'Lotes obligatorios',from:lotesReq()?'Sí':'No',to:nr?'Sí':'No',maquillaje:!nr,estatusAntes:'',estatusDespues:'',by:quienSU(),origen:'programador'});
     CFG.lotesObligatorios=nr; CFG.tolLotesPct=nt; }
-  // usuarios de la app (solo master edita)
-  if(isMaster){ const uN=[...document.querySelectorAll('.uName')], uP=[...document.querySelectorAll('.uPin')];
-    const us=[]; uN.forEach((el,i)=>{ const nm=el.value.trim(); const pn=(uP[i].value||'').trim(); if(nm&&pn) us.push({name:nm,pin:pn}); });
-    CFG.users=us;
-    // báscula: contraseña (no puede repetir la de superusuario ni master) y tolerancias del cuadre
-    const pb=(document.getElementById('cfgPwdBasc').value||'').trim();
-    if(pb&&(pb===CFG.pwd||pb===CFG.masterPwd)){ toast('La contraseña de báscula debe ser distinta a la de superusuario y master'); return; }
-    { const bn=[...document.querySelectorAll('.bUName')], bp=[...document.querySelectorAll('.bUPwd')]; const bu=[]; const vistos={};
-      for(let i=0;i<bn.length;i++){ const nm=bn[i].value.trim(), pw=(bp[i].value||'').trim(); if(!nm&&!pw) continue;
-        if(!nm||!pw){ toast('Cada usuario de báscula necesita nombre y contraseña'); return; }
-        if(pw.length<4){ toast('La contraseña de '+nm+' debe tener mínimo 4 caracteres'); return; }
-        if(pw===CFG.pwd||pw===CFG.masterPwd||(pb&&pw===pb)){ toast('La contraseña de '+nm+' debe ser distinta a la de superusuario, master y la compartida'); return; }
-        if(vistos[pw]){ toast('«'+nm+'» y «'+vistos[pw]+'» tienen la misma contraseña: cada quien necesita la suya'); return; }
-        vistos[pw]=nm; bu.push({name:nm,pwd:pw}); }
-      CFG.bascUsers=bu;
-    // superusuarios y consulta con usuario propio: contraseña única, distinta de master / superusuario / báscula
-    { const sn=[...document.querySelectorAll('.sUName')], sp=[...document.querySelectorAll('.sUPwd')], sr=[...document.querySelectorAll('.sURol')]; const su=[]; const usadas={};
-      if(CFG.pwd) usadas[CFG.pwd]='la contraseña de superusuario'; if(CFG.masterPwd) usadas[CFG.masterPwd]='la contraseña master'; if(pb) usadas[pb]='la contraseña compartida de báscula'; bu.forEach(x=>usadas[x.pwd]='báscula · '+x.name);
-      for(let i=0;i<sn.length;i++){ const nm=sn[i].value.trim(), pw=(sp[i].value||'').trim(), rol=sr[i].value==='cons'?'cons':'su'; if(!nm&&!pw) continue;
-        if(!nm||!pw){ toast('Cada usuario del programa necesita nombre y contraseña'); return; }
-        if(pw.length<4){ toast('La contraseña de '+nm+' debe tener mínimo 4 caracteres'); return; }
-        if(usadas[pw]){ toast('La contraseña de «'+nm+'» ya la usa '+usadas[pw]+': cada quien necesita la suya',5000); return; }
-        usadas[pw]=nm; su.push({name:nm,pwd:pw,rol}); }
-      const antes=JSON.stringify((CFG.staffUsers||[]).map(x=>[x.name,x.rol])), despues=JSON.stringify(su.map(x=>[x.name,x.rol]));
-      if(antes!==despues) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'staffUsers',label:'Usuarios del programa (superusuarios / consulta)',from:(CFG.staffUsers||[]).map(x=>x.name+' ('+(x.rol==='cons'?'consulta':'superusuario')+')').join(', ')||'—',to:su.map(x=>x.name+' ('+(x.rol==='cons'?'consulta':'superusuario')+')').join(', ')||'—',maquillaje:false,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
-      CFG.staffUsers=su.length?su:false; } }   // false (no lista vacía): la nube no guarda listas vacías y los demás equipos se quedarían con la anterior
-    CFG.lotesDesde=(document.getElementById('cfgLotesDesde').value||''); CFG.pwdBascula=pb; const nn=(i,d)=>{ const v=document.getElementById(i).value; return v===''||isNaN(Number(v))?d:Math.max(0,Number(v)); };
+  // Acceso 19H: los usuarios se administran en el panel de usuarios (ya no aquí)
+  if(isMaster){
+    CFG.lotesDesde=(document.getElementById('cfgLotesDesde').value||''); const nn=(i,d)=>{ const v=document.getElementById(i).value; return v===''||isNaN(Number(v))?d:Math.max(0,Number(v)); };
     CFG.bascTolKg=nn('cfgBascTolKg',50); CFG.cuadreTolProgPct=nn('cfgCuadTolProg',5); CFG.bascTolSacos=nn('cfgBascTolSacos',0); }
   const fbtxt=document.getElementById('cfgFb').value.trim();
   let reinit=false;
@@ -1695,8 +1649,7 @@ function saveConfig(){
   persistCfg(); document.getElementById('cfgOverlay').classList.remove('show'); render(); toast('Configuración guardada');
   if(reinit) initFirebase();
 }
-function savePwd(){ const v=document.getElementById('cfgPwd').value.trim(); if(v.length<4){toast('Mínimo 4 caracteres');return;} CFG.pwd=v; persistCfg(); document.getElementById('cfgPwd').value=''; toast('Contraseña actualizada'); }
-function saveMasterPwd(){ if(!isMaster)return; const v=document.getElementById('cfgMasterPwd').value.trim(); if(v.length<4){toast('Mínimo 4 caracteres');return;} CFG.masterPwd=v; persistCfg(); document.getElementById('cfgMasterPwd').value=''; toast('Contraseña master actualizada'); }
+function cambiarMiPwd(){ Acceso19H.pedirCambio({nombre:(Acceso19H.perfil()||{}).nombre,cancelar:true}).then(ok=>{ if(ok) toast('Contraseña actualizada ✓'); }); }
 function resetData(){ if(!requireMaster())return; if(!confirm('Esto borra los cambios y regresa a los datos de ejemplo. ¿Continuar?'))return;
   DATA=normalize(JSON.parse(JSON.stringify(SEED))); CFG.limites={...DEFAULT_LIMITES};
   persistAll(); render(); toast('Datos restablecidos'); }
@@ -1711,7 +1664,7 @@ function clearAll(){ if(!requireMaster())return;
 /* ================= EXPORT/IMPORT ================= */
 function exportJSON(){ if(!requireUnlock())return; dlBlob(new Blob([JSON.stringify({cfg:CFG,data:DATA},null,2)],{type:'application/json'}),'respaldo_embarques.json'); toast('Respaldo descargado'); }
 function importJSON(e){ if(!requireUnlock())return; const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
-  rd.onload=()=>{ try{ const o=JSON.parse(rd.result); DATA=normalize(Array.isArray(o)?o:(o.data||[])); if(o.cfg)CFG={...CFG,...o.cfg}; persistAll(); render(); toast('Respaldo cargado ✓'); }catch(err){ toast('Archivo inválido'); } };
+  rd.onload=()=>{ try{ const o=JSON.parse(rd.result); DATA=normalize(Array.isArray(o)?o:(o.data||[])); if(o.cfg)CFG=sinViejos({...CFG,...o.cfg}); persistAll(); render(); toast('Respaldo cargado ✓'); }catch(err){ toast('Archivo inválido'); } };
   rd.readAsText(f); e.target.value=''; }
 function exportCSV(){
   const H=['F.Prog','Cita','SalidaProg','Pedido','Cliente','Destino','Estado','Unidad','Eco','Anden','Turno','Operador','Colocacion','Inicio','Fin','SalidaReal','EsperaAnden','T.Carga','EstatusCarga','EstatusSalida','RetrasoSalidaMin','Permanencia','Semaforo','KgProg','KgCargado','KgMin','F.Carga','Despachado','Motivo','Cargador','Obs'];
@@ -1726,14 +1679,17 @@ function dlBlob(b,n){ const a=document.createElement('a'); a.href=URL.createObje
 /* ================= PERSISTENCIA (local + firebase) ================= */
 function normalize(arr){ arr.forEach((r,i)=>{ if(!r.id)r.id='r'+i+'_'+Math.random().toString(36).slice(2,6); }); return arr; }
 function saveCfgLocal(){} // noop placeholder to keep render happy
-function persistCfg(){ try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbCfg){ fbCfg.set(sanitize(CFG)); } }
+function persistCfg(){ CFG=sinViejos(CFG); try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbCfg){ fbCfg.set(sanitize(CFG)); } }
 function persist(id,rec){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fb&&fbData&&rec){ fbData.child(id).set(sanitize(rec)); } }
 function persistDelete(id){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fb&&fbData){ fbData.child(id).remove(); } }
-function persistAll(){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbData){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); fbCfg.set(sanitize(CFG)); } }
+function persistAll(){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbData){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); persistCfg(); } }
 function sanitize(o){ return JSON.parse(JSON.stringify(o)); }
+const CFG_VIEJOS=['pwd','masterPwd','pwdBascula','staffUsers','bascUsers','users'];   // Acceso 19H: ya no viven aquí
+function sinViejos(o){ const c=Object.assign({},o); CFG_VIEJOS.forEach(k=>delete c[k]); return c; }
 
 function loadLocal(){
-  try{ const c=localStorage.getItem(CFG_KEY); if(c) CFG={...CFG,...JSON.parse(c)}; }catch(e){}
+  try{ const c=localStorage.getItem(CFG_KEY); if(c) CFG=sinViejos({...CFG,...JSON.parse(c)}); }catch(e){}
+  try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}   // borra de este equipo las contraseñas viejas
   rebuildMotivoMap();
   try{ const a=localStorage.getItem(AUDIT_KEY); if(a) AUDIT=JSON.parse(a); }catch(e){}
   loadFlotaLocal();
@@ -1756,7 +1712,7 @@ function initFirebase(){
   if(!CFG.firebase || !CFG.firebase.databaseURL){ setConn('local','Local'); document.getElementById('footer').textContent='Programador de embarques · modo local. Conecta Firebase en ⚙ Configuración para sincronizar con la app de cargadores.'; return; }
   loadFbScripts(()=>{
     try{
-      if(!fb){ fb = firebase.initializeApp(CFG.firebase, 'prog'+Date.now()); if(RECAPTCHA_SITE_KEY){ try{ firebase.appCheck(fb).activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), true); }catch(e){ console.error('appCheck:',e); } } }
+      if(!fb){ fb = Acceso19H.app(); if(!fb){ setConn('local','Sin sesión'); return; } }   // Acceso 19H: la misma app donde entraste (lleva tu sesión a la base)
       const db = firebase.database(fb);
       fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('skan/_proyeccion'); fbProyEdit = db.ref('skan/_proyedit'); fbCuad = db.ref('skan/_cuadre');
       setConn('online','Conectando…');
@@ -1764,7 +1720,7 @@ function initFirebase(){
       // Tras vaciar todo, la marca queda puesta y ya no se vuelve a sembrar.
       Promise.all([fbData.once('value'), fbCfg.once('value')]).then(([ds,cs])=>{
         const cv=cs.val()||{};
-        if(!ds.exists() && !cv.seeded){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); fbCfg.update({...sanitize(CFG), seeded:true}); }
+        if(!ds.exists() && !cv.seeded){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); fbCfg.update({...sanitize(sinViejos(CFG)), seeded:true}); }
       });
       // sembrar flota la primera vez (marca "flotaSeeded" independiente)
       Promise.all([fbFlota.once('value'), fbCfg.once('value')]).then(([fs,cs])=>{
@@ -1772,7 +1728,7 @@ function initFirebase(){
         if(!fs.exists() && !cv.flotaSeeded){ const o={}; FLOTA.forEach(r=>o[r.id]=sanitize(r)); fbFlota.set(o); fbCfg.update({flotaSeeded:true}); }
       });
       fbData.on('value', snap=>{ const val=snap.val(); if(val){ DATA=normalize(Object.values(val)); render(); } setConn('online','Nube conectada'); document.getElementById('footer').textContent='Programador de embarques · sincronizado en tiempo real con la app de cargadores (Firebase).'; });
-      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG={...CFG,...v}; try{ gateRevalidate(); }catch(e){} SERV_OVERRIDES=CFG.servClientes||null;
+      fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG=sinViejos({...CFG,...v}); _cfgSynced=true; SERV_OVERRIDES=CFG.servClientes||null;
         // la nube todavía no tiene el catálogo de motivos (cuentas ya sembradas antes de este cambio): lo sube ahora
         if(!v.motivos || !v.motivos.length){ CFG.motivos=MOTIVOS_DEFAULT.map(m=>({...m})); persistCfg(); }
         // lo mismo para la trazabilidad: la app de cargadores lee el catálogo de productos y las reglas desde la nube
@@ -3506,59 +3462,65 @@ function marcarDespPendientes(id){
 let _cfgSynced=false;
 const GATE_KEY='prog_sess_v1';
 function _hx(s){ let h=5381; s=String(s); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return String(h); }
-function gateCreds(){   // todas las credenciales vigentes y el perfil que da cada una
-  const L=[]; const add=(pw,r,n)=>{ if(pw) L.push({pw:String(pw),r,n:n||''}); };
-  add(CFG.masterPwd,'master'); add(CFG.pwd,'su'); (CFG.staffUsers||[]).forEach(u=>add(u.pwd,u.rol==='cons'?'cons':'su',u.name)); (CFG.bascUsers||[]).forEach(u=>add(u.pwd,'basc',u.name)); add(CFG.pwdBascula,'basc','');
-  return L;
-}
+/* ===== ACCESO 19H · usuario + contraseña con Firebase Authentication =====
+   Las contraseñas ya no viven en /config ni en este archivo. Ver acceso-19h.js */
 function gateApply(p){
   unlocked=(p.r==='master'||p.r==='su'); isMaster=(p.r==='master'); isBasc=(p.r==='basc'); isCons=(p.r==='cons'); bascName=isBasc?(p.n||''):''; userName=(p.r==='su'||p.r==='cons')?(p.n||''):'';
   document.body.classList.remove('gated'); _avCounts=null; applyLock(); try{ refreshAvisos(); }catch(e){}
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
 }
+const perfilAGate=p=>({r:p.prog,n:p.nombre||''});
+function gateLlenarUsuarios(){
+  const sel=document.getElementById('gateUser'); if(!sel) return;
+  Acceso19H.directorio('prog').then(L=>{
+    let ult=''; try{ ult=localStorage.getItem('prog_ult_usuario')||''; }catch(x){}
+    sel.innerHTML='<option value="">— Elige tu usuario —</option>'+L.map(u=>`<option value="${u.key}"${u.key===ult?' selected':''}>${u.nombre.replace(/</g,'&lt;')}</option>`).join('');
+    const i=document.getElementById('gatePwd'); if(i&&ult) setTimeout(()=>i.focus(),50);
+  }).catch(()=>{ sel.innerHTML='<option value="">Sin conexión: revisa tu internet</option>'; });
+}
 function gateShow(msg){
   document.body.classList.add('gated'); const i=document.getElementById('gatePwd'); if(i){ i.value=''; setTimeout(()=>i.focus(),50); }
   const e=document.getElementById('gateErr'); if(e){ e.style.display=msg?'block':'none'; e.textContent=msg||''; }
+  gateLlenarUsuarios();
 }
 let _gateBusy=false;
+function gateDentro(perfil){
+  gateApply(perfilAGate(perfil)); setView(perfil.prog==='basc'?'bascula':'tabla');
+  initFirebase();
+  Acceso19H.vigilar((p,antes)=>{   // si el master te da de baja o te cambia el rol, se cierra la sesión
+    if(!p||p.activo!==true||!Acceso19H.ROLES_PROG[p.prog]||(antes&&antes.prog!==p.prog)){ Acceso19H.salir().then(()=>location.reload()); }
+  });
+  if(perfil.prog==='master'||perfil.prog==='su'){ Acceso19H.token().then(t=>{ try{ if(window.CliStaff&&t) CliStaff.loginProgramador({idToken:t}); }catch(e){} }); }   // Fletes y precios / Clientes
+}
 function gateGo(){
-  if(_gateBusy) return; const v=document.getElementById('gatePwd').value; if(!v) return;
+  if(_gateBusy) return; const key=document.getElementById('gateUser').value, v=document.getElementById('gatePwd').value;
   const e=document.getElementById('gateErr'), b=document.getElementById('gateBtn');
-  _gateBusy=true; b.disabled=true; e.style.display='none'; let t=0;
-  const need=()=>CFG.firebase&&CFG.firebase.databaseURL&&!_cfgSynced&&t<32;   // espera a bajar los usuarios de la nube (máx. ~8 s)
-  const step=()=>{
-    if(need()){ b.textContent='Verificando…'; t++; return setTimeout(step,250); }
-    const hit=gateCreds().find(c=>c.pw===v);
-    b.textContent='Entrar'; b.disabled=false; _gateBusy=false;
-    if(!hit){ e.textContent='Contraseña incorrecta'; e.style.display='block'; document.getElementById('gatePwd').select(); return; }
-    try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:_hx(v),r:hit.r,n:hit.n})); }catch(x){}
+  if(!key){ e.textContent='Elige tu usuario'; e.style.display='block'; return; }
+  if(!v) return;
+  _gateBusy=true; b.disabled=true; b.textContent='Verificando…'; e.style.display='none';
+  Acceso19H.entrar(key,v,'prog').then(perfil=>{
+    try{ localStorage.setItem('prog_ult_usuario',key); }catch(x){}
     document.getElementById('gatePwd').value='';
-    try{ askNotif(); unlockAudio(); }catch(e){}
-    gateApply(hit); setView(hit.r==='basc'?'bascula':'tabla');
-    if(hit.r==='master'||hit.r==='su'){ try{ if(window.CliStaff) CliStaff.loginProgramador(v); }catch(e){} }   // Fletes y precios / Clientes: misma contraseña
-    toast(hit.r==='master'?'Acceso master ✓':hit.r==='su'?'Superusuario'+(hit.n?': '+hit.n:'')+' ✓':hit.r==='cons'?'Consulta: '+(hit.n||'usuario')+' ✓ (solo lectura)':'Báscula: '+(hit.n||'usuario')+' ✓');
-  };
-  step();
+    try{ askNotif(); unlockAudio(); }catch(x){}
+    gateDentro(perfil);
+    toast(perfil.prog==='master'?'Acceso master ✓':perfil.prog==='su'?'Superusuario: '+perfil.nombre+' ✓':perfil.prog==='cons'?'Consulta: '+perfil.nombre+' ✓ (solo lectura)':'Báscula: '+perfil.nombre+' ✓');
+  }).catch(er=>{ e.textContent=er.message||'No se pudo entrar'; e.style.display='block'; document.getElementById('gatePwd').select(); })
+    .then(()=>{ _gateBusy=false; b.disabled=false; b.textContent='Entrar'; });
 }
 function gateLogout(){
-  try{ sessionStorage.removeItem(GATE_KEY); }catch(x){}
-  unlocked=false; isMaster=false; isBasc=false; isCons=false; bascName=''; userName=''; applyLock(); gateShow(); toast('Sesión cerrada');
   try{ if(window.CliStaff) CliStaff.salir(); }catch(e){}
+  Acceso19H.salir().then(()=>location.reload());   // recarga limpia: sin datos ni escuchas de la sesión anterior
 }
-// al abrir: si ya entraste en esta pestaña, se restaura; si no, se pide acceso antes de mostrar nada
+// al abrir: si en este equipo ya había sesión válida, entra directo; si no, pide usuario y contraseña
 function gateInit(){
-  let s=null; try{ s=JSON.parse(sessionStorage.getItem(GATE_KEY)||'null'); }catch(x){}
-  if(s&&s.r){ gateApply({r:s.r,n:s.n}); } else gateShow();
+  document.body.classList.add('gated');
+  const h=document.getElementById('gateHint'); if(h) h.textContent='Verificando sesión…';
+  Acceso19H.iniciar({firebase:(CFG.firebase&&CFG.firebase.databaseURL)?CFG.firebase:null, recaptcha:RECAPTCHA_SITE_KEY})
+    .then(()=>Acceso19H.sesionActual('prog'))
+    .then(p=>{ if(h) h.textContent='Elige tu usuario y escribe tu contraseña'; if(p) gateDentro(p); else gateShow(); })
+    .catch(()=>{ if(h) h.textContent='Sin conexión a internet. Revisa y vuelve a cargar.'; gateShow(); });
 }
-// cuando llegan los usuarios de la nube: si cambiaron o quitaron tus credenciales, se cierra la sesión
-function gateRevalidate(){
-  _cfgSynced=true;
-  let s=null; try{ s=JSON.parse(sessionStorage.getItem(GATE_KEY)||'null'); }catch(x){}
-  if(!s||!s.h) return;
-  const hit=gateCreds().find(c=>_hx(c.pw)===s.h);
-  if(!hit){ try{ sessionStorage.removeItem(GATE_KEY); }catch(x){} unlocked=false; isMaster=false; isBasc=false; isCons=false; bascName=''; userName=''; applyLock(); gateShow('Tu acceso cambió: vuelve a entrar'); return; }
-  if(hit.r!==s.r||hit.n!==s.n){ try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:s.h,r:hit.r,n:hit.n})); }catch(x){} gateApply(hit); }
-}
+function gateRevalidate(){ _cfgSynced=true; }
 
 /* ================================================================
    ===== AVISOS POR ROL · SOLICITUDES DE EDICIÓN · TABLERO DE ÁREAS =====
@@ -3827,8 +3789,7 @@ applyHardcodedFb();
 SERV_OVERRIDES=(typeof CFG!=='undefined'&&CFG.servClientes)?CFG.servClientes:null;
 setPreset('semana');
 applyLock();
-gateInit();
-initFirebase();
+gateInit();   // Acceso 19H: la nube se conecta hasta que entras con tu usuario
 render();
 
 /* ============ EDITOR DE SERVICIO POR CLIENTE (chalanes / sacos) ============
