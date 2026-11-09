@@ -588,6 +588,10 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
           <button class="ghost" onclick="saveMasterPwd()">Actualizar master</button>
         </div>
         <hr style="border-color:var(--line);margin:12px 0">
+        <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">👤 Usuarios del programa — superusuarios y consulta</div>
+        <p class="hint" style="margin-top:0"><b>Superusuario</b>: programa, edita y sube reportes (igual que la contraseña de superusuario), con su nombre en Auditoría. <b>Consulta</b>: entra y ve todo (programación, tablero, cuadre, trazabilidad), pero no puede crear, editar, borrar ni configurar. Cada quien con su propia contraseña; si quitas o cambias un usuario, su sesión se cierra sola.</p>
+        <div id="staffUsersBody" style="margin-bottom:10px"></div>
+        <hr style="border-color:var(--line);margin:12px 0">
         <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">👥 Usuarios de la app (cargadores) — nombre y PIN</div>
         <p class="hint" style="margin-top:0">Solo estos usuarios podrán registrar en la app, con su PIN. Se sincronizan a los celulares.</p>
         <div id="usersBody"></div>
@@ -832,6 +836,8 @@ let FLOTA = [];           // registros de mantenimiento/seguros/verificaciones
 let flotaEditId = null;   // registro de flota en edición
 let unlocked = false;
 let isMaster = false;
+let isCons = false;      // usuario de consulta: entra y ve todo, no modifica nada
+let userName = '';       // nombre del superusuario / consulta con usuario propio (va en Auditoría)
 let AUDIT = [];
 let sortK='fechaProg', sortDir=1;
 let curView='tabla';
@@ -1515,7 +1521,7 @@ function cancelPedido(){
 function requireMaster(){ if(!isMaster){ toast('Solo el usuario master'); return false; } return true; }
 function auditPush(entry){ AUDIT.push(entry); if(fbAudit){ try{ fbAudit.push(sanitize(entry)); }catch(e){} } try{ localStorage.setItem(AUDIT_KEY, JSON.stringify(AUDIT.slice(-2000))); }catch(e){} }
 function auditConfig(oldL,newL,oldSV,newSV,oldSA,newSA){
-  const by=isMaster?'master':'superusuario';
+  const by=quienSU();
   Object.keys({...oldL,...newL}).forEach(k=>{
     const a=oldL[k], b=newL[k];
     if(a!==b){ const maq=(a!=null&&b!=null&&b>a); // aumentar el tiempo permitido = aflojar el estándar (posible maquillaje)
@@ -1537,7 +1543,7 @@ function auditDiff(prev, next){
                          (f==='kilos' && Number(a||0)>0 && Number(b||0)<Number(a||0));
       const entry={ ts:new Date().toISOString(), id:prev.id||next.id||'', pedido:prev.pedido||next.pedido||'', cliente:prev.cliente||next.cliente||'',
         field:f, label:AUDIT_LABELS[f]||f, from:a, to:b, maquillaje,
-        estatusAntes:before.estatus, estatusDespues:after.estatus, by:(isMaster?'master':'superusuario'), origen:'programador' };
+        estatusAntes:before.estatus, estatusDespues:after.estatus, by:quienSU(), origen:'programador' };
       AUDIT.push(entry);
       if(fbAudit){ try{ fbAudit.push(sanitize(entry)); }catch(e){} }
     }
@@ -1557,20 +1563,21 @@ function deleteRow(){
 
 /* ================= SUPERUSUARIO ================= */
 function toggleLock(){
-  if(unlocked||isBasc){ gateLogout(); return; }
+  if(unlocked||isBasc||isCons){ gateLogout(); return; }
   else { gateShow(); }
 }
 function doLogin(){
   const v=document.getElementById('pwd').value;
   if(CFG.masterPwd && v===CFG.masterPwd){ unlocked=true; isMaster=true; isBasc=false; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Acceso master ✓'); }
   else if(v===CFG.pwd){ unlocked=true; isMaster=false; isBasc=false; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Superusuario habilitado ✓'); }
+  else if((CFG.staffUsers||[]).some(u=>u.pwd===v)){ const su=CFG.staffUsers.find(u=>u.pwd===v); gateApply({r:su.rol==='cons'?'cons':'su',n:su.name}); try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:_hx(v),r:su.rol==='cons'?'cons':'su',n:su.name})); }catch(x){} document.getElementById('loginOverlay').classList.remove('show'); toast((su.rol==='cons'?'Consulta: ':'Superusuario: ')+su.name+' ✓'); }
   else if((CFG.bascUsers||[]).some(u=>u.pwd===v)){ const bu=CFG.bascUsers.find(u=>u.pwd===v); unlocked=false; isMaster=false; isBasc=true; bascName=bu.name; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Báscula: '+bu.name+' ✓'); setView('bascula'); }
   else if(CFG.pwdBascula && v===CFG.pwdBascula){ unlocked=false; isMaster=false; isBasc=true; bascName=''; applyLock(); document.getElementById('loginOverlay').classList.remove('show'); toast('Usuario de báscula ✓'); setView('bascula'); }
   else document.getElementById('pwdErr').style.display='block';
 }
 function applyLock(){
   document.querySelectorAll('[data-prot]').forEach(el=>{ const m=el.hasAttribute('data-master'); el.classList.toggle('show', m?isMaster:unlocked); });
-  const b=document.getElementById('lockBtn'); b.classList.toggle('open',unlocked||isBasc); b.textContent=unlocked?(isMaster?'🕵️ Master activo':'🔓 Superusuario activo'):(isBasc?'⚖️ Báscula activa · salir':'🔒 Superusuario / Master');
+  const b=document.getElementById('lockBtn'); b.classList.toggle('open',unlocked||isBasc||isCons); b.textContent=unlocked?(isMaster?'🕵️ Master activo':'🔓 '+(userName||'Superusuario')+' · salir'):(isBasc?'⚖️ Báscula activa · salir':(isCons?'👁️ Consulta: '+(userName||'usuario')+' · salir':'🔒 Superusuario / Master'));
   document.body.classList.toggle('basc',isBasc);
   { const tc=document.getElementById('tabConc'); if(tc) tc.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='conc') setView('tabla'); const ts=document.getElementById('tabSol'); if(ts) ts.style.display=isMaster?'inline-flex':'none'; if(!isMaster&&curView==='sol') setView('tabla'); try{ _avCounts=null; refreshAvisos(); }catch(e){} }
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
@@ -1616,7 +1623,7 @@ function buildCfg(){
   document.getElementById('cfgLotesReq').checked=lotesReq(); document.getElementById('cfgTolLot').value=tolLot();
   document.getElementById('cfgFb').value=CFG.firebase?JSON.stringify(CFG.firebase,null,2):'';
   buildUsers();
-  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgPwdBasc',CFG.pwdBascula||''); S('cfgLotesDesde',CFG.lotesDesde||''); buildBascUsers(); S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
+  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgPwdBasc',CFG.pwdBascula||''); S('cfgLotesDesde',CFG.lotesDesde||''); buildBascUsers(); buildStaffUsers(); S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
 }
 function buildUsers(){
   const ub=document.getElementById('usersBody'); if(!ub) return;
@@ -1627,6 +1634,14 @@ function userRow(name,pin){ return `<div style="display:flex;gap:9px;align-items
   <input value="${(name||'').replace(/"/g,'&quot;')}" class="uName" placeholder="Nombre del cargador" style="flex:1">
   <input value="${(pin||'')}" class="uPin" placeholder="PIN" inputmode="numeric" style="width:90px">
   <button class="ghost" style="color:var(--late);padding:6px 9px" onclick="this.parentElement.remove()">✕</button></div>`; }
+function staffUserRow(name,pwd,rol){ const q=x=>(x||'').replace(/"/g,'&quot;'); return `<div style="display:flex;gap:9px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
+  <input value="${q(name)}" class="sUName" placeholder="Nombre (ej. Ana – Logística)" style="flex:1;min-width:160px">
+  <input value="${q(pwd)}" class="sUPwd" placeholder="Contraseña" style="width:140px">
+  <select class="sURol" style="width:150px"><option value="su"${rol!=='cons'?' selected':''}>Superusuario</option><option value="cons"${rol==='cons'?' selected':''}>Consulta (solo ver)</option></select>
+  <button class="ghost" title="Quitar" onclick="this.parentNode.remove()">✕</button></div>`; }
+function buildStaffUsers(){ const ub=document.getElementById('staffUsersBody'); if(!ub) return;
+  ub.innerHTML=(CFG.staffUsers||[]).map(u=>staffUserRow(u.name,u.pwd,u.rol)).join('')+`<button class="ghost" onclick="addStaffUserRow()">＋ Agregar usuario</button>`; }
+function addStaffUserRow(){ const ub=document.getElementById('staffUsersBody'); const d=document.createElement('div'); d.innerHTML=staffUserRow('','','su'); ub.insertBefore(d.firstChild, ub.lastChild); }
 function bascUserRow(name,pwd){ const q=x=>(x||'').replace(/"/g,'&quot;'); return `<div style="display:flex;gap:9px;align-items:center;margin-bottom:7px">
   <input value="${q(name)}" class="bUName" placeholder="Nombre (ej. Juan – báscula)" style="flex:1">
   <input value="${q(pwd)}" class="bUPwd" placeholder="Contraseña" style="width:140px">
@@ -1643,7 +1658,7 @@ function saveConfig(){
   auditConfig(CFG.limites, n, CFG.semV, newSemV, CFG.semA, newSemA);   // registrar cambios de estándares
   CFG.limites=n; CFG.semV=newSemV; CFG.semA=newSemA;
   { const nr=document.getElementById('cfgLotesReq').checked, nt=Math.max(0,Number(document.getElementById('cfgTolLot').value)||0);
-    if(nr!==lotesReq()) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'lotesObligatorios',label:'Lotes obligatorios',from:lotesReq()?'Sí':'No',to:nr?'Sí':'No',maquillaje:!nr,estatusAntes:'',estatusDespues:'',by:isMaster?'master':'superusuario',origen:'programador'});
+    if(nr!==lotesReq()) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'lotesObligatorios',label:'Lotes obligatorios',from:lotesReq()?'Sí':'No',to:nr?'Sí':'No',maquillaje:!nr,estatusAntes:'',estatusDespues:'',by:quienSU(),origen:'programador'});
     CFG.lotesObligatorios=nr; CFG.tolLotesPct=nt; }
   // usuarios de la app (solo master edita)
   if(isMaster){ const uN=[...document.querySelectorAll('.uName')], uP=[...document.querySelectorAll('.uPin')];
@@ -1659,7 +1674,18 @@ function saveConfig(){
         if(pw===CFG.pwd||pw===CFG.masterPwd||(pb&&pw===pb)){ toast('La contraseña de '+nm+' debe ser distinta a la de superusuario, master y la compartida'); return; }
         if(vistos[pw]){ toast('«'+nm+'» y «'+vistos[pw]+'» tienen la misma contraseña: cada quien necesita la suya'); return; }
         vistos[pw]=nm; bu.push({name:nm,pwd:pw}); }
-      CFG.bascUsers=bu; }
+      CFG.bascUsers=bu;
+    // superusuarios y consulta con usuario propio: contraseña única, distinta de master / superusuario / báscula
+    { const sn=[...document.querySelectorAll('.sUName')], sp=[...document.querySelectorAll('.sUPwd')], sr=[...document.querySelectorAll('.sURol')]; const su=[]; const usadas={};
+      if(CFG.pwd) usadas[CFG.pwd]='la contraseña de superusuario'; if(CFG.masterPwd) usadas[CFG.masterPwd]='la contraseña master'; if(pb) usadas[pb]='la contraseña compartida de báscula'; bu.forEach(x=>usadas[x.pwd]='báscula · '+x.name);
+      for(let i=0;i<sn.length;i++){ const nm=sn[i].value.trim(), pw=(sp[i].value||'').trim(), rol=sr[i].value==='cons'?'cons':'su'; if(!nm&&!pw) continue;
+        if(!nm||!pw){ toast('Cada usuario del programa necesita nombre y contraseña'); return; }
+        if(pw.length<4){ toast('La contraseña de '+nm+' debe tener mínimo 4 caracteres'); return; }
+        if(usadas[pw]){ toast('La contraseña de «'+nm+'» ya la usa '+usadas[pw]+': cada quien necesita la suya',5000); return; }
+        usadas[pw]=nm; su.push({name:nm,pwd:pw,rol}); }
+      const antes=JSON.stringify((CFG.staffUsers||[]).map(x=>[x.name,x.rol])), despues=JSON.stringify(su.map(x=>[x.name,x.rol]));
+      if(antes!==despues) auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(configuración)',field:'staffUsers',label:'Usuarios del programa (superusuarios / consulta)',from:(CFG.staffUsers||[]).map(x=>x.name+' ('+(x.rol==='cons'?'consulta':'superusuario')+')').join(', ')||'—',to:su.map(x=>x.name+' ('+(x.rol==='cons'?'consulta':'superusuario')+')').join(', ')||'—',maquillaje:false,estatusAntes:'',estatusDespues:'',by:'master',origen:'programador'});
+      CFG.staffUsers=su.length?su:false; } }   // false (no lista vacía): la nube no guarda listas vacías y los demás equipos se quedarían con la anterior
     CFG.lotesDesde=(document.getElementById('cfgLotesDesde').value||''); CFG.pwdBascula=pb; const nn=(i,d)=>{ const v=document.getElementById(i).value; return v===''||isNaN(Number(v))?d:Math.max(0,Number(v)); };
     CFG.bascTolKg=nn('cfgBascTolKg',50); CFG.cuadreTolProgPct=nn('cfgCuadTolProg',5); CFG.bascTolSacos=nn('cfgBascTolSacos',0); }
   const fbtxt=document.getElementById('cfgFb').value.trim();
@@ -2284,7 +2310,8 @@ function cuadSet(path,val){
 }
 // mezcla varios renglones de un nodo (un solo viaje a la nube): cuadMerge('bandeja',{clave:{…}})
 function cuadMerge(nodo,obj){ CUAD[nodo]=Object.assign(CUAD[nodo]||{},obj); cuadSaveLocal(); if(fb&&fbCuad){ try{ fbCuad.child(nodo).update(sanitize(obj)); }catch(e){ console.error(e); } } }
-function cuadUser(){ return isMaster?'master':(isBasc?('báscula'+(bascName?' · '+bascName:'')):(unlocked?'superusuario':'—')); }
+function cuadUser(){ return isMaster?'master':(isBasc?('báscula'+(bascName?' · '+bascName:'')):(unlocked?quienSU():(isCons?'consulta · '+userName:'—'))); }
+function quienSU(){ return isMaster?'master':('superusuario'+(userName?' · '+userName:'')); }
 
 /* ---------- utilidades ---------- */
 const normNom=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
@@ -3481,11 +3508,11 @@ const GATE_KEY='prog_sess_v1';
 function _hx(s){ let h=5381; s=String(s); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return String(h); }
 function gateCreds(){   // todas las credenciales vigentes y el perfil que da cada una
   const L=[]; const add=(pw,r,n)=>{ if(pw) L.push({pw:String(pw),r,n:n||''}); };
-  add(CFG.masterPwd,'master'); add(CFG.pwd,'su'); (CFG.bascUsers||[]).forEach(u=>add(u.pwd,'basc',u.name)); add(CFG.pwdBascula,'basc','');
+  add(CFG.masterPwd,'master'); add(CFG.pwd,'su'); (CFG.staffUsers||[]).forEach(u=>add(u.pwd,u.rol==='cons'?'cons':'su',u.name)); (CFG.bascUsers||[]).forEach(u=>add(u.pwd,'basc',u.name)); add(CFG.pwdBascula,'basc','');
   return L;
 }
 function gateApply(p){
-  unlocked=(p.r==='master'||p.r==='su'); isMaster=(p.r==='master'); isBasc=(p.r==='basc'); bascName=p.n||'';
+  unlocked=(p.r==='master'||p.r==='su'); isMaster=(p.r==='master'); isBasc=(p.r==='basc'); isCons=(p.r==='cons'); bascName=isBasc?(p.n||''):''; userName=(p.r==='su'||p.r==='cons')?(p.n||''):'';
   document.body.classList.remove('gated'); _avCounts=null; applyLock(); try{ refreshAvisos(); }catch(e){}
   if(isBasc && !BASC_VIEWS.includes(curView)) setView('bascula');
 }
@@ -3508,14 +3535,14 @@ function gateGo(){
     document.getElementById('gatePwd').value='';
     try{ askNotif(); unlockAudio(); }catch(e){}
     gateApply(hit); setView(hit.r==='basc'?'bascula':'tabla');
-    if(hit.r!=='basc'){ try{ if(window.CliStaff) CliStaff.loginProgramador(v); }catch(e){} }   // Fletes y precios / Clientes: misma contraseña
-    toast(hit.r==='master'?'Acceso master ✓':hit.r==='su'?'Superusuario habilitado ✓':'Báscula: '+(hit.n||'usuario')+' ✓');
+    if(hit.r==='master'||hit.r==='su'){ try{ if(window.CliStaff) CliStaff.loginProgramador(v); }catch(e){} }   // Fletes y precios / Clientes: misma contraseña
+    toast(hit.r==='master'?'Acceso master ✓':hit.r==='su'?'Superusuario'+(hit.n?': '+hit.n:'')+' ✓':hit.r==='cons'?'Consulta: '+(hit.n||'usuario')+' ✓ (solo lectura)':'Báscula: '+(hit.n||'usuario')+' ✓');
   };
   step();
 }
 function gateLogout(){
   try{ sessionStorage.removeItem(GATE_KEY); }catch(x){}
-  unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); gateShow(); toast('Sesión cerrada');
+  unlocked=false; isMaster=false; isBasc=false; isCons=false; bascName=''; userName=''; applyLock(); gateShow(); toast('Sesión cerrada');
   try{ if(window.CliStaff) CliStaff.salir(); }catch(e){}
 }
 // al abrir: si ya entraste en esta pestaña, se restaura; si no, se pide acceso antes de mostrar nada
@@ -3529,7 +3556,7 @@ function gateRevalidate(){
   let s=null; try{ s=JSON.parse(sessionStorage.getItem(GATE_KEY)||'null'); }catch(x){}
   if(!s||!s.h) return;
   const hit=gateCreds().find(c=>_hx(c.pw)===s.h);
-  if(!hit){ try{ sessionStorage.removeItem(GATE_KEY); }catch(x){} unlocked=false; isMaster=false; isBasc=false; bascName=''; applyLock(); gateShow('Tu acceso cambió: vuelve a entrar'); return; }
+  if(!hit){ try{ sessionStorage.removeItem(GATE_KEY); }catch(x){} unlocked=false; isMaster=false; isBasc=false; isCons=false; bascName=''; userName=''; applyLock(); gateShow('Tu acceso cambió: vuelve a entrar'); return; }
   if(hit.r!==s.r||hit.n!==s.n){ try{ sessionStorage.setItem(GATE_KEY,JSON.stringify({h:s.h,r:hit.r,n:hit.n})); }catch(x){} gateApply(hit); }
 }
 
