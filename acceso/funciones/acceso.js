@@ -61,8 +61,9 @@ async function claveLibre(base) {
 }
 
 async function publicarDirectorio(uid, p) {
-  if (!p || p.activo === false || (!p.prog && !p.carg && !p.ger && !p.vend)) { await db.ref('acceso/directorio/' + p.key).remove(); return; }
+  if (!p || p.activo === false || (!p.prog && !p.carg && !p.ger && !p.vend && !p.cb)) { await db.ref('acceso/directorio/' + p.key).remove(); return; }
   const a = {}; if (p.prog) a.prog = true; if (p.carg) a.carg = true; if (p.ger) a.ger = true; if (p.vend || p.ger) a.vend = true;
+  if (p.cb || ['master', 'su', 'basc'].includes(p.prog)) a.basc = true;   // Cuadre de báscula
   await db.ref('acceso/directorio/' + p.key).set({n: p.nombre, a});
 }
 
@@ -73,18 +74,19 @@ function validarTemporal(t, nip) {
 }
 
 function limpiaVend(v) { v = String(v || '').trim().toUpperCase().replace(/[.#$\[\]\/]/g, '').slice(0, 40); return v || null; }
-async function crearCuenta({nombre, key, prog, carg, ger, vend, pass, debeCambiar, por, otros}) {
+async function crearCuenta({nombre, key, prog, carg, ger, vend, cb, pass, debeCambiar, por, otros}) {
   nombre = String(nombre || '').trim().slice(0, 60);
   if (!nombre) throw falla('Falta el nombre.');
   prog = ROLES.includes(prog) ? prog : null; carg = carg === true; ger = ROLES_GER.includes(ger) ? ger : null; vend = limpiaVend(vend);
-  if (!prog && !carg && !ger && !vend && !otros) throw falla('Elige al menos un acceso.');
+  cb = cb === true;
+  if (!prog && !carg && !ger && !vend && !cb && !otros) throw falla('Elige al menos un acceso.');
   key = key ? clave(key) : await claveLibre(nombre);
   const email = key + DOMINIO;
   let user = null;
   try { user = await admin.auth().getUserByEmail(email); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
   if (user) await admin.auth().updateUser(user.uid, {password: PRE + pass, disabled: false, displayName: nombre});
   else user = await admin.auth().createUser({email, password: PRE + pass, displayName: nombre});
-  const p = {key, nombre, prog, carg: carg || null, ger, vend, activo: true, debeCambiar: debeCambiar !== false, creado: Date.now(), por: por || 'sistema'};
+  const p = {key, nombre, prog, carg: carg || null, ger, vend, cb: cb || null, activo: true, debeCambiar: debeCambiar !== false, creado: Date.now(), por: por || 'sistema'};
   await db.ref('acceso/usuarios/' + user.uid).set(p);
   await publicarDirectorio(user.uid, p);
   return {uid: user.uid, key};
@@ -183,8 +185,8 @@ async function accionMaster(yo, accion, d) {
   if (accion === 'roles') return rolesSistemas();
   if (accion === 'crear') {
     const otros = ROLES_INV.includes(d.inv) || ROLES_RH.includes(d.rh);
-    const nip = !ROLES.includes(d.prog) && !ROLES_GER.includes(d.ger) && !otros;
-    const r = await crearCuenta({nombre: d.nombre, prog: d.prog, carg: d.carg === true, ger: d.ger, vend: d.vend, otros, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre});
+    const nip = !ROLES.includes(d.prog) && !ROLES_GER.includes(d.ger) && !otros;   // cargadores, vendedores y cuadre: NIP
+    const r = await crearCuenta({nombre: d.nombre, prog: d.prog, carg: d.carg === true, ger: d.ger, vend: d.vend, cb: d.cb === true, otros, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre});
     const pc = {key: r.key, nombre: d.nombre};
     if (d.inv) await rolSistema('inv', r.uid, pc, d.inv);
     if (d.rh) await rolSistema('rh', r.uid, pc, d.rh);
@@ -198,7 +200,7 @@ async function accionMaster(yo, accion, d) {
   const p = (await ref.once('value')).val();
   if (!p) throw falla('Ese usuario no existe.');
   if (accion === 'restablecer') {
-    const t = validarTemporal(d.temporal, !p.prog && !p.ger);
+    const t = validarTemporal(d.temporal, false);   // mínimo 6 (NIP o contraseña, según la persona)
     await admin.auth().updateUser(uid, {password: PRE + t});
     await admin.auth().revokeRefreshTokens(uid);
     await ref.update({debeCambiar: true, restablecido: Date.now()});
@@ -211,15 +213,16 @@ async function accionMaster(yo, accion, d) {
     if ('carg' in d) n.carg = d.carg === true ? true : null;
     if ('ger' in d) n.ger = ROLES_GER.includes(d.ger) ? d.ger : null;
     if ('vend' in d) n.vend = limpiaVend(d.vend);
+    if ('cb' in d) n.cb = d.cb === true ? true : null;
     if ('inv' in d) await rolSistema('inv', uid, Object.assign({}, p, n), d.inv);
     if ('rh' in d) await rolSistema('rh', uid, Object.assign({}, p, n), d.rh);
     if ('activo' in n) { for (const sis of ['inv', 'rh']) { const r = db.ref(sis + '/usuarios/' + uid); const a = (await r.once('value')).val(); if (a && a.acceso) await r.update({activo: n.activo}); } }
     if ('activo' in d) n.activo = d.activo === true;
     const q = Object.assign({}, p, n);
-    if (q.activo && !q.prog && !q.carg && !q.ger && !q.vend && !ROLES_INV.includes(d.inv) && !ROLES_RH.includes(d.rh)) throw falla('Debe tener al menos un acceso (o dale de baja).');
+    // (sin acceso a ningún programa simplemente no entra a nada; no se bloquea el cambio)
     await ref.update(n);
     await admin.auth().updateUser(uid, {disabled: q.activo === false});
-    if ('activo' in n || 'prog' in n || 'ger' in n || 'vend' in n) await admin.auth().revokeRefreshTokens(uid);
+    if ('activo' in n || 'prog' in n || 'ger' in n || 'vend' in n || 'cb' in n) await admin.auth().revokeRefreshTokens(uid);
     await publicarDirectorio(uid, q);
     await bitacora(yo.nombre, 'Actualizó a ' + p.nombre + ': ' + JSON.stringify(n));
     return {};
@@ -242,6 +245,11 @@ exports.embAdmin = onRequest(
       if (llave) {
         if (!igualSeguro(llave, CLI_MAESTRO.value())) { await new Promise((r) => setTimeout(r, 1200)); res.status(401).json({ok: false, message: 'Llave maestra incorrecta.'}); return; }
         if (accion === 'migrar') { res.json(Object.assign({ok: true}, await migrar(datos || {}))); return; }
+        if (accion === 'directorio') {   // rehace la lista de nombres para entrar (con el acceso a Cuadre de báscula)
+          const us = (await db.ref('acceso/usuarios').once('value')).val() || {};
+          for (const uid of Object.keys(us)) await publicarDirectorio(uid, us[uid]);
+          res.json({ok: true, cuentas: Object.keys(us).length}); return;
+        }
         if (accion === 'ola3') { res.json(Object.assign({ok: true}, await ola3())); return; }
         if (accion === 'ola2') { res.json(Object.assign({ok: true}, await ola2())); return; }
         if (accion === 'cerrar') { res.json(Object.assign({ok: true}, await cerrar())); return; }

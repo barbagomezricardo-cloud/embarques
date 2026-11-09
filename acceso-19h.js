@@ -78,7 +78,7 @@
     if (app === 'carg') return p.carg === true;
     if (app === 'ger') return !!ROLES_GER[p.ger];                                   // Ventas y Maestra
     if (app === 'vend') return !!p.vend || !!ROLES_GER[p.ger];                      // App Vendedor
-    if (app === 'basc') return p.prog === 'master' || p.prog === 'su' || p.prog === 'basc';   // Cuadre de báscula
+    if (app === 'basc') return p.prog === 'master' || p.prog === 'su' || p.prog === 'basc' || p.cb === true;   // Cuadre de báscula
     return true;
   }
 
@@ -91,7 +91,7 @@
     });
   }
 
-  function esNip(p) { return !!p && !p.prog && !p.ger; }   // cargadores y vendedores: NIP de 6 números
+  function esNip(p) { return !!p && !p.prog && !p.ger; }   // cb/carg/vend: NIP   // cargadores y vendedores: NIP de 6 números
   function cargarPerfil(uid) { return leer('acceso/usuarios/' + uid).then(function (p) { S.perfil = p; S.uid = uid; return p; }); }
 
   function msgError(e) {
@@ -273,74 +273,119 @@
     return s + N[a[1] % N.length] + N[(a[1] >>> 8) % N.length];
   }
 
-  /* Panel de usuarios para el master. cont = elemento donde se dibuja */
+  /* Panel de usuarios del master, ORGANIZADO POR PROGRAMA.
+     Cada programa es un desplegable con quién tiene acceso y con qué rol; abajo, «Personas» para
+     dar de alta, restablecer contraseña y dar de baja. cont = elemento donde se dibuja */
+  var PROGRAMAS = [
+    { k: 'prog', t: '🚚 Programador de embarques', roles: ROLES_PROG },
+    { k: 'carg', t: '📦 Cargadores', bool: 'Cargador' },
+    { k: 'cb', t: '⚖️ Cuadre de báscula', bool: 'Acceso', nota: 'También entran master, superusuario y báscula del Programador.' },
+    { k: 'ger', t: '📊 Ventas y Maestra', roles: ROLES_GER, nota: 'Master y super-usuario también entran al Centro de Mando.' },
+    { k: 'vend', t: '🧑‍💼 App del vendedor', clave: true, nota: 'La clave es la cartera que ve (ej. ARMANDO, ADMINISTRACION).' },
+    { k: 'inv', t: '🏭 Inventarios', roles: ROLES_INV },
+    { k: 'rh', t: '👥 Recursos Humanos', roles: ROLES_RH }
+  ];
   function panel(cont) {
     css();
     if (!S.perfil || S.perfil.prog !== 'master') { cont.innerHTML = '<p class="hint">Solo el master administra usuarios.</p>'; return; }
+    var abiertos = {}; cont.querySelectorAll('details[data-k]').forEach(function (d) { if (d.open) abiertos[d.getAttribute('data-k')] = 1; });
     cont.innerHTML = '<p class="hint" style="margin-top:0">Cargando usuarios…</p>';
     Promise.all([leer('acceso/usuarios'), admin('roles', {}).then(function (j) { return j.roles || {}; }).catch(function () { return {}; })]).then(function (res) {
-      var o = res[0], RS = res[1];
-      var L = Object.keys(o || {}).map(function (uid) { return Object.assign({ uid: uid }, o[uid]); })
-        .sort(function (a, b) { return (a.activo === false) - (b.activo === false) || String(a.nombre).localeCompare(String(b.nombre), 'es'); });
-      var opX = function (T, v) { return '<option value="">—</option>' + Object.keys(T).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + T[k] + '</option>'; }).join(''); };
-      var opG = function (v) { return '<option value="">— sin acceso —</option>' + Object.keys(ROLES_GER).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + ROLES_GER[k] + '</option>'; }).join(''); };
-      var opR = function (v) { return '<option value="">— sin acceso —</option>' + Object.keys(ROLES_PROG).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + ROLES_PROG[k] + '</option>'; }).join(''); };
-      var h = '<p class="hint" style="margin-top:0">Cada persona entra con su <b>usuario</b> y su contraseña. Nadie (ni tú) puede ver contraseñas: si alguien la olvida, tócale <b>Restablecer</b> y te doy una temporal para dársela; al entrar, el sistema le pide crear la suya.</p>' +
-        '<table class="acc19-t"><tr><th>Nombre / usuario</th><th>Programador</th><th>Cargadores</th><th>Ventas y Maestra</th><th>App Vendedor (clave)</th><th>Inventarios</th><th>RH</th><th>Estado</th><th></th></tr>';
+      var o = res[0] || {}, RS = res[1];
+      var L = Object.keys(o).map(function (uid) { var u = Object.assign({ uid: uid }, o[uid]); u.inv = (RS[uid] || {}).inv || null; u.rh = (RS[uid] || {}).rh || null; return u; })
+        .sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
+      var activos = L.filter(function (u) { return u.activo !== false; });
+      var val = function (u, P) { return P.bool ? (u[P.k] === true) : (u[P.k] || null); };
+      var etiqueta = function (P, v) { return P.bool ? P.bool : (P.clave ? v : (P.roles[v] || v)); };
+      var opR = function (T, v) { return Object.keys(T).map(function (k) { return '<option value="' + k + '"' + (v === k ? ' selected' : '') + '>' + T[k] + '</option>'; }).join(''); };
+      var h = '<p class="hint" style="margin-top:0">Abre un programa para ver <b>quién entra y con qué rol</b>. Cada persona usa el mismo usuario y contraseña en todos sus programas. Nadie (ni tú) puede ver contraseñas: si alguien la olvida, búscalo en <b>Personas</b> y toca Restablecer.</p>';
+      PROGRAMAS.forEach(function (P) {
+        var con = activos.filter(function (u) { return !!val(u, P); });
+        h += '<details data-k="' + P.k + '" style="border:1px solid rgba(127,127,127,.3);border-radius:10px;margin:8px 0"' + (abiertos[P.k] ? ' open' : '') + '>' +
+          '<summary style="cursor:pointer;padding:10px 12px;font-weight:800">' + P.t + ' <span style="font-weight:500;opacity:.7">· ' + con.length + ' persona' + (con.length === 1 ? '' : 's') + '</span></summary><div style="padding:0 12px 12px">' +
+          (P.nota ? '<p class="hint" style="margin:0 0 6px">' + P.nota + '</p>' : '') + '<table class="acc19-t">';
+        con.forEach(function (u) {
+          var v = val(u, P), yo = u.uid === S.uid;
+          var ctrl = P.roles ? '<select data-a="rol"' + (yo ? ' disabled' : '') + '>' + opR(P.roles, v) + '</select>'
+            : P.clave ? '<input data-a="rol" style="width:150px" value="' + esc(v) + '"' + (yo ? ' disabled' : '') + '>' : esc(P.bool);
+          h += '<tr data-uid="' + esc(u.uid) + '" data-k="' + P.k + '"><td><b>' + esc(u.nombre) + '</b> <span style="opacity:.6">' + esc(u.key) + '</span>' + (u.debeCambiar ? ' <span class="acc19-chip">debe cambiar</span>' : '') + '</td><td>' + ctrl + '</td><td style="white-space:nowrap;text-align:right">' +
+            (yo ? '<span style="opacity:.6">tú</span>' : (P.bool ? '' : '<button data-a="guardar">Guardar</button>') + '<button data-a="quitar">Quitar</button>') + '</td></tr>';
+        });
+        if (!con.length) h += '<tr><td class="hint">Nadie todavía.</td></tr>';
+        var sin = activos.filter(function (u) { return !val(u, P); });
+        h += '</table><div class="acc19-f" data-k="' + P.k + '"><select data-a="quien"><option value="">＋ Dar acceso a…</option>' + sin.map(function (u) { return '<option value="' + esc(u.uid) + '">' + esc(u.nombre) + '</option>'; }).join('') + '</select>' +
+          (P.roles ? '<select data-a="nrol">' + opR(P.roles, '') + '</select>' : P.clave ? '<input data-a="nrol" placeholder="clave, ej. ARMANDO" style="width:150px">' : '') +
+          '<button data-a="dar">Dar acceso</button></div></div></details>';
+      });
+      // Personas: alta, contraseña, baja
+      h += '<details data-k="personas" style="border:1px solid rgba(127,127,127,.3);border-radius:10px;margin:8px 0"' + (abiertos.personas ? ' open' : '') + '><summary style="cursor:pointer;padding:10px 12px;font-weight:800">🪪 Personas (alta, contraseña y baja) <span style="font-weight:500;opacity:.7">· ' + activos.length + ' activas</span></summary><div style="padding:0 12px 12px"><table class="acc19-t"><tr><th>Nombre / usuario</th><th>Programas</th><th>Estado</th><th></th></tr>';
       L.forEach(function (u) {
         var yo = u.uid === S.uid;
-        h += '<tr data-uid="' + esc(u.uid) + '"' + (u.activo === false ? ' style="opacity:.5"' : '') + '><td><b>' + esc(u.nombre) + '</b><br><span style="opacity:.7">' + esc(u.key) + '</span></td>' +
-          '<td><select class="acc19-rp"' + (yo ? ' disabled' : '') + '>' + opR(u.prog || '') + '</select></td>' +
-          '<td><input type="checkbox" class="acc19-rc"' + (u.carg ? ' checked' : '') + (yo ? ' disabled' : '') + '></td>' +
-          '<td><select class="acc19-rg"' + (yo ? ' disabled' : '') + '>' + opG(u.ger || '') + '</select></td>' +
-          '<td><input class="acc19-rv" style="width:110px" placeholder="ej. ARMANDO" value="' + esc(u.vend || '') + '"' + (yo ? ' disabled' : '') + '></td>' +
-          '<td><select class="acc19-ri"' + (yo ? ' disabled' : '') + '>' + opX(ROLES_INV, (RS[u.uid] || {}).inv || '') + '</select></td>' +
-          '<td><select class="acc19-rr"' + (yo ? ' disabled' : '') + '>' + opX(ROLES_RH, (RS[u.uid] || {}).rh || '') + '</select></td>' +
-          '<td>' + (u.activo === false ? 'Baja' : (u.debeCambiar ? '<span class="acc19-chip">Debe cambiar</span>' : 'Activo')) + '</td>' +
-          '<td style="white-space:nowrap">' + (yo ? '<span style="opacity:.7">tú</span>' :
-            '<button data-a="guardar">Guardar</button><button data-a="reset">Restablecer</button><button data-a="' + (u.activo === false ? 'alta' : 'baja') + '">' + (u.activo === false ? 'Reactivar' : 'Dar de baja') + '</button>') + '</td></tr>';
+        var progs = PROGRAMAS.filter(function (P) { return !!val(u, P); }).map(function (P) { return P.t.replace(/^\S+\s/, '') + ' (' + esc(etiqueta(P, val(u, P))) + ')'; }).join(' · ') || '<span style="opacity:.6">ninguno</span>';
+        h += '<tr data-uid="' + esc(u.uid) + '"' + (u.activo === false ? ' style="opacity:.5"' : '') + '><td><b>' + esc(u.nombre) + '</b><br><span style="opacity:.7">usuario: ' + esc(u.key) + '</span></td><td style="font-size:12px">' + progs + '</td><td>' +
+          (u.activo === false ? 'Baja' : (u.debeCambiar ? '<span class="acc19-chip">Debe cambiar</span>' : 'Activo')) + '</td><td style="white-space:nowrap">' +
+          (yo ? '<span style="opacity:.6">tú</span>' : '<button data-a="reset">Restablecer</button><button data-a="' + (u.activo === false ? 'alta' : 'baja') + '">' + (u.activo === false ? 'Reactivar' : 'Dar de baja') + '</button>') + '</td></tr>';
       });
-      h += '</table><div class="acc19-f"><div><div class="hint">Nombre completo</div><input id="acc19-nn" placeholder="Ej. Juan Pérez – báscula"></div>' +
-        '<div><div class="hint">Programador</div><select id="acc19-np">' + opR('') + '</select></div>' +
-        '<label style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="acc19-nc"> Cargadores</label>' +
-        '<div><div class="hint">Ventas y Maestra</div><select id="acc19-ng">' + opG('') + '</select></div>' +
-        '<div><div class="hint">App Vendedor (clave)</div><input id="acc19-nv" style="width:110px" placeholder="ej. ARMANDO"></div>' +
-        '<div><div class="hint">Inventarios</div><select id="acc19-ni">' + opX(ROLES_INV, '') + '</select></div>' +
-        '<div><div class="hint">RH</div><select id="acc19-nr">' + opX(ROLES_RH, '') + '</select></div>' +
-        '<button id="acc19-add">＋ Crear usuario</button></div><div id="acc19-msg" class="hint"></div>';
+      h += '</table><div class="acc19-f"><input id="acc19-nn" placeholder="Nombre completo de la persona nueva" style="min-width:220px">' +
+        '<select id="acc19-np">' + PROGRAMAS.map(function (P) { return '<option value="' + P.k + '">' + P.t + '</option>'; }).join('') + '</select>' +
+        '<span id="acc19-nrw"></span><button id="acc19-add">＋ Crear persona</button></div></div></details><div id="acc19-msg" class="hint" style="margin-top:8px"></div>';
       cont.innerHTML = h;
+
       var msg = function (t) { cont.querySelector('#acc19-msg').innerHTML = t; };
+      var P_ = function (k) { return PROGRAMAS.filter(function (P) { return P.k === k; })[0]; };
+      var nipDe = function (d) { return !d.prog && !d.ger && !d.inv && !d.rh; };
       var entrega = function (nombre, key, tmp, nip) {
         msg('✅ <b>' + esc(nombre) + '</b> · usuario <b>' + esc(key) + '</b> · ' + (nip ? 'NIP' : 'contraseña') + ' temporal <b style="font-size:15px;letter-spacing:1px">' + esc(tmp) + '</b><br>Dásela en persona. Al entrar le pedirá crear la suya. No se vuelve a mostrar.');
       };
-      cont.querySelectorAll('tr[data-uid] button').forEach(function (b) {
+      var dato = function (P, v) { var d = {}; d[P.k] = P.bool ? (v ? true : false) : (v || null); if (P.clave && d[P.k]) d[P.k] = String(d[P.k]).trim().toUpperCase(); return d; };
+      var correr = function (b, p, ok) { b.disabled = true; p.then(ok || function () { panel(cont); }).catch(function (e) { msg('⚠️ ' + esc(e.message)); b.disabled = false; }); };
+      // por programa
+      cont.querySelectorAll('tr[data-k] button').forEach(function (b) {
         b.onclick = function () {
-          var tr = b.closest('tr'), uid = tr.getAttribute('data-uid'), u = L.filter(function (x) { return x.uid === uid; })[0], a = b.getAttribute('data-a');
-          var prog = tr.querySelector('.acc19-rp').value || null, carg = tr.querySelector('.acc19-rc').checked;
-          var ger = tr.querySelector('.acc19-rg').value || null, vend = tr.querySelector('.acc19-rv').value.trim().toUpperCase() || null;
-          var inv = tr.querySelector('.acc19-ri').value || null, rh = tr.querySelector('.acc19-rr').value || null;
-          var p;
-          if (a === 'guardar') p = admin('actualizar', { uid: uid, prog: prog, carg: carg, ger: ger, vend: vend, inv: inv, rh: rh }).then(function () { msg('Guardado: ' + esc(u.nombre)); });
-          else if (a === 'reset') {
-            if (!confirm('¿Restablecer la contraseña de ' + u.nombre + '? La actual deja de servir.')) return;
-            var nip = !u.prog && !u.ger; var tmp = temporal(nip);
-            p = admin('restablecer', { uid: uid, temporal: tmp }).then(function () { entrega(u.nombre, u.key, tmp, nip); });
-          } else {
-            if (a === 'baja' && !confirm('¿Dar de baja a ' + u.nombre + '? Ya no podrá entrar.')) return;
-            p = admin('actualizar', { uid: uid, activo: a === 'alta' }).then(function () { panel(cont); });
-          }
-          b.disabled = true; p.catch(function (e) { msg('⚠️ ' + esc(e.message)); }).then(function () { b.disabled = false; });
+          var tr = b.closest('tr'), P = P_(tr.getAttribute('data-k')), uid = tr.getAttribute('data-uid'), a = b.getAttribute('data-a');
+          var u = L.filter(function (x) { return x.uid === uid; })[0];
+          if (a === 'quitar' && !confirm('¿Quitar a ' + u.nombre + ' de ' + P.t.replace(/^\S+\s/, '') + '?')) return;
+          var v = a === 'quitar' ? null : (tr.querySelector('[data-a="rol"]') || {}).value;
+          correr(b, admin('actualizar', Object.assign({ uid: uid }, dato(P, v))));
         };
       });
+      cont.querySelectorAll('.acc19-f[data-k] button').forEach(function (b) {
+        b.onclick = function () {
+          var f = b.closest('.acc19-f'), P = P_(f.getAttribute('data-k')), uid = f.querySelector('[data-a="quien"]').value;
+          if (!uid) { msg('Elige a la persona.'); return; }
+          var v = P.bool ? true : (f.querySelector('[data-a="nrol"]') || {}).value;
+          if (!v) { msg('Escribe la clave.'); return; }
+          correr(b, admin('actualizar', Object.assign({ uid: uid }, dato(P, v))));
+        };
+      });
+      // personas
+      cont.querySelectorAll('tr[data-uid]:not([data-k]) button').forEach(function (b) {
+        b.onclick = function () {
+          var uid = b.closest('tr').getAttribute('data-uid'), u = L.filter(function (x) { return x.uid === uid; })[0], a = b.getAttribute('data-a');
+          if (a === 'reset') {
+            if (!confirm('¿Restablecer la contraseña de ' + u.nombre + '? La actual deja de servir.')) return;
+            var nip = nipDe(u), tmp = temporal(nip);
+            correr(b, admin('restablecer', { uid: uid, temporal: tmp }), function () { b.disabled = false; entrega(u.nombre, u.key, tmp, nip); });
+          } else {
+            if (a === 'baja' && !confirm('¿Dar de baja a ' + u.nombre + '? Ya no podrá entrar a ningún programa.')) return;
+            correr(b, admin('actualizar', { uid: uid, activo: a === 'alta' }));
+          }
+        };
+      });
+      var rolNuevo = function () {
+        var P = P_(cont.querySelector('#acc19-np').value), w = cont.querySelector('#acc19-nrw');
+        w.innerHTML = P.roles ? '<select id="acc19-nr">' + opR(P.roles, '') + '</select>' : P.clave ? '<input id="acc19-nr" placeholder="clave, ej. ARMANDO" style="width:150px">' : '';
+      };
+      cont.querySelector('#acc19-np').onchange = rolNuevo; rolNuevo();
       cont.querySelector('#acc19-add').onclick = function () {
-        var n = cont.querySelector('#acc19-nn').value.trim(), prog = cont.querySelector('#acc19-np').value || null, carg = cont.querySelector('#acc19-nc').checked;
-        var ger = cont.querySelector('#acc19-ng').value || null, vend = cont.querySelector('#acc19-nv').value.trim().toUpperCase() || null;
-        var inv = cont.querySelector('#acc19-ni').value || null, rh = cont.querySelector('#acc19-nr').value || null;
+        var n = cont.querySelector('#acc19-nn').value.trim(), P = P_(cont.querySelector('#acc19-np').value), r = cont.querySelector('#acc19-nr');
         if (!n) { msg('Escribe el nombre.'); return; }
-        if (!prog && !carg && !ger && !vend && !inv && !rh) { msg('Elige al menos un acceso.'); return; }
-        var nip = !prog && !ger && !inv && !rh, tmp = temporal(nip), bt = this; bt.disabled = true;
-        admin('crear', { nombre: n, prog: prog, carg: carg, ger: ger, vend: vend, inv: inv, rh: rh, temporal: tmp }).then(function (j) { panel(cont); setTimeout(function () { var m = cont.querySelector('#acc19-msg'); if (m) entrega(n, j.key, tmp, nip); }, 400); })
-          .catch(function (e) { bt.disabled = false; msg('⚠️ ' + esc(e.message)); });
+        var d = dato(P, P.bool ? true : (r && r.value));
+        if (!d[P.k]) { msg('Escribe la clave.'); return; }
+        var nip = nipDe(d), tmp = temporal(nip), bt = this;
+        correr(bt, admin('crear', Object.assign({ nombre: n, temporal: tmp }, d)), function (j) {
+          panel(cont); setTimeout(function () { var m = cont.querySelector('#acc19-msg'); if (m) entrega(n, j.key, tmp, nip); }, 500);
+        });
       };
     }).catch(function (e) { cont.innerHTML = '<p class="hint">No se pudieron leer los usuarios: ' + esc(e.message) + '</p>'; });
   }
