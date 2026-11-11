@@ -59,6 +59,17 @@ R['acceso']={
 if fase in ('cerrar','cerrar2'):
   for n in ['config','audit','flota']:
     R[n]={".read": LIC+" && "+U, ".write": LIC+" && "+ESCRIBE}
+if fase=='compras':   # Inventarios: compras puede proponer pedidos y responder las propuestas de inventarios
+  LICI="(root.child('licencia/activa').val() === true && now < root.child('licencia/hasta').val())"
+  UC="auth != null && root.child('inv/usuarios/' + auth.uid).child('activo').val() === true && root.child('inv/usuarios/' + auth.uid).child('rol').val() === 'compras'"
+  C=("data.child('estado').val() !== 'recibido' && ("
+     "(!data.exists() && (newData.child('origen').val() === 'compras' || (newData.child('estado').val() === 'propuesta' && newData.child('prop/lado').val() === 'compras'))) || "
+     "(data.exists() && data.child('origen').val() === 'compras' && (!newData.exists() || newData.child('origen').val() === 'compras')) || "
+     "(data.exists() && newData.exists() && newData.child('prop/lado').val() === 'compras') || "
+     "(data.exists() && newData.exists() && data.child('prop/lado').val() === 'inventarios') || "
+     "(data.exists() && newData.exists() && data.child('prop/lado').val() === 'compras' && !newData.child('prop').exists() && newData.child('estado').val() === data.child('estado').val()) || "
+     "(data.exists() && !newData.exists() && data.child('estado').val() === 'propuesta' && data.child('prop/lado').val() === 'compras'))")
+  ll=R['inv']['llegadas']; ll.setdefault('$id',{})['.write']=LICI+" && ("+UC+") && "+C
 if fase=='cerrar2':   # ola 2: lo que leen Ventas, Maestra, Vendedor y Cuadre de báscula, solo con sesión
   for n in ['embarques','skan','visits','locks','cuadreBascula']:
     v=R.get(n) or {}
@@ -99,6 +110,24 @@ if r.get("omitidos"): print("\n  Omitidos:", "; ".join(r["omitidos"]))
 print("\n  Copia esta tabla: los NIP no se vuelven a mostrar. Al entrar, cada vendedor crea el suyo.")
 ' || exit 1
   ok "Cuentas listas. Avísame para publicar Ventas, Maestra, Vendedor y Cuadre de báscula; luego corre FASE=cerrar2."
+  exit 0
+fi
+
+if [ "$FASE" = "ola4" ]; then
+  paso "Ola 4 · 1/3 Servidor: embAdmin y cliApi"
+  LLAVE="$(llave)"; [ -z "$LLAVE" ] && { echo "No pude leer la llave CLI_MAESTRO."; exit 1; }
+  CARP=""; for f in $(find "$HOME" -maxdepth 4 -name index.js -path '*functions*' -not -path '*/node_modules/*' 2>/dev/null); do grep -q "require('./acceso')" "$f" && { CARP="$(dirname "$f")"; break; }; done
+  [ -z "$CARP" ] && { aviso "No encontré tu carpeta de funciones."; exit 1; }
+  for a in "acceso/funciones/acceso.js:acceso.js" "clientes/funciones/clientes.js:clientes.js" "clientes/funciones/cli-core.js:cli-core.js"; do
+    curl -sfL "$RAW/${a%%:*}" -o "$CARP/${a##*:}" || { echo "No pude descargar ${a%%:*}"; exit 1; }
+  done
+  (cd "$CARP/.." && firebase deploy --only functions:embAdmin,functions:cliApi --force) || { aviso "El despliegue falló. Mándame el error."; exit 1; }
+  sleep 5
+  paso "Ola 4 · 2/3 Accesos por programa (nadie pierde lo que ya usaba)"
+  llamar '{"accion":"ola4"}' | python3 -c 'import json,sys; r=json.load(sys.stdin); print("\n".join("  · "+h for h in r.get("hechos",[])) or r)'
+  paso "Ola 4 · 3/3 Reglas: compras puede proponer pedidos en Inventarios"
+  reglas compras || exit 1
+  ok "Listo. Avísame para publicar las apps."
   exit 0
 fi
 

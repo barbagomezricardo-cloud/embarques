@@ -211,7 +211,7 @@ table.tend tr:hover td{background:rgba(222,10,20,.07)}
 <link rel="stylesheet" href="tema-19h.css">
 <script src="tema-19h.js"></script>
 <script src="acceso-19h.js"></script>
-<script>Acceso19H.puerta({app:"ger",titulo:"Ventas · Pet Food",nip:false,recaptcha:"6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj"});</script>
+<script>Acceso19H.puerta({app:"ventas",titulo:"Ventas · Pet Food",nip:false,recaptcha:"6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj"});</script>
 <meta name="theme-color" content="#DE0A14">
 </head>
 <body>
@@ -6798,7 +6798,7 @@ function applyRole(){
 function toggleSuper(){ setTimeout(function(){try{renderMapeoTable();}catch(e){}try{renderCorteBar();}catch(e){}},60);
   if(SK_SUPER){ SK_SUPER=false; applyRole(); return; }
   var pf=window.Acceso19H&&Acceso19H.perfil();   // Acceso 19H: el permiso lo da tu usuario (master o super-usuario)
-  if(pf&&(pf.ger==='master'||pf.ger==='su')){ SK_SUPER=true; applyRole(); return; }
+  if(pf&&(pf.master===true||pf.ventas==='master'||pf.ventas==='su')){ SK_SUPER=true; applyRole(); return; }
   alert('Tu usuario es de consulta. Pide al master el permiso de super-usuario en el panel de usuarios.');
 }
 function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app)c.app=SK_APP; if(!c.master)c.master=SK_MASTER; return c;}

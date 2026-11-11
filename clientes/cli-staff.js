@@ -162,7 +162,7 @@
       var goP = function () {
         var b = $('#clis-in', cont); b.disabled = true;
         var tok = (W.Acceso19H && W.Acceso19H.token) ? W.Acceso19H.token() : Promise.resolve('');
-        tok.then(function (t) { if (!t) throw { error: 'Primero entra al programador con tu usuario.' }; return api('loginProg', '', { idToken: t }); })
+        tok.then(function (t) { if (!t) throw { error: 'Primero entra al programador con tu usuario.' }; return api('loginProg', '', { idToken: t, modo: 'prog' }); })
           .then(function (r) { guardaSesion(r); alEntrar(); }).catch(function (e) { b.disabled = false; $('#clis-e', cont).textContent = e.error || 'No se pudo entrar.'; });
       };
       $('#clis-in', cont).onclick = goP;
@@ -667,7 +667,7 @@
   // Acceso 19H: recibe {idToken} de la sesión del programador (ya no la contraseña)
   function loginProgramador(cred) {
     if (!MODO_PROG || !cred) return Promise.resolve();
-    var datos = (typeof cred === 'object') ? { idToken: cred.idToken } : { pwd: cred };
+    var datos = (typeof cred === 'object') ? { idToken: cred.idToken, modo: 'prog' } : { pwd: cred };
     if (!datos.idToken && !datos.pwd) return Promise.resolve();
     return listo().then(function () { return api('loginProg', '', datos); }).then(function (r) {
       guardaSesion(r); refrescarBandeja(true);

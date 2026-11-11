@@ -514,27 +514,31 @@
     }
     // Acceso 19H: el programador ya entró con su usuario de Firebase; aquí solo se revisa su rol
     // Rol en Clientes según tu usuario único: gerencia (Ventas/Maestra) > Administración > vendedor > programación
-    function rolAcceso(p) {
+    // Solo entra quien tiene rol en «Clientes · panel del personal» (o el master). Desde el Programador (modo 'prog') cuenta su rol de ahí.
+    function rolAcceso(p, modo) {
       if (!p || p.activo !== true) return null;
-      if (p.ger === 'master' || p.ger === 'su') return { rol: 'gerencia', vk: '' };
-      if (p.vend === 'ADMINISTRACION') return { rol: 'admin', vk: '' };
-      if (p.vend) return { rol: 'vendedor', vk: keyp(p.vend) };
-      if (p.prog === 'master') return { rol: 'progmaster', vk: '' };
-      if (p.prog === 'su') return { rol: 'programacion', vk: '' };
+      if (modo === 'prog') {
+        if (p.master === true || p.prog === 'master') return { rol: 'progmaster', vk: '' };
+        if (p.prog === 'su') return { rol: 'programacion', vk: '' };
+        return null;
+      }
+      if (p.master === true || p.cli === 'master' || p.cli === 'su') return { rol: 'gerencia', vk: '' };
+      if (p.cli === 'admin') return { rol: 'admin', vk: '' };
+      if (p.cli === 'vendedor' && p.vend) return { rol: 'vendedor', vk: keyp(p.vend) };
       return null;
     }
-    function rolProg(p) { var r = rolAcceso(p); return r ? r.rol : ''; }
-    function progLoginUid(uid) {
+    function rolProg(p, modo) { var r = rolAcceso(p, modo); return r ? r.rol : ''; }
+    function progLoginUid(uid, modo) {
       return Promise.resolve(db.get('acceso/usuarios/' + uid)).then(function (p) {
-        var r = rolAcceso(p);
+        var r = rolAcceso(p, modo);
         if (!r) throw err('credenciales', 'Tu usuario no tiene acceso a Clientes.', 403);
-        return { u: 'AC:' + (p.key || uid), nombre: p.nombre || 'Usuario', rol: r.rol, vk: r.vk, prog: true, uid: uid };
+        return { u: 'AC:' + (p.key || uid), nombre: p.nombre || 'Usuario', rol: r.rol, vk: r.vk, prog: true, uid: uid, modo: modo || '' };
       });
     }
     function sesionProg(ses) {
       if (ses.uid) {
         return Promise.resolve(db.get('acceso/usuarios/' + ses.uid)).then(function (p) {
-          if (rolProg(p) !== ses.rol) throw err('sin_sesion', 'Tu acceso cambió. Vuelve a entrar.', 401);
+          if (rolProg(p, ses.modo) !== ses.rol) throw err('sin_sesion', 'Tu acceso cambió. Vuelve a entrar.', 401);
           return { nombre: ses.nombre, rol: ses.rol, vk: ses.vk || '', activo: true, pinVer: ses.v || 1 };
         });
       }
