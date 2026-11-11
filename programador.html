@@ -1312,7 +1312,7 @@ function carryList(){
     const arr = cv.carry && (!from || (r.fechaProg||'')>=from);       // los arrastres (ya cargados otro día) solo del periodo elegido
     return arr || pendPast;
   }).map(o=>{ o.situ = o.cv.carry?'ARRASTRE':(o.r.fechaProg<TODAY?'PENDIENTE (vencido)':'PENDIENTE');
-    if(o.situ!=='ARRASTRE'&&idx){ const ds=(typeof remDig==='function')?remDig(o.r.pedido):[]; const pk=ds.map(d=>idx.get(d)).find(Boolean); if(pk){ o.pickOdoo=pk; o.situ='SALIÓ EN ODOO'; } }
+    if(o.situ!=='ARRASTRE'&&idx){ const ds=(typeof remsEmb==='function')?remsEmb(o.r):[]; const pk=ds.map(d=>idx.get(d)).find(Boolean); if(pk){ o.pickOdoo=pk; o.situ='SALIÓ EN ODOO'; } }
     return o; })
     .sort((a,b)=>(a.r.fechaProg||'').localeCompare(b.r.fechaProg||''));
 }
@@ -2528,10 +2528,10 @@ function cuadCompute(P){
      que se liberó. Si el detalle por salida (mov) de los meses vecinos está cargado, se pasan de un mes a otro las salidas
      cuyo embarque quedó en otro periodo: salió de Odoo el 02/11 pero la remisión es de octubre → cuenta en octubre. */
   if(inv){ try{
-    const perRem={}; cuadUnits().forEach(u=>{ remDig(u.r.pedido).forEach(d=>{ perRem[d]=u.per; }); });
+    const perRem={}; cuadUnits().forEach(u=>{ remsEmb(u.r).forEach(d=>{ perRem[d]=u.per; }); });
     const mvAdj=(m,sg)=>m.l.forEach(([pk,l,q])=>{ if(_sv(pk)||_semi(pk)) return; q=sg*q; const o=gp(pk); o.name=o.name||nm[pk]||pk; o.inv+=q;
       const oc=gc(normNom(m._cli||m.cli)); oc.name=oc.name||m._cli||m.cli; oc.inv+=q; const o2=gl(pk+'|'+l); o2.pk=pk; o2.lote=o2.lote||l||'(sin lote)'; o2.name=o2.name||nm[pk]||pk; o2.inv+=q; });
-    const cliRem={}; cuadUnits().forEach(u=>{ remDig(u.r.pedido).forEach(d=>{ cliRem[d]=u.r.cliente; }); });
+    const cliRem={}; cuadUnits().forEach(u=>{ remsEmb(u.r).forEach(d=>{ cliRem[d]=u.r.cliente; }); });
     [prevPer(P),P,nextPer(P)].forEach(pp=>{ const mv=odooRows(pp,'mov'); if(!mv||!mv.rows) return;
       mv.rows.forEach(m=>{ const ds=remDig(m.v); const tgt=ds.map(d=>perRem[d]).find(Boolean); if(!tgt) return; const org=perDe(m.f); if(org===tgt) return;
         m._cli=ds.map(d=>cliRem[d]).find(Boolean)||m.cli;
@@ -2861,6 +2861,8 @@ function renderCuadre(){
       :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto) se empareja con el del programa ignorando acentos y signos.':'Por lote · INFORMATIVO: compara el lote de Cargadores, Báscula y Odoo (se ignoran espacios y símbolos). Las diferencias aquí no cuentan como error: el cuadre se juzga por producto, cantidad y peso.';
   } else if(CQ.view==='rem'){
     const fr=odooRows(CQ.per,'facrem'); const F=new Map(); (fr&&fr.rows||[]).forEach(([v,qq,sub])=>F.set(String(v).toUpperCase(),{q:qq,sub}));
+    const alias=new Map(); D.cus.forEach(c=>remAdminDe(c.u.r).forEach(x=>alias.set(String(x.v).toUpperCase(),String(c.u.r.pedido||'').trim().toUpperCase())));
+    alias.forEach((orig,adm)=>{ const f=F.get(adm); if(!f) return; const o=F.get(orig)||{q:0,sub:0,via:[]}; o.q+=f.q; o.sub+=f.sub; o.via=(o.via||[]).concat(adm); F.set(orig,o); F.delete(adm); });
     const A=new Map(); D.cus.forEach(c=>{ const v=String(c.u.r.pedido||'').trim().toUpperCase()||('(sin remisión) '+c.u.id); const o=A.get(v)||{v,cli:c.u.r.cliente||'',f:c.u.fecha,c:0,b:0,n:0,id:c.u.id,sinB:false}; o.c+=c.prods.reduce((a,p)=>a+p.c,0); o.b+=c.prods.reduce((a,p)=>a+p.b,0); o.n++; if(!c.u.b) o.sinB=true; A.set(v,o); });
     const keys=[...new Set([...A.keys(),...F.keys()])];
     const lecR=(a,f)=>{ const L=[]; if(!fr) return [['info','Carga el reporte de ventas por remisión']];
@@ -2871,7 +2873,7 @@ function renderCuadre(){
       return L; };
     const rows=keys.map(v=>{ const a=A.get(v), f=F.get(v); return {v,a,f,lec:lecR(a,f)}; }).filter(x=>(!CQ.soloDif||x.lec.some(l=>l[0]!=='info'))&&(!q||normNom(x.v+' '+(x.a?x.a.cli:'')).includes(q))).sort((x,y)=>x.v.localeCompare(y.v));
     head=th('Remisión')+th('Cliente')+th('Fecha')+th('Cargadores',1)+th('Báscula',1)+th('Facturado',1)+th('Subtotal $',1)+th('Báscula − Fact.',1)+th('Lectura');
-    body=rows.map(({v,a,f,lec})=>`<tr ${a?`style="cursor:pointer" onclick="cuadDet('${a.id}')"`:''}><td class="code"><b>${escProy(v)}</b></td><td>${escProy(a?a.cli:'')}</td><td>${a?a.f:''}</td><td class="num">${a?fS(a.c):'—'}</td><td class="num">${a?fS(a.b):'—'}</td><td class="num">${f?fS(f.q):'—'}</td><td class="num">${f?'$'+Math.round(f.sub).toLocaleString('es-MX'):'—'}</td><td class="num">${a&&f&&f.q>0?sgn(a.b-f.q):'—'}</td><td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
+    body=rows.map(({v,a,f,lec})=>`<tr ${a?`style="cursor:pointer" onclick="cuadDet('${a.id}')"`:''}><td class="code"><b>${escProy(v)}</b>${f&&f.via&&f.via.length?`<div class="hint" style="margin:0">→ facturado como ${escProy(f.via.join(' + '))}</div>`:''}</td><td>${escProy(a?a.cli:'')}</td><td>${a?a.f:''}</td><td class="num">${a?fS(a.c):'—'}</td><td class="num">${a?fS(a.b):'—'}</td><td class="num">${f?fS(f.q):'—'}</td><td class="num">${f?'$'+Math.round(f.sub).toLocaleString('es-MX'):'—'}</td><td class="num">${a&&f&&f.q>0?sgn(a.b-f.q):'—'}</td><td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
     const T=rows.reduce((t,x)=>{ if(x.a){t.c+=x.a.c;t.b+=x.a.b;} if(x.f){t.f+=x.f.q;t.s+=x.f.sub;} return t; },{c:0,b:0,f:0,s:0});
     if(rows.length) body+=`<tr style="font-weight:700;background:#12202f"><td>Total</td><td></td><td></td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td><td class="num">${fS(T.f)}</td><td class="num">$${Math.round(T.s).toLocaleString('es-MX')}</td><td class="num">${sgn(T.b-T.f)}</td><td></td></tr>`;
     const fm=CUAD.odoo[CQ.per]&&CUAD.odoo[CQ.per].facrem;
@@ -2911,8 +2913,30 @@ function cuadDet(id){
       ${obsHtml(id)}
       ${hist.length?`<div class="hint"><b>Historial del embarque y del pesaje</b><br>${hist.map(h=>ttsStr(h.ts)+' · '+escProy(h.usuario||'')+' · '+escProy(h.accion||'')+' — '+escProy(h.detalle||'')).join('<br>')}</div>`:''}
     </div>`;
-  document.getElementById('cqDetBtns').innerHTML='';
+  document.getElementById('cqDetBtns').innerHTML=(isMaster&&!cu.u.noProg?`<button class="ghost" onclick="remAdminEdit('${id}')" title="Odoo re-documentó la remisión de este embarque en otra(s)">🧾 Remisión dividida${remAdminDe(r).length?' ('+remAdminDe(r).length+')':''}</button>`:'');
   document.getElementById('cqDetOverlay').classList.add('show');
+}
+function remAdminEdit(id){
+  if(!requireMaster()) return; const r=DATA.find(x=>x.id===id); if(!r) return;
+  const cur=remAdminDe(r).map(x=>x.v+(x.q?':'+x.q:'')).join(', ');
+  const v=prompt('División administrativa de la remisión '+(r.pedido||'—')+' ('+(r.cliente||'')+')\n\nEl embarque salió físicamente con esta remisión (Cargadores y Báscula no cambian), pero en Odoo se facturó en otra(s).\nEscribe las remisiones nuevas y sus sacos, separadas por coma. Ej.:  R22329:315, R22330:385\n(Déjalo vacío para quitar la división.)',cur);
+  if(v===null) return;
+  const L=[]; for(const part of String(v).split(/[,;\n]+/)){ const t=part.trim(); if(!t) continue; const mm=t.match(/^(R?\s*\d{4,})\s*(?::|=|\s)\s*(\d+(?:\.\d+)?)?$/i); if(!mm){ toast('No entendí «'+t+'». Usa el formato R22329:315',5000); return; } const rv='R'+mm[1].replace(/\D/g,''); if(remDig(rv)[0]===remDig(r.pedido)[0]){ toast('La remisión nueva no puede ser la misma que la original'); return; } L.push({v:rv,q:mm[2]?Number(mm[2]):0}); }
+  const tot=L.reduce((a,x)=>a+x.q,0), fis=(CUAD.bascula[id]?bascSacos(CUAD.bascula[id]):lotesSacos(r));
+  if(L.length&&tot&&Math.abs(tot-fis)>cuadCfg().tolSacos&&!confirm('Las remisiones nuevas suman '+fS(tot)+' sacos y el embarque físico trae '+fS(fis)+'. ¿Guardar de todos modos?')) return;
+  // embarques del programa con esas remisiones que la conciliación generó desde Odoo (sin Cargadores ni ticket real): son el mismo embarque → se cancelan
+  const dups=L.length?DATA.filter(x=>x.id!==id&&!x.cancelado&&remDig(x.pedido).some(d=>L.some(y=>remDig(y.v).includes(d)))):[];
+  const gen=dups.filter(x=>x.generado&&!(CUAD.bascula[x.id]&&!CUAD.bascula[x.id].generado)), reales=dups.filter(x=>!gen.includes(x));
+  if(reales.length&&!confirm('Ojo: '+reales.map(x=>x.pedido+' ('+(x.cliente||'')+')').join(', ')+' tiene(n) captura real de Cargadores o Báscula y NO se cancelará(n). ¿Continuar?')) return;
+  if(gen.length&&!confirm('Se cancelarán '+gen.length+' embarque(s) que la conciliación generó desde Odoo con esas remisiones ('+gen.map(x=>x.pedido).join(', ')+'), porque son este mismo embarque. Queda en Auditoría. ¿Continuar?')) return;
+  const antes=cur||'—', ahora=L.map(x=>x.v+(x.q?':'+x.q:'')).join(', ')||'—';
+  r.remAdmin=L.length?L.map(x=>Object.assign({},x,{ts:new Date().toISOString(),usuario:cuadUser()})):null; if(!r.remAdmin) delete r.remAdmin;
+  r.ultimaAccionAt=new Date().toISOString(); persist(r.id,r);
+  auditPush({ts:new Date().toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'remAdmin',label:'Remisión dividida administrativamente (Odoo re-documentó el embarque)',from:antes,to:ahora,maquillaje:false,estatusAntes:'',estatusDespues:'',by:quienSU(),origen:'programador'});
+  gen.forEach(x=>{ x.cancelado=true; x.canceladoAt=new Date().toISOString(); x.obs=((x.obs||'')+' · Cancelado: es el embarque '+(r.pedido||'')+' (remisión dividida administrativamente)').trim(); persist(x.id,x);
+    auditPush({ts:new Date().toISOString(),id:x.id,pedido:x.pedido||'',cliente:x.cliente||'',field:'cancelado',label:'Cancelado: duplicado de '+(r.pedido||'')+' por remisión dividida',from:'activo',to:'CANCELADO',maquillaje:false,estatusAntes:'',estatusDespues:'',by:quienSU(),origen:'programador'}); });
+  _rpC={t:0,v:null}; try{ bandejaSync(conciliarTodo()); }catch(e){} render(); refreshCuad(); closeCuadDet(); cuadDet(id);
+  toast(L.length?'🧾 '+(r.pedido||'')+' → '+ahora+(gen.length?' · '+gen.length+' duplicado(s) cancelado(s)':''):'División quitada');
 }
 function closeCuadDet(){ document.getElementById('cqDetOverlay').classList.remove('show'); }
 function cuadSaveAna(id){ if(!bascPuede()||isBasc)return; const b=CUAD.bascula[id]; if(!b)return; const lock=bascBloqueado(b,DATA.find(x=>x.id===id)); if(perCerrado(perDe(b.fecha))&&!isMaster){ toast('🔒 Mes cerrado'); return; }
@@ -3087,6 +3111,13 @@ const BASC_VIEWS=['tabla','bascula','cuadre','cierre'];
    Todo lo creado queda marcado «generado» (no es un pesaje real), con respaldo para deshacer y en Auditoría. */
 const CC={f:{estado:'abierto',det:'',tipo:'',q:'',rango:'todo',persona:''},res:null,sel:{},personas:[],rowsAll:[]};
 const remDig=s=>{ const m=String(s||'').match(/\d{4,}/g); return m?m.map(x=>x.replace(/^0+/,'')):[]; };
+/* ===== DIVISIÓN ADMINISTRATIVA DE REMISIÓN =====
+   El embarque salió físicamente con una remisión (Cargadores y Báscula la registran), pero en Odoo se re-documentó en
+   otra(s): ej. R22305 → R22329 + R22330. El master la registra en el embarque (r.remAdmin) y el programa:
+   · liga las salidas/facturas de las remisiones nuevas a ESE embarque (no se crean embarques nuevos ni se duplican sacos),
+   · si Inventarios dejó también la salida original, la marca como «salida duplicada · pendiente con Inventarios». */
+function remAdminDe(r){ return asArr(r&&r.remAdmin).filter(x=>x&&x.v); }
+function remsEmb(r){ const st=new Set(remDig(r&&r.pedido)); remAdminDe(r).forEach(x=>remDig(x.v).forEach(d=>st.add(d))); return [...st]; }
 const addDias=(f,n)=>{ const d=new Date(f+'T12:00:00'); d.setDate(d.getDate()+n); return iso(d); };
 const difDias=(a,b)=>Math.abs(Math.round((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/864e5));
 const hash=s=>{ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return String(h); };
@@ -3147,7 +3178,10 @@ function conciliar(P){
   const used=new Set(), match=new Map(), cfg=cuadCfg(), lm=lotemapOdoo();
   const lotsOf=r=>new Set(lotesDe(r).map(x=>normLote(x.lote)));
   // 1) por remisión (pedido del programa = columna Ventas de Odoo)
-  embs.forEach(r=>{ const ds=remDig(r.pedido); if(!ds.length)return; const ps=picks.filter(p=>!used.has(p.ref)&&remDig(p.v).some(x=>ds.includes(x))); if(ps.length){ match.set(r.id,{ps,via:'remision'}); ps.forEach(p=>used.add(p.ref)); } });
+  embs.forEach(r=>{ const ds=remsEmb(r); if(!ds.length)return; const ps=picks.filter(p=>!used.has(p.ref)&&remDig(p.v).some(x=>ds.includes(x))); if(!ps.length) return;
+    // remisión dividida: valen las salidas de las remisiones nuevas; la original que Inventarios dejó viva es salida duplicada
+    let ps2=ps, dup=[]; const ad=remAdminDe(r); if(ad.length){ const adD=new Set([].concat(...ad.map(x=>remDig(x.v)))); const sust=ps.filter(p=>remDig(p.v).some(d=>adD.has(d))); if(sust.length){ dup=ps.filter(p=>!sust.includes(p)); ps2=sust; } }
+    match.set(r.id,{ps:ps2,via:ad.length?'remisión dividida':'remision',dup}); ps.forEach(p=>used.add(p.ref)); });
   // 2) por cliente + fecha cercana (pedido vacío o mal capturado); si hay varias, gana la que comparte más lotes
   embs.filter(r=>!match.has(r.id)).forEach(r=>{ const nc=normNom(r.cliente), ls=lotsOf(r);
     const cand=picks.filter(p=>!used.has(p.ref)&&normNom(p.cli)===nc&&difDias(p.f,fechaEmb(r))<=3)
@@ -3174,10 +3208,11 @@ function conciliar(P){
       items.push({id:r.id,r,b,picks:[],hall,fixes:[],sinSalida:true}); return; }
     const od=odLineas(m.ps), C=capLineas(r.lotes), B=b?capLineas(b.items):null;
     const vs=[...new Set(m.ps.map(p=>p.v).filter(Boolean))], ped=String(r.pedido||'').trim();
-    if(vs.length){ const okRem=remDig(ped).some(x=>vs.some(v=>remDig(v).includes(x)));
+    if(vs.length){ const okRem=remsEmb(r).some(x=>vs.some(v=>remDig(v).includes(x)));
       if(!ped){ hall.push({who:'P',k:'rem',t:`Sin remisión capturada; Odoo salió con ${vs.join(', ')}`}); fixes.add('pedido'); }
       else if(!okRem){ hall.push({who:'P',k:'rem',t:`Remisión capturada «${ped}» ≠ Odoo ${vs.join(', ')}`}); fixes.add('pedido'); } }
     const dC=difProd(C,od,cfg.tolSacos), info=lotInfo(C,od,cfg.tolSacos,'Cargadores');
+    if(remAdminDe(r).length) info.push('Remisión dividida administrativamente: '+(ped||'—')+' → '+remAdminDe(r).map(x=>x.v+(x.q?' ('+fS(x.q)+')':'')).join(' + ')+(m.dup&&m.dup.length?'. Inventarios dejó también la salida original '+m.dup.map(p=>p.ref+' · '+p.v+' ('+fS([...odLineas([p]).values()].reduce((a,x)=>a+x.q,0))+')').join(', ')+' → salida DUPLICADA, pendiente con Inventarios':''));
     dC.forEach(d=>hall.push({who:'C',k:dKind(d),t:dTxt(d,'Cargadores')})); if(dC.length) fixes.add('C');
     if(b){ lotInfo(B,od,cfg.tolSacos,b.generado?'Báscula (generada)':'Báscula').forEach(t=>info.push(t)); const dB=difProd(B,od,cfg.tolSacos); dB.forEach(d=>hall.push({who:'B',k:dKind(d),gen:!!b.generado,t:dTxt(d,b.generado?'Báscula (generada)':'Báscula')})); if(dB.length) fixes.add('B'); }
     else { hall.push({who:'B',k:'sinb',t:'Sin registro de báscula (el botón crea uno marcado «generado», con los sacos de Odoo)'}); fixes.add('crearB'); }
@@ -3185,7 +3220,7 @@ function conciliar(P){
   });
   const odooSolo0=picks.filter(p=>!used.has(p.ref)&&p.f>=from&&p.f<=to&&p.l.some(x=>!esSacoVacio(x[0]))), odooSolo=[], nodesp=[];
   // salida de Odoo cuyo embarque SÍ existe en el programa pero no está marcado como despachado
-  odooSolo0.forEach(p=>{ const ds=remDig(p.v), r=ds.length?DATA.find(x=>!x.cancelado&&!isDesp(x)&&remDig(x.pedido).some(d=>ds.includes(d))):null; if(r&&!nodesp.some(n=>n.r.id===r.id)) nodesp.push({p,r}); else odooSolo.push(p); });
+  odooSolo0.forEach(p=>{ const ds=remDig(p.v), r=ds.length?DATA.find(x=>!x.cancelado&&!isDesp(x)&&remsEmb(x).some(d=>ds.includes(d))):null; if(r&&!nodesp.some(n=>n.r.id===r.id)) nodesp.push({p,r}); else odooSolo.push(p); });
   // bandeja: un renglón por problema
   const issues=[]; const mkKey=(t,x)=>t+'_'+keySafe(x);
   items.forEach(i=>{ if(!i.hall.length)return; const tipo=i.sinSalida?'sin':'emb'; const cats=new Set(i.hall.map(h=>h.who)); if(i.hall.some(h=>/Producto cambiado|Producto y cantidad|ese lote es/.test(h.t))) cats.add('prod'); if(i.sinSalida) cats.add('sin');
