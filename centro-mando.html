@@ -198,7 +198,7 @@ async function boot() {
     if (!licViva(l)) return bloqueo(l && l.activa === true ? 'La licencia general venció.' : 'El sistema está desactivado desde tu Panel de Licencia.');
     if (app && (typeof app === 'object' ? !licViva(app) : app !== true)) return bloqueo('El Centro de Mando está desactivado desde tu Panel de Licencia.');
   } catch (e) { return bloqueo('No se pudo validar la licencia. Revisa tu internet y vuelve a intentar.', true); }
-  try { await Acceso19H.puerta({ app: 'ger', titulo: 'Centro de Mando' }); } catch (e) { return bloqueo('No se pudo validar tu usuario. Revisa tu internet.', true); }   // Acceso 19H: tu usuario master
+  try { await Acceso19H.puerta({ app: 'cm', titulo: 'Centro de Mando' }); } catch (e) { return bloqueo('No se pudo validar tu usuario. Revisa tu internet.', true); }   // Acceso 19H: tu usuario master
   initFirebase();
   await Promise.all([esperaAuth(AUTH_INV), esperaAuth(AUTH_RH)]);
   const [pi, pr] = await Promise.all([perfil('inv'), perfil('rh')]);

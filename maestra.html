@@ -68,7 +68,7 @@ input[type=file]{display:none}
 <link rel="stylesheet" href="tema-19h.css">
 <script src="tema-19h.js"></script>
 <script src="acceso-19h.js"></script>
-<script>Acceso19H.puerta({app:"ger",titulo:"Gerencia · Pet Food",nip:false,recaptcha:"6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj"});</script>
+<script>Acceso19H.puerta({app:"maestra",titulo:"Gerencia · Pet Food",nip:false,recaptcha:"6Lf4vtQtAAAAABsSvrf7bax_PgYQX1TrT3j6Rmuj"});</script>
 <meta name="theme-color" content="#DE0A14">
 </head>
 <body>
@@ -649,7 +649,7 @@ let M_SUPER=false;
 function unlockMSuper(){
   if(M_SUPER){M_SUPER=false;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}return;}
   var pf=window.Acceso19H&&Acceso19H.perfil();   // Acceso 19H: el permiso lo da tu usuario
-  if(!(pf&&(pf.ger==='master'||pf.ger==='su'))){ alert('Tu usuario es de consulta. Pide al master el permiso de super-usuario.'); return; }
+  if(!(pf&&(pf.master===true||pf.maestra==='master'||pf.maestra==='su'))){ alert('Tu usuario es de consulta. Pide al master el permiso de super-usuario.'); return; }
   M_SUPER=true;if(CARDOPEN&&window._cardCliente)showCard(window._cardCliente);try{refreshContactoModalIfOpen();}catch(e){}
 }
 function parseLatLon(text){

@@ -177,6 +177,34 @@
     };
   }
 
+
+  /* Acceso 19H: si el master marcó «debe cambiar», pide la contraseña nueva antes de dejar entrar */
+  function cambioObligatorio(app, anterior) {
+    const u = app.auth().currentUser; if (!u) return Promise.resolve();
+    return app.database().ref('acceso/usuarios/' + u.uid + '/debeCambiar').once('value').then(s => {
+      if (s.val() !== true) return;
+      return new Promise(ok => {
+        const ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,20,.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+        ov.innerHTML = '<div style="background:#fff;color:#1d1a17;border-radius:14px;max-width:380px;width:100%;padding:20px;font-family:inherit">' +
+          '<h3 style="margin:0 0 6px;color:#C8102E">🔑 Crea tu contraseña nueva</h3><p style="font-size:13.5px;margin:0 0 12px">Por seguridad registra tu propia contraseña (mínimo 8 caracteres, con letras y números). Es la misma para todas tus apps.</p>' +
+          '<input type="password" id="ac19n1" placeholder="Contraseña nueva" style="width:100%;box-sizing:border-box;font-size:16px;padding:11px;margin-bottom:8px;border:1px solid #ccc;border-radius:9px">' +
+          '<input type="password" id="ac19n2" placeholder="Repítela" style="width:100%;box-sizing:border-box;font-size:16px;padding:11px;margin-bottom:8px;border:1px solid #ccc;border-radius:9px">' +
+          '<div id="ac19e" style="color:#C8102E;font-size:13px;min-height:1.2em"></div><button id="ac19b" style="width:100%;padding:12px;border:0;border-radius:9px;background:#C8102E;color:#fff;font-weight:800;font-size:15px">Guardar y entrar</button></div>';
+        document.body.appendChild(ov);
+        const er = ov.querySelector('#ac19e'), b = ov.querySelector('#ac19b');
+        b.onclick = async () => {
+          const a = ov.querySelector('#ac19n1').value, c = ov.querySelector('#ac19n2').value;
+          if (a !== c) { er.textContent = 'No coinciden.'; return; }
+          if (a.length < 8 || !/[A-Za-z]/.test(a) || !/\d/.test(a)) { er.textContent = 'Mínimo 8 caracteres, con letras y números.'; return; }
+          if (a === anterior) { er.textContent = 'Debe ser distinta a la anterior.'; return; }
+          b.disabled = true;
+          try { await u.updatePassword('emb19h:' + a); await app.database().ref('acceso/usuarios/' + u.uid + '/debeCambiar').set(false); ov.remove(); ok(); }
+          catch (e) { b.disabled = false; er.textContent = (e && e.message) || 'No se pudo guardar.'; }
+        };
+      });
+    }).catch(() => {});
+  }
   function makeFirebaseAuth(app, DB) {
     const auth = app.auth();
     const cbs = new Set();
@@ -209,6 +237,7 @@
         catch (e) {   // Acceso 19H: el mismo usuario y contraseña de todas tus apps (si el master te dio acceso aquí)
           const k = String(usuario || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
           try { await auth.signInWithEmailAndPassword(k + '@emb19h.app', 'emb19h:' + pass); } catch (e2) { throw new Error(errMsg(e)); }
+          await cambioObligatorio(app, pass);
         }
       },
       async logout() { await auth.signOut(); },

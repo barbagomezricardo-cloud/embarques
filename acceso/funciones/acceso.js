@@ -21,7 +21,19 @@ const CLI_MAESTRO = defineSecret('CLI_MAESTRO');
 const DOMINIO = '@emb19h.app';
 const PRE = 'emb19h:';
 const ROLES = ['master', 'su', 'cons', 'basc'];
-const ROLES_GER = ['master', 'su', 'visor'];
+const ROLES_GER = ['master', 'su', 'visor'];          // Ventas y Maestra
+const ROLES_CB = ['master', 'bascula', 'compras', 'inventarios'];
+const ROLES_CLI = ['master', 'su', 'admin', 'vendedor'];
+const ROLES_CM = ['master', 'su', 'usuario'];
+/* Campos de acceso por programa y su lista de roles (null = sí/no) */
+const CAMPOS = {prog: ROLES, ventas: ROLES_GER, maestra: ROLES_GER, cb: ROLES_CB, cli: ROLES_CLI, cm: ROLES_CM};
+function limpiaCampo(k, v) {
+  if (k === 'carg') return v === true ? true : null;
+  if (k === 'vend') return limpiaVend(v);
+  return CAMPOS[k] && CAMPOS[k].includes(v) ? v : null;
+}
+const TODOS = ['prog', 'carg', 'cb', 'ventas', 'maestra', 'vend', 'cli', 'cm'];
+function tieneAlgo(p) { return p.master === true || TODOS.some((k) => !!p[k]); }
 const ROLES_INV = ['master', 'jefe', 'compras', 'almacenista', 'produccion'];
 const ROLES_RH = ['master', 'rh', 'director', 'jefe'];
 /* Ola 3: el mismo usuario entra a Inventarios y RH. Su rol ahí vive en inv/usuarios/{uid} y rh/usuarios/{uid} */
@@ -61,9 +73,12 @@ async function claveLibre(base) {
 }
 
 async function publicarDirectorio(uid, p) {
-  if (!p || p.activo === false || (!p.prog && !p.carg && !p.ger && !p.vend && !p.cb)) { await db.ref('acceso/directorio/' + p.key).remove(); return; }
-  const a = {}; if (p.prog) a.prog = true; if (p.carg) a.carg = true; if (p.ger) a.ger = true; if (p.vend || p.ger) a.vend = true;
-  if (p.cb || ['master', 'su', 'basc'].includes(p.prog)) a.basc = true;   // Cuadre de báscula
+  if (!p || p.activo === false || !tieneAlgo(p)) { await db.ref('acceso/directorio/' + p.key).remove(); return; }
+  // Solo aparece en la lista de los programas a los que tiene acceso (el master, en todos)
+  const M = p.master === true, a = {};
+  if (M || p.prog) a.prog = true; if (M || p.carg) a.carg = true; if (M || p.cb) a.basc = true;
+  if (M || p.ventas) a.ventas = true; if (M || p.maestra) a.maestra = true; if (M || p.vend) a.vend = true;
+  if (M || p.cli) a.cli = true; if (M || p.cm) a.cm = true; if (M) a.panel = true;
   await db.ref('acceso/directorio/' + p.key).set({n: p.nombre, a});
 }
 
@@ -74,19 +89,18 @@ function validarTemporal(t, nip) {
 }
 
 function limpiaVend(v) { v = String(v || '').trim().toUpperCase().replace(/[.#$\[\]\/]/g, '').slice(0, 40); return v || null; }
-async function crearCuenta({nombre, key, prog, carg, ger, vend, cb, pass, debeCambiar, por, otros}) {
+async function crearCuenta({nombre, key, pass, debeCambiar, por, otros, ...acc}) {
   nombre = String(nombre || '').trim().slice(0, 60);
   if (!nombre) throw falla('Falta el nombre.');
-  prog = ROLES.includes(prog) ? prog : null; carg = carg === true; ger = ROLES_GER.includes(ger) ? ger : null; vend = limpiaVend(vend);
-  cb = cb === true;
-  if (!prog && !carg && !ger && !vend && !cb && !otros) throw falla('Elige al menos un acceso.');
+  const campos = {}; TODOS.forEach((k) => { campos[k] = limpiaCampo(k, acc[k]); });
+  if (!tieneAlgo(campos) && !otros) throw falla('Elige al menos un acceso.');
   key = key ? clave(key) : await claveLibre(nombre);
   const email = key + DOMINIO;
   let user = null;
   try { user = await admin.auth().getUserByEmail(email); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
   if (user) await admin.auth().updateUser(user.uid, {password: PRE + pass, disabled: false, displayName: nombre});
   else user = await admin.auth().createUser({email, password: PRE + pass, displayName: nombre});
-  const p = {key, nombre, prog, carg: carg || null, ger, vend, cb: cb || null, activo: true, debeCambiar: debeCambiar !== false, creado: Date.now(), por: por || 'sistema'};
+  const p = Object.assign({key, nombre}, campos, {activo: true, debeCambiar: debeCambiar !== false, creado: Date.now(), por: por || 'sistema'});
   await db.ref('acceso/usuarios/' + user.uid).set(p);
   await publicarDirectorio(user.uid, p);
   return {uid: user.uid, key};
@@ -165,6 +179,32 @@ async function rolesSistemas() {
   return {roles: out};
 }
 
+/* Ola 4: un acceso por programa. Pasa los permisos de antes a los campos nuevos sin quitarle nada a nadie
+   que ya trabajaba, y marca al master (entra a todo). */
+async function ola4() {
+  const us = (await db.ref('acceso/usuarios').once('value')).val() || {};
+  const inv = (await db.ref('inv/usuarios').once('value')).val() || {};
+  const hechos = [];
+  for (const uid of Object.keys(us)) {
+    const p = us[uid], n = {};
+    if (p.prog === 'master') { n.master = true; n.debeCambiar = false; }
+    if (p.ger && !p.ventas) n.ventas = p.ger;
+    if (p.ger && !p.maestra) n.maestra = p.ger;
+    if ((p.ger === 'master' || p.ger === 'su') && !p.cm) n.cm = p.ger;
+    if (!p.cli) {
+      if (p.ger === 'master' || p.ger === 'su') n.cli = p.ger;
+      else if (p.vend === 'ADMINISTRACION') n.cli = 'admin';
+      else if (p.vend) n.cli = 'vendedor';
+    }
+    if (p.cb === true) { const r = (inv[uid] || {}).rol; n.cb = r === 'compras' ? 'compras' : r === 'jefe' ? 'inventarios' : 'bascula'; }
+    else if (!p.cb && p.prog === 'basc') n.cb = 'bascula';
+    if (Object.keys(n).length) { await db.ref('acceso/usuarios/' + uid).update(n); hechos.push(p.nombre + ': ' + Object.keys(n).join(', ')); }
+    await publicarDirectorio(uid, Object.assign({}, p, n));
+  }
+  await bitacora('instalación', 'Ola 4: acceso por programa');
+  return {hechos};
+}
+
 async function cerrar() {
   const up = {}; VIEJOS.forEach((k) => { up['config/' + k] = null; });
   await db.ref().update(up);
@@ -185,8 +225,9 @@ async function accionMaster(yo, accion, d) {
   if (accion === 'roles') return rolesSistemas();
   if (accion === 'crear') {
     const otros = ROLES_INV.includes(d.inv) || ROLES_RH.includes(d.rh);
-    const nip = !ROLES.includes(d.prog) && !ROLES_GER.includes(d.ger) && !otros;   // cargadores, vendedores y cuadre: NIP
-    const r = await crearCuenta({nombre: d.nombre, prog: d.prog, carg: d.carg === true, ger: d.ger, vend: d.vend, cb: d.cb === true, otros, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre});
+    const nip = !['prog', 'ventas', 'maestra', 'cli', 'cm'].some((k) => limpiaCampo(k, d[k])) && !otros;   // cargadores, vendedores y cuadre: NIP
+    const acc = {}; TODOS.forEach((k) => { if (k in d) acc[k] = d[k]; });
+    const r = await crearCuenta(Object.assign({nombre: d.nombre, otros, pass: validarTemporal(d.temporal, nip), debeCambiar: true, por: yo.nombre}, acc));
     const pc = {key: r.key, nombre: d.nombre};
     if (d.inv) await rolSistema('inv', r.uid, pc, d.inv);
     if (d.rh) await rolSistema('rh', r.uid, pc, d.rh);
@@ -199,6 +240,15 @@ async function accionMaster(yo, accion, d) {
   const ref = db.ref('acceso/usuarios/' + uid);
   const p = (await ref.once('value')).val();
   if (!p) throw falla('Ese usuario no existe.');
+  if (accion === 'borrar') {   // eliminar para siempre (solo personas dadas de baja)
+    if (p.activo !== false) throw falla('Primero dale de baja.');
+    try { await admin.auth().deleteUser(uid); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
+    for (const sis of ['inv', 'rh']) { const r = db.ref(sis + '/usuarios/' + uid); const a = (await r.once('value')).val(); if (a && a.acceso) await r.remove(); }
+    await db.ref('acceso/directorio/' + p.key).remove();
+    await ref.remove();
+    await bitacora(yo.nombre, 'Eliminó a ' + p.nombre);
+    return {};
+  }
   if (accion === 'restablecer') {
     const t = validarTemporal(d.temporal, false);   // mínimo 6 (NIP o contraseña, según la persona)
     await admin.auth().updateUser(uid, {password: PRE + t});
@@ -209,20 +259,16 @@ async function accionMaster(yo, accion, d) {
   }
   if (accion === 'actualizar') {
     const n = {};
-    if ('prog' in d) n.prog = ROLES.includes(d.prog) ? d.prog : null;
-    if ('carg' in d) n.carg = d.carg === true ? true : null;
-    if ('ger' in d) n.ger = ROLES_GER.includes(d.ger) ? d.ger : null;
-    if ('vend' in d) n.vend = limpiaVend(d.vend);
-    if ('cb' in d) n.cb = d.cb === true ? true : null;
+    TODOS.forEach((k) => { if (k in d) n[k] = limpiaCampo(k, d[k]); });
     if ('inv' in d) await rolSistema('inv', uid, Object.assign({}, p, n), d.inv);
     if ('rh' in d) await rolSistema('rh', uid, Object.assign({}, p, n), d.rh);
-    if ('activo' in n) { for (const sis of ['inv', 'rh']) { const r = db.ref(sis + '/usuarios/' + uid); const a = (await r.once('value')).val(); if (a && a.acceso) await r.update({activo: n.activo}); } }
     if ('activo' in d) n.activo = d.activo === true;
+    if ('activo' in n) { for (const sis of ['inv', 'rh']) { const r = db.ref(sis + '/usuarios/' + uid); const a = (await r.once('value')).val(); if (a && a.acceso) await r.update({activo: n.activo}); } }
     const q = Object.assign({}, p, n);
     // (sin acceso a ningún programa simplemente no entra a nada; no se bloquea el cambio)
     await ref.update(n);
     await admin.auth().updateUser(uid, {disabled: q.activo === false});
-    if ('activo' in n || 'prog' in n || 'ger' in n || 'vend' in n || 'cb' in n) await admin.auth().revokeRefreshTokens(uid);
+    if (Object.keys(n).length) await admin.auth().revokeRefreshTokens(uid);
     await publicarDirectorio(uid, q);
     await bitacora(yo.nombre, 'Actualizó a ' + p.nombre + ': ' + JSON.stringify(n));
     return {};
@@ -250,6 +296,7 @@ exports.embAdmin = onRequest(
           for (const uid of Object.keys(us)) await publicarDirectorio(uid, us[uid]);
           res.json({ok: true, cuentas: Object.keys(us).length}); return;
         }
+        if (accion === 'ola4') { res.json(Object.assign({ok: true}, await ola4())); return; }
         if (accion === 'ola3') { res.json(Object.assign({ok: true}, await ola3())); return; }
         if (accion === 'ola2') { res.json(Object.assign({ok: true}, await ola2())); return; }
         if (accion === 'cerrar') { res.json(Object.assign({ok: true}, await cerrar())); return; }
@@ -263,7 +310,7 @@ exports.embAdmin = onRequest(
       }
       if (!(await licenciaOk())) { res.json({ok: false, message: 'Licencia desactivada.'}); return; }
       const yo = await quien(req);
-      if (!yo || yo.prog !== 'master') { res.status(403).json({ok: false, message: 'Solo el master puede hacer esto.'}); return; }
+      if (!yo || !(yo.master === true || yo.prog === 'master')) { res.status(403).json({ok: false, message: 'Solo el master puede hacer esto.'}); return; }
       res.json(Object.assign({ok: true}, await accionMaster(yo, accion, datos || {})));
     } catch (e) {
       if (e.publico) { res.status(400).json({ok: false, message: e.message}); return; }

@@ -303,7 +303,7 @@ function applyWatermark(){
 function parseHash(){
   const h=(location.hash||'').replace(/^#/,''); const o={};
   h.split('&').forEach(kv=>{const i=kv.indexOf('=');if(i>0)o[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1));});
-  try{ var pf=window.Acceso19H&&Acceso19H.perfil(); if(pf&&pf.vend&&!pf.ger) o.v=pf.vend; }catch(e){}   // Acceso 19H: cada vendedor solo abre su cartera
+  try{ var pf=window.Acceso19H&&Acceso19H.perfil(); if(pf&&pf.vend&&pf.master!==true) o.v=pf.vend; }catch(e){}   // Acceso 19H: cada vendedor solo abre su cartera
   return o;
 }
 function applyPayload(p){

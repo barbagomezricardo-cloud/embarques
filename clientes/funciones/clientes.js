@@ -152,7 +152,7 @@ exports.cliApi = onRequest(
         if (datos && datos.idToken) {
           let dec;
           try { dec = await admin.auth().verifyIdToken(String(datos.idToken), true); } catch (e) { return res.status(401).json({error: 'Tu sesión expiró. Entra de nuevo.', code: 'sin_sesion'}); }
-          ses = await core.progLoginUid(dec.uid);
+          ses = await core.progLoginUid(dec.uid, datos.modo === 'prog' ? 'prog' : '');
         } else ses = await core.progLogin(datos && datos.pwd);
         const exp = Date.now() + 7 * 24 * 3600 * 1000;
         out = {token: firmar(Object.assign({}, ses, {exp})), yo: {u: ses.u, nombre: ses.nombre, rol: ses.rol, vk: ses.vk || ''}, exp};
