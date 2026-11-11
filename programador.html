@@ -342,7 +342,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <div id="cqSteps"></div>
     <div class="periodbar" style="margin-bottom:10px">
       <div class="f"><label>Periodo</label><select id="cqPer" onchange="cqSet('per',this.value)"></select></div>
-      <div class="f"><label>Vista</label><select id="cqView" onchange="cqSet('view',this.value)"><option value="prod">Por producto</option><option value="lote">Por producto y lote</option><option value="cli">Por cliente</option><option value="emb">Por embarque</option></select></div>
+      <div class="f"><label>Vista</label><select id="cqView" onchange="cqSet('view',this.value)"><option value="prod">Por producto</option><option value="lote">Por producto y lote</option><option value="cli">Por cliente</option><option value="emb">Por embarque</option><option value="rem">Por remisión (facturado)</option></select></div>
       <div class="f"><label>Buscar</label><input id="cqQ" placeholder="Producto, lote, cliente, pedido…" oninput="cqSet('q',this.value)"></div>
       <div class="f"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--txt);text-transform:none"><input type="checkbox" id="cqSoloDif" onchange="cqSet('soloDif',this.checked)"> Solo diferencias</label></div>
       <div class="spacer"></div>
@@ -591,6 +591,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
           <div class="field"><label>Control de lotes en Cargadores desde</label><input type="date" id="cfgLotesDesde" style="width:150px" title="Antes de esta fecha Cargadores no registraba lotes: se llenan desde Odoo. Desde esta fecha se respeta lo que ellos capturan. Vacío = primer día con lotes capturados."></div>
           <div class="field"><label>Tolerancia báscula (kg)</label><input type="number" id="cfgBascTolKg" min="0" style="width:110px"></div>
           <div class="field"><label>Programado vs cargado, informativo (±%)</label><input type="number" id="cfgCuadTolProg" min="0" style="width:110px"></div>
+          <div class="field"><label>Base del cuadre</label><select id="cfgCuadBase" style="width:210px" title="Contra qué se cuadra Báscula/Embarques"><option value="fac">Facturado (ventas)</option><option value="inv">Salidas de inventario</option></select></div>
           <div class="field"><label>Tolerancia en sacos</label><input type="number" id="cfgBascTolSacos" min="0" style="width:100px"></div>
         </div>
       </div>
@@ -1601,7 +1602,7 @@ function buildCfg(){
   document.getElementById('cfgSemV').value=CFG.semV; document.getElementById('cfgSemA').value=CFG.semA;
   document.getElementById('cfgLotesReq').checked=lotesReq(); document.getElementById('cfgTolLot').value=tolLot();
   document.getElementById('cfgFb').value=CFG.firebase?JSON.stringify(CFG.firebase,null,2):'';
-  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgLotesDesde',CFG.lotesDesde||''); if(isMaster){ const ap=document.getElementById('accesoPanel'); if(ap) Acceso19H.panel(ap); } S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); }
+  { const S=(i,v)=>{ const e=document.getElementById(i); if(e)e.value=v; }; S('cfgLotesDesde',CFG.lotesDesde||''); if(isMaster){ const ap=document.getElementById('accesoPanel'); if(ap) Acceso19H.panel(ap); } S('cfgBascTolKg',cuadCfg().tolKg); S('cfgCuadTolProg',cuadCfg().tolProg); S('cfgBascTolSacos',cuadCfg().tolSacos); S('cfgCuadBase',cuadBase()); }
 }
 function buildUsers(){
   const ub=document.getElementById('usersBody'); if(!ub) return;
@@ -1641,7 +1642,7 @@ function saveConfig(){
   // Acceso 19H: los usuarios se administran en el panel de usuarios (ya no aquí)
   if(isMaster){
     CFG.lotesDesde=(document.getElementById('cfgLotesDesde').value||''); const nn=(i,d)=>{ const v=document.getElementById(i).value; return v===''||isNaN(Number(v))?d:Math.max(0,Number(v)); };
-    CFG.bascTolKg=nn('cfgBascTolKg',50); CFG.cuadreTolProgPct=nn('cfgCuadTolProg',5); CFG.bascTolSacos=nn('cfgBascTolSacos',0); }
+    CFG.cuadreBase=(document.getElementById('cfgCuadBase')||{}).value==='inv'?'inv':'fac'; CFG.bascTolKg=nn('cfgBascTolKg',50); CFG.cuadreTolProgPct=nn('cfgCuadTolProg',5); CFG.bascTolSacos=nn('cfgBascTolSacos',0); }
   const fbtxt=document.getElementById('cfgFb').value.trim();
   let reinit=false;
   if(fbtxt){ try{ const parsed=JSON.parse(fbtxt); if(JSON.stringify(parsed)!==JSON.stringify(CFG.firebase)){CFG.firebase=parsed;reinit=true;} }catch(e){ toast('JSON de Firebase inválido'); return; } }
@@ -2243,6 +2244,9 @@ const MESES_ES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto
 const BASC_CATALOGO=[{cod:'04MAS0024',name:'KAN KAN 20 KG (R)',kg:20},{cod:'04MAS009',name:'KAN KAN 20 KGS',kg:20},{cod:'04MAS0013',name:'KAN KAN 25 + 1 KG EXTRA',kg:26},{cod:'04MAS0020',name:'KAN KAN 25 KG',kg:25},{cod:'04MAS0023',name:'KAN KAN 25 KG (R)',kg:25},{cod:'04MAS0012',name:'MI BOOB 20 + 1 KG EXTRA',kg:21},{cod:'04MAS008',name:'MI BOOB 20 KGS',kg:20},{cod:'04MAS010',name:'PET FOOD 20 KG (R)',kg:20},{cod:'04MAS0016',name:'SILVER CAT 15 + 1 KG EXTRA',kg:16},{cod:'04MAS006',name:'SILVER CAT 15 KGS',kg:15},{cod:'04MAS007',name:'SILVER CAT 5 KGS',kg:5},{cod:'04MAS0017',name:'SILVER KAN 18% 25 KG +1 EXTRAS',kg:26},{cod:'04MAS003',name:'SILVER KAN 18% 25 KGS',kg:25},{cod:'04MAS002',name:'SILVER KAN 18% 5 KGS',kg:5},{cod:'04MAS0015',name:'SILVER KAN CACHORRO 20 +1 KG EXTRA',kg:21},{cod:'04MAS004',name:'SILVER KAN CACHORRO 20 KGS',kg:20},{cod:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',kg:5},{cod:'04MAS001',name:'SILVER KAN PREMIUM +22% 25 KG',kg:25},{cod:'04MAS0011',name:'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILOS EXTRAS',kg:27},{cod:'02CROQ037',name:'CABALLO IMPERIAL 15KG',kg:15},{cod:'02GAL43',name:'CRECIMIENTO POLLO EXTRUSADO 20 KGS',kg:20},{cod:'03CAB01',name:'CABALLO FIEL 40 KG',kg:40},{cod:'03CAB02',name:'CABALLO IMPERIAL 40KG',kg:40},{cod:'03GAL14',name:'GALLO MANTENIMIENTO 14% 40KG',kg:40},{cod:'03GAL19',name:'GALLO DE PELEA PELECHA 40 KG',kg:40},{cod:'03GAL22',name:'GALLO DE PELEA GANADOR F19 40 KGS',kg:40},{cod:'03GAL40',name:'PRE-INICIO POLLO 40KGS',kg:40},{cod:'03GAL42',name:'PRE INICIO POLLO 15 KGS (EXTRUSADO)',kg:15},{cod:'03GAL43',name:'CRECIMIENTO POLLO 20 KG EXTRUSADO',kg:20},{cod:'03GAL23',name:'GALLO MANTENIMIENTO SUPER 40 KG',kg:40}];
 
 let CUAD={bascula:{},cierres:{},odoo:{},odoodata:{},ajustes:{},bandeja:{},solicitudes:{},obs:{}}, fbCuad=null, isBasc=false, bascName='';
+/* Base del cuadre de Báscula/Embarques: 'fac' = lo FACTURADO en Odoo (default) · 'inv' = salidas de inventario.
+   Con base facturado, inventario queda como referencia «pendiente con Inventarios» (no es error de báscula ni de embarques). */
+function cuadBase(){ return CFG.cuadreBase==='inv'?'inv':'fac'; }
 const cuadCfg=()=>({ tolKg:(CFG.bascTolKg!=null&&!isNaN(Number(CFG.bascTolKg)))?Math.max(0,Number(CFG.bascTolKg)):50,
   tolProg:(CFG.cuadreTolProgPct!=null&&!isNaN(Number(CFG.cuadreTolProgPct)))?Math.max(0,Number(CFG.cuadreTolProgPct)):5,
   tolSacos:(CFG.bascTolSacos!=null&&!isNaN(Number(CFG.bascTolSacos)))?Math.max(0,Number(CFG.bascTolSacos)):0 });
@@ -2410,7 +2414,12 @@ function parseOdooFac(rows){
     if(t==='d') desc+=q; else if(t==='m') man+=q;
     const key=mes+'|'+cli+'|'+pk+'|'+t; const o=agg.get(key); if(o) o[3]+=q; else agg.set(key,[mes,cli,pk,q,t]); leafs++; };
   const hasMonthLabels=rows.some(r=>monthRe.test(String(r[0]||'')));
-  if(hasMonthLabels&&rows.some(r=>/^\s*R\d{4,}\s*$/.test(String(r[0]||'')))) return {kind:'facrem',rows:[],nm:{},info:{}};   // facturado por remisión (sin productos): no se carga como producto
+  if(hasMonthLabels&&rows.some(r=>/^\s*R\d{4,}\s*$/.test(String(r[0]||'')))){   // facturado por REMISIÓN (sin productos): mes → remisión, con cantidad e importe
+    let colS=-1; for(let i=0;i<Math.min(rows.length,5);i++){ for(let j=1;j<rows[i].length;j++){ if(/^subtotal/i.test(String(rows[i][j]||'').trim())){ colS=j; i=99; break; } } }
+    const out=[]; let cur=''; rows.forEach(r=>{ const a=String(r[0]||'').trim(); const m=a.match(monthRe);
+      if(m){ cur=m[2]+'-'+String(MESES_ES.indexOf(m[1].toLowerCase())+1).padStart(2,'0'); return; }
+      if(cur&&/^R\d{4,}$/i.test(a)) out.push([cur,a.toUpperCase(),Math.round((parseFloat(r[colQ])||0)*1000)/1000,colS>=0?Math.round((parseFloat(r[colS])||0)*100)/100:0]); });
+    return {kind:'facrem',rows:out,nm:{},info:{formato:'por remisión'}}; }
   if(hasMonthLabels && !(String(rows[0][0])==='Column0')){
     // tabla dinámica mensual (sale.report): mes → producto (sin cliente)
     let cur=''; rows.forEach(r=>{ const a=String(r[0]||''); const m=a.match(monthRe);
@@ -2442,7 +2451,11 @@ async function cuadOdooFiles(files){
     try{ const buf=await f.arrayBuffer(); const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
       const res=parseOdooInv(rows)||parseOdooFac(rows);
-      if(res&&res.kind==='facrem'){ out.push('✗ '+f.name+': es facturado por remisión (sin productos); para el cuadre sube el de ventas por producto'); continue; }
+      if(res&&res.kind==='facrem'){   // se guarda aparte: alimenta la vista «Por remisión (facturado)»; no cambia el cuadre por producto
+        if(!res.rows.length){ out.push('✗ '+f.name+': no encontré remisiones'); continue; }
+        const byM={}; res.rows.forEach(r=>{ (byM[r[0]]=byM[r[0]]||[]).push([r[1],r[2],r[3]]); });
+        Object.keys(byM).forEach(P=>{ cuadSet('odoodata/'+P+'/facrem',JSON.stringify({rows:byM[P]})); cuadSet('odoo/'+P+'/facrem',{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:byM[P].length,tot:Math.round(byM[P].reduce((a,r)=>a+r[1],0)*100)/100}); delete _odooCache[P+'|facrem']; odTsSet(P,'facrem'); });
+        out.push('✓ '+f.name+': facturado por remisión · '+Object.keys(byM).map(perLabel).join(', ')+' (ver Cuadre → Vista «Por remisión»)'); continue; }
       if(!res||!res.rows.length){ out.push('✗ '+f.name+': no reconocí el formato (movimientos de inventario o ventas facturadas)'); continue; }
       const byMes={}; res.rows.forEach(r=>{ (byMes[r[0]]=byMes[r[0]]||[]).push(r); });
       const prev=Object.keys(byMes);
@@ -2546,9 +2559,16 @@ function cuadLec(o,hasInv,hasFac,tolS){
     if(cs>tolS) out.push(['warn','Liberado por Cargadores sin pesar en báscula ('+fS(cs)+') · desfase']);
     if(bs>tolS) out.push(['warn','Pesado en báscula sin liberar por Cargadores ('+fS(bs)+') · desfase']);
     if(Math.abs(res)>tolS) out.push(['crit','Cargadores ≠ Báscula ('+sgn(res)+')']); }
-  if(hasInv){ if(soloOdoo){ if(o.inv) out.push(['info','Solo en Odoo (no pasó por báscula)']); }
-    else { const d=o.b-o.inv; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Pesado en báscula sin salida en Odoo ('+sgn(d)+') · falta liberar']); else out.push(['crit','Odoo da salida de más vs báscula ('+sgn(d)+')']); } } }
-  if(hasInv&&hasFac&&o.fac!=null){ const d=o.inv-o.fac; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Salió de inventario sin facturar ('+sgn(d)+')']); else out.push(['crit','Facturado sin salida de inventario ('+sgn(d)+')']); } }
+  const baseFac=cuadBase()==='fac'&&hasFac&&o.fac!=null;
+  if(baseFac){   // báscula vs FACTURADO
+    if(soloOdoo){ if(o.fac) out.push(['info','Solo en Odoo (no pasó por báscula)']); }
+    else { const d=o.b-o.fac; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Pesado en báscula sin facturar ('+sgn(d)+') · falta liberar/facturar']); else out.push(['crit','Facturado de más vs báscula ('+sgn(d)+')']); } }
+    if(hasInv){ const d=o.inv-o.fac; if(Math.abs(d)>tolS) out.push(['info','Inventarios: salida '+(d>0?'de más':'de menos')+' vs facturado ('+sgn(d)+') · pendiente con Inventarios']); }
+  } else {
+    if(hasInv){ if(soloOdoo){ if(o.inv) out.push(['info','Solo en Odoo (no pasó por báscula)']); }
+      else { const d=o.b-o.inv; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Pesado en báscula sin salida en Odoo ('+sgn(d)+') · falta liberar']); else out.push(['crit','Odoo da salida de más vs báscula ('+sgn(d)+')']); } } }
+    if(hasInv&&hasFac&&o.fac!=null){ const d=o.inv-o.fac; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Salió de inventario sin facturar ('+sgn(d)+')']); else out.push(['crit','Facturado sin salida de inventario ('+sgn(d)+')']); } }
+  }
   return out;
 }
 
@@ -2802,8 +2822,12 @@ function renderCuadre(){
     {l:'Falta báscula',v:K.pend,f:K.cPend?fS(K.cPend)+' sacos cargados sin pesar':'al corriente',c:K.pend?'warn':'ok'},
     {l:'Sacos · Cargadores',v:fS(K.c),f:'liberado por Cargadores'+(K.cSinB?' · '+fS(K.cSinB)+' aún sin pesar ('+K.nCSinB+')':''),c:K.cSinB?'warn':'blue'},
     {l:'Sacos · Báscula',v:fS(K.b),f:cuadBascFoot(K,cfg),c:cuadBascCls(K,cfg)},
+    ...(cuadBase()==='fac'?[
+    {l:'Odoo · facturado neto (base)',v:D.hasFac?fS(K.fac):'—',f:D.hasFac?'vs báscula '+sgn(K.b-K.fac)+(Math.abs(K.b-K.fac)<0.5?' ✓':K.b>K.fac?' · por facturar':' · facturado de más'):'carga el reporte de ventas',c:D.hasFac?(Math.abs(K.b-K.fac)<0.5?'ok':'warn'):'warn'},
+    {l:'Odoo · salidas inventario (ref.)',v:D.hasInv?fS(K.inv):'—',f:D.hasInv&&D.hasFac?'vs facturado '+sgn(dInvFac)+(Math.abs(dInvFac)<0.5?' ✓':' · pendiente con Inventarios'):D.hasInv?'informativo':'opcional: sin reporte de inventarios',c:D.hasInv?(Math.abs(dInvFac)<0.5?'pur':'warn'):'blue'}
+    ]:[
     {l:'Odoo · salidas inventario',v:D.hasInv?fS(K.inv):'—',f:D.hasInv?'vs báscula '+sgn(K.b-K.inv):'carga el reporte de Odoo',c:D.hasInv?'pur':'warn'},
-    {l:'Odoo · facturado neto',v:D.hasFac?fS(K.fac):'—',f:D.hasFac&&D.hasInv?'inventario − facturado '+sgn(dInvFac)+(dInvFac>0?' · por facturar':dInvFac<0?' · facturado sin salir':' ✓'):D.hasFac?'sin descuento ni maniobra':'carga el reporte de Odoo',c:D.hasFac?(Math.abs(dInvFac)<0.5?'ok':'warn'):'warn'}
+    {l:'Odoo · facturado neto',v:D.hasFac?fS(K.fac):'—',f:D.hasFac&&D.hasInv?'inventario − facturado '+sgn(dInvFac)+(dInvFac>0?' · por facturar':dInvFac<0?' · facturado sin salir':' ✓'):D.hasFac?'sin descuento ni maniobra':'carga el reporte de Odoo',c:D.hasFac?(Math.abs(dInvFac)<0.5?'ok':'warn'):'warn'}])
   ];
   document.getElementById('cqKpis').innerHTML=kp.map(k=>`<div class="kpi ${k.c}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="foot">${k.f||''}</div>${k.bar!=null?`<div class="bar"><i style="width:${k.bar}%"></i></div>`:''}</div>`).join('');
   // gráfica: top productos
@@ -2824,16 +2848,34 @@ function renderCuadre(){
   if(CQ.view==='prod'||CQ.view==='cli'||CQ.view==='lote'){
     const src=CQ.view==='prod'?D.prod:CQ.view==='cli'?D.cli:D.lot;
     const hasF=CQ.view==='lote'?false:(CQ.view==='cli'?D.hasFacCli:D.hasFac);
-    head=th(CQ.view==='prod'?'Producto':CQ.view==='cli'?'Cliente':'Producto · lote')+th('Cargadores',1)+th('Báscula',1)+th('Odoo inventario',1)+(hasF?th('Odoo facturado',1):'')+th('Báscula − Inv.',1)+(hasF?th('Inv. − Fact.',1):'')+th('Lectura');
+    const bF=cuadBase()==='fac'&&hasF;   // base facturado: la diferencia de báscula se mide contra lo facturado
+    head=th(CQ.view==='prod'?'Producto':CQ.view==='cli'?'Cliente':'Producto · lote')+th('Cargadores',1)+th('Báscula',1)+th('Odoo inventario',1)+(hasF?th('Odoo facturado',1):'')+th(bF?'Báscula − Fact.':'Báscula − Inv.',1)+(hasF?th('Inv. − Fact.',1):'')+th('Lectura');
     const esLote=CQ.view==='lote';   // el reporte por lote es solo informativo: no cuenta como error de productos, cantidades ni pesos
     const rows=src.map(o=>({o,lec:cuadLec(Object.assign({},o,{fac:hasF?o.fac:null}),D.hasInv,hasF,cfg.tolSacos).map(l=>esLote?['info',l[1]]:l)})).filter(x=>(!CQ.soloDif||(esLote?x.lec.length:x.lec.some(l=>l[0]!=='info')))&&(!q||normNom((x.o.name||'')+' '+(x.o.lote||'')).includes(q)));
     body=rows.map(({o,lec})=>`<tr><td>${escProy(o.name||o.k)}${CQ.view==='lote'?` · <b class="code">${escProy(o.lote||'')}</b>`:''}</td><td class="num">${fS(o.c)}</td><td class="num">${fS(o.b)}</td><td class="num">${oN(o.inv)}</td>${hasF?`<td class="num">${fS(o.fac)}</td>`:''}
-      <td class="num ${D.hasInv&&Math.abs(o.b-o.inv)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${D.hasInv&&(o.c||o.b)?sgn(o.b-o.inv):'—'}</td>${hasF?`<td class="num ${Math.abs(o.inv-o.fac)>cfg.tolSacos?'dwarn':''}">${D.hasInv?sgn(o.inv-o.fac):'—'}</td>`:''}<td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
+      ${bF?`<td class="num ${Math.abs(o.b-o.fac)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${(o.c||o.b)?sgn(o.b-o.fac):'—'}</td>`:`<td class="num ${D.hasInv&&Math.abs(o.b-o.inv)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${D.hasInv&&(o.c||o.b)?sgn(o.b-o.inv):'—'}</td>`}${hasF?`<td class="num ${Math.abs(o.inv-o.fac)>cfg.tolSacos?'dwarn':''}">${D.hasInv?sgn(o.inv-o.fac):'—'}</td>`:''}<td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
     const T=rows.reduce((t,{o})=>{ t.c+=o.c;t.b+=o.b;t.inv+=o.inv;t.fac+=(hasF?o.fac:0); return t; },{c:0,b:0,inv:0,fac:0});
-    if(rows.length) body+=`<tr style="font-weight:700;background:#12202f"><td>Total</td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td><td class="num">${oN(T.inv)}</td>${hasF?`<td class="num">${fS(T.fac)}</td>`:''}<td class="num">${D.hasInv?sgn(T.b-T.inv):'—'}</td>${hasF?`<td class="num">${D.hasInv?sgn(T.inv-T.fac):'—'}</td>`:''}<td></td></tr>`;
+    if(rows.length) body+=`<tr style="font-weight:700;background:#12202f"><td>Total</td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td><td class="num">${oN(T.inv)}</td>${hasF?`<td class="num">${fS(T.fac)}</td>`:''}<td class="num">${bF?sgn(T.b-T.fac):(D.hasInv?sgn(T.b-T.inv):'—')}</td>${hasF?`<td class="num">${D.hasInv?sgn(T.inv-T.fac):'—'}</td>`:''}<td></td></tr>`;
     if(CQ.view==='cli'&&!D.hasFacCli&&D.hasFac) body+='<tr><td colspan="9" class="hint" style="white-space:normal">El reporte de ventas facturadas cargado es la tabla mensual (sin cliente). Para ver facturado por cliente carga el pivote por cliente.</td></tr>';
     document.getElementById('cqHint').innerHTML=CQ.view==='prod'?'Producto a producto: lo que cargaron, lo que pesó báscula, lo que salió de inventario en Odoo y lo facturado (sin descuento ni maniobra). Las promociones y bonificaciones cuentan como el mismo producto.'
       :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto) se empareja con el del programa ignorando acentos y signos.':'Por lote · INFORMATIVO: compara el lote de Cargadores, Báscula y Odoo (se ignoran espacios y símbolos). Las diferencias aquí no cuentan como error: el cuadre se juzga por producto, cantidad y peso.';
+  } else if(CQ.view==='rem'){
+    const fr=odooRows(CQ.per,'facrem'); const F=new Map(); (fr&&fr.rows||[]).forEach(([v,qq,sub])=>F.set(String(v).toUpperCase(),{q:qq,sub}));
+    const A=new Map(); D.cus.forEach(c=>{ const v=String(c.u.r.pedido||'').trim().toUpperCase()||('(sin remisión) '+c.u.id); const o=A.get(v)||{v,cli:c.u.r.cliente||'',f:c.u.fecha,c:0,b:0,n:0,id:c.u.id,sinB:false}; o.c+=c.prods.reduce((a,p)=>a+p.c,0); o.b+=c.prods.reduce((a,p)=>a+p.b,0); o.n++; if(!c.u.b) o.sinB=true; A.set(v,o); });
+    const keys=[...new Set([...A.keys(),...F.keys()])];
+    const lecR=(a,f)=>{ const L=[]; if(!fr) return [['info','Carga el reporte de ventas por remisión']];
+      if(a&&!f) L.push(['warn','Sin facturar (no viene en el reporte)']); else if(a&&f&&!(f.q>0)) L.push(['warn','Orden sin facturar todavía (cantidad facturada 0)']);
+      if(!a&&f&&f.q>0) L.push(['crit','Facturado sin embarque en el programa']); if(!a&&f&&!(f.q>0)) L.push(['info','Orden en Odoo sin embarque ni factura']);
+      if(a&&a.sinB) L.push(['warn','Falta báscula']);
+      if(a&&f&&f.q>0){ const ref=a.sinB?a.c:a.b, d=ref-f.q, tol=Math.max(cfg.tolSacos,10,Math.round(f.q*0.01)); if(Math.abs(d)>tol) L.push([d>0?'warn':'crit',(d>0?'Cargado/pesado de más vs facturado':'Facturado de más vs lo cargado')+' ('+sgn(d)+')']); }
+      return L; };
+    const rows=keys.map(v=>{ const a=A.get(v), f=F.get(v); return {v,a,f,lec:lecR(a,f)}; }).filter(x=>(!CQ.soloDif||x.lec.some(l=>l[0]!=='info'))&&(!q||normNom(x.v+' '+(x.a?x.a.cli:'')).includes(q))).sort((x,y)=>x.v.localeCompare(y.v));
+    head=th('Remisión')+th('Cliente')+th('Fecha')+th('Cargadores',1)+th('Báscula',1)+th('Facturado',1)+th('Subtotal $',1)+th('Báscula − Fact.',1)+th('Lectura');
+    body=rows.map(({v,a,f,lec})=>`<tr ${a?`style="cursor:pointer" onclick="cuadDet('${a.id}')"`:''}><td class="code"><b>${escProy(v)}</b></td><td>${escProy(a?a.cli:'')}</td><td>${a?a.f:''}</td><td class="num">${a?fS(a.c):'—'}</td><td class="num">${a?fS(a.b):'—'}</td><td class="num">${f?fS(f.q):'—'}</td><td class="num">${f?'$'+Math.round(f.sub).toLocaleString('es-MX'):'—'}</td><td class="num">${a&&f&&f.q>0?sgn(a.b-f.q):'—'}</td><td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
+    const T=rows.reduce((t,x)=>{ if(x.a){t.c+=x.a.c;t.b+=x.a.b;} if(x.f){t.f+=x.f.q;t.s+=x.f.sub;} return t; },{c:0,b:0,f:0,s:0});
+    if(rows.length) body+=`<tr style="font-weight:700;background:#12202f"><td>Total</td><td></td><td></td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td><td class="num">${fS(T.f)}</td><td class="num">$${Math.round(T.s).toLocaleString('es-MX')}</td><td class="num">${sgn(T.b-T.f)}</td><td></td></tr>`;
+    const fm=CUAD.odoo[CQ.per]&&CUAD.odoo[CQ.per].facrem;
+    document.getElementById('cqHint').innerHTML='Por remisión contra el reporte de <b>ventas facturadas por remisión</b>'+(fm?' ('+escProy(fm.fname||'')+' · '+new Date(fm.ts).toLocaleString('es-MX')+')':' — aún no cargado: súbelo con «Cargar reportes de Odoo»')+'. La «Cant. facturada» de Odoo incluye renglones como descuento y maniobra, por eso trae unas unidades de más: solo se marca diferencia si pasa de 10 sacos o del 1%.';
   } else {
     head=th('Fecha')+th('Pedido')+th('Cliente')+th('Prog. kg',1)+th('Cargadores kg',1)+th('Cargadores sacos',1)+th('Báscula neto kg',1)+th('Báscula sacos',1)+th('Estatus');
     const qfOk=c=>!CQ.qf||(CQ.qf==='pend'?c.st==='pend':CQ.qf==='dif'?c.st==='dif':CQ.qf==='sinlotes'?c.flags.some(f=>f.k==='lotes'):CQ.qf==='old'?(c.st==='pend'&&c.u.fecha&&c.u.fecha<TODAY):true);
@@ -3740,7 +3782,8 @@ function cuadStepsHtml(D){
   const cargOk=despCarg.filter(c=>lotesDe(c.u.r).length), cargPend=despCarg.filter(c=>!lotesDe(c.u.r).length);
   const conB=cus.filter(c=>c.u.b), sinB=cus.filter(c=>!c.u.b&&c.st==='pend');
   const cuadOk=conB.filter(c=>c.st==='ok'||c.st==='ana'), cuadPend=conB.filter(c=>c.st==='dif');
-  const prodMal=D.hasInv?D.prod.filter(o=>(o.c||o.b)&&Math.abs(o.b-o.inv)>cfg.tolSacos):[];
+  const _bF=cuadBase()==='fac'&&D.hasFac, _hasRef=_bF||D.hasInv;
+  const prodMal=_hasRef?D.prod.filter(o=>(o.c||o.b)&&Math.abs(o.b-(_bF?o.fac:o.inv))>cfg.tolSacos):[];
   const prodN=D.prod.filter(o=>o.c||o.b).length;
   const mine=isBasc?'bascula':(isMaster?'':'prog');
   const lst=(arr,n)=>arr.slice(0,n).map(c=>`<div style="padding:3px 0;font-size:11.5px;cursor:pointer;border-top:1px solid var(--line)" onclick="cuadDet('${c.u?c.u.id:c.id}')">${escProy((c.u?c.u.r:c).cliente||'')} · <span class="muted">${escProy((c.u?c.u.r:c).pedido||'—')} · ${c.u?c.u.fecha:fechaEmb(c)}</span></div>`).join('')+(arr.length>n?`<div class="hint" style="margin-top:3px">… y ${arr.length-n} más</div>`:'');
@@ -3751,7 +3794,7 @@ function cuadStepsHtml(D){
       <div class="bar" style="height:5px;background:var(--line);border-radius:3px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:${ok?'var(--ok)':'var(--warn)'}"></i></div>
       ${pendList.length&&Array.isArray(pendList)&&pendList[0]&&(pendList[0].u||pendList[0].id)?`<div style="margin-top:6px">${lst(pendList,3)}</div>`:''}
       ${(!ok&&btn)?`<div style="margin-top:8px"><button class="${mine===key?'primary':'ghost'}" style="width:100%" onclick="${fn}">${btn}</button></div>`:''}</div>`; };
-  const odooState=!D.hasInv?[['x']]:prodMal;
+  const odooState=!_hasRef?[['x']]:prodMal;
   return regBannerHtml()+`<div class="card" style="padding:12px 14px;margin-bottom:12px"><h3 style="margin:0 0 4px">⚖️ ¿Están las áreas a la par? · ${perLabel(P)}</h3>
     <div class="hint" style="margin-bottom:8px">Cada área con lo que ya hizo y lo que le falta. «Atender ahora» abre la lista filtrada de pendientes.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
@@ -3759,7 +3802,7 @@ function cuadStepsHtml(D){
       ${step('carg','📲','Cargadores',cargOk.length,despCarg.length,cargPend,cargPend.length+' sin lotes','Atender ahora',"cqFiltro('sinlotes','"+P+"')")}
       ${step('bascula','⚖️','Báscula',conB.length,cus.length,sinB,sinB.length+' sin pesar',isBasc?'Ir a pesar':'Atender ahora',isBasc?"bsFiltro('pend')":"cqFiltro('pend','"+P+"')")}
       ${step('cuadre','🔎','Cuadre',cuadOk.length,conB.length,cuadPend,cuadPend.length+' con diferencia','Atender ahora',"cqFiltro('dif','"+P+"')")}
-      ${step('odoo','🧾','Odoo',prodN-(D.hasInv?prodMal.length:prodN),prodN,D.hasInv?[]:[],D.hasInv?(prodMal.length+' producto(s) no cuadran'):'sin cargar','Ver productos',"CQ.view='prod';CQ.qf='';CQ.soloDif=true;renderCuadre();irA('#v-cuadre .tablewrap','Productos con diferencia contra Odoo')",D.hasInv?(prodMal.length?'warn':''):'warn')}
+      ${step('odoo','🧾','Odoo',prodN-(_hasRef?prodMal.length:prodN),prodN,[],_hasRef?(prodMal.length+' producto(s) no cuadran'+(_bF?' vs facturado':'')):'sin cargar','Ver productos',"CQ.view='prod';CQ.qf='';CQ.soloDif=true;renderCuadre();irA('#v-cuadre .tablewrap','Productos con diferencia contra Odoo')",D.hasInv?(prodMal.length?'warn':''):'warn')}
     </div></div>`;
 }
 function cqGoTabla(P){
