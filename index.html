@@ -187,9 +187,9 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 <div class="modal" id="turnoModal">
   <div class="modalc">
     <h3>👤 Iniciar turno</h3>
-    <p class="hint">Selecciona tu usuario e ingresa tu NIP. Si es tu primera vez con el nuevo acceso, usa tu PIN de siempre: te pedirá crear tu NIP nuevo de 6 números.</p>
+    <p class="hint">Elige tu nombre y escribe <b>la misma contraseña (o NIP) que usas en tus otras apps</b>. Solo los cargadores registran cargas; los demás entran a consultar. Si tu usuario es nuevo, usa la temporal que te dio el master: te pedirá crear la tuya una sola vez y te servirá en todas tus apps.</p>
     <select id="turnoName" style="width:100%;font-size:16px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px;margin-bottom:9px"></select>
-    <input id="turnoPin" type="password" inputmode="numeric" placeholder="NIP" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')doTurno()">
+    <input id="turnoPin" type="password" autocomplete="current-password" placeholder="Contraseña o NIP" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')doTurno()">
     <div id="turnoErr" style="color:var(--late);font-size:13px;margin-top:6px;display:none">Usuario o NIP incorrecto</div>
     <button class="bigbtn bg-start" onclick="doTurno()">Entrar</button>
     <button class="bigbtn bg-dis" onclick="document.getElementById('turnoModal').classList.remove('show')">Cancelar</button>
@@ -294,7 +294,8 @@ let DATA=[], fbCfgObj=null;
 let fb=null, fbData=null, fbCfg=null, fbAudit=null;
 const STORE_KEY='progEmbarques_v1', CFG_KEY='progEmbarques_cfg_v1', APPCFG_KEY='cargApp_fb', USER_KEY='cargApp_user';
 let openId=null, tick=null, curTab='oper';
-let currentUser = null;   // null = modo visor (solo lectura)
+let currentUser = null;   // null = sin sesión
+let puedeEditar = false;  // true solo para cargadores (carg:true) y master; los demás usuarios consultan
 
 /* ---- cálculo compartido ---- */
 function toMin(h){ if(!h)return null; const p=h.split(':'); return (+p[0])*60+(+p[1]); }
@@ -410,12 +411,12 @@ function fillSheet(r){
   // status line (terminado) — informativa, se ve siempre
   if(s==='done'){ const L=lateness(r); if(L.carga!=null&&L.permit!=null){ const razon=L.rc&&L.rs?'carga y salida':(L.rc?'carga lenta':'salió tarde'); body+=`<div class="statusline" style="background:${L.late?'var(--latebg)':'var(--okbg)'};color:${L.late?'var(--late)':'var(--ok)'}">${L.late?`⚠ RETRASADO +${L.retraso} min · ${razon}${r.motivo?' · '+motivoDesc(r.motivo):''}`:'✓ A TIEMPO'}</div>`; } }
 
-  if(!currentUser){
+  if(!puedeEditar){
     // MODO VISOR (solo lectura)
     if(r.kilos) body+=`<div class="stamps" style="margin-top:12px"><div class="st" style="flex:1">Kg cargados<b>${Number(r.kilos).toLocaleString('es-MX')}</b></div>${r.sacos?`<div class="st" style="flex:1">Sacos<b>${r.sacos}</b></div>`:''}</div>`;
     if(lotesDe(r).length) body+=lotesCardHTML(r,false);
     if(r.ultimoUsuario) body+=`<div class="hint" style="text-align:center;margin-top:10px">Último registro por: <b>${r.ultimoUsuario}</b></div>`;
-    body+=`<div style="text-align:center;margin-top:14px;color:var(--muted);font-size:13.5px">👁️ Modo visor (solo lectura).<br>Toca <b>Iniciar turno</b> arriba para poder registrar.</div>`;
+    body+=`<div style="text-align:center;margin-top:14px;color:var(--muted);font-size:13.5px">👁️ Modo visor (solo lectura).<br>${currentUser?'Tu usuario es de <b>consulta</b>: solo los cargadores registran cargas.':'Toca <b>Iniciar turno</b> arriba para poder registrar.'}</div>`;
     document.getElementById('sheetBody').innerHTML=body; return;
   }
 
@@ -690,7 +691,7 @@ function initFirebase(){
     setConn('online','Conectando…');
     fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
     // ¿ya había un turno abierto en este celular? (la sesión de Firebase se conserva)
-    Acceso19H.sesionActual('carg',{nip:true}).then(p=>{ if(p){ turnoAbierto(p); } else if(currentUser){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } });
+    Acceso19H.sesionActual('carg').then(p=>{ if(p){ turnoAbierto(p); } else if(currentUser){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } });
   }catch(e){ console.error(e); setConn('local','Local (error)'); } }).catch(()=>setConn('local','Sin internet'));
 }
 let _cfgOn=false;
@@ -718,12 +719,12 @@ function checkPin(){ document.getElementById('pinModal').classList.remove('show'
 function saveCfg(){ const t=document.getElementById('cfgFb').value.trim(); if(!t){ localStorage.removeItem(APPCFG_KEY); document.getElementById('cfgModal').classList.remove('show'); toast('Modo local'); setConn('local','Local'); return; } try{ const o=JSON.parse(t); localStorage.setItem(APPCFG_KEY,JSON.stringify(o)); document.getElementById('cfgModal').classList.remove('show'); toast('Guardado, conectando…'); initFirebase(); }catch(e){ toast('JSON inválido'); } }
 
 /* ---- turno / usuario ---- */
-function updateTurnoBtn(){ const b=document.getElementById('turnoBtn'); if(currentUser){ b.textContent='👤 '+currentUser+' · salir'; b.classList.add('on'); } else { b.textContent='👤 Iniciar turno'; b.classList.remove('on'); } }
+function updateTurnoBtn(){ const b=document.getElementById('turnoBtn'); if(currentUser){ b.textContent=(puedeEditar?'👤 ':'👁️ ')+currentUser+(puedeEditar?'':' (consulta)')+' · salir'; b.classList.add('on'); } else { b.textContent='👤 Iniciar turno'; b.classList.remove('on'); } }
 function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentUser+'? Ya no podrás registrar hasta iniciar de nuevo.')){ Acceso19H.salir().then(()=>{ try{localStorage.removeItem(USER_KEY);}catch(e){} location.reload(); }); } } else {
     const sel=document.getElementById('turnoName'); sel.innerHTML='<option value="">Cargando…</option>';
     document.getElementById('turnoPin').value=''; document.getElementById('turnoErr').style.display='none';
     document.getElementById('turnoModal').classList.add('show');
-    Acceso19H.directorio('carg').then(L=>{
+    Acceso19H.directorio().then(L=>{
       if(!L.length){ sel.innerHTML='<option value="">El supervisor aún no ha creado usuarios</option>'; return; }
       let ult=''; try{ ult=localStorage.getItem('carg_ult_usuario')||''; }catch(e){}
       sel.innerHTML='<option value="">— Elige tu nombre —</option>'+L.map(u=>`<option value="${u.key}"${u.key===ult?' selected':''}>${u.nombre.replace(/</g,'&lt;')}</option>`).join('');
@@ -731,21 +732,22 @@ function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentU
     }).catch(()=>{ sel.innerHTML='<option value="">Sin internet</option>'; });
   } }
 function turnoAbierto(p){
-  currentUser=p.nombre; try{localStorage.setItem(USER_KEY,p.nombre);}catch(e){}
+  currentUser=p.nombre; puedeEditar=Acceso19H.puedeCargar(p); try{localStorage.setItem(USER_KEY,p.nombre);}catch(e){}
   conectarCfg(); updateTurnoBtn(); render();
-  Acceso19H.vigilar(q=>{ if(!q||q.activo!==true||q.carg!==true){ toast('Tu usuario fue dado de baja'); Acceso19H.salir().then(()=>location.reload()); } });
+  Acceso19H.vigilar(q=>{ if(!q||q.activo!==true){ toast('Tu usuario fue dado de baja'); Acceso19H.salir().then(()=>location.reload()); return; }
+    const ed=Acceso19H.puedeCargar(q); if(ed!==puedeEditar){ puedeEditar=ed; updateTurnoBtn(); render(); toast(ed?'Ahora puedes registrar cargas':'Tu usuario quedó de consulta'); } });
 }
 let _turnoBusy=false;
 function doTurno(){ if(_turnoBusy) return; const key=document.getElementById('turnoName').value; const pin=document.getElementById('turnoPin').value.trim();
   const er=document.getElementById('turnoErr');
-  if(!key||!pin){ er.textContent='Elige tu nombre y escribe tu NIP'; er.style.display='block'; return; }
+  if(!key||!pin){ er.textContent='Elige tu nombre y escribe tu contraseña o NIP'; er.style.display='block'; return; }
   _turnoBusy=true; er.style.display='none';
-  Acceso19H.entrar(key,pin,'carg',{nip:true}).then(p=>{
+  Acceso19H.entrar(key,pin,'carg').then(p=>{
     try{ localStorage.setItem('carg_ult_usuario',key); }catch(e){}
-    document.getElementById('turnoModal').classList.remove('show'); turnoAbierto(p); toast('Turno iniciado: '+p.nombre);
+    document.getElementById('turnoModal').classList.remove('show'); turnoAbierto(p); toast((puedeEditar?'Turno iniciado: ':'Modo consulta: ')+p.nombre);
   }).catch(e=>{ er.textContent=e.message||'Usuario o NIP incorrecto'; er.style.display='block'; }).then(()=>{ _turnoBusy=false; });
 }
-function requireTurno(){ if(!currentUser){ toast('Inicia turno para registrar 👤'); turnoClick(); return false; } return true; }
+function requireTurno(){ if(!currentUser){ toast('Inicia turno para registrar 👤'); turnoClick(); return false; } if(!puedeEditar){ toast('👁️ Tu usuario es de consulta: solo los cargadores registran cargas',2600); return false; } return true; }
 /* ---- auditoría de la app (quién movió qué) ---- */
 function appAudit(r, field, label, from, to){
   const entry={ ts:new Date().toISOString(), id:r.id, pedido:r.pedido||'', cliente:r.cliente||'', field, label, from:(from==null?'':String(from)), to:(to==null?'':String(to)), maquillaje:false, estatusAntes:'', estatusDespues:'', by:currentUser||'?', origen:'app' };

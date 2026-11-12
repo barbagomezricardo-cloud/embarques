@@ -81,7 +81,7 @@
     if (!p || p.activo !== true) return false;
     if (p.master === true) return true;
     if (app === 'prog') return !!ROLES_PROG[p.prog];
-    if (app === 'carg') return p.carg === true;
+    if (app === 'carg') return tieneAcceso(p);   // Cargadores: todo usuario activo entra a CONSULTAR; solo carg:true (o master) registra cargas
     if (app === 'ventas') return !!ROLES_GER[p.ventas];
     if (app === 'maestra') return !!ROLES_GER[p.maestra];
     if (app === 'vend') return !!p.vend;
@@ -90,6 +90,10 @@
     if (app === 'cm') return !!ROLES_CM[p.cm];
     return false;   // 'panel' (Panel de Licencia) y cualquier otro: solo master
   }
+
+  function tieneAcceso(p) { return !!p && (p.master === true || p.carg === true || !!(p.prog || p.ventas || p.maestra || p.vend || p.cb || p.cli || p.cm || p.inv || p.rh)); }
+  /* Solo los cargadores (carg:true) y el master inician y registran cargas; los demás, solo consulta */
+  function puedeCargar(p) { return !!p && p.activo === true && (p.master === true || p.carg === true); }
 
   /* Lista de nombres para elegir al entrar (no trae contraseñas ni roles) */
   function directorio(app) {
@@ -287,7 +291,7 @@
      dar de alta, restablecer contraseña y dar de baja. cont = elemento donde se dibuja */
   var PROGRAMAS = [
     { k: 'prog', t: '🚚 Programador de embarques', roles: ROLES_PROG },
-    { k: 'carg', t: '📦 Cargadores', bool: 'Cargador' },
+    { k: 'carg', t: '📦 Cargadores (pueden iniciar y registrar cargas)', bool: 'Cargador', nota: 'Solo estas personas y tú (master) registran cargas. Cualquier otro usuario activo entra a la app de Cargadores <b>solo a consultar</b>, con su mismo usuario y contraseña; no hace falta darle acceso aquí.' },
     { k: 'cb', t: '⚖️ Cuadre de báscula', roles: ROLES_CB },
     { k: 'ventas', t: '📈 Ventas (tablero)', roles: ROLES_GER },
     { k: 'maestra', t: '📊 Maestra (gerencia)', roles: ROLES_GER },
@@ -410,7 +414,7 @@
     iniciar: iniciar, app: function () { return S.app; }, db: function () { return S.db; },
     directorio: directorio, entrar: entrar, sesionActual: sesionActual, salir: salir, vigilar: vigilar,
     cambiar: cambiar, pedirCambio: pedirCambio, admin: admin, token: token, panel: panel,
-    puerta: puerta, esperarSesion: esperarSesion, ROLES_INV: ROLES_INV, ROLES_RH: ROLES_RH, ROLES_CB: ROLES_CB, permitido: permitido, tokenGuardado: tokenGuardado, appCheckToken: appCheckToken, ROLES_GER: ROLES_GER,
+    puerta: puerta, esperarSesion: esperarSesion, ROLES_INV: ROLES_INV, ROLES_RH: ROLES_RH, ROLES_CB: ROLES_CB, permitido: permitido, puedeCargar: puedeCargar, tokenGuardado: tokenGuardado, appCheckToken: appCheckToken, ROLES_GER: ROLES_GER,
     perfil: function () { return S.perfil; }, clave: clave, ROLES_PROG: ROLES_PROG
   };
 })(window);
