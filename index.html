@@ -689,10 +689,16 @@ function initFirebase(){
     fb=Acceso19H.app();   // Acceso 19H: la misma app donde inicia turno cada cargador (lleva su sesión a la base)
     const db=firebase.database(fb); fbData=db.ref('embarques');
     setConn('online','Conectando…');
-    fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); });
+    conectarDatos();
     // ¿ya había un turno abierto en este celular? (la sesión de Firebase se conserva)
     Acceso19H.sesionActual('carg').then(p=>{ if(p){ turnoAbierto(p); } else if(currentUser){ currentUser=null; try{localStorage.removeItem(USER_KEY);}catch(e){} updateTurnoBtn(); render(); } });
   }catch(e){ console.error(e); setConn('local','Local (error)'); } }).catch(()=>setConn('local','Sin internet'));
+}
+let _datosOn=false;
+function conectarDatos(){   // embarques solo se leen con sesión: si la lectura se negó antes de entrar, se reintenta al iniciar turno
+  if(_datosOn||!fbData) return; _datosOn=true;
+  fbData.on('value',snap=>{ const v=snap.val(); if(v){ DATA=Object.values(v); render(); } setConn('online','Nube conectada'); },
+    ()=>{ _datosOn=false; setConn('online','Inicia turno para ver las cargas'); });
 }
 let _cfgOn=false;
 function conectarCfg(){   // Acceso 19H: /config y /audit ya solo se abren con sesión
@@ -733,7 +739,7 @@ function turnoClick(){ if(currentUser){ if(confirm('¿Cerrar turno de '+currentU
   } }
 function turnoAbierto(p){
   currentUser=p.nombre; puedeEditar=Acceso19H.puedeCargar(p); try{localStorage.setItem(USER_KEY,p.nombre);}catch(e){}
-  conectarCfg(); updateTurnoBtn(); render();
+  conectarDatos(); conectarCfg(); updateTurnoBtn(); render();
   Acceso19H.vigilar(q=>{ if(!q||q.activo!==true){ toast('Tu usuario fue dado de baja'); Acceso19H.salir().then(()=>location.reload()); return; }
     const ed=Acceso19H.puedeCargar(q); if(ed!==puedeEditar){ puedeEditar=ed; updateTurnoBtn(); render(); toast(ed?'Ahora puedes registrar cargas':'Tu usuario quedó de consulta'); } });
 }
