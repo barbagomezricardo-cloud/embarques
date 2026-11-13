@@ -472,7 +472,7 @@ table.tend tr:hover td{background:rgba(222,10,20,.07)}
   <div class="pane" id="pane-objetivos"><div id="obj-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-nuevos"><div id="nue-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:var(--kt5A4E42)">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-neto-wrap" style="display:none"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px"><input type="checkbox" id="graf-neto" onchange="renderGrafica()" style="vertical-align:middle"> Sin kilo de regalo</label></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde día:</label><select id="graf-dayfrom" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span><button id="wa-export-btn" onclick="exportWhatsappReport()" style="margin-left:10px;background:var(--wa);color:var(--ktFFFFFF);border:none;border-radius:6px;padding:7px 12px;font-size:.78rem;font-weight:800;cursor:pointer">📲 Generar reporte para WhatsApp</button><span id="wa-status" style="font-size:.72rem;color:var(--kt5A4E42);margin-left:8px"></span></div><div id="graf-content"></div></div></div>
-  <div class="pane" id="pane-productos"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:var(--kt5A4E42)">Vendedor:</label><select id="prod-vend" onchange="renderProductos()"><option value="">Todos los vendedores</option></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde:</label><select id="prod-from" onchange="renderProductos()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta:</label><select id="prod-to" onchange="renderProductos()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Cliente:</label><input id="prod-cli" list="prod-cli-list" placeholder="Todos los clientes" style="min-width:230px" onchange="renderProductos()" oninput="if(!this.value)renderProductos()"><datalist id="prod-cli-list"></datalist><input type="file" id="basecp-input" accept=".xlsx,.xls" style="display:none" onchange="cargarBaseCP(this.files[0])"></div><div id="prod-basecp" style="font-size:.74rem;margin:-2px 0 10px"></div><div id="prod-content"></div></div></div>
+  <div class="pane" id="pane-productos"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:var(--kt5A4E42)">Vendedor:</label><select id="prod-vend" onchange="renderProductos()"><option value="">Todos los vendedores</option></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde:</label><select id="prod-from" onchange="renderProductos()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta:</label><select id="prod-to" onchange="renderProductos()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Buscar cliente:</label><input id="prod-cli-q" placeholder="Parte del nombre" autocomplete="off" style="min-width:150px" oninput="prodCliFiltra()" onkeydown="if(event.key==='Enter'){event.preventDefault();const s=document.getElementById('prod-cli');if(s.options.length>1){s.selectedIndex=1;renderProductos();}}"><select id="prod-cli" style="min-width:230px;max-width:340px" onchange="renderProductos()"><option value="">— Todos los clientes —</option></select><input type="file" id="basecp-input" accept=".xlsx,.xls" style="display:none" onchange="cargarBaseCP(this.files[0])"></div><div id="prod-basecp" style="font-size:.74rem;margin:-2px 0 10px"></div><div id="prod-content"></div></div></div>
   <div class="pane" id="pane-metas">
     <div style="display:flex;flex-direction:column;width:100%;flex:1;min-height:0">
       <div style="font-size:1.05rem;font-weight:800;color:var(--gold-t);padding:12px 16px 2px">📋 Metas por cliente 2026</div>
@@ -4711,6 +4711,19 @@ function curCPCliente(c){
   for(const fk in out) out[fk]=out[fk].map(x=>Math.round(x));
   return out;
 }
+// Buscador del filtro de cliente: el texto solo acota la lista; el cliente se elige en la lista y no se borra
+function prodCliFiltra(sinRender){
+  const sel=document.getElementById('prod-cli'), q=document.getElementById('prod-cli-q'); if(!sel||!DATA)return;
+  const vf=(document.getElementById('prod-vend')||{}).value||'', actual=sel.value;
+  const norm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  const nq=norm(q&&q.value);
+  let L=DATA.clients.filter(c=>!vf||c.vendedor===vf).map(c=>c.nombre).sort((a,b)=>a.localeCompare(b,'es'));
+  const enCartera=L.indexOf(actual)>=0;
+  if(nq) L=L.filter(n=>norm(n).indexOf(nq)>=0);
+  if(actual&&enCartera&&L.indexOf(actual)<0) L.unshift(actual);
+  sel.innerHTML='<option value="">'+(nq?'— '+L.length+' encontrado(s) —':'— Todos los clientes —')+'</option>'+L.map(n=>'<option value="'+_pe(n)+'"'+(n===actual?' selected':'')+'>'+_pe(n)+'</option>').join('');
+  if(!sinRender&&L.length===1&&!actual){ sel.selectedIndex=1; renderProductos(); }
+}
 let prodSortCol='diff', prodSortAsc=true;
 function sortProductos(col){ if(prodSortCol===col)prodSortAsc=!prodSortAsc; else{prodSortCol=col;prodSortAsc=(col==='label');} renderProductos(); }
 function renderProductos(){
@@ -4723,9 +4736,9 @@ function renderProductos(){
   if(toEl&&toEl.options.length===0){ DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];toEl.appendChild(o);}); toEl.value=DATA.meses[DATA.meses.length-1]; }
   const vf=vendEl?vendEl.value:'';
   // Cliente: la lista se limita al vendedor elegido
-  const cliEl=document.getElementById('prod-cli'), cliDl=document.getElementById('prod-cli-list');
+  const cliEl=document.getElementById('prod-cli');
   const cliPool=DATA.clients.filter(c=>!vf||c.vendedor===vf);
-  if(cliDl&&cliDl.getAttribute('data-v')!==vf+'|'+cliPool.length){ cliDl.innerHTML=cliPool.map(c=>c.nombre).sort((a,b)=>a.localeCompare(b,'es')).map(n=>'<option value="'+_pe(n)+'">').join(''); cliDl.setAttribute('data-v',vf+'|'+cliPool.length); }
+  if(cliEl&&cliEl.getAttribute('data-v')!==vf+'|'+cliPool.length){ cliEl.setAttribute('data-v',vf+'|'+cliPool.length); prodCliFiltra(true); }
   const cliTxt=cliEl?cliEl.value.trim():'';
   const cliObj=cliTxt?(cliPool.find(c=>c.nombre===cliTxt)||cliPool.find(c=>nkey(c.nombre)===nkey(cliTxt))||null):null;
   const pyB=Y?Y.py:null, BCP=getBaseCP(pyB), stEl=document.getElementById('prod-basecp');
@@ -4767,6 +4780,12 @@ function renderProductos(){
     ${card(totGrowth==null?'nuevo':(pct(totGrowth)),'Crecimiento total','vs '+(Y?Y.py:''),totGrowth==null?'#5A4E42':(totGrowth>=0?'var(--green)':'var(--red)'))}
     ${card(nSube+' / '+nBaja,'Productos que suben / bajan',nNuevo?nNuevo+' sin venta el año pasado':'','var(--green-t)')}
     </div>`;
+  if(cliObj){
+    const bc=baseCPCliente(cliObj.nombre,Y?Y.py:null);
+    h=`<div style="display:flex;align-items:center;gap:12px;background:var(--mid);border:2px solid var(--gold-t);border-radius:12px;padding:10px 14px;margin-bottom:12px"><div style="font-size:1.6rem">👤</div><div style="flex:1"><div style="font-size:.66rem;color:var(--kt5A4E42);text-transform:uppercase;letter-spacing:.05em;font-weight:700">Cliente en revisión</div><div style="font-size:1.25rem;font-weight:900;color:var(--kt281E12)">${_pe(cliObj.nombre)}</div><div style="font-size:.74rem;color:var(--kt5A4E42)">${cliObj.vendedor?'Vendedor: '+_pe(cliObj.vendedor)+' · ':''}${periodoTxt}</div></div><a href="#" onclick="const s=document.getElementById('prod-cli');s.value='';renderProductos();return false" style="color:var(--red-t);font-weight:800">✕ Todos</a></div>`
+      +(bc===null?`<div style="background:#FFF4DF;color:#8A5000;border-radius:9px;padding:9px 12px;font-size:.8rem;margin-bottom:10px">⚠ <b>Falta cargar la venta ${Y?Y.py:''} por cliente y producto</b>: por eso el año pasado sale en 0. Usa «📂 Cargar reporte de ventas ${Y?Y.py:''} de Odoo» (arriba) una sola vez.</div>`:(!Object.keys(bc).length?`<div style="background:var(--mid);border-radius:9px;padding:9px 12px;font-size:.8rem;margin-bottom:10px">Este cliente no compró en ${Y?Y.py:''}: todo es venta nueva.</div>`:''))
+      +h;
+  }
   if(!rows.length){ h+='<div style="padding:20px;color:var(--kt5A4E42)">No hay venta en este periodo/filtro.</div>'; box.innerHTML=h; return; }
   const arw=c=>prodSortCol===c?(prodSortAsc?' ▲':' ▼'):' ↕';
   const maxAbs=Math.max(...rows.map(r=>Math.max(r.cur,r.prior)),1);
