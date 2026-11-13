@@ -111,14 +111,30 @@
   // Clientes nuevos que entran al esquema: 1.ª compra desde S.nuevosDesde (oct 2026). Los anteriores ya se pagaron con el esquema anterior.
   function nuevoEnVigor(Y, f) { var d = S.nuevosDesde || DEF.nuevosDesde; return Y.cy > d.y || (Y.cy === d.y && f >= d.m); }
   function nuevosFuera(Y) { return Y.rows.filter(function (r) { return r.nuevo && r.firstMes > 0 && !nuevoEnVigor(Y, r.firstMes); }).length; }
+  /* Estado de cada cliente nuevo para el seguimiento:
+     seg = en seguimiento · con = cerrado con pago · sin = cerrado sin pago · na = no aplica (antes del arranque) */
+  function estadoNuevo(c, Y, st0, maxM) {
+    var d = S.nuevosDesde || DEF.nuevosDesde, p1 = c.f + 2, p2 = c.f + 5;
+    if (c.na) return { k: 'na', t: 'No aplica: primera compra en ' + MES[c.f] + ' (antes de ' + MES[d.m] + ' ' + d.y + ')' };
+    if (st0.excl) return { k: 'sin', t: 'No validado por gerencia' };
+    if (!c.completo3 || p1 > maxM) return { k: 'seg', t: 'Se define en ' + (p1 > 12 ? MES[p1 - 12] + ' ' + (Y.cy + 1) : MES[p1]) };
+    if (c.compro < 2) return { k: 'sin', t: 'No cumplió: compró ' + c.compro + ' de 3 meses' };
+    if (!c.tier) return { k: 'sin', t: 'No cumplió: promedio menor a ' + ent(S.cTiers[0][0]) + ' sacos' };
+    var mitad = r2(c.tier.monto / 2), resto = r2(c.tier.monto - mitad);
+    var t1 = '1.er pago ' + $$(mitad) + ' (' + MES[p1] + ')' + (st0.pag1 ? ' ✔ pagado' : ' · por pagar');
+    var p2Txt = p2 > 12 ? MES[p2 - 12] + ' ' + (Y.cy + 1) : MES[p2];
+    if (st0.pag2) return { k: 'con', t: 'Pagado completo: ' + $$(c.tier.monto), pagos: true };
+    if (c.m6 != null && p2 <= maxM && c.m6 <= 0) return st0.pag1 ? { k: 'con', t: t1 + ' · 2.º pago no aplica (no compró en ' + p2Txt + ')', pagos: true } : { k: 'seg', t: t1 + ' · 2.º pago no aplica', pagos: true };
+    return { k: 'seg', t: t1 + ' · 2.º pago ' + $$(resto) + ' (' + p2Txt + ')' + (c.m6 != null && c.m6 > 0 ? ' ✔ compró' : ''), pagos: true };
+  }
   function nuevosDe(Y) {
-    return Y.rows.filter(function (r) { return r.nuevo && r.firstMes > 0 && nuevoEnVigor(Y, r.firstMes); }).map(function (r) {
+    return Y.rows.filter(function (r) { return r.nuevo && r.firstMes > 0; }).map(function (r) {
       var f = r.firstMes, c = r.curM || [];
       var m1 = c[f - 1] || 0, m2 = f + 1 <= 12 ? (c[f] || 0) : null, m3 = f + 2 <= 12 ? (c[f + 1] || 0) : null, m6 = f + 5 <= 12 ? (c[f + 4] || 0) : null;
       var tres = [m1, m2, m3].filter(function (x) { return x != null; });
       var compro = tres.filter(function (x) { return x > 0; }).length;
       var prom = (m1 + (m2 || 0) + (m3 || 0)) / 3;
-      return { nombre: r.nombre, vend: r.vend || 'SIN DATOS', f: f, m1: m1, m2: m2, m3: m3, m6: m6, compro: compro, prom: prom, tier: tierCliente(prom, 1), tierSop: tierCliente(m1, 2), completo3: m3 != null };
+      return { na: !nuevoEnVigor(Y, f), nombre: r.nombre, vend: r.vend || 'SIN DATOS', f: f, m1: m1, m2: m2, m3: m3, m6: m6, compro: compro, prom: prom, tier: tierCliente(prom, 1), tierSop: tierCliente(m1, 2), completo3: m3 != null };
     }).sort(function (a, b) { return b.f - a.f || b.prom - a.prom; });
   }
 
@@ -144,7 +160,7 @@
       }
       // clientes nuevos del vendedor que pagan este mes
       nuevos.forEach(function (c) {
-        if (c.vend !== v) return; var st = mesState(mk(Y.cy, c.f)).nuevos[c.nombre] || {}; if (st.excl) return;
+        if (c.na || c.vend !== v) return; var st = mesState(mk(Y.cy, c.f)).nuevos[c.nombre] || {}; if (st.excl) return;
         if (!c.tier || c.compro < 2) return;
         var mitad = r2(c.tier.monto / 2);
         if (c.f + 2 === m) p.conceptos.push(['Cliente nuevo ' + c.nombre + ' (' + c.tier.nombre + ', 1.er pago 50%)', mitad]);
@@ -163,7 +179,7 @@
       nuevos.forEach(function (c) {
         // el canalizado y la validación se guardan en el mes de la primera compra
         var st0 = (S.meses[mk(Y.cy, c.f)] || { nuevos: {} }).nuevos[c.nombre] || {};
-        if (c.f !== m || st0.canal !== s[0] || st0.excl) return;
+        if (c.na || c.f !== m || st0.canal !== s[0] || st0.excl) return;
         if (c.tierSop) p.conceptos.push(['Canalizó a ' + c.nombre + ' (1.ª compra ' + ent(c.m1) + ' sacos)', c.tierSop.monto]);
       });
       p.total = r2(p.conceptos.reduce(function (a, x) { return a + x[1]; }, 0));
@@ -307,26 +323,29 @@
       h.push('<div class="bn-card"><div class="hd"><b>' + esc(p.nombre) + '</b><span class="bn-tag ' + (p.kpi.ok >= 3 ? 'ok' : 'no') + '">' + p.kpi.ok + ' de 3 · factor ' + Math.round(p.factor * 100) + '%</span></div><div class="pay">' + $$(p.total) + '</div>' + conceptos(p) + '</div>');
     });
     h.push('</div></div>');
-    // clientes nuevos
-    var _nd = S.nuevosDesde || DEF.nuevosDesde, _fuera = nuevosFuera(Y);
-    h.push('<div class="bn-sec"><h3>Clientes nuevos desde ' + MES[_nd.m] + ' ' + _nd.y + ' <small>Detectados en el reporte (sin compras en ' + Y.py + ') con primera compra de ' + MES[_nd.m] + ' ' + _nd.y + ' en adelante. Gerencia valida cada alta.</small></h3>');
-    if (_fuera) h.push('<div class="bn-nota">' + _fuera + ' cliente' + (_fuera === 1 ? '' : 's') + ' nuevo' + (_fuera === 1 ? '' : 's') + ' con primera compra antes de ' + MES[_nd.m] + ' no participa' + (_fuera === 1 ? '' : 'n') + ' en este esquema (ya se pagaron con el esquema anterior).</div>');
-    if (!R.nuevos.length) h.push('<div class="bn-nota">Aún no hay clientes nuevos desde ' + MES[_nd.m] + ' ' + _nd.y + '.</div>');
+    // clientes nuevos: seguimiento con filtro (en seguimiento / cerrados con pago / cerrados sin pago / no aplica)
+    var _nd = S.nuevosDesde || DEF.nuevosDesde, _maxM = Math.max.apply(null, meses);
+    var _L = R.nuevos.map(function (c) { var st0 = mesState(mk(Y.cy, c.f)).nuevos[c.nombre] || {}; return { c: c, st0: st0, e: estadoNuevo(c, Y, st0, _maxM) }; });
+    var _cnt = { seg: 0, con: 0, sin: 0, na: 0 }; _L.forEach(function (x) { _cnt[x.e.k]++; });
+    var _fl = S.filtroNuevos || 'seg';
+    var _ET = { seg: ['🔎 En seguimiento', ''], con: ['✅ Cerrados con pago', 'ok'], sin: ['⛔ Cerrados sin pago', 'no'], na: ['No aplica (antes de ' + MES[_nd.m] + ')', 'no'] };
+    h.push('<div class="bn-sec"><h3>Clientes nuevos · seguimiento de bono <small>Solo pagan los clientes con primera compra de ' + MES[_nd.m] + ' ' + _nd.y + ' en adelante. Gerencia valida cada alta y marca cada pago hecho.</small></h3>');
+    h.push('<div class="bn-par" style="align-items:center"><label>Ver<select id="bn-fnuevos">' + ['seg', 'con', 'sin', 'na', 'todos'].map(function (k) { return '<option value="' + k + '"' + (_fl === k ? ' selected' : '') + '>' + (k === 'todos' ? 'Todos (' + _L.length + ')' : _ET[k][0] + ' (' + _cnt[k] + ')') + '</option>'; }).join('') + '</select></label>' +
+      '<span class="bn-nota">En seguimiento <b>' + _cnt.seg + '</b> · Cerrados con pago <b>' + _cnt.con + '</b> · Cerrados sin pago <b>' + _cnt.sin + '</b> · No aplica <b>' + _cnt.na + '</b></span></div>');
+    var _V = _L.filter(function (x) { return _fl === 'todos' || x.e.k === _fl; });
+    if (!_V.length) h.push('<div class="bn-nota">No hay clientes en este apartado.</div>');
     else {
-      h.push('<div class="bn-tbl"><table><thead><tr><th>Cliente</th><th>Vendedor</th><th>1.ª compra</th><th class="r">Mes 1</th><th class="r">Mes 2</th><th class="r">Mes 3</th><th class="r">Promedio</th><th>Tamaño</th><th>Pago al vendedor</th><th>Canalizó (redes)</th><th>¿Cuenta?</th></tr></thead><tbody>');
-      R.nuevos.forEach(function (c) {
-        var st0 = mesState(mk(Y.cy, c.f)).nuevos[c.nombre] || {};
-        var p1 = c.f + 2, p2 = c.f + 5, est;
-        if (!c.completo3 && c.f + 2 > 12) est = 'Mes 3 cae en ' + (Y.cy + 1);
-        else if (c.f + 2 > Math.max.apply(null, meses)) est = 'Se define en ' + MES[p1];
-        else if (c.compro < 2) est = '<span class="bn-tag no">No aplica: compró ' + c.compro + ' de 3</span>';
-        else if (!c.tier) est = '<span class="bn-tag no">No aplica: promedio &lt; ' + ent(S.cTiers[0][0]) + '</span>';
-        else est = $$(c.tier.monto / 2) + ' en ' + MES[p1] + (p2 <= 12 ? ' · ' + $$(c.tier.monto - c.tier.monto / 2) + ' en ' + MES[p2] + (c.m6 == null ? '' : (c.m6 > 0 ? ' ✔' : (p2 <= Math.max.apply(null, meses) ? ' ✖ no compró' : ''))) : ' · 2.º pago en ' + (Y.cy + 1));
-        h.push('<tr' + (st0.excl ? ' style="opacity:.5"' : '') + '><td>' + esc(c.nombre) + '</td><td>' + esc(c.vend) + '</td><td>' + MES[c.f] + '</td><td class="r">' + ent(c.m1) + '</td><td class="r">' + (c.m2 == null ? '—' : ent(c.m2)) + '</td><td class="r">' + (c.m3 == null ? '—' : ent(c.m3)) + '</td><td class="r">' + ent(c.prom) + '</td><td>' + (c.tier ? c.tier.nombre : '—') + '</td><td>' + est + '</td>' +
+      h.push('<div class="bn-tbl"><table><thead><tr><th>Cliente</th><th>Vendedor</th><th>1.ª compra</th><th class="r">Mes 1</th><th class="r">Mes 2</th><th class="r">Mes 3</th><th class="r">Promedio</th><th>Tamaño</th><th>Estado y pago al vendedor</th><th>Canalizó (redes)</th><th>¿Cuenta?</th></tr></thead><tbody>');
+      _V.forEach(function (x) {
+        var c = x.c, st0 = x.st0, e = x.e, na = e.k === 'na';
+        var pagos = e.pagos ? '<div style="margin-top:4px;display:flex;gap:10px;flex-wrap:wrap"><label class="bn-nota"><input type="checkbox" data-pag="1" data-cli="' + esc(c.nombre) + '" data-f="' + c.f + '"' + (st0.pag1 ? ' checked' : '') + '> 1.er pago hecho</label><label class="bn-nota"><input type="checkbox" data-pag="2" data-cli="' + esc(c.nombre) + '" data-f="' + c.f + '"' + (st0.pag2 ? ' checked' : '') + '> 2.º pago hecho</label></div>' : '';
+        h.push('<tr' + (na || e.k === 'sin' ? ' style="opacity:.6"' : '') + '><td>' + esc(c.nombre) + '</td><td>' + esc(c.vend) + '</td><td>' + MES[c.f] + '</td><td class="r">' + ent(c.m1) + '</td><td class="r">' + (c.m2 == null ? '—' : ent(c.m2)) + '</td><td class="r">' + (c.m3 == null ? '—' : ent(c.m3)) + '</td><td class="r">' + ent(c.prom) + '</td><td>' + (c.tier && !na ? c.tier.nombre : '—') + '</td>' +
+          '<td><span class="bn-tag ' + _ET[e.k][1] + '">' + (e.k === 'seg' ? 'Seguimiento' : e.k === 'con' ? 'Cerrado con pago' : e.k === 'sin' ? 'Cerrado sin pago' : 'No aplica') + '</span><div class="bn-nota" style="margin-top:3px">' + e.t + '</div>' + pagos + '</td>' +
+          (na ? '<td>—</td><td>—</td></tr>' :
           '<td><select data-canal="' + esc(c.nombre) + '" data-f="' + c.f + '"><option value="">—</option>' + ['jefa', 'a1', 'a2'].map(function (k) { return '<option value="' + k + '"' + (st0.canal === k ? ' selected' : '') + '>' + esc(S.nombres[k]) + '</option>'; }).join('') + '</select>' + (st0.canal && c.tierSop ? ' <span class="bn-nota">' + $$(c.tierSop.monto) + ' en ' + MES[c.f] + '</span>' : '') + '</td>' +
-          '<td><label class="bn-nota"><input type="checkbox" data-valid="' + esc(c.nombre) + '" data-f="' + c.f + '"' + (st0.excl ? '' : ' checked') + '> Validado</label></td></tr>');
+          '<td><label class="bn-nota"><input type="checkbox" data-valid="' + esc(c.nombre) + '" data-f="' + c.f + '"' + (st0.excl ? '' : ' checked') + '> Validado</label></td></tr>'));
       });
-      h.push('</tbody></table></div><div class="bn-nota">Pago al vendedor: 50% al tercer mes si compró en al menos 2 de sus primeros 3 meses, y 50% al sexto mes si sigue comprando. Quita la palomita a un cliente que no cumpla la definición (compró en los últimos 12 meses, mismo RFC o transferido de otro vendedor).</div>');
+      h.push('</tbody></table></div><div class="bn-nota">Pago al vendedor: 50% al tercer mes si compró en al menos 2 de sus primeros 3 meses, y 50% al sexto mes si sigue comprando. Marca cada pago cuando se haga: al marcar el último pasa a «Cerrados con pago». Quita «Validado» a un cliente que no cumpla la definición (compró en los últimos 12 meses, mismo RFC o transferido de otro vendedor) y pasa a «Cerrados sin pago».</div>');
     }
     h.push('</div>');
     // detalle de pago
@@ -395,6 +414,8 @@
       if (t.id === 'bn-mes') { mesSel = +t.value; SIM = {}; SIMD = {}; return render(); }
       if (d.esq != null) { S.esquema[d.esq] = t.value; save(); return render(); }
       if (d.canal != null && R) { var ms = mesState(mk(R.Y.cy, +d.f)); ms.nuevos[d.canal] = Object.assign(ms.nuevos[d.canal] || {}, { canal: t.value }); save(); return render(); }
+      if (t.id === 'bn-fnuevos') { S.filtroNuevos = t.value; save(); return render(); }
+      if (d.pag != null && R) { var msp = mesState(mk(R.Y.cy, +d.f)), o = msp.nuevos[d.cli] = Object.assign(msp.nuevos[d.cli] || {}, {}); o['pag' + d.pag] = t.checked; if (d.pag === '2' && t.checked) o.pag1 = true; save(); return render(); }
       if (d.valid != null && R) { var ms2 = mesState(mk(R.Y.cy, +d.f)); ms2.nuevos[d.valid] = Object.assign(ms2.nuevos[d.valid] || {}, { excl: !t.checked }); save(); return render(); }
     });
     root.addEventListener('click', function (ev) {
