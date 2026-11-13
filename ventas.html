@@ -472,7 +472,7 @@ table.tend tr:hover td{background:rgba(222,10,20,.07)}
   <div class="pane" id="pane-objetivos"><div id="obj-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-nuevos"><div id="nue-content" style="width:100%;overflow-y:auto;padding:16px"></div></div>
   <div class="pane" id="pane-grafica"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:var(--kt5A4E42)">Vista:</label><select id="graf-mode" onchange="renderGrafica()"><option value="mes">Por mes</option><option value="dia">Por día (elige mes)</option><option value="anio">Por año</option></select><span id="graf-unit-wrap"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Unidad:</label><select id="graf-unit" onchange="renderGrafica()"><option value="sac">Sacos</option><option value="ton">Toneladas</option></select></span><span id="graf-neto-wrap" style="display:none"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px"><input type="checkbox" id="graf-neto" onchange="renderGrafica()" style="vertical-align:middle"> Sin kilo de regalo</label></span><span id="graf-range-wrap"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde:</label><select id="graf-from" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta:</label><select id="graf-to" onchange="renderGrafica()"><option value="auto">Automático (detecta parcial)</option></select></span><span id="graf-month-wrap" style="display:none"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Mes:</label><select id="graf-month" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde día:</label><select id="graf-dayfrom" onchange="renderGrafica()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta día:</label><select id="graf-cutday" onchange="renderGrafica()"></select></span><span id="graf-vend-wrap"><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Vendedor:</label><select id="graf-vend" onchange="renderGrafica()"><option value="">Todos los vendedores</option></select></span><button id="wa-export-btn" onclick="exportWhatsappReport()" style="margin-left:10px;background:var(--wa);color:var(--ktFFFFFF);border:none;border-radius:6px;padding:7px 12px;font-size:.78rem;font-weight:800;cursor:pointer">📲 Generar reporte para WhatsApp</button><span id="wa-status" style="font-size:.72rem;color:var(--kt5A4E42);margin-left:8px"></span></div><div id="graf-content"></div></div></div>
-  <div class="pane" id="pane-productos"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:var(--kt5A4E42)">Vendedor:</label><select id="prod-vend" onchange="renderProductos()"><option value="">Todos los vendedores</option></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde:</label><select id="prod-from" onchange="renderProductos()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta:</label><select id="prod-to" onchange="renderProductos()"></select></div><div id="prod-content"></div></div></div>
+  <div class="pane" id="pane-productos"><div style="width:100%;overflow-y:auto;padding:16px"><div class="tbl-ctrl" style="margin-bottom:8px"><label style="font-size:.78rem;color:var(--kt5A4E42)">Vendedor:</label><select id="prod-vend" onchange="renderProductos()"><option value="">Todos los vendedores</option></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Desde:</label><select id="prod-from" onchange="renderProductos()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Hasta:</label><select id="prod-to" onchange="renderProductos()"></select><label style="font-size:.78rem;color:var(--kt5A4E42);margin-left:8px">Cliente:</label><input id="prod-cli" list="prod-cli-list" placeholder="Todos los clientes" style="min-width:230px" onchange="renderProductos()" oninput="if(!this.value)renderProductos()"><datalist id="prod-cli-list"></datalist><input type="file" id="basecp-input" accept=".xlsx,.xls" style="display:none" onchange="cargarBaseCP(this.files[0])"></div><div id="prod-basecp" style="font-size:.74rem;margin:-2px 0 10px"></div><div id="prod-content"></div></div></div>
   <div class="pane" id="pane-metas">
     <div style="display:flex;flex-direction:column;width:100%;flex:1;min-height:0">
       <div style="font-size:1.05rem;font-weight:800;color:var(--gold-t);padding:12px 16px 2px">📋 Metas por cliente 2026</div>
@@ -1309,6 +1309,7 @@ function processPivot(rows,fname){
 
 // ── CONSTRUCCIÓN COMÚN DE DATA ────────────────────────────────────────────────
 function finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,promoCliente,promoMesTon,fname){
+    if(window._SOLO_BASE_CP){ window._SOLO_BASE_CP=false; guardarBaseCP(byClienteProdMes,fname); return; }
     _EQ_REAL_PRICE_CACHE=null;   // nuevo reporte: recalcular el precio real promedio por producto
     const mapping=getMapping();
     document.getElementById('load-msg').textContent='Calculando niveles y descuentos...';
@@ -4632,11 +4633,19 @@ function curProdSum(vf, mFrom, mTo){
   return out;
 }
 // Arma las filas del reporte: {fk,label,cur,prior,diff,growth} para un vendedor y rango de meses.
-function productReportRows(vf, mFrom, mTo){
+function productReportRows(vf, mFrom, mTo, cliObj){
   if(!DATA.yoy)computeYoY();
   const py = DATA.yoy ? DATA.yoy.py : null;
-  const cur = curProdSum(vf, mFrom, mTo);
-  const prior = py!=null ? baselineProdSum(py, vf, mFrom, mTo) : {};
+  let cur, prior;
+  if(cliObj){   // un solo cliente: su venta de este año contra su propia base del año anterior
+    const F=(DATA.yoy&&DATA.yoy.factores)||{};
+    const sum=(o,fac)=>{ const r={}; for(const fk in o){ let s=0; for(let m=mFrom;m<=mTo;m++) s+=(o[fk][m-1]||0)*(fac&&F[m]!=null?F[m]:1); if(s>0)r[fk]=s; } return r; };
+    cur = sum(curCPCliente(cliObj),false);
+    prior = sum(baseCPCliente(cliObj.nombre,py)||{},true);
+  } else {
+    cur = curProdSum(vf, mFrom, mTo);
+    prior = py!=null ? baselineProdSum(py, vf, mFrom, mTo) : {};
+  }
   const liveNames = prodRawNames();
   const keys = new Set([...Object.keys(cur), ...Object.keys(prior)]);
   const rows = [];
@@ -4647,6 +4656,60 @@ function productReportRows(vf, mFrom, mTo){
     rows.push({fk, label:prodFamLabel(fk, liveNames), cur:c, prior:p, diff, growth});
   });
   return rows;
+}
+// ── BASE DEL AÑO ANTERIOR POR CLIENTE Y PRODUCTO ────────────────────────────
+// Se carga UNA vez con el reporte de ventas de Odoo del año anterior (mismo formato que el diario).
+// No toca el tablero ni publica nada a vendedores: solo guarda, por cliente, los sacos de cada
+// familia de producto mes a mes (sin promoción/bonificación), en este navegador y en la nube.
+// Estructura: baseline04mas_<año>_cp = { nkey(cliente): { 'FAMILIA|KG': [ene..dic] } }
+function cargarBaseCP(file){
+  if(!file)return; if(!SK_SUPER){ alert('Solo el usuario master o súper puede cargar la base.'); return; }
+  window._SOLO_BASE_CP=true;
+  document.getElementById('loading').style.display='flex';
+  document.getElementById('load-msg').textContent='Leyendo base por cliente: '+file.name+'...';
+  const r=new FileReader(); r.onload=e=>{ try{ processExcel(e.target.result,file.name); }catch(er){ window._SOLO_BASE_CP=false; alert('No se pudo leer: '+er.message); location.reload(); } };
+  r.onerror=()=>{ window._SOLO_BASE_CP=false; alert('Error al leer el archivo.'); location.reload(); };
+  r.readAsArrayBuffer(file);
+}
+function guardarBaseCP(byClienteProdMes,fname){
+  const anio=LAST_DATA_YEAR||0, cy=TODAY.getFullYear();
+  if(!anio||anio>=cy){ alert('Este reporte es de '+(anio||'un año que no se reconoce')+'. Para la base por cliente carga el reporte de ventas del año anterior completo ('+(cy-1)+').'); location.reload(); return; }
+  const out={}; let n=0;
+  const merge={}; if(typeof BASE_MERGE!=='undefined') for(const src in BASE_MERGE) merge[nkey(src)]=nkey(BASE_MERGE[src]);
+  for(const cli in byClienteProdMes){
+    let k=nkey(cli); if(merge[k])k=merge[k];
+    const pm=byClienteProdMes[cli]||{}; const d=out[k]||{};
+    for(const pn in pm){ const fk=_famKey(pn); const arr=d[fk]||(d[fk]=[0,0,0,0,0,0,0,0,0,0,0,0]); for(const m in pm[pn]){ const i=(+m)-1; if(i>=0&&i<12) arr[i]+=pm[pn][m]||0; } }
+    for(const fk in d){ d[fk]=d[fk].map(x=>Math.round(x)); if(!d[fk].some(x=>x))delete d[fk]; }
+    if(Object.keys(d).length){ if(!out[k])n++; out[k]=d; }
+  }
+  const raw=JSON.stringify(out);
+  try{ localStorage.setItem('baseline04mas_'+anio+'_cp',raw); }catch(e){}
+  _BASECP_CACHE={};
+  skFetch(_dbUrl()+'/skan/_baselines/'+anio+'_cp.json',{method:'PUT',body:raw})
+    .then(()=>{ alert('✔ Base '+anio+' por cliente y producto guardada ('+n+' clientes).\nSe guardó también en la nube. Ahora vuelvo a abrir tu reporte actual y se publica a vendedores y gerencia.'); location.reload(); })
+    .catch(()=>{ alert('✔ Base '+anio+' guardada en este navegador ('+n+' clientes), pero no se pudo subir a la nube. Revisa tu conexión y vuelve a cargarla.'); location.reload(); });
+}
+let _BASECP_CACHE={};
+function getBaseCP(py){
+  if(!py)return null;
+  if(_BASECP_CACHE[py]!==undefined)return _BASECP_CACHE[py];
+  let b=null; try{ b=JSON.parse(localStorage.getItem('baseline04mas_'+py+'_cp')||'null'); }catch(e){}
+  if(b){ const idx=new Map(); for(const k in b) idx.set(nkey(k),k); b={data:b,idx:idx,res:{}}; }
+  if(b)_BASECP_CACHE[py]=b; return b;
+}
+// Base del año anterior de UN cliente: {fam:[12]} (o null si no hay base cargada / no compraba)
+function baseCPCliente(nombre,py){
+  const B=getBaseCP(py); if(!B)return null;
+  if(B.res[nombre]===undefined){ const k=resolveKey(nombre,B.idx); B.res[nombre]=k?B.data[k]:null; }
+  return B.res[nombre]||{};
+}
+// Venta de este año de UN cliente por familia: {fam:[12]}
+function curCPCliente(c){
+  const out={}; const pm=(c&&c.prodMes)||{};
+  for(const pn in pm){ const fk=_famKey(pn); const arr=out[fk]||(out[fk]=[0,0,0,0,0,0,0,0,0,0,0,0]); for(const m in pm[pn]){ const i=(+m)-1; if(i>=0&&i<12) arr[i]+=pm[pn][m]||0; } }
+  for(const fk in out) out[fk]=out[fk].map(x=>Math.round(x));
+  return out;
 }
 let prodSortCol='diff', prodSortAsc=true;
 function sortProductos(col){ if(prodSortCol===col)prodSortAsc=!prodSortAsc; else{prodSortCol=col;prodSortAsc=(col==='label');} renderProductos(); }
@@ -4659,10 +4722,20 @@ function renderProductos(){
   if(fromEl&&fromEl.options.length===0){ DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];fromEl.appendChild(o);}); fromEl.value=DATA.meses[0]; }
   if(toEl&&toEl.options.length===0){ DATA.meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=MES_NOM[m];toEl.appendChild(o);}); toEl.value=DATA.meses[DATA.meses.length-1]; }
   const vf=vendEl?vendEl.value:'';
+  // Cliente: la lista se limita al vendedor elegido
+  const cliEl=document.getElementById('prod-cli'), cliDl=document.getElementById('prod-cli-list');
+  const cliPool=DATA.clients.filter(c=>!vf||c.vendedor===vf);
+  if(cliDl&&cliDl.getAttribute('data-v')!==vf+'|'+cliPool.length){ cliDl.innerHTML=cliPool.map(c=>c.nombre).sort((a,b)=>a.localeCompare(b,'es')).map(n=>'<option value="'+_pe(n)+'">').join(''); cliDl.setAttribute('data-v',vf+'|'+cliPool.length); }
+  const cliTxt=cliEl?cliEl.value.trim():'';
+  const cliObj=cliTxt?(cliPool.find(c=>c.nombre===cliTxt)||cliPool.find(c=>nkey(c.nombre)===nkey(cliTxt))||null):null;
+  const pyB=Y?Y.py:null, BCP=getBaseCP(pyB), stEl=document.getElementById('prod-basecp');
+  if(stEl) stEl.innerHTML=(BCP?'<span style="color:var(--green-t)">✔ Base '+pyB+' por cliente y producto cargada ('+Object.keys(BCP.data).length+' clientes).</span>':'<span style="color:var(--red-t)">⚠ Falta la base '+pyB+' por cliente y producto: sin ella, al elegir un cliente su año anterior sale en 0.</span>')
+    +(SK_SUPER?' <a href="#" onclick="document.getElementById(\'basecp-input\').click();return false" style="color:var(--gold-t);font-weight:700">📂 '+(BCP?'Volver a cargar':'Cargar')+' reporte de ventas '+pyB+' de Odoo</a>':'');
   const mFromRaw=fromEl&&fromEl.value?+fromEl.value:DATA.meses[0], mToRaw=toEl&&toEl.value?+toEl.value:DATA.meses[DATA.meses.length-1];
   const mFrom=Math.min(mFromRaw,mToRaw), mTo=Math.max(mFromRaw,mToRaw);
   const periodoTxt=(mFrom===mTo)?MES_NOM[mFrom]:(MES_NOM[mFrom]+'–'+MES_NOM[mTo]);
-  let rows=productReportRows(vf, mFrom, mTo);
+  let rows=productReportRows(vf, mFrom, mTo, cliObj);
+  if(cliTxt&&!cliObj){ box.innerHTML='<div style="padding:20px;color:var(--kt5A4E42)">No encuentro al cliente «'+_pe(cliTxt)+'»'+(vf?' en la cartera de '+_pe(vf):'')+'. Elígelo de la lista.</div>'; return; }
   rows=rows.filter(r=>r.cur>0||r.prior>0);
   rows.sort((a,b)=>{
     let va,vb;
@@ -4671,19 +4744,22 @@ function renderProductos(){
       case 'cur': va=a.cur; vb=b.cur; break;
       case 'prior': va=a.prior; vb=b.prior; break;
       case 'growth': va=(a.growth==null?-2:a.growth); vb=(b.growth==null?-2:b.growth); break;
+      case 'shC': va=a.shC; vb=b.shC; break;
+      case 'shD': va=a.shD; vb=b.shD; break;
       default: va=a.diff; vb=b.diff;
     }
     if(typeof va==='string')return prodSortAsc?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0);
     return prodSortAsc?va-vb:vb-va;
   });
   const totCur=rows.reduce((a,r)=>a+r.cur,0), totPrior=rows.reduce((a,r)=>a+r.prior,0);
+  rows.forEach(r=>{ r.shC=totCur>0?r.cur/totCur:0; r.shP=totPrior>0?r.prior/totPrior:0; r.shD=r.shC-r.shP; });   // participación de cada producto en lo que compra
   const totGrowth=totPrior>0?(totCur/totPrior-1):(totCur>0?null:0);
   const nSube=rows.filter(r=>r.growth!=null&&r.growth>0.001).length, nBaja=rows.filter(r=>r.growth!=null&&r.growth<-0.001).length, nNuevo=rows.filter(r=>r.growth==null).length;
   const card=(val,lbl,sub,col)=>`<div style="flex:1;min-width:158px;background:var(--mid);border:1px solid var(--kdEADFD3);border-left:4px solid ${col};border-radius:9px;padding:9px 13px">
     <div style="font-size:1.35rem;font-weight:800;color:${col};line-height:1.15">${val}</div>
     <div style="font-size:.66rem;color:var(--kt5A4E42);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">${lbl}</div>
     ${sub?`<div style="font-size:.68rem;color:var(--kt6F6357);margin-top:2px">${sub}</div>`:''}</div>`;
-  let h=`<div style="font-size:1.1rem;font-weight:800;color:var(--gold-t)">📦 Venta por producto — ${periodoTxt}${vf?' · '+_pe(vf):''}</div>
+  let h=`<div style="font-size:1.1rem;font-weight:800;color:var(--gold-t)">📦 Venta por producto — ${periodoTxt}${vf?' · '+_pe(vf):''}${cliObj?' · 👤 '+_pe(cliObj.nombre):''}</div>
     <div style="font-size:.72rem;color:var(--kt5A4E42);margin:2px 0 10px">Sacos reales (sin promoción/bonificación) por familia de producto, ${Y?Y.cy:''} vs mismo periodo ${Y?Y.py:''}. Junta variantes del mismo producto (kilo extra, presentaciones) bajo una sola fila.</div>
     <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px">
     ${card(fmt(totCur),'Sacos '+(Y?Y.cy:''),periodoTxt,'var(--gold-t)')}
@@ -4700,6 +4776,9 @@ function renderProductos(){
     <th style="text-align:right" onclick="sortProductos('prior')">Sacos ${Y?Y.py:''}${arw('prior')}</th>
     <th style="text-align:right" onclick="sortProductos('diff')">Diferencia${arw('diff')}</th>
     <th style="text-align:right" onclick="sortProductos('growth')">Crecimiento${arw('growth')}</th>
+    <th style="text-align:right" onclick="sortProductos('shC')" title="Qué parte de lo que compra es este producto">% de la compra ${Y?Y.cy:''}${arw('shC')}</th>
+    <th style="text-align:right">% ${Y?Y.py:''}</th>
+    <th style="text-align:right" onclick="sortProductos('shD')" title="Puntos que ganó o perdió el producto dentro de la compra">Cambio en mezcla${arw('shD')}</th>
     <th>Mezcla</th>
   </tr></thead><tbody>`;
   rows.forEach(r=>{
@@ -4712,6 +4791,9 @@ function renderProductos(){
       <td style="text-align:right;color:var(--kt5A4E42)">${fmt(r.prior)}</td>
       <td style="text-align:right;color:${r.diff>=0?'var(--green-t)':'var(--red-t)'};font-weight:700">${r.diff>=0?'+':''}${fmt(r.diff)}</td>
       <td style="text-align:right;color:${col};font-weight:700">${growTxt}</td>
+      <td style="text-align:right">${(r.shC*100).toFixed(1)}%</td>
+      <td style="text-align:right;color:var(--kt5A4E42)">${(r.shP*100).toFixed(1)}%</td>
+      <td style="text-align:right;font-weight:700;color:${r.shD>=0.0005?'var(--green-t)':(r.shD<=-0.0005?'var(--red-t)':'var(--kt5A4E42)')}">${r.shD>=0?'+':''}${(r.shD*100).toFixed(1)} pts</td>
       <td style="min-width:110px"><div style="height:6px;background:var(--kbFFFFFF);border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${wCur}%;background:var(--gold)"></i></div><div style="height:4px;background:var(--kbFFFFFF);border-radius:4px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:${wPrior}%;background:var(--kbEADFD3)"></i></div></td>
     </tr>`;
   });
@@ -6889,7 +6971,9 @@ function buildVendorPayloads(){
         boost:Math.round(((c.boost!=null)?c.boost:premBoost(c.mixPlus||0,getPremCfg()))*1000)/1000,
         evalSac:evalSac, antSac:antSac, premEval:Math.round(premEval),
         vitSac:Math.round(vitSac), baseCrec:Math.round(baseCrec), vitPB:Math.round(vitPB), vitPM:Math.round(vitPM),
-        ult:ultM, tot:Math.round(c.total||0)};
+        ult:ultM, tot:Math.round(c.total||0),
+        // por familia de producto, 12 meses: este año (pf) y su base del año anterior (ppf) → filtro por cliente en vendedor/maestra
+        pf:curCPCliente(c), ppf:baseCPCliente(c.nombre,Yv.py||0)};
     });
     var vm=(typeof _vendMonthly==='function')?_vendMonthly(v):{cur:[],prior:[]};
     var promoSac=0,newDisc=0;
