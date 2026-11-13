@@ -9,7 +9,7 @@
    - Vendedores (esquema general): $ por punto de crecimiento (2 decimales)
      + $ por saco adicional si el mes llega al umbral; ambos con tope.
    - Cartera en arranque (Dagoviet): nivel de sacos del mes.
-   - Clientes nuevos: 50% al mes 3 (si compró 2 de 3 meses) y 50% al mes 6.
+   - Clientes nuevos (solo con 1.ª compra desde octubre 2026): 50% al mes 3 (si compró 2 de 3 meses) y 50% al mes 6.
    - Soporte: crecimiento de toda la división × factor por indicadores,
      + bono por cliente canalizado desde redes (en su primera compra).
    Los parámetros, indicadores y validaciones se guardan en este equipo
@@ -29,6 +29,7 @@
     nombres: { jefa: 'Jefa de Embarques', a1: 'Asistente de Ventas 1', a2: 'Asistente de Ventas 2' },
     esquema: {},      // VENDEDOR -> 'general' | 'arranque' | 'no'
     inicio: { y: 2026, m: 11 },
+    nuevosDesde: { y: 2026, m: 10 },   // solo cuentan los clientes nuevos cuya 1.ª compra es de este mes en adelante (vendedores y soporte)
     meses: {}         // 'AAAA-MM' -> { kpi:{jefa:[..],a1:[..],a2:[..]}, nuevos:{cliente:{excl:bool, canal:''}} }
   };
   var S = null, SIM = {}, SIMD = {};
@@ -40,6 +41,7 @@
     S = Object.assign(clone(DEF), s || {});
     S.nombres = Object.assign(clone(DEF.nombres), S.nombres || {});
     if (!S.meses) S.meses = {}; if (!S.esquema) S.esquema = {};
+    S.nuevosDesde = Object.assign(clone(DEF.nuevosDesde), S.nuevosDesde || {});
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
   function n(v) { var x = parseFloat(v); return isNaN(x) ? 0 : x; }
@@ -106,8 +108,11 @@
     });
     return { v: o, div: div };
   }
+  // Clientes nuevos que entran al esquema: 1.ª compra desde S.nuevosDesde (oct 2026). Los anteriores ya se pagaron con el esquema anterior.
+  function nuevoEnVigor(Y, f) { var d = S.nuevosDesde || DEF.nuevosDesde; return Y.cy > d.y || (Y.cy === d.y && f >= d.m); }
+  function nuevosFuera(Y) { return Y.rows.filter(function (r) { return r.nuevo && r.firstMes > 0 && !nuevoEnVigor(Y, r.firstMes); }).length; }
   function nuevosDe(Y) {
-    return Y.rows.filter(function (r) { return r.nuevo && r.firstMes > 0; }).map(function (r) {
+    return Y.rows.filter(function (r) { return r.nuevo && r.firstMes > 0 && nuevoEnVigor(Y, r.firstMes); }).map(function (r) {
       var f = r.firstMes, c = r.curM || [];
       var m1 = c[f - 1] || 0, m2 = f + 1 <= 12 ? (c[f] || 0) : null, m3 = f + 2 <= 12 ? (c[f + 1] || 0) : null, m6 = f + 5 <= 12 ? (c[f + 4] || 0) : null;
       var tres = [m1, m2, m3].filter(function (x) { return x != null; });
@@ -303,8 +308,10 @@
     });
     h.push('</div></div>');
     // clientes nuevos
-    h.push('<div class="bn-sec"><h3>Clientes nuevos de ' + Y.cy + ' <small>Detectados en el reporte (sin compras en ' + Y.py + '). Gerencia valida cada alta.</small></h3>');
-    if (!R.nuevos.length) h.push('<div class="bn-nota">No hay clientes nuevos en el reporte.</div>');
+    var _nd = S.nuevosDesde || DEF.nuevosDesde, _fuera = nuevosFuera(Y);
+    h.push('<div class="bn-sec"><h3>Clientes nuevos desde ' + MES[_nd.m] + ' ' + _nd.y + ' <small>Detectados en el reporte (sin compras en ' + Y.py + ') con primera compra de ' + MES[_nd.m] + ' ' + _nd.y + ' en adelante. Gerencia valida cada alta.</small></h3>');
+    if (_fuera) h.push('<div class="bn-nota">' + _fuera + ' cliente' + (_fuera === 1 ? '' : 's') + ' nuevo' + (_fuera === 1 ? '' : 's') + ' con primera compra antes de ' + MES[_nd.m] + ' no participa' + (_fuera === 1 ? '' : 'n') + ' en este esquema (ya se pagaron con el esquema anterior).</div>');
+    if (!R.nuevos.length) h.push('<div class="bn-nota">Aún no hay clientes nuevos desde ' + MES[_nd.m] + ' ' + _nd.y + '.</div>');
     else {
       h.push('<div class="bn-tbl"><table><thead><tr><th>Cliente</th><th>Vendedor</th><th>1.ª compra</th><th class="r">Mes 1</th><th class="r">Mes 2</th><th class="r">Mes 3</th><th class="r">Promedio</th><th>Tamaño</th><th>Pago al vendedor</th><th>Canalizó (redes)</th><th>¿Cuenta?</th></tr></thead><tbody>');
       R.nuevos.forEach(function (c) {
@@ -352,7 +359,8 @@
       S.kpiJ.map(function (k, i) { return '<tr><td><input type="text" data-kj="' + i + '" data-k="0" value="' + esc(k[0]) + '"></td><td class="r"><input type="number" step="0.1" data-kj="' + i + '" data-k="1" value="' + k[1] + '"></td></tr>'; }).join('') +
       S.kpiA.map(function (k, i) { return '<tr><td><input type="text" data-ka="' + i + '" data-k="0" value="' + esc(k[0]) + '"></td><td class="r"><input type="number" step="0.1" data-ka="' + i + '" data-k="1" value="' + k[1] + '"></td></tr>'; }).join('') + '</tbody></table></div>';
     h += '<div class="bn-par">' + ['jefa', 'a1', 'a2'].map(function (k) { return '<label>Nombre<input type="text" data-nom="' + k + '" value="' + esc(S.nombres[k]) + '"></label>'; }).join('') +
-      '<label>Vigente desde (mes)<input type="number" min="1" max="12" data-ini="m" value="' + S.inicio.m + '"></label><label>Vigente desde (año)<input type="number" data-ini="y" value="' + S.inicio.y + '"></label></div>';
+      '<label>Vigente desde (mes)<input type="number" min="1" max="12" data-ini="m" value="' + S.inicio.m + '"></label><label>Vigente desde (año)<input type="number" data-ini="y" value="' + S.inicio.y + '"></label>' +
+      '<label>Clientes nuevos desde (mes)<input type="number" min="1" max="12" data-nd="m" value="' + S.nuevosDesde.m + '"></label><label>Clientes nuevos desde (año)<input type="number" data-nd="y" value="' + S.nuevosDesde.y + '"></label></div>';
     h += '<div class="bn-tbl"><table><thead><tr><th>Vendedor en el reporte</th><th>Esquema</th></tr></thead><tbody>' + Object.keys(vend).sort().map(function (v) {
       var e = esquemaDe(v); return '<tr><td>' + esc(v) + '</td><td><select data-esq="' + esc(v) + '"><option value="general"' + (e === 'general' ? ' selected' : '') + '>General (crecimiento)</option><option value="arranque"' + (e === 'arranque' ? ' selected' : '') + '>Cartera en arranque</option><option value="no"' + (e === 'no' ? ' selected' : '') + '>Sin bono</option></select></td></tr>';
     }).join('') + '</tbody></table></div>';
@@ -380,6 +388,7 @@
       if (d.ka != null) { S.kpiA[+d.ka][+d.k] = +d.k ? n(t.value) : t.value; save(); return later(); }
       if (d.nom != null) { S.nombres[d.nom] = t.value; save(); return later(); }
       if (d.ini != null) { S.inicio[d.ini] = Math.round(n(t.value)); save(); return later(); }
+      if (d.nd != null) { S.nuevosDesde[d.nd] = Math.round(n(t.value)); save(); return later(); }
     });
     root.addEventListener('change', function (ev) {
       var t = ev.target, d = t.dataset, R = W.__bnUltimo;
