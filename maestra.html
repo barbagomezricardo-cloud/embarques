@@ -350,7 +350,7 @@ function applyPayload(p){
     vitSac:(r.vitSac!=null?r.vitSac:null),baseCrec:(r.baseCrec!=null?r.baseCrec:null),vitPB:(r.vitPB!=null?r.vitPB:null),vitPM:(r.vitPM!=null?r.vitPM:null),
     ult:r.ult||0,tot:r.tot||0,
     nvCand:!!r.nvCand,nvRitmo:r.nvRitmo||0,nvProm6:r.nvProm6||0,nvMeses:r.nvMeses||0,nvAuth:r.nvAuth||null,nvPct:(r.nvPct!=null?r.nvPct:0.5),nvArranque:r.nvArranque||0,
-    nvFrio:!!r.nvFrio,nvDias:(r.nvDias!=null?r.nvDias:null),esp:r.esp||null};});
+    nvFrio:!!r.nvFrio,nvDias:(r.nvDias!=null?r.nvDias:null),esp:r.esp||null,pf:r.pf||null,ppf:(r.ppf!==undefined?r.ppf:undefined)};});
 }
 function fetchCloud(){
   const q=parseHash(); CLOUD.db=q.db||''; CLOUD.v=q.v||'';
@@ -1430,6 +1430,8 @@ function resumenPDF(){
 function setVMode(m){ VMODE=m; renderVentas(); }
 function setRangeFrom(v){ RANGE_FROM=Number(v)||0; renderVentas(); }
 function setRangeTo(v){ RANGE_TO=Number(v)||0; renderVentas(); }
+var PROD_CLI='';   // vista por producto: '' = toda la cartera, o el nombre de un cliente
+function setProdCli(v){ PROD_CLI=String(v||'').trim(); renderVentas(); }
 function setRangeUnit(v){ RANGE_UNIT=v; renderVentas(); }
 function setRangeGran(v){ RANGE_GRAN=v; renderVentas(); }
 function setRangeDiaMes(v){ RANGE_DIA_MES=Number(v)||0; RANGE_DAY_FROM=0; RANGE_DAY_TO=0; renderVentas(); }
@@ -1577,6 +1579,10 @@ function renderVentas(){
       +'<div style="flex:1;min-width:110px"><label style="font-size:11px;color:var(--kt5A4E42)">Desde</label><select style="'+selSt2+'" onchange="setRangeFrom(this.value)">'+meses.map(function(m){return '<option value="'+m+'"'+(m===RANGE_FROM?' selected':'')+'>'+MESN[m]+'</option>';}).join('')+'</select></div>'
       +'<div style="flex:1;min-width:110px"><label style="font-size:11px;color:var(--kt5A4E42)">Hasta</label><select style="'+selSt2+'" onchange="setRangeTo(this.value)">'+meses.map(function(m){return '<option value="'+m+'"'+(m===RANGE_TO?' selected':'')+'>'+MESN[m]+'</option>';}).join('')+'</select></div>'
       +'</div>';
+    var _cliN=Object.keys(CLIENTS).sort(function(x,y){return x.localeCompare(y,'es');});
+    if(PROD_CLI && !CLIENTS[PROD_CLI]) PROD_CLI='';
+    h+='<div style="margin:-2px 0 10px"><label style="font-size:11px;color:var(--kt5A4E42)">Cliente</label><input list="prodCliList" value="'+String(PROD_CLI).replace(/"/g,'&quot;')+'" placeholder="Toda la cartera · escribe o elige un cliente" onchange="setProdCli(this.value)" style="'+selSt2+'"><datalist id="prodCliList">'+_cliN.map(function(n){return '<option value="'+n.replace(/"/g,'&quot;')+'">';}).join('')+'</datalist>'
+      +(PROD_CLI?'<div style="margin-top:5px;font-size:12px"><a href="#" onclick="setProdCli(\'\');return false" style="color:var(--ktC8102E);font-weight:700">✕ Ver toda la cartera</a></div>':'')+'</div>';
     if(!V.prodCur || !Object.keys(V.prodCur).length){
       h+='<div class="hint">⚠ Esta vista todavía no se ha publicado (hace falta subir de nuevo el reporte desde ventas.html).</div>';
       h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · datos del último reporte publicado.</div>';
@@ -1584,6 +1590,12 @@ function renderVentas(){
     }
     var pFrom=Math.min(RANGE_FROM,RANGE_TO), pTo=Math.max(RANGE_FROM,RANGE_TO);
     var pCur=V.prodCur||{}, pPrior=V.prodPrior||{}, pNames=V.prodNames||{};
+    if(PROD_CLI){
+      var _cc=CLIENTS[PROD_CLI];
+      if(!_cc.pf){ h+='<div class="hint">⚠ El detalle por cliente aún no se ha publicado (hace falta subir de nuevo el reporte desde ventas.html).</div>'; app.innerHTML=h; return; }
+      pCur=_cc.pf||{}; pPrior=_cc.ppf||{};
+      if(_cc.ppf===null) h+='<div class="hint" style="margin-bottom:8px">⚠ Falta cargar en ventas.html la base del año pasado por cliente y producto: el año pasado sale en 0.</div>';
+    }
     var fams={}; Object.keys(pCur).forEach(function(k){fams[k]=1;}); Object.keys(pPrior).forEach(function(k){fams[k]=1;});
     var prows=[];
     Object.keys(fams).forEach(function(fk){
@@ -1596,6 +1608,7 @@ function renderVentas(){
     prows.sort(function(a,b){return a.diff-b.diff;});
     var totC=prows.reduce(function(a,r){return a+r.cur;},0), totP=prows.reduce(function(a,r){return a+r.prior;},0);
     var totG=totP>0?(totC/totP-1):(totC>0?null:0);
+    prows.forEach(function(r){ r.shC=totC>0?r.cur/totC:0; r.shP=totP>0?r.prior/totP:0; r.shD=r.shC-r.shP; });
     h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
       +kcard(fmt(totC),'Sacos este año (sin promo)','#C8102E')
       +kcard(fmt(totP),'mismo periodo año pasado','#5A4E42')
@@ -1610,11 +1623,12 @@ function renderVentas(){
         var growTxt=r.growth==null?'nuevo':((r.growth>=0?'+':'')+(r.growth*100).toFixed(1)+'%');
         var wC=Math.max(2,Math.round(r.cur/maxAbs*100)), wP=Math.max(2,Math.round(r.prior/maxAbs*100));
         h+='<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--kt281E12)"><span style="font-weight:800;color:var(--kt281E12)">'+r.label+'</span><span>'+fmt(r.cur)+' vs '+fmt(r.prior)+' · <b style="color:'+col+'">'+growTxt+'</b></span></div>'
+          +'<div style="font-size:11px;color:var(--kt5A4E42);margin-top:1px">'+(PROD_CLI?'Es el ':'')+'<b style="color:var(--kt281E12)">'+(r.shC*100).toFixed(1)+'%</b> de '+(PROD_CLI?'lo que compra':'la venta')+' (año pasado '+(r.shP*100).toFixed(1)+'%) · <b style="color:'+(r.shD>=0.0005?'#1D7A45':(r.shD<=-0.0005?'#A80810':'#5A4E42'))+'">'+(r.shD>=0?'+':'')+(r.shD*100).toFixed(1)+' pts</b></div>'
           +'<div style="height:9px;background:var(--kbFFFFFF);border-radius:6px;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;width:'+wC+'%;background:'+col+'"></i></div>'
           +'<div style="height:5px;background:var(--kbFFFFFF);border-radius:6px;margin-top:2px;overflow:hidden"><i style="display:block;height:100%;width:'+wP+'%;background:var(--kbEADFD3)"></i></div></div>';
       });
     }
-    h+='<div style="font-size:11px;color:var(--kt6F6357);margin-top:6px">Sacos reales por producto (sin promoción/bonificación). Barra de color = este año. Barra gris = mismo periodo del año pasado.</div>';
+    h+='<div style="font-size:11px;color:var(--kt6F6357);margin-top:6px">Sacos reales por producto (sin promoción/bonificación). Barra de color = este año. Barra gris = mismo periodo del año pasado. % = parte de '+(PROD_CLI?'la compra del cliente':'la venta')+' que es ese producto; pts = cuánto ganó o perdió en la mezcla.</div>';
     h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · datos del último reporte publicado.</div>';
     app.innerHTML=h; return;
   }
