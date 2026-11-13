@@ -1430,8 +1430,18 @@ function resumenPDF(){
 function setVMode(m){ VMODE=m; renderVentas(); }
 function setRangeFrom(v){ RANGE_FROM=Number(v)||0; renderVentas(); }
 function setRangeTo(v){ RANGE_TO=Number(v)||0; renderVentas(); }
-var PROD_CLI='';   // vista por producto: '' = toda la cartera, o el nombre de un cliente
+var PROD_CLI='', PROD_CLI_Q='';   // vista por producto: '' = toda la cartera, o el nombre de un cliente · texto del buscador
 function setProdCli(v){ PROD_CLI=String(v||'').trim(); renderVentas(); }
+function _normCli(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim(); }
+function prodCliOpts(L,q){
+  var nq=_normCli(q), F=nq?L.filter(function(n){ return _normCli(n).indexOf(nq)>=0; }):L;
+  if(PROD_CLI && F.indexOf(PROD_CLI)<0) F=[PROD_CLI].concat(F);
+  return '<option value="">'+(nq?('— '+F.length+' cliente'+(F.length===1?'':'s')+' encontrado'+(F.length===1?'':'s')+' —'):'— Toda la cartera —')+'</option>'
+    +F.map(function(n){ var e=n.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); return '<option value="'+e+'"'+(n===PROD_CLI?' selected':'')+'>'+e+'</option>'; }).join('');
+}
+function _escC(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function filtraProdCli(q){ PROD_CLI_Q=q; var s=document.getElementById('prodCliSel'); if(s) s.innerHTML=prodCliOpts(Object.keys(CLIENTS).sort(function(x,y){return x.localeCompare(y,'es');}),q); }
+function elegirPrimerProdCli(){ var s=document.getElementById('prodCliSel'); if(s&&s.options.length>1){ var v=s.options[1].value; if(s.options.length===2||!PROD_CLI) setProdCli(v); else s.focus(); } }
 function setRangeUnit(v){ RANGE_UNIT=v; renderVentas(); }
 function setRangeGran(v){ RANGE_GRAN=v; renderVentas(); }
 function setRangeDiaMes(v){ RANGE_DIA_MES=Number(v)||0; RANGE_DAY_FROM=0; RANGE_DAY_TO=0; renderVentas(); }
@@ -1581,8 +1591,18 @@ function renderVentas(){
       +'</div>';
     var _cliN=Object.keys(CLIENTS).sort(function(x,y){return x.localeCompare(y,'es');});
     if(PROD_CLI && !CLIENTS[PROD_CLI]) PROD_CLI='';
-    h+='<div style="margin:-2px 0 10px"><label style="font-size:11px;color:var(--kt5A4E42)">Cliente</label><input list="prodCliList" value="'+String(PROD_CLI).replace(/"/g,'&quot;')+'" placeholder="Toda la cartera · escribe o elige un cliente" onchange="setProdCli(this.value)" style="'+selSt2+'"><datalist id="prodCliList">'+_cliN.map(function(n){return '<option value="'+n.replace(/"/g,'&quot;')+'">';}).join('')+'</datalist>'
-      +(PROD_CLI?'<div style="margin-top:5px;font-size:12px"><a href="#" onclick="setProdCli(\'\');return false" style="color:var(--ktC8102E);font-weight:700">✕ Ver toda la cartera</a></div>':'')+'</div>';
+    // Buscador: el texto solo filtra la lista (no se borra ni recarga); el cliente se elige en la lista
+    h+='<div style="margin:-2px 0 10px;display:flex;gap:8px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:150px"><label style="font-size:11px;color:var(--kt5A4E42)">Buscar cliente</label><input id="prodCliQ" value="'+String(PROD_CLI_Q).replace(/"/g,'&quot;')+'" placeholder="Escribe parte del nombre" oninput="filtraProdCli(this.value)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();elegirPrimerProdCli();}" autocomplete="off" style="'+selSt2+'"></div>'
+      +'<div style="flex:2;min-width:200px"><label style="font-size:11px;color:var(--kt5A4E42)">Cliente</label><select id="prodCliSel" onchange="setProdCli(this.value)" style="'+selSt2+'">'+prodCliOpts(_cliN,PROD_CLI_Q)+'</select></div></div>';
+    if(PROD_CLI){
+      var _ccH=CLIENTS[PROD_CLI];
+      h+='<div style="display:flex;align-items:center;gap:10px;background:#FCEBEC;border:2px solid #C8102E;border-radius:12px;padding:10px 14px;margin-bottom:10px">'
+        +'<div style="font-size:22px">👤</div><div style="flex:1;min-width:0"><div style="font-size:11px;color:#5A4E42;font-weight:800;text-transform:uppercase;letter-spacing:.3px">Cliente en revisión</div>'
+        +'<div style="font-size:17px;font-weight:900;color:#281E12;line-height:1.2">'+_escC(PROD_CLI)+'</div>'
+        +'<div style="font-size:12px;color:#5A4E42">'+((_ccH&&_ccH.vend)?'Vendedor: '+_escC(_ccH.vend)+' · ':'')+MESN[Math.min(RANGE_FROM,RANGE_TO)]+'–'+MESN[Math.max(RANGE_FROM,RANGE_TO)]+'</div></div>'
+        +'<a href="#" onclick="setProdCli(\'\');return false" style="color:#C8102E;font-weight:800;font-size:13px;white-space:nowrap">✕ Toda la cartera</a></div>';
+    }
     if(!V.prodCur || !Object.keys(V.prodCur).length){
       h+='<div class="hint">⚠ Esta vista todavía no se ha publicado (hace falta subir de nuevo el reporte desde ventas.html).</div>';
       h+='<div class="foot">Ventas de '+(APPVEND||'tu cartera')+' · datos del último reporte publicado.</div>';
@@ -1594,7 +1614,8 @@ function renderVentas(){
       var _cc=CLIENTS[PROD_CLI];
       if(!_cc.pf){ h+='<div class="hint">⚠ El detalle por cliente aún no se ha publicado (hace falta subir de nuevo el reporte desde ventas.html).</div>'; app.innerHTML=h; return; }
       pCur=_cc.pf||{}; pPrior=_cc.ppf||{};
-      if(_cc.ppf===null) h+='<div class="hint" style="margin-bottom:8px">⚠ Falta cargar en ventas.html la base del año pasado por cliente y producto: el año pasado sale en 0.</div>';
+      if(!_cc.ppf) h+='<div style="background:#FFF4DF;color:#8A5000;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:10px">⚠ <b>Todavía no está cargada la venta del año pasado por cliente y producto</b>, por eso «año pasado» sale en 0. Se carga una sola vez en ventas.html → pestaña Productos → «📂 Cargar reporte de ventas del año pasado».</div>';
+      else if(!Object.keys(_cc.ppf).length) h+='<div style="background:#F3ECE4;color:#5A4E42;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:10px">Este cliente no tiene compras el año pasado: todo lo de este año es venta nueva.</div>';
     }
     var fams={}; Object.keys(pCur).forEach(function(k){fams[k]=1;}); Object.keys(pPrior).forEach(function(k){fams[k]=1;});
     var prows=[];
