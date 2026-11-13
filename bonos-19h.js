@@ -299,7 +299,8 @@
       '<label class="bn-nota">Mes a pagar <select id="bn-mes">' + meses.map(function (x) { return '<option value="' + x + '"' + (x === m ? ' selected' : '') + '>' + MES[x] + ' ' + Y.cy + '</option>'; }).join('') + '</select></label>' +
       '<button class="bn-btn" id="bn-real" type="button">↺ Quitar simulaciones</button>' +
       '<button class="bn-btn" id="bn-copy" type="button">📋 Copiar resumen</button>' +
-      '<button class="bn-btn pri" id="bn-xls" type="button">⬇ Excel de pago</button></div>');
+      '<button class="bn-btn pri" id="bn-xls" type="button">⬇ Excel de pago</button>' +
+      '<button class="bn-btn pri" id="bn-print" type="button">🖨 Relación y recibos para imprimir</button></div>');
     var avisos = [];
     if (R.parcial) avisos.push('⚠ ' + MES[m] + ' todavía va incompleto en el reporte: estas cifras son preliminares. Paga con el reporte del mes cerrado.');
     if (antes) avisos.push('El esquema entra en vigor con la venta de ' + MES[S.inicio.m] + ' ' + S.inicio.y + '. Este mes sirve solo como referencia.');
@@ -460,6 +461,7 @@
       if (t.id === 'bn-def') { var keep = { meses: S.meses, esquema: S.esquema, nombres: S.nombres }; S = Object.assign(clone(DEF), keep); save(); return render(); }
       if (t.id === 'bn-copy') return copiar();
       if (t.id === 'bn-xls') return excel();
+      if (t.id === 'bn-print') return imprimir();
     });
   }
   /* el estado de canalizado/validación vive en el mes de la 1.ª compra del cliente */
@@ -480,6 +482,78 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(function () { fallback(txt); ok(); }); else { fallback(txt); ok(); }
   }
   function fallback(txt) { var ta = D.createElement('textarea'); ta.value = txt; D.body.appendChild(ta); ta.select(); try { D.execCommand('copy'); } catch (e) { } ta.remove(); }
+  /* ---------- relación de pago y recibos imprimibles (formato formal, rojo y blanco, con logos) ---------- */
+  function letras(x) {
+    var U = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE', 'VEINTIÚN', 'VEINTIDÓS', 'VEINTITRÉS', 'VEINTICUATRO', 'VEINTICINCO', 'VEINTISÉIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE'];
+    var DEC = ['', '', '', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+    var CEN = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+    function c999(n) {
+      if (n === 0) return ''; if (n === 100) return 'CIEN';
+      var c = Math.floor(n / 100), r = n % 100, t = '';
+      if (r < 30) t = U[r]; else { t = DEC[Math.floor(r / 10)] + (r % 10 ? ' Y ' + U[r % 10] : ''); }
+      return (CEN[c] + (c && r ? ' ' : '') + t).trim();
+    }
+    var ent = Math.floor(x + 1e-9), cts = Math.round((x - ent) * 100); if (cts === 100) { ent++; cts = 0; }
+    var mill = Math.floor(ent / 1e6), mil = Math.floor((ent % 1e6) / 1000), res = ent % 1000, w = [];
+    if (mill) w.push(mill === 1 ? 'UN MILLÓN' : c999(mill) + ' MILLONES');
+    if (mil) w.push(mil === 1 ? 'MIL' : c999(mil) + ' MIL');
+    if (res) w.push(c999(res));
+    var txt = w.length ? w.join(' ') : 'CERO';
+    return txt + ((mill && !mil && !res) ? ' DE' : '') + (ent === 1 ? ' PESO ' : ' PESOS ') + ('0' + cts).slice(-2) + '/100 M.N.';
+  }
+  function imprimir() {
+    var U = W.__bnUltimo; if (!U) return;
+    var R = U.R, sim = !!(Object.keys(SIM).length || Object.keys(SIMD).length), per = MES[U.m] + ' ' + U.Y.cy;
+    var folio = 'BN-' + U.Y.cy + '-' + ('0' + U.m).slice(-2), hoy = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+    var LOGO1 = 'https://barbagomezricardo-cloud.github.io/embarques/clientes/img/logo-petfood.png', LOGO2 = 'https://barbagomezricardo-cloud.github.io/embarques/clientes/img/logo-19h.png';
+    var puesto = function (p) { return p.rol === 'vendedor' ? (p.esq === 'general' ? 'Vendedor' : 'Vendedor · cartera en arranque') : 'Soporte comercial'; };
+    var marca = sim ? 'ESCENARIO SIMULADO · NO PAGAR' : (R.parcial ? 'PRELIMINAR · MES EN CURSO' : '');
+    var enc = function (tit, sub) {
+      return '<header><img src="' + LOGO1 + '" alt="División Pet Food"><div class="t"><div class="emp">Leche 19 Diecinueve Hermanos · División Pet Food</div><h1>' + tit + '</h1><div class="sub">' + sub + '</div></div><img src="' + LOGO2 + '" alt="19 Hermanos" class="l2"></header>' +
+        '<div class="meta"><span><b>Folio:</b> ' + folio + '</span><span><b>Periodo:</b> ' + per + '</span><span><b>Fecha de emisión:</b> ' + hoy + '</span></div>' + (marca ? '<div class="marca">' + marca + '</div>' : '');
+    };
+    var firmas = function (L) { return '<div class="firmas">' + L.map(function (f) { return '<div class="f"><div class="ln"></div><b>' + esc(f[0]) + '</b><span>' + esc(f[1]) + '</span></div>'; }).join('') + '</div>'; };
+    var con = R.personas.filter(function (p) { return p.total > 0; });
+    var tv = 0, ts = 0; R.personas.forEach(function (p) { if (p.rol === 'vendedor') tv += p.total; else ts += p.total; });
+    var h = [];
+    // 1) relación de pago
+    h.push('<section class="hoja">' + enc('Relación de pago de bonos', 'Bonos por crecimiento, clientes nuevos y rendimiento · ' + per));
+    h.push('<div class="kpis"><div><span>Vendedores</span><b>' + $$(tv) + '</b></div><div><span>Soporte</span><b>' + $$(ts) + '</b></div><div class="tot"><span>Total a pagar</span><b>' + $$(R.total) + '</b></div><div><span>Personas con pago</span><b>' + con.length + '</b></div></div>');
+    h.push('<table><thead><tr><th>#</th><th>Persona</th><th>Puesto</th><th>Conceptos</th><th class="r">Importe</th></tr></thead><tbody>');
+    R.personas.forEach(function (p, i) {
+      h.push('<tr' + (p.total > 0 ? '' : ' class="cero"') + '><td>' + (i + 1) + '</td><td><b>' + esc(p.nombre) + '</b></td><td>' + puesto(p) + '</td><td class="cc">' + p.conceptos.map(function (x) { return esc(x[0]) + ' <span class="imp">' + $$(x[1]) + '</span>'; }).join('<br>') + '</td><td class="r"><b>' + $$(p.total) + '</b></td></tr>');
+    });
+    h.push('</tbody><tfoot><tr><td colspan="4" class="r">TOTAL DEL MES</td><td class="r">' + $$(R.total) + '</td></tr></tfoot></table>');
+    h.push('<div class="letra"><b>Importe con letra:</b> ' + letras(R.total) + '</div>');
+    h.push('<p class="nota">Cálculo sobre las ventas reales del reporte de Odoo de ' + per + ', comparadas contra el mismo mes de ' + U.Y.py + ', conforme al esquema de bonos vigente. Se somete a consideración para su autorización y pago.</p>');
+    h.push(firmas([['Lic. Ricardo Barba Gómez', 'Elaboró · Gerencia Comercial, División Pet Food'], ['', 'Autorizó · Dirección'], ['', 'Pagó · Administración / Nómina']]) + '</section>');
+    // 2) un recibo por persona con pago
+    con.forEach(function (p) {
+      h.push('<section class="hoja">' + enc('Recibo de pago de bono', esc(p.nombre) + ' · ' + puesto(p)));
+      h.push('<table><thead><tr><th>Concepto</th><th class="r">Importe</th></tr></thead><tbody>' + p.conceptos.map(function (x) { return '<tr><td>' + esc(x[0]) + '</td><td class="r">' + $$(x[1]) + '</td></tr>'; }).join('') +
+        '</tbody><tfoot><tr><td class="r">TOTAL A PAGAR</td><td class="r">' + $$(p.total) + '</td></tr></tfoot></table>');
+      h.push('<div class="letra"><b>Importe con letra:</b> ' + letras(p.total) + '</div>');
+      h.push('<p class="recibi">Recibí de <b>Leche 19 Diecinueve Hermanos</b> la cantidad de <b>' + $$(p.total) + '</b> (' + letras(p.total) + ') por concepto de bono correspondiente al periodo <b>' + per + '</b>, conforme al desglose anterior.</p>');
+      h.push(firmas([[p.nombre, 'Recibí de conformidad · Fecha: ______________'], ['Lic. Ricardo Barba Gómez', 'Entregó · Gerencia Comercial']]) + '</section>');
+    });
+    var css = '@page{size:letter;margin:14mm}*{box-sizing:border-box}body{margin:0;font-family:"Public Sans",Arial,sans-serif;color:#281E12;background:#EEE6DD;font-size:12.5px}' +
+      '.hoja{background:#fff;max-width:216mm;margin:14px auto;padding:16mm 14mm;box-shadow:0 4px 20px rgba(0,0,0,.12);border-top:8px solid #C8102E;position:relative;page-break-after:always}' +
+      'header{display:flex;align-items:center;gap:14px;border-bottom:3px solid #C8102E;padding-bottom:10px}header img{height:58px}header img.l2{height:48px;margin-left:auto}' +
+      '.emp{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6B5E52;font-weight:700}h1{font-family:Archivo,Arial,sans-serif;font-size:22px;color:#C8102E;margin:2px 0}.sub{font-size:12.5px;color:#5A4E42}' +
+      '.meta{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px;font-size:11.5px;color:#5A4E42}.marca{background:#C8102E;color:#fff;text-align:center;font-weight:900;letter-spacing:.12em;padding:6px;border-radius:6px;margin-bottom:10px}' +
+      '.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}.kpis div{border:1px solid #EADFD3;border-radius:8px;padding:8px 10px}.kpis span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6B5E52;font-weight:700}.kpis b{font-size:17px}.kpis .tot{background:#C8102E;border-color:#C8102E;color:#fff}.kpis .tot span{color:#FCEBEC}' +
+      'table{width:100%;border-collapse:collapse;margin-top:4px}th{background:#C8102E;color:#fff;text-align:left;padding:7px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.05em}td{padding:7px 8px;border-bottom:1px solid #EADFD3;vertical-align:top}tbody tr:nth-child(even) td{background:#FCF7F2}' +
+      '.r{text-align:right;white-space:nowrap}.cc{font-size:11px;color:#5A4E42}.imp{color:#281E12;font-weight:700}tr.cero td{color:#A0968B}tfoot td{background:#FCEBEC;font-weight:900;font-size:14px;color:#C8102E;border-top:2px solid #C8102E}' +
+      '.letra{margin-top:10px;padding:8px 10px;border-left:4px solid #C8102E;background:#FCF7F2;font-size:12px}.nota{font-size:11px;color:#6B5E52;margin-top:10px}.recibi{margin-top:14px;line-height:1.55}' +
+      '.firmas{display:flex;gap:22px;margin-top:46px}.f{flex:1;text-align:center;font-size:11px}.f .ln{border-top:1.5px solid #281E12;margin-bottom:5px;height:0}.f b{display:block;min-height:14px}.f span{color:#6B5E52}' +
+      '.barra{position:sticky;top:0;background:#281E12;color:#fff;padding:10px;text-align:center;z-index:5}.barra button{background:#C8102E;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;font-size:14px}' +
+      '@media print{body{background:#fff}.barra{display:none}.hoja{box-shadow:none;margin:0;max-width:none;padding:0 0 0 0;border-top:6px solid #C8102E}.hoja:last-child{page-break-after:auto}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+    var doc = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Bonos ' + per + ' · ' + folio + '</title><link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800;900&family=Public+Sans:wght@400;600;700;900&display=swap" rel="stylesheet"><style>' + css + '</style></head><body>' +
+      '<div class="barra"><button onclick="window.print()">🖨 Imprimir / Guardar PDF</button> &nbsp; Relación de pago + ' + con.length + ' recibo' + (con.length === 1 ? '' : 's') + '</div>' + h.join('') + '</body></html>';
+    var w = W.open('', '_blank'); if (!w) { alert('Permite las ventanas emergentes para abrir los recibos.'); return; }
+    w.document.open(); w.document.write(doc); w.document.close();
+  }
+  W.__bnLetras = letras;
   function excel() {
     var U = W.__bnUltimo; if (!U) return; if (typeof XLSX === 'undefined' || !XLSX.utils) { alert('No se cargó la librería de Excel.'); return; }
     var R = U.R, wb = XLSX.utils.book_new(), sim = Object.keys(SIM).length || Object.keys(SIMD).length;
