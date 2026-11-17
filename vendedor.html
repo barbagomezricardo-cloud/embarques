@@ -362,6 +362,8 @@ function fetchCloud(){
 function refreshCloud(){ if(CLOUD.db&&CLOUD.v)fetchCloud(); }
 /* ── Copia local de la cartera: con datos móviles la app abre al instante con lo último que cargó ── */
 var _cacheMostrado=false;
+/* Si la app se apaga, se bloquea al vendedor o el teléfono no es el autorizado: se borra la copia local de la cartera */
+function _borrarCopia(){ try{ var k=_cacheKey(); if(k)localStorage.removeItem(k); }catch(e){} _cacheMostrado=false; try{cacheAviso('');}catch(e){} }
 function _cacheKey(){ var q=parseHash(); return q.v?('vend_cache_'+q.v):''; }
 function _hayCache(){ try{ var k=_cacheKey(); return !!(k&&localStorage.getItem(k)); }catch(e){ return false; } }
 function _cacheFecha(){ try{ var o=JSON.parse(localStorage.getItem(_cacheKey())||'null'); return o&&o.t?(' del '+new Date(o.t).toLocaleString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})):''; }catch(e){ return ''; } }
@@ -1729,10 +1731,10 @@ function showCard(name){
 }
 
 // ── Candado de licencia (tu panel manda) + carga en vivo + auto-refresco ──
-function skBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🔒</div><h2 style="color:var(--ktC8102E);margin:10px 0">Servicio no disponible</h2><p class="hint">Esta app está desactivada temporalmente. Contacta a tu gerente.</p></div>';}
+function skBlocked(){_borrarCopia();var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🔒</div><h2 style="color:var(--ktC8102E);margin:10px 0">Servicio no disponible</h2><p class="hint">Esta app está desactivada temporalmente. Contacta a tu gerente.</p></div>';}
 function skGate(cb){skFetch(SK_DB+'/licencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(l){if(l&&l.activa===true)cb();else skBlocked();}).catch(function(){cb();});}
 // ── Apagado POR VENDEDOR: el gerente puede desactivar a un solo vendedor sin afectar a los demás ──
-function skVendBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🚫</div><h2 style="color:var(--ktC8102E);margin:10px 0">Acceso desactivado</h2><p class="hint">Tu acceso a esta app fue desactivado por tu gerente. Contáctalo si crees que es un error.</p></div>';}
+function skVendBlocked(){_borrarCopia();var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">🚫</div><h2 style="color:var(--ktC8102E);margin:10px 0">Acceso desactivado</h2><p class="hint">Tu acceso a esta app fue desactivado por tu gerente. Contáctalo si crees que es un error.</p></div>';}
 function vBlocked(b){return b===true||(b&&b.blocked===true);}
 function skVendorGate(cb){
   var q=parseHash(); var v=q.v||''; if(!v){cb();return;}
@@ -1749,7 +1751,7 @@ function skPoll(){ if(!CLOUD.v)return;
   if(buscandoAhora())return;               // ni encima de una búsqueda en curso: se cerraría el teclado
   skFetch(base+'/skan/'+encodeURIComponent(CLOUD.v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(p){ if(p&&p.rows){ if(CARDOPEN)return; applyPayload(p); renderList(CLISTQ); } }).catch(function(){}); }
 // ── Candado por DISPOSITIVO: el primer teléfono que abre el link queda autorizado; otro teléfono se bloquea ──
-function skDeviceBlocked(){var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">📵</div><h2 style="color:var(--ktC8102E);margin:10px 0">App bloqueada en este teléfono</h2><p class="hint">Esta app ya está activada en otro dispositivo. Si cambiaste de teléfono, pide a tu gerente que <b>libere tu acceso</b>.</p></div>';}
+function skDeviceBlocked(){_borrarCopia();var w=document.getElementById('wrap');if(w)w.innerHTML='<div style="text-align:center;padding:54px 16px"><div style="font-size:44px">📵</div><h2 style="color:var(--ktC8102E);margin:10px 0">App bloqueada en este teléfono</h2><p class="hint">Esta app ya está activada en otro dispositivo. Si cambiaste de teléfono, pide a tu gerente que <b>libere tu acceso</b>.</p></div>';}
 /* Safari (sobre todo iPhone) borra localStorage solo (Intelligent Tracking Prevention tras ~7 días sin
    usar el sitio, "Borrar historial y datos de sitios web", o abrir el link dentro de WhatsApp/Instagram
    en vez de Safari — cada uno guarda su propio storage). Cuando eso pasa, el teléfono del vendedor
