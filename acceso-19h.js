@@ -74,7 +74,24 @@
     return S.listo;
   }
 
-  function leer(ruta) { return S.db.ref(ruta).once('value').then(function (s) { return s.val(); }); }
+  /* Lectura con respaldo: el canal en tiempo real (websocket) a veces se queda colgado con datos móviles.
+     Si en 4 s no contesta, se pide lo mismo por HTTPS normal (como hace Gerencia) y gana el que llegue primero. */
+  function leer(ruta) {
+    var sdk = S.db.ref(ruta).once('value').then(function (s) { return s.val(); });
+    var rest = new Promise(function (ok, mal) {
+      setTimeout(function () {
+        var u = S.auth && S.auth.currentUser;
+        (u ? u.getIdToken().catch(function () { return ''; }) : Promise.resolve('')).then(function (t) {
+          return fetch(CFG_DEF.databaseURL + '/' + String(ruta).replace(/^\/+/, '') + '.json' + (t ? '?auth=' + encodeURIComponent(t) : ''), { cache: 'no-store' });
+        }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(ok).catch(mal);
+      }, 4000);
+    });
+    return new Promise(function (ok, mal) {
+      var n = 0, fin = false, err = null;
+      var uno = function (pr) { pr.then(function (v) { if (!fin) { fin = true; ok(v); } }, function (e) { err = err || e; if (++n === 2 && !fin) mal(err); }); };
+      uno(sdk); uno(rest);
+    });
+  }
 
   /* Cada persona entra SOLO a los programas que el master le dio. El master (p.master) entra a todo. */
   function permitido(p, app) {
@@ -238,7 +255,9 @@
   function tokenGuardado() { return S.tok; }   // síncrono: el último token (se renueva cada 40 min con token())
   function appCheckToken() {
     try { if (!S.ac && W.firebase && W.firebase.appCheck) S.ac = W.firebase.appCheck(S.app); } catch (e) { S.ac = null; }
-    return S.ac ? S.ac.getToken().then(function (x) { return x && x.token; }).catch(function () { return ''; }) : Promise.resolve('');
+    if (!S.ac) return Promise.resolve('');
+    // con señal débil reCAPTCHA puede tardar mucho: tras 3 s se sigue sin esperar más
+    return Promise.race([S.ac.getToken().then(function (x) { return x && x.token; }).catch(function () { return ''; }), new Promise(function (ok) { setTimeout(function () { ok(''); }, 3000); })]);
   }
   function esperarSesion() { return _ses.p; }
   function sesionLista(p) { token().then(function () { _ses.r(p); }); }
