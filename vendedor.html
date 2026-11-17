@@ -96,7 +96,7 @@ input[type=file]{display:none}
       <input type="file" id="fi" accept=".xlsx,.xls">
     </details>
   </div>
-  <div id="loading" style="display:none;text-align:center;padding:40px 0;color:var(--kt5A4E42)">Cargando datos en vivo…</div>
+  <div id="loading" style="display:none;text-align:center;padding:40px 0;color:var(--kt5A4E42)">Cargando datos en vivo…<div style="margin-top:14px"><a href="#" onclick="Acceso19H.diagnostico();return false" style="color:var(--ktC8102E);font-size:13px">🔧 ¿No carga? Diagnóstico</a></div></div>
   <div id="app" style="display:none"></div>
 </div>
 <script>/* anti-«Conectando…»: el localStorage de github.io lo comparten todas las apps; si se llena, Firebase truena al guardar su marca de reconexión. Se ignora ese error solo para llaves firebase:. */try{if(!Storage.prototype.__fbq){var _si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){try{return _si.call(this,k,v)}catch(e){if(/^firebase:/i.test(String(k)))return;throw e}};Storage.prototype.__fbq=1}}catch(e){}</script>
@@ -355,7 +355,7 @@ function fetchCloud(){
     if(_cacheMostrado||_hayCache()){ cacheAviso('📶 Sin conexión estable: estás viendo los datos guardados'+_cacheFecha()+'. <a href="#" onclick="fetchCloud();return false" style="color:inherit;font-weight:800;text-decoration:underline">Reintentar</a>'); return; }
     document.getElementById('drop').style.display='none';
     const app=document.getElementById('app'); app.style.display='block';
-    app.innerHTML='<div style="text-align:center;padding:40px 16px"><div style="font-size:40px">📶</div><h3 style="margin:8px 0">No se pudo conectar</h3><p class="hint">La señal está débil o se cortó. Vuelve a intentar; en cuanto cargue una vez, la app guardará tu cartera en el teléfono para abrir aunque no haya buena señal.</p><button class="btn" onclick="fetchCloud()" style="margin-top:10px">🔄 Reintentar</button></div>';
+    app.innerHTML='<div style="text-align:center;padding:40px 16px"><div style="font-size:40px">📶</div><h3 style="margin:8px 0">No se pudo conectar</h3><p class="hint">La señal está débil o se cortó. Vuelve a intentar; en cuanto cargue una vez, la app guardará tu cartera en el teléfono para abrir aunque no haya buena señal.</p><button class="btn" onclick="fetchCloud()" style="margin-top:10px">🔄 Reintentar</button> <button class="btn" onclick="Acceso19H.diagnostico()" style="margin-top:10px">🔧 Diagnóstico</button><div class="hint" style="margin-top:6px">Detalle: '+String((e&&e.message)||e).replace(/</g,'&lt;')+'</div></div>';
   });
   return true;
 }
