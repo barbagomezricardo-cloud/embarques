@@ -46,7 +46,8 @@
   function correo(key) { return clave(key) + DOMINIO; }
   function script(src) {
     return new Promise(function (ok, mal) {
-      var s = D.createElement('script'); s.src = src; s.onload = ok; s.onerror = function () { mal(new Error('Sin internet')); }; D.head.appendChild(s);
+      var s = D.createElement('script'), t = setTimeout(function () { mal(new Error('La conexión tardó demasiado al cargar ' + src.split('/').pop())); }, 25000);
+      s.src = src; s.onload = function () { clearTimeout(t); ok(); }; s.onerror = function () { clearTimeout(t); mal(new Error('No se pudo cargar ' + src.split('/').pop())); }; D.head.appendChild(s);
     });
   }
 
@@ -262,6 +263,39 @@
   function esperarSesion() { return _ses.p; }
   function sesionLista(p) { token().then(function () { _ses.r(p); }); }
 
+  /* ---------- Diagnóstico de conexión: prueba cada servicio que usan las apps y muestra cuál falla ---------- */
+  function diagnostico(cont) {
+    var host = cont || D.body, box = D.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:14px;font-family:system-ui,sans-serif';
+    box.innerHTML = '<div style="background:#fff;color:#1d1a17;border-radius:14px;max-width:440px;width:100%;max-height:90vh;overflow:auto;padding:16px;border-top:6px solid #C8102E"><h3 style="margin:0 0 4px;color:#C8102E">🔧 Diagnóstico de conexión</h3><div style="font-size:12px;color:#6B5E52;margin-bottom:8px">Toma una captura de esta pantalla y envíala a tu gerente.</div><div id="dg-l" style="font-size:13px;line-height:1.5">Probando…</div><button id="dg-x" style="margin-top:12px;width:100%;padding:10px;border:0;border-radius:10px;background:#C8102E;color:#fff;font-weight:800">Cerrar</button></div>';
+    host.appendChild(box); box.querySelector('#dg-x').onclick = function () { box.remove(); };
+    var L = box.querySelector('#dg-l'), filas = [];
+    var ua = navigator.userAgent, nav = /FBAN|FBAV|Instagram|WhatsApp|Line\//i.test(ua) ? 'dentro de WhatsApp/Instagram/Facebook (sugiero abrir en Safari o Chrome)' : (/CriOS|Chrome/i.test(ua) ? 'Chrome' : (/Safari/i.test(ua) ? 'Safari' : 'otro'));
+    var con = navigator.connection && navigator.connection.effectiveType ? navigator.connection.effectiveType : '—';
+    var pinta = function () { L.innerHTML = '<div style="margin-bottom:6px;font-size:12px;color:#6B5E52">' + new Date().toLocaleString('es-MX') + ' · navegador: ' + nav + ' · en línea: ' + (navigator.onLine ? 'sí' : 'NO') + ' · red: ' + con + '</div>' + filas.map(function (f) { return '<div style="display:flex;gap:8px;border-bottom:1px solid #EADFD3;padding:4px 0"><span style="width:20px">' + (f.ok == null ? '⏳' : f.ok ? '✅' : '❌') + '</span><span style="flex:1">' + f.n + (f.d ? '<div style="font-size:11px;color:#8A5000">' + esc(f.d) + '</div>' : '') + '</span><span style="font-size:11px;color:#6B5E52">' + (f.ms != null ? f.ms + ' ms' : '') + '</span></div>'; }).join(''); };
+    var prueba = function (n, fn) {
+      var f = { n: n, ok: null }; filas.push(f); pinta(); var t0 = Date.now();
+      return Promise.race([Promise.resolve().then(fn), new Promise(function (_, mal) { setTimeout(function () { mal(new Error('sin respuesta en 12 s')); }, 12000); })])
+        .then(function (d) { f.ok = true; f.d = d || ''; }, function (e) { f.ok = false; f.d = (e && e.message) || String(e); })
+        .then(function () { f.ms = Date.now() - t0; pinta(); });
+    };
+    var nc = function (u) { return fetch(u, { mode: 'no-cors', cache: 'no-store' }).then(function () { return ''; }); };
+    Promise.all([
+      prueba('Página de la app (GitHub)', function () { return fetch(location.href.split('#')[0], { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); }); }),
+      prueba('Librerías de Google (gstatic)', function () { return nc(SDK + 'firebase-app-compat.js'); }),
+      prueba('Base de datos (lectura normal)', function () { return fetch(CFG_DEF.databaseURL + '/licencia/activa.json', { cache: 'no-store' }).then(function (r) { return r.status === 200 ? '' : ('respuesta ' + r.status + (r.status === 401 ? ' (pide sesión: normal)' : '')); }); }),
+      prueba('Inicio de sesión de Google', function () { return nc('https://identitytoolkit.googleapis.com/'); }),
+      prueba('Renovación de sesión', function () { return nc('https://securetoken.googleapis.com/'); }),
+      prueba('reCAPTCHA (seguridad)', function () { return nc('https://www.google.com/recaptcha/enterprise.js'); }),
+      prueba('Firebase cargado en la app', function () { if (!S.app) throw new Error('aún no termina de cargar'); }),
+      prueba('Sesión iniciada', function () { var u = S.auth && S.auth.currentUser; if (!u) throw new Error('sin sesión en este teléfono'); return (S.perfil && S.perfil.nombre) || ''; }),
+      prueba('Credencial de sesión', function () { var u = S.auth && S.auth.currentUser; if (!u) throw new Error('sin sesión'); return u.getIdToken().then(function () { return ''; }); }),
+      prueba('Verificación App Check', function () { if (!S.ac && W.firebase && W.firebase.appCheck && S.app) { try { S.ac = W.firebase.appCheck(S.app); } catch (e) { } } if (!S.ac) return 'no activa'; return S.ac.getToken().then(function (x) { if (!x || !x.token) throw new Error('sin credencial'); }); }),
+      prueba('Canal en tiempo real', function () { if (!S.db) throw new Error('aún no termina de cargar'); return new Promise(function (ok, mal) { var r = S.db.ref('.info/connected'), h = function (sn) { if (sn.val() === true) { r.off('value', h); ok(''); } }; r.on('value', h); setTimeout(function () { r.off('value', h); mal(new Error('no conectó')); }, 10000); }); }),
+      prueba('Leer tu perfil', function () { if (!S.uid && !(S.auth && S.auth.currentUser)) throw new Error('sin sesión'); var uid = S.uid || S.auth.currentUser.uid; return leer('acceso/usuarios/' + uid).then(function (p) { if (!p) throw new Error('perfil vacío'); return p.nombre || ''; }); })
+    ]).then(function () { var mal = filas.filter(function (f) { return f.ok === false; }).length; L.insertAdjacentHTML('beforeend', '<div style="margin-top:8px;font-weight:800;color:' + (mal ? '#A80810' : '#1D7A45') + '">' + (mal ? mal + ' prueba(s) fallaron' : 'Todo respondió bien') + '</div>'); });
+  }
+
   /* Pantalla de acceso para Ventas, Maestra, Vendedor y Cuadre de báscula:
      cubre la app hasta que la persona entra (o ya tenía sesión en este equipo). */
   function puerta(op) {
@@ -274,7 +308,15 @@
     var montar = function () { (D.body || D.documentElement).appendChild(ov); };
     if (D.body) montar(); else D.addEventListener('DOMContentLoaded', montar);
     var q = function (x) { return ov.querySelector(x); };
-    return iniciar({ recaptcha: op.recaptcha }).then(function () { return sesionActual(op.app, { nip: op.nip }); }).then(function (p) {
+    var ayuda = function (txt) {
+      var e = q('#acc19-ay'); if (!e) { e = D.createElement('div'); e.id = 'acc19-ay'; e.style.cssText = 'margin-top:10px;font-size:12px;color:#8A5000;background:#FFF4DF;border-radius:8px;padding:8px'; q('.acc19-bx').appendChild(e); }
+      e.innerHTML = txt + '<div style="display:flex;gap:8px;margin-top:6px"><button type="button" id="acc19-rt" style="flex:1;padding:8px;border:0;border-radius:8px;background:#C8102E;color:#fff;font-weight:700">🔄 Reintentar</button><button type="button" id="acc19-dg" style="flex:1;padding:8px;border:1px solid #C8102E;border-radius:8px;background:#fff;color:#C8102E;font-weight:700">🔧 Diagnóstico</button></div>';
+      q('#acc19-rt').onclick = function () { location.reload(); }; q('#acc19-dg').onclick = function () { diagnostico(); };
+    };
+    var lento = setTimeout(function () { if (ov.isConnected && !q('#acc19-ay')) ayuda('La conexión está tardando más de lo normal.'); }, 12000);
+    q('#acc19-ph').textContent = 'Conectando… (1 de 2)';
+    return iniciar({ recaptcha: op.recaptcha }).then(function () { q('#acc19-ph').textContent = 'Revisando tu sesión… (2 de 2)'; return sesionActual(op.app, { nip: op.nip }); }).then(function (p) {
+      clearTimeout(lento); var ay = q('#acc19-ay'); if (ay) ay.remove();
       if (p) { ov.remove(); sesionLista(p); return p; }
       q('#acc19-ph').textContent = 'Elige tu nombre y escribe tu ' + (op.nip ? 'NIP' : 'contraseña') + '.';
       var LSK = 'acc19_ult_' + op.app;
@@ -294,7 +336,7 @@
         };
         q('#acc19-pb').onclick = go; q('#acc19-p').onkeydown = function (e) { if (e.key === 'Enter') go(); };
       });
-    }).catch(function () { q('#acc19-ph').textContent = 'Sin conexión a internet. Revisa y vuelve a cargar la página.'; throw new Error('sin internet'); });
+    }).catch(function (e) { clearTimeout(lento); q('#acc19-ph').textContent = 'No se pudo conectar.'; ayuda(esc((e && e.message) || 'Sin conexión a internet.')); throw new Error('sin internet'); });
   }
 
   function temporal(nip) {
@@ -433,7 +475,7 @@
     iniciar: iniciar, app: function () { return S.app; }, db: function () { return S.db; },
     directorio: directorio, entrar: entrar, sesionActual: sesionActual, salir: salir, vigilar: vigilar,
     cambiar: cambiar, pedirCambio: pedirCambio, admin: admin, token: token, panel: panel,
-    puerta: puerta, esperarSesion: esperarSesion, ROLES_INV: ROLES_INV, ROLES_RH: ROLES_RH, ROLES_CB: ROLES_CB, permitido: permitido, puedeCargar: puedeCargar, tokenGuardado: tokenGuardado, appCheckToken: appCheckToken, ROLES_GER: ROLES_GER,
+    puerta: puerta, esperarSesion: esperarSesion, ROLES_INV: ROLES_INV, ROLES_RH: ROLES_RH, ROLES_CB: ROLES_CB, permitido: permitido, puedeCargar: puedeCargar, diagnostico: diagnostico, tokenGuardado: tokenGuardado, appCheckToken: appCheckToken, ROLES_GER: ROLES_GER,
     perfil: function () { return S.perfil; }, clave: clave, ROLES_PROG: ROLES_PROG
   };
 })(window);
