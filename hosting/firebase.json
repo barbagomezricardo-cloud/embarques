@@ -1,0 +1,10 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [{ "source": "**", "function": { "functionId": "sitio19h", "region": "us-central1" } }]
+  },
+  "functions": [
+    { "source": "funcion", "codebase": "sitio", "ignore": ["node_modules", ".git", "firebase-debug.log"] }
+  ]
+}

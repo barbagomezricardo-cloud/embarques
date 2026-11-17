@@ -1,0 +1,7 @@
+{
+  "name": "sitio19h",
+  "description": "Entrega las apps de Pet Food desde Firebase (embarques-mascotas.web.app) tomando siempre la versión vigente de GitHub",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "dependencies": { "firebase-functions": "^6.1.0", "firebase-admin": "^12.7.0" }
+}
