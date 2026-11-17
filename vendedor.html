@@ -11,7 +11,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Silver Kan">
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--navy:#FBF7F2;--gold:#C8102E;--bg:#FFFFFF;--mid:#FFFFFF;--green:#1D7A45;--red:#A80810;--amber:#8A5000}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -69,7 +68,7 @@ input[type=file]{display:none}
 .pbar{height:6px;background:var(--kbEEF1F6);border-radius:4px;overflow:hidden;margin:2px 0 4px}
 .pbar i{display:block;height:100%}
 .dhint{font-size:11px;color:var(--kt6F6357);padding-top:4px}
-</style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap">
+</style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="tema-19h.css">
 <script src="tema-19h.js"></script>
 <script src="acceso-19h.js"></script>
@@ -408,7 +407,10 @@ const drop=document.getElementById('drop');
 document.getElementById('fi').addEventListener('change',e=>{const f=e.target.files[0];if(f)read(f);});
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();}));
 drop.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)read(f);});
-function read(f){const r=new FileReader();r.onload=e=>{try{parse(e.target.result);}catch(err){alert('No se pudo leer: '+err.message);}};r.readAsArrayBuffer(f);}
+/* La librería de Excel (~1 MB) ya no se descarga al abrir: con datos móviles bloqueaba la app (pantalla negra).
+   Solo se baja cuando el gerente sube un Excel aquí. */
+function cargarXLSX(){ if(window.XLSX)return Promise.resolve(); return new Promise(function(ok,mal){ var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload=ok; s.onerror=function(){mal(new Error('No se pudo descargar el lector de Excel'));}; document.head.appendChild(s); }); }
+function read(f){const r=new FileReader();r.onload=e=>{cargarXLSX().then(()=>{try{parse(e.target.result);}catch(err){alert('No se pudo leer: '+err.message);}}).catch(err=>alert(err.message));};r.readAsArrayBuffer(f);}
 
 function parse(buf){
   const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
