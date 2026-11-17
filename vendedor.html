@@ -6,7 +6,6 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) :is([style*="background:#FBF7F2" i],[style*="background-color:#FBF7F2" i],[style*="background: #FBF7F2" i]){background:#221B14!important}:root:not([data-theme="light"]) :is([style*="background:#FFFFFF" i],[style*="background-color:#FFFFFF" i],[style*="background: #FFFFFF" i]){background:#221B14!important}:root:not([data-theme="light"]) :is([style^="color:#0EA5E9" i],[style*=";color:#0EA5E9" i],[style*="; color:#0EA5E9" i]){color:#78D0F7!important}:root:not([data-theme="light"]) :is(text[fill="#0EA5E9" i],tspan[fill="#0EA5E9" i]){fill:#78D0F7}:root:not([data-theme="light"]) :is([style^="color:#1D7A45" i],[style*=";color:#1D7A45" i],[style*="; color:#1D7A45" i]){color:#8CE4B1!important}:root:not([data-theme="light"]) :is(text[fill="#1D7A45" i],tspan[fill="#1D7A45" i]){fill:#8CE4B1}:root:not([data-theme="light"]) :is([style^="color:#1F4E8C" i],[style*=";color:#1F4E8C" i],[style*="; color:#1F4E8C" i]){color:#CFC3B6!important}:root:not([data-theme="light"]) :is(text[fill="#1F4E8C" i],tspan[fill="#1F4E8C" i]){fill:#CFC3B6}:root:not([data-theme="light"]) :is([style^="color:#5A4E42" i],[style*=";color:#5A4E42" i],[style*="; color:#5A4E42" i]){color:#CFC3B6!important}:root:not([data-theme="light"]) :is(text[fill="#5A4E42" i],tspan[fill="#5A4E42" i]){fill:#CFC3B6}:root:not([data-theme="light"]) :is([style^="color:#6B3FA0" i],[style*=";color:#6B3FA0" i],[style*="; color:#6B3FA0" i]){color:#B599D7!important}:root:not([data-theme="light"]) :is(text[fill="#6B3FA0" i],tspan[fill="#6B3FA0" i]){fill:#B599D7}:root:not([data-theme="light"]) :is([style^="color:#6F6357" i],[style*=";color:#6F6357" i],[style*="; color:#6F6357" i]){color:#CFC3B6!important}:root:not([data-theme="light"]) :is(text[fill="#6F6357" i],tspan[fill="#6F6357" i]){fill:#CFC3B6}:root:not([data-theme="light"]) :is([style^="color:#8A5000" i],[style*=";color:#8A5000" i],[style*="; color:#8A5000" i]){color:#FFC370!important}:root:not([data-theme="light"]) :is(text[fill="#8A5000" i],tspan[fill="#8A5000" i]){fill:#FFC370}:root:not([data-theme="light"]) :is([style^="color:#A80810" i],[style*=";color:#A80810" i],[style*="; color:#A80810" i]){color:#F9777D!important}:root:not([data-theme="light"]) :is(text[fill="#A80810" i],tspan[fill="#A80810" i]){fill:#F9777D}:root:not([data-theme="light"]) :is([style^="color:#C8102E" i],[style*=";color:#C8102E" i],[style*="; color:#C8102E" i]){color:#F47B8F!important}:root:not([data-theme="light"]) :is(text[fill="#C8102E" i],tspan[fill="#C8102E" i]){fill:#F47B8F}}</style>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Silver Kan — App Vendedor</title>
-<link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -340,18 +339,48 @@ function fetchCloud(){
   document.getElementById('drop').style.display='none';
   document.getElementById('loading').style.display='block';
   const url=CLOUD.db.replace(/\/$/,'')+'/skan/'+encodeURIComponent(CLOUD.v)+'.json';
-  skFetch(url,{cache:'no-store'}).then(r=>r.json()).then(p=>{
+  if(_cacheMostrado){ document.getElementById('loading').style.display='none'; cacheAviso('⏳ Actualizando…'); }
+  const ctl=(typeof AbortController!=='undefined')?new AbortController():null; const tmo=setTimeout(function(){ if(ctl)ctl.abort(); },45000);
+  skFetch(url,{cache:'no-store',signal:ctl?ctl.signal:undefined}).then(r=>{ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); }).then(p=>{
+    clearTimeout(tmo);
     document.getElementById('loading').style.display='none';
-    if(!p||!p.rows){document.getElementById('drop').style.display='block';document.getElementById('app').innerHTML='<div class="hint">Aún no hay datos publicados para este vendedor. Pídele a tu gerente que cargue el reporte.</div>';document.getElementById('app').style.display='block';return;}
+    if(!p||!p.rows){ if(_cacheMostrado){cacheAviso('');return;} document.getElementById('drop').style.display='block';document.getElementById('app').innerHTML='<div class="hint">Aún no hay datos publicados para este vendedor. Pídele a tu gerente que cargue el reporte.</div>';document.getElementById('app').style.display='block';return;}
+    guardarCache(p); cacheAviso('');
+    if(_cacheMostrado&&(CARDOPEN||buscandoAhora())){ applyPayload(p); _cacheMostrado=false; return; }
+    _cacheMostrado=false;
     applyPayload(p); renderList(''); try{pushVisitasCloud();pushObsCloud();pushFugaNotaCloud();}catch(e){} try{fetchAltasLive();}catch(e){} try{fetchClienteInfoLive();}catch(e){} try{fetchContactoPendLive();}catch(e){}
   }).catch(e=>{
+    clearTimeout(tmo);
     document.getElementById('loading').style.display='none';
-    document.getElementById('drop').style.display='block';
-    alert('No se pudo conectar a los datos en vivo. Revisa tu internet e inténtalo de nuevo.');
+    if(_cacheMostrado||_hayCache()){ cacheAviso('📶 Sin conexión estable: estás viendo los datos guardados'+_cacheFecha()+'. <a href="#" onclick="fetchCloud();return false" style="color:inherit;font-weight:800;text-decoration:underline">Reintentar</a>'); return; }
+    document.getElementById('drop').style.display='none';
+    const app=document.getElementById('app'); app.style.display='block';
+    app.innerHTML='<div style="text-align:center;padding:40px 16px"><div style="font-size:40px">📶</div><h3 style="margin:8px 0">No se pudo conectar</h3><p class="hint">La señal está débil o se cortó. Vuelve a intentar; en cuanto cargue una vez, la app guardará tu cartera en el teléfono para abrir aunque no haya buena señal.</p><button class="btn" onclick="fetchCloud()" style="margin-top:10px">🔄 Reintentar</button></div>';
   });
   return true;
 }
 function refreshCloud(){ if(CLOUD.db&&CLOUD.v)fetchCloud(); }
+/* ── Copia local de la cartera: con datos móviles la app abre al instante con lo último que cargó ── */
+var _cacheMostrado=false;
+function _cacheKey(){ var q=parseHash(); return q.v?('vend_cache_'+q.v):''; }
+function _hayCache(){ try{ var k=_cacheKey(); return !!(k&&localStorage.getItem(k)); }catch(e){ return false; } }
+function _cacheFecha(){ try{ var o=JSON.parse(localStorage.getItem(_cacheKey())||'null'); return o&&o.t?(' del '+new Date(o.t).toLocaleString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})):''; }catch(e){ return ''; } }
+function guardarCache(p){ try{ var k=_cacheKey(); if(k) localStorage.setItem(k, JSON.stringify({t:Date.now(),p:p})); }catch(e){ /* sin espacio: se sigue sin copia */ } }
+function cacheAviso(html){
+  var b=document.getElementById('cache-aviso');
+  if(!html){ if(b)b.remove(); return; }
+  if(!b){ b=document.createElement('div'); b.id='cache-aviso'; b.style.cssText='position:sticky;top:0;z-index:50;background:#FFF4DF;color:#8A5000;border-bottom:1px solid #EADFD3;padding:8px 12px;font-size:13px;text-align:center'; document.body.insertBefore(b,document.body.firstChild); }
+  b.innerHTML=html;
+}
+function mostrarCache(){
+  try{
+    var k=_cacheKey(); if(!k)return; var o=JSON.parse(localStorage.getItem(k)||'null'); if(!o||!o.p||!o.p.rows)return;
+    var q=parseHash(); CLOUD.db=q.db||SK_DB; CLOUD.v=q.v||'';
+    document.getElementById('drop').style.display='none'; document.getElementById('loading').style.display='none';
+    applyPayload(o.p); renderList(''); _cacheMostrado=true;
+    cacheAviso('⏳ Mostrando tus datos guardados'+_cacheFecha()+' mientras se conecta…');
+  }catch(e){}
+}
 
 function loadCode(){
   const raw=(document.getElementById('code').value||'').trim().replace(/\s+/g,'');
@@ -1751,8 +1780,13 @@ function skDeviceLock(cb){
   }).catch(function(){ cb(); }); // sin internet: no bloquea (los datos tampoco cargan)
 }
 applyZoom();
-window.addEventListener('hashchange',function(){skGate(function(){skVendorGate(function(){skDeviceLock(fetchCloud);});});});
-skGate(function(){ skVendorGate(function(){ skDeviceLock(function(){ fetchCloud(); setInterval(skPoll,60000); }); }); });
+window.addEventListener('hashchange',function(){_gateT(skGate,6000)(function(){_gateT(skVendorGate,6000)(function(){_gateT(skDeviceLock,6000)(fetchCloud);});});});
+/* Con datos móviles cada consulta puede tardar: los controles (licencia, bloqueo del vendedor, candado del
+   teléfono) corren con límite de espera y, si no contestan a tiempo, la app sigue (igual que sin internet).
+   Mientras tanto se muestra de inmediato la última cartera guardada en el teléfono. */
+function _gateT(gate, ms){ return function(cb){ var done=false; var go=function(){ if(!done){ done=true; cb(); } }; setTimeout(go, ms); gate(go); }; }
+mostrarCache();
+_gateT(skGate,6000)(function(){ _gateT(skVendorGate,6000)(function(){ _gateT(skDeviceLock,6000)(function(){ fetchCloud(); setInterval(skPoll,60000); }); }); });
 /* Guarda una copia de la app (el "cascarón": este HTML y el script que necesita) para que si al abrirla
    desde la pantalla de inicio el celular no tiene señal buena (típico con datos móviles), en vez de
    "Safari no puede abrir la página" cargue lo último guardado y solo falle la actualización de precios,
