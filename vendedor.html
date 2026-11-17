@@ -1,4 +1,19 @@
-<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><script>
+/* Mudanza a Firebase (embarques-mascotas.web.app): algunas redes móviles no alcanzan github.io.
+   El link viejo de GitHub manda solo al nuevo, llevando la identificación de este teléfono para que
+   el candado de dispositivo lo reconozca y no lo bloquee al cambiar de dirección. */
+(function(){try{
+  var NUEVO='embarques-mascotas.web.app', h=location.hash||'', m=h.match(/[#&]v=([^&]*)/), v=m?decodeURIComponent(m[1]):'';
+  if(/github\.io$/.test(location.hostname)){
+    var dev=''; try{ dev=v?(localStorage.getItem('sk_dev_'+v)||''):''; }catch(e){}
+    location.replace('https://'+NUEVO+'/vendedor.html'+h+(dev?((h?'&':'#')+'dev='+encodeURIComponent(dev)):''));
+    return;
+  }
+  var d=h.match(/[#&]dev=([^&]*)/);
+  if(d){ if(v){ try{ if(!localStorage.getItem('sk_dev_'+v)) localStorage.setItem('sk_dev_'+v, decodeURIComponent(d[1])); }catch(e){} }
+    history.replaceState(null,'',location.pathname+location.search+h.replace(/[#&]dev=[^&]*/,'').replace(/^&/,'#')); }
+}catch(e){}})();
+</script>
 <style id="tema19h-vars">:root{--kb0B7CAF:#0B7CAF;--kb12843C:#12843C;--kb17843F:#17843F;--kb196CF4:#196CF4;--kb6B21A8:#6B21A8;--kb7C5A2B:#7C5A2B;--kb8A6114:#8A6114;--kbC0392B:#C0392B;--kbDBE4F5:#DBE4F5;--kbDE0A14:#DE0A14;--kbE3F3EA:#E3F3EA;--kbE5F4EA:#E5F4EA;--kbE6EEF9:#E6EEF9;--kbEADFD3:#EADFD3;--kbEEF1F6:#EEF1F6;--kbEEF4FF:#EEF4FF;--kbF3ECE4:#F3ECE4;--kbF4F6FA:#F4F6FA;--kbFBF7F2:#FBF7F2;--kbFBFCFF:#FBFCFF;--kbFCF0DC:#FCF0DC;--kbFDECEB:#FDECEB;--kbFFF7E6:#FFF7E6;--kbFFFDF7:#FFFDF7;--kbFFFFFF:#FFFFFF;--kd7C5A2B:#7C5A2B;--kd86612A:#86612A;--kdA855F7:#A855F7;--kdC7DBFF:#C7DBFF;--kdDE0A14:#DE0A14;--kdE3F3EA:#E3F3EA;--kdEADFD3:#EADFD3;--kdF3ECE4:#F3ECE4;--kdF4D58A:#F4D58A;--kt15803D:#15803D;--kt1A7A3F:#1A7A3F;--kt1D7A45:#1D7A45;--kt1F4E8C:#1F4E8C;--kt281E12:#281E12;--kt5A4E42:#5A4E42;--kt6B3FA0:#6B3FA0;--kt6F6357:#6F6357;--kt7A5A12:#7A5A12;--kt8A5000:#8A5000;--ktA80810:#A80810;--ktC8102E:#C8102E;--ktFFFFFF:#FFFFFF}
 :root[data-theme="dark"]{--kbDBE4F5:#2B231B;--kbE3F3EA:#17120D;--kbE5F4EA:#17120D;--kbE6EEF9:#2B231B;--kbEADFD3:#2B231B;--kbEEF1F6:#17120D;--kbEEF4FF:#17120D;--kbF3ECE4:#2B231B;--kbF4F6FA:#17120D;--kbFBF7F2:#221B14;--kbFBFCFF:#221B14;--kbFCF0DC:#17120D;--kbFDECEB:#17120D;--kbFFF7E6:#221B14;--kbFFFDF7:#221B14;--kbFFFFFF:#221B14;--kdC7DBFF:#25457E;--kdE3F3EA:#3A3027;--kdEADFD3:#3A3027;--kdF3ECE4:#3A3027;--kt15803D:#84EBAB;--kt1A7A3F:#89E6AD;--kt1D7A45:#8CE4B1;--kt1F4E8C:#CFC3B6;--kt281E12:#F4ECE3;--kt5A4E42:#CFC3B6;--kt6B3FA0:#B599D7;--kt6F6357:#CFC3B6;--kt7A5A12:#EDCC83;--kt8A5000:#FFC370;--ktA80810:#F9777D;--ktC8102E:#F47B8F}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--kbDBE4F5:#2B231B;--kbE3F3EA:#17120D;--kbE5F4EA:#17120D;--kbE6EEF9:#2B231B;--kbEADFD3:#2B231B;--kbEEF1F6:#17120D;--kbEEF4FF:#17120D;--kbF3ECE4:#2B231B;--kbF4F6FA:#17120D;--kbFBF7F2:#221B14;--kbFBFCFF:#221B14;--kbFCF0DC:#17120D;--kbFDECEB:#17120D;--kbFFF7E6:#221B14;--kbFFFDF7:#221B14;--kbFFFFFF:#221B14;--kdC7DBFF:#25457E;--kdE3F3EA:#3A3027;--kdEADFD3:#3A3027;--kdF3ECE4:#3A3027;--kt15803D:#84EBAB;--kt1A7A3F:#89E6AD;--kt1D7A45:#8CE4B1;--kt1F4E8C:#CFC3B6;--kt281E12:#F4ECE3;--kt5A4E42:#CFC3B6;--kt6B3FA0:#B599D7;--kt6F6357:#CFC3B6;--kt7A5A12:#EDCC83;--kt8A5000:#FFC370;--ktA80810:#F9777D;--ktC8102E:#F47B8F}}

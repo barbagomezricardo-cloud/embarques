@@ -6813,8 +6813,8 @@ function renderRuta(){
 const Q_GROUPS=[[[2,3,4],'Feb–Abr'],[[5,6,7],'May–Jul'],[[8,9,10],'Ago–Oct'],[[11,12,1],'Nov–Ene']];
 function quarterOf(m){for(const g of Q_GROUPS){if(g[0].indexOf(m)>=0)return {months:g[0],label:g[1]};}return {months:[m],label:''};}
 const SK_DB='https://embarques-mascotas-default-rtdb.firebaseio.com'; // Firebase de embarques (misma licencia)
-const SK_APP='https://barbagomezricardo-cloud.github.io/embarques/vendedor.html';
-const SK_MASTER='https://barbagomezricardo-cloud.github.io/embarques/maestra.html';
+const SK_APP='https://embarques-mascotas.web.app/vendedor.html';   // Firebase: abre también en redes que no alcanzan github.io
+const SK_MASTER='https://embarques-mascotas.web.app/maestra.html';
 
 // ── App Check (protección anti-abuso, OPCIONAL y apagada por defecto) ───────
 // Hoy cualquier script fuera de estas apps que se sepa la URL de la base (arriba)
@@ -6907,7 +6907,7 @@ function toggleSuper(){ setTimeout(function(){try{renderMapeoTable();}catch(e){}
   if(pf&&(pf.master===true||pf.ventas==='master'||pf.ventas==='su')){ SK_SUPER=true; applyRole(); return; }
   alert('Tu usuario es de consulta. Pide al master el permiso de super-usuario en el panel de usuarios.');
 }
-function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app)c.app=SK_APP; if(!c.master)c.master=SK_MASTER; return c;}
+function getCloudCfg(){var c={};try{c=JSON.parse(localStorage.getItem('cloudCfg04mas')||'{}');}catch(e){c={};} if(!c.db)c.db=SK_DB; if(!c.app||/github\.io/.test(c.app))c.app=SK_APP; if(!c.master||/github\.io/.test(c.master))c.master=SK_MASTER; return c;}
 function saveCloudCfg(){ if(!reqSuper())return;const prev=getCloudCfg();const c={db:((document.getElementById('cl-db')||{}).value||'').trim(),secret:((document.getElementById('cl-sec')||{}).value||'').trim(),app:((document.getElementById('cl-app')||{}).value||'').trim(),master:((document.getElementById('cl-master')||{value:prev.master}).value||'').trim()};localStorage.setItem('cloudCfg04mas',JSON.stringify(c));pushConfigCloud(true);renderCodesPanel();}
 // ── COBRADORES: usuarios que VEN la cartera de un vendedor, con su propia marca de agua y su propia licencia/link.
 //    name = etiqueta que se muestra y se estampa en la marca de agua · cartera = vendedor cuya cartera verá (por nombre, sin importar mayúsculas/acentos).
