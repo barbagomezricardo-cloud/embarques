@@ -527,6 +527,7 @@ function pintarInv(I) {
   el.innerHTML = h; bindConectar('inv');
 }
 /* ---------- EMPAQUE: consumo dinámico, existencia de control y alcance (empaque-19h.js) ---------- */
+function cargarXLSX() { if (window.XLSX) return Promise.resolve(); return new Promise((ok, mal) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = () => mal(new Error('No se pudo descargar el lector de Excel')); document.head.appendChild(s); }); }
 async function escribir(ruta, val) {
   const h = { 'Content-Type': 'application/json' }; const t = await acToken(); if (t) h['X-Firebase-AppCheck'] = t;
   const it = window.Acceso19H ? await Acceso19H.token() : ''; if (!it) throw new Error('Sin sesión');
@@ -548,8 +549,8 @@ function pintarEmpaque() {
   const conC = cos.filter(f => f.tieneConteo).length;
   h += `<div class="kpis">${kpi('Críticos', fmt(crit.length), 'se acaban antes de que llegue un pedido', crit.length ? 'bad' : 'ok')}${kpi('En riesgo', fmt(ries.length), 'bajo stock mínimo', ries.length ? 'warn' : 'ok')}${kpi('Costales al mes', fmt(totVig), 'consumo vigente con ' + Math.round(R.merma * 100) + '% de merma')}${kpi('Promo + bonificación', (R.promoPct * 100).toFixed(1) + '%', 'de las salidas · últimos 3 meses')}${kpi('Cambio de ritmo', fmt(ritmo.length), 'últimos 30 días vs vigente (±' + Math.round(R.umbral * 100) + '%)', ritmo.length ? 'warn' : 'ok')}</div>`;
   const base = R.cerrados.length ? R.cerrados.slice().reverse().map(k => Empaque19H.MESC[+k.slice(5) - 1]).join(', ') : '—';
-  h += `<div class="small mut" style="margin:-2px 0 6px">Consumo vigente = 50% promedio de los últimos 3 meses cerrados + 50% de los últimos 6 (${base}); se actualiza solo al cerrar cada mes. Salidas registradas hasta el <b>${esc(R.ultimo)}</b> (reporte ${esc(R.upd)}). ${R.conteo && R.conteo.fecha ? 'Existencia de control desde tu conteo del <b>' + esc(R.conteo.fecha) + '</b> (' + conC + ' de ' + cos.length + ' costales).' : '<b>Sin conteo base:</b> la existencia es la que reporta Inventarios.'}</div>`;
-  h += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 2px"><button class="btn sm${EMP_VER === 'alerta' ? ' pri' : ''}" data-ev="alerta">Alcance y compra</button><button class="btn sm${EMP_VER === 'tend' ? ' pri' : ''}" data-ev="tend">Consumo por mes</button><button class="btn sm${EMP_VER === 'ctrl' ? ' pri' : ''}" data-ev="ctrl">Control vs Inventarios</button>${esMasterCM() ? '<button class="btn sm" id="emp-conteo">📝 Conteo base</button><button class="btn sm" id="emp-par">⚙️ Parámetros</button>' : ''}</div>`;
+  h += `<div class="small mut" style="margin:-2px 0 6px">Consumo vigente = 50% promedio de los últimos 3 meses cerrados + 50% de los últimos 6 (${base}); se actualiza solo al cerrar cada mes. Salidas registradas hasta el <b>${esc(R.ultimo)}</b> (reporte ${esc(R.upd)}). ${R.conteo && R.conteo.fecha ? 'Existencia de control desde tu conteo del <b>' + esc(R.conteo.fecha) + '</b> (' + conC + ' de ' + cos.length + ' costales); costales usados = ventas' + (R.conDeltaPT ? ' + cambio de producto terminado al ' + esc(R.ptActual.fecha) : (R.conteo.pt ? ' (sube una foto nueva de producto terminado para sumar su cambio)' : ' (sin foto de producto terminado: se supone constante)')) + '.' : '<b>Sin conteo base:</b> la existencia es la que reporta Inventarios.'}</div>`;
+  h += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 2px"><button class="btn sm${EMP_VER === 'alerta' ? ' pri' : ''}" data-ev="alerta">Alcance y compra</button><button class="btn sm${EMP_VER === 'tend' ? ' pri' : ''}" data-ev="tend">Consumo por mes</button><button class="btn sm${EMP_VER === 'ctrl' ? ' pri' : ''}" data-ev="ctrl">Control vs Inventarios</button>${esMasterCM() ? '<button class="btn sm" id="emp-conteo">📝 Conteo base</button><button class="btn sm" id="emp-odoo">📥 Actualizar con Odoo</button><button class="btn sm" id="emp-par">⚙️ Parámetros</button>' : ''}</div>`;
   const nom = f => `${esc(f.it.nombre || f.id)}<div class="sub">${esc(f.id)}${f.esCons ? ' · ' + fmt(f.it._kgMil, 2) + ' kg por 1,000 sacos' : ''}</div>`;
   const pill = f => f.a ? `<span class="pill ${f.a.crit === 'CRÍTICO' ? 'p-bad' : f.a.crit === 'RIESGO' ? 'p-warn' : 'p-ok'}">${f.a.crit === 'SALUDABLE' ? 'OK' : f.a.crit}</span>` : '';
   const u = f => f.esCons ? ' kg' : '';
@@ -563,15 +564,18 @@ function pintarEmpaque() {
       F.map(f => `<tr><td>${nom(f)}</td>${f.meses.map(m => `<td>${fmt(m.q)}</td>`).join('')}<td><b>${fmt(f.vig)}</b></td><td style="color:${f.alertaRitmo ? 'var(--warn)' : 'inherit'}">${fmt(f.v30)}</td></tr>`).join('') + '</table></div>';
     const sm = Object.keys(R.sinMapa); if (sm.length) h += `<div class="small" style="margin-top:6px;color:var(--warn)">⚠️ Productos sin costal asignado (no se cuentan): ${sm.map(c => esc(c + ' ' + R.sinMapa[c].nombre) + ' (' + fmt(R.sinMapa[c].q) + ')').join(' · ')}</div>`;
   } else {
-    h += `<div class="tbl-wrap"><table class="tbl"><tr><th>Costal</th><th>Conteo base</th><th>− Salidas</th><th>+ Entradas</th><th>Control</th><th>Inventarios</th><th>Diferencia</th></tr>` +
-      F.map(f => `<tr><td>${nom(f)}</td><td>${f.tieneConteo ? fmt(num(R.conteo.items[f.id])) : '—'}</td><td>${f.tieneConteo ? fmt(f.salidas) : '—'}</td><td>${f.tieneConteo ? fmt(f.entradas) : '—'}</td><td><b>${f.tieneConteo ? fmt(f.ctrl) : '—'}</b></td><td>${fmt(f.invFis)}</td><td style="color:${f.dif && Math.abs(f.dif) > Math.max(500, f.vig * 0.05) ? 'var(--bad)' : 'inherit'}">${f.dif == null ? '—' : (f.dif > 0 ? '+' : '') + fmt(f.dif)}</td></tr>`).join('') + '</table></div>';
-    h += '<div class="small mut" style="margin-top:4px">Diferencia = lo que reporta Inventarios − tu existencia de control. Una diferencia grande indica consumos o traslados mal registrados (o un conteo base desactualizado). Salidas incluyen la merma configurada.</div>';
+    const OE = (D.cfg && D.cfg.odooEmp) || null;
+    const difC = (a, b) => (a == null || b == null) ? '—' : `<span style="color:${Math.abs(a - b) > 500 ? 'var(--bad)' : 'inherit'}">${a - b > 0 ? '+' : ''}${fmt(a - b)}</span>`;
+    h += `<div class="tbl-wrap"><table class="tbl"><tr><th>Costal</th><th>Conteo base</th><th>Ventas</th><th>Δ prod. terminado</th><th>Usados (con merma)</th><th>+ Entradas</th><th>Control</th>${OE ? '<th>Odoo ' + esc(OE.fecha) + '</th><th>Dif. Odoo</th>' : ''}<th>App Inventarios</th><th>Dif. app</th></tr>` +
+      F.map(f => { const o = OE && OE.items && OE.items[f.id] != null ? num(OE.items[f.id]) : null; return `<tr><td>${nom(f)}</td><td>${f.tieneConteo ? fmt(num(R.conteo.items[f.id])) : '—'}</td><td>${f.tieneConteo ? fmt(f.ventasDesde) : '—'}</td><td>${f.tieneConteo && R.conDeltaPT ? (f.deltaPT > 0 ? '+' : '') + fmt(f.deltaPT) : '—'}</td><td>${f.tieneConteo ? fmt(f.salidas) : '—'}</td><td>${f.tieneConteo ? fmt(f.entradas) : '—'}</td><td><b>${f.tieneConteo ? fmt(f.ctrl) : '—'}</b></td>${OE ? '<td>' + fmt(o) + '</td><td>' + (f.tieneConteo ? difC(o, f.ctrl) : '—') + '</td>' : ''}<td>${fmt(f.invFis)}</td><td>${f.tieneConteo ? difC(f.invFis, f.ctrl) : '—'}</td></tr>`; }).join('') + '</table></div>';
+    h += '<div class="small mut" style="margin-top:4px">Usados = sacos que salieron (ventas Odoo) + lo que creció el producto terminado (Odoo), con la merma configurada: el costal se gasta al producir. Diferencia = lo que reportan (Odoo o la app de Inventarios) − tu control. Una diferencia grande indica consumos, traslados o mermas mal registrados.</div>';
   }
   h += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${lnk('inventarios/inventarios/index.html', '📋 Inventarios')}${lnk('ventas.html', '📤 Cargar reporte de ventas')}</div>`;
   el.innerHTML = h;
   el.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => { EMP_VER = b.getAttribute('data-ev'); pintarEmpaque(); });
   const bc = $('#emp-conteo'); if (bc) bc.onclick = () => editarEmpaque('conteo', R);
   const bp = $('#emp-par'); if (bp) bp.onclick = () => editarEmpaque('par', R);
+  const bo = $('#emp-odoo'); if (bo) bo.onclick = () => editarEmpaque('odoo', R);
 }
 function editarEmpaque(tipo, R) {
   const cfg = JSON.parse(JSON.stringify((S.d.emp && S.d.emp.cfg) || {}));
@@ -580,9 +584,15 @@ function editarEmpaque(tipo, R) {
   let h = '<div class="card" style="max-width:520px;width:100%;max-height:90vh;overflow:auto">';
   if (tipo === 'conteo') {
     const c = cfg.conteo || {};
-    h += `<h2>📝 Conteo base de empaque</h2><div class="small mut">Captura lo que contaste físicamente (almacén de empaque + insumos de PT) al cierre del día indicado. Desde el día siguiente el sistema descuenta solo las salidas reales de Odoo y suma las entradas que registre Inventarios. Deja vacío lo que no contaste: se usará lo que reporta Inventarios.</div>
-      <label class="small" style="display:block;margin-top:8px">Fecha del conteo (al cierre del día) <input type="date" id="emp-f" value="${esc(c.fecha || hoyISO())}" class="btn" style="width:auto"></label>
+    h += `<h2>📝 Conteo base de empaque</h2><div class="small mut">Sube los reportes «Variante del producto» de Odoo: el de <b>empaque vacío</b> llena las cantidades y el de <b>producto terminado</b> queda como foto inicial. También puedes capturar a mano. Desde el día siguiente a la fecha se descuentan los costales usados (ventas + cambio de producto terminado) y se suman las entradas que registre Inventarios. Lo que dejes vacío usa lo que reporta Inventarios.</div>
+      <label class="btn sm" style="margin-top:8px;display:inline-block">📥 Subir reportes de Odoo (puedes elegir los dos)<input type="file" id="emp-xls" accept=".xlsx,.xls" multiple style="display:none"></label> <span class="small" id="emp-xls-st">${c.pt ? '✔ Foto de producto terminado del ' + esc(c.pt.fecha) : 'Sin foto de producto terminado'}</span>
+      <label class="small" style="display:block;margin-top:8px">Fecha de las existencias (si el reporte se sacó en la mañana antes de embarcar, usa el día anterior) <input type="date" id="emp-f" value="${esc(c.fecha || hoyISO())}" class="btn" style="width:auto"></label>
       <div class="emp-ed">${F.map(f => `<span>${esc(f.it.nombre || f.id)}<span class="small mut"> · ${esc(f.id)}${f.invFis != null ? ' · Inv: ' + fmt(f.invFis) : ''}</span></span><input inputmode="decimal" data-id="${esc(f.id)}" value="${c.items && c.items[f.id] != null ? c.items[f.id] : ''}" placeholder="—">`).join('')}</div>`;
+  } else if (tipo === 'odoo') {
+    const pa = cfg.ptActual, oe = cfg.odooEmp;
+    h += `<h2>📥 Actualizar con Odoo</h2><div class="small mut">Sube periódicamente (sugiero cada semana o al cierre de mes) los reportes «Variante del producto» de Odoo:<br>• <b>Producto terminado</b>: actualiza el cambio de producto terminado desde tu conteo, para calcular los costales realmente usados.<br>• <b>Empaque vacío</b>: queda como «lo que dice Odoo» para compararlo contra tu control (no cambia tu control).</div>
+      <label class="btn sm" style="margin-top:8px;display:inline-block">📥 Elegir reportes<input type="file" id="emp-xls" accept=".xlsx,.xls" multiple style="display:none"></label> <span class="small" id="emp-xls-st">${pa ? 'Producto terminado al ' + esc(pa.fecha) : 'Sin foto de producto terminado'} · ${oe ? 'Empaque Odoo al ' + esc(oe.fecha) : 'sin foto de empaque'}</span>
+      <label class="small" style="display:block;margin-top:8px">Fecha de las existencias <input type="date" id="emp-f" value="${hoyISO()}" class="btn" style="width:auto"></label>`;
   } else {
     h += `<h2>⚙️ Parámetros de empaque</h2>
       <div class="emp-ed"><span>Merma de empaque (%)<div class="small mut">costales que se rompen o desperdician en la envasadora</div></span><input inputmode="decimal" id="emp-mer" value="${((cfg.merma == null ? 0.01 : cfg.merma) * 100)}">
@@ -592,12 +602,45 @@ function editarEmpaque(tipo, R) {
   h += '<div class="err" id="emp-e" style="color:var(--bad);font-size:13px"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn" id="emp-x">Cancelar</button><button class="btn pri" id="emp-ok">Guardar</button></div></div>';
   ov.innerHTML = h; document.body.appendChild(ov);
   ov.querySelector('#emp-x').onclick = () => ov.remove();
+  let subidoPT = null, subidoEmp = null;
+  const fx = ov.querySelector('#emp-xls');
+  if (fx) fx.onchange = async () => {
+    const st = ov.querySelector('#emp-xls-st'); st.textContent = 'Leyendo…';
+    try {
+      await cargarXLSX(); const msgs = [];
+      for (const f of fx.files) {
+        const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+        const V = Empaque19H.leerVariantes(rows);
+        const nPT = Object.keys(V.pt).length, nE = Object.keys(V.empaque).length;
+        if (nPT) { subidoPT = { items: V.pt, nombres: V.nombres }; msgs.push('✔ producto terminado: ' + nPT + ' productos'); }
+        if (nE) {
+          subidoEmp = { items: V.empaque };
+          if (tipo === 'conteo') ov.querySelectorAll('[data-id]').forEach(i => { const id = i.getAttribute('data-id'); if (V.empaque[id] != null) i.value = V.empaque[id]; });
+          msgs.push('✔ empaque: ' + nE + ' artículos');
+        }
+        if (!nPT && !nE) msgs.push('⚠️ ' + f.name + ': no trae productos 04MAS ni empaque');
+      }
+      st.textContent = msgs.join(' · ');
+    } catch (e) { st.textContent = '⚠️ ' + e.message; }
+  };
   ov.querySelector('#emp-ok').onclick = async () => {
     const b = ov.querySelector('#emp-ok'); b.disabled = true;
     try {
       if (tipo === 'conteo') {
         const items = {}; ov.querySelectorAll('[data-id]').forEach(i => { const v = String(i.value).replace(/,/g, '').trim(); if (v !== '') items[i.getAttribute('data-id')] = Number(v); });
-        cfg.conteo = { fecha: ov.querySelector('#emp-f').value, items, por: (Acceso19H.perfil() || {}).nombre || '', ts: Date.now() };
+        const fecha = ov.querySelector('#emp-f').value;
+        const ptPrev = cfg.conteo && cfg.conteo.pt && cfg.conteo.fecha === fecha ? cfg.conteo.pt : null;
+        cfg.conteo = { fecha, items, por: (Acceso19H.perfil() || {}).nombre || '', ts: Date.now() };
+        if (subidoPT) cfg.conteo.pt = Object.assign({ fecha }, subidoPT); else if (ptPrev) cfg.conteo.pt = ptPrev;
+        else if (!confirm('No subiste la foto de producto terminado. Sin ella, el control supondrá que el producto terminado no cambia. ¿Guardar así?')) { ov.querySelector('#emp-ok').disabled = false; return; }
+        if (cfg.ptActual && cfg.ptActual.fecha < fecha) delete cfg.ptActual;   // la foto de PT anterior al conteo ya no aplica
+        if (subidoEmp) cfg.odooEmp = Object.assign({ fecha }, subidoEmp);
+      } else if (tipo === 'odoo') {
+        const fecha = ov.querySelector('#emp-f').value;
+        if (!subidoPT && !subidoEmp) throw new Error('Elige al menos un reporte de Odoo.');
+        if (subidoPT) cfg.ptActual = Object.assign({ fecha }, subidoPT);
+        if (subidoEmp) cfg.odooEmp = Object.assign({ fecha }, subidoEmp);
       } else {
         cfg.merma = Math.max(0, num(ov.querySelector('#emp-mer').value) / 100); cfg.umbral = Math.max(0.01, num(ov.querySelector('#emp-umb').value) / 100);
         cfg.kgMil = {}; ov.querySelectorAll('[data-kg]').forEach(i => { const v = String(i.value).trim(); if (v !== '') cfg.kgMil[i.getAttribute('data-kg')] = Number(v); });
