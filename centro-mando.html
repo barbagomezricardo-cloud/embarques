@@ -569,7 +569,13 @@ function pintarEmpaque() {
     h += '<div class="small mut" style="margin-top:4px">Base inicial = costales vacíos + sacos de producto terminado (Odoo): los costales con que cuentas para vender. Se descuentan las ventas reales (con la merma configurada) y se suman las entradas de costales que registra Inventarios. Es una ventana aproximada; el control real lo lleva Inventarios.</div>';
   }
   h += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${lnk('inventarios/inventarios/index.html', '📋 Inventarios')}${lnk('ventas.html', '📤 Cargar reporte de ventas')}</div>`;
+  // Desplegable: cerrado por defecto con un resumen de una línea; recuerda si lo dejaste abierto
+  let abierto = false; try { abierto = localStorage.getItem('cm_emp_abierto') === '1'; } catch (e) { }
+  const res = `<span class="pill ${crit.length ? 'p-bad' : 'p-ok'}">${crit.length} crítico${crit.length === 1 ? '' : 's'}</span> <span class="pill ${ries.length ? 'p-warn' : 'p-ok'}">${ries.length} en riesgo</span> <span class="small mut">${fmt(totVig)} costales/mes</span>`;
+  const sp = h.indexOf('</h2>') + 5;
+  h = `<details id="emp-det"${abierto ? ' open' : ''}><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-family:var(--fd);font-size:15px">📦 Empaque · consumo y alcance</b>${res}<span class="small mut" style="margin-left:auto">${abierto ? '▲ ocultar' : '▼ ver detalle'}</span></summary><div style="margin-top:10px">` + h.slice(sp) + '</div></details>';
   el.innerHTML = h;
+  const det = $('#emp-det'); det.addEventListener('toggle', () => { try { localStorage.setItem('cm_emp_abierto', det.open ? '1' : '0'); } catch (e) { } const t = det.querySelector('summary .small.mut:last-child'); if (t) t.textContent = det.open ? '▲ ocultar' : '▼ ver detalle'; });
   el.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => { EMP_VER = b.getAttribute('data-ev'); pintarEmpaque(); });
   const bc = $('#emp-conteo'); if (bc) bc.onclick = () => editarEmpaque('conteo', R);
   const bp = $('#emp-par'); if (bp) bp.onclick = () => editarEmpaque('par', R);
