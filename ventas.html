@@ -932,7 +932,7 @@ function processExcel(buf,fname){
   try{
     window.LAST_VAL_PM=null;window.LAST_VAL_MES=null;window.LAST_TIENE_MONTO=false;
     window.LAST_VAL_PM_SINIVA=null;window.LAST_VAL_MES_SINIVA=null;window.LAST_TIENE_SUBTOTAL=false;
-    window.LAST_EXCLUIDA_PROD=null;
+    window.LAST_EXCLUIDA_PROD=null; window.__empDia=null;
     window.LAST_TODOS_MES_SACOS=null;window.LAST_TODOS_MES_VAL=null;window.LAST_TODOS_MES_VALSINIVA=null;
     window.LAST_TODOS_PROD_MES_SACOS=null;window.LAST_TODOS_PROD_MES_VALSINIVA=null;
     window.LAST_TODOS_MES_COT=null;window.LAST_TODOS_MES_DESC=null;window.LAST_DUP_LIST=null;window.LAST_DUP_MES=null;
@@ -985,6 +985,9 @@ function processExcel(buf,fname){
       const prod=String(row[cProd]||'').trim();
       if(!prod.toUpperCase().includes('04MAS'))continue;
       const mp=prod.match(/\[(\S+)\]/);if(!mp)continue;
+      // EMPAQUE: toda salida física lleva costal (venta, promoción, bonificación y clientes excluidos del análisis)
+      try{const _q=parseFloat(row[cCant])||0;if(_q>0&&cFecha>=0){const _f=row[cFecha];let _d=null;if(_f instanceof Date)_d=_f;else if(typeof _f==='number')_d=new Date(Math.round((_f-25569)*86400000));else if(_f){const _x=new Date(_f);if(!isNaN(_x))_d=_x;}
+        if(_d){const _k=_d.getFullYear()*10000+(_d.getMonth()+1)*100+_d.getDate();const _c=mp[1].toUpperCase();const E=window.__empDia||(window.__empDia={d:{},n:{}});const o=E.d[_k]||(E.d[_k]={});o[_c]=(o[_c]||0)+_q;if(!E.n[_c])E.n[_c]=prod.split(']').slice(1).join(']').trim();}}}catch(e){}
       if(/[PB]\d*$/.test(mp[1].toUpperCase())){const cq=parseFloat(row[cCant])||0;let mz=0;if(cFecha>=0){const f=row[cFecha];if(f instanceof Date)mz=f.getMonth()+1;else if(typeof f==='number')mz=new Date(Math.round((f-25569)*86400000)).getUTCMonth()+1;else if(f){const d=new Date(f);if(!isNaN(d))mz=d.getMonth()+1;}}if(mz>0&&cq>0){const kgm=(prod.toUpperCase().match(/(\d+(?:\.\d+)?)\s*KG/g)||[]).slice(-1)[0];promoMesTon[mz]=(promoMesTon[mz]||0)+cq*(kgm?parseFloat(kgm):25)/1000;}continue;}
 
       const cant=parseFloat(row[cCant])||0;if(cant<=0)continue;
@@ -1031,6 +1034,7 @@ function processExcel(buf,fname){
 
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiarioX;
     window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND={};window.LAST_LINEAS=window.__lineasL||[];window.__lineasL=null;
+    window.LAST_EMPAQUE=window.__empDia||null;window.__empDia=null;
     LAST_PROMO_PROD={};
     finishBuild(byClienteMes,byClienteProd,byClienteProdMes,mesTotal,lastDate,mesesCliente,sacosCliente,{},promoMesTon,fname);
   }catch(err){
@@ -1064,9 +1068,12 @@ function processPivot(rows,fname){
     const todosMesCot={};                 // $ de cotizaciones aún no facturadas (Cant. facturada=0, importe positivo)
     const todosMesDesc={};                // $ de "Descuento s/ venta" (renglón negativo del documento)
     const todosCP={};                     // cliente|producto -> renglones, para detectar fantasmas
-    let curProdNameAll='';
+    let curProdNameAll='',curCodeAll='';
+    window.__empDia=null;
     const recTodos=(prodName,mes,val,monto,montoSinIva,fd,cliente)=>{
       if(!mes)return;
+      // EMPAQUE: toda salida física 04MAS (venta, promoción, bonificación, clientes excluidos) por día y producto exacto
+      try{ if(fd&&val>0&&/04MAS/.test(curCodeAll)){ const _k=fd.getFullYear()*10000+(fd.getMonth()+1)*100+fd.getDate(); const E=window.__empDia||(window.__empDia={d:{},n:{}}); const o=E.d[_k]||(E.d[_k]={}); o[curCodeAll]=(o[curCodeAll]||0)+val; if(!E.n[curCodeAll])E.n[curCodeAll]=prodName; } }catch(e){}
       const pn=prodName||'(sin producto)';
       // El renglón de descuento del documento va aparte de las cotizaciones: son cosas distintas y
       // mezclarlas escondía cuánto de un mes es descuento. Ojo: este descuento SOLO se resta en la
@@ -1231,7 +1238,7 @@ function processPivot(rows,fname){
       if(t==='Total')continue;
       if(t.startsWith('[')){
         const pi=prodInfo(t);if(!pi)continue;
-        curProdNameAll=pi.name||t;   // para "todos los productos": el nombre se calcula sin importar es04
+        curProdNameAll=pi.name||t; curCodeAll=((t.match(/\[(\S+)\]/)||[])[1]||'').toUpperCase();   // para "todos los productos": el nombre se calcula sin importar es04
         if(productFirst){
           if(!pi.es04){curKind='skip';curProdName='';}
           else if(pi.promo){curKind='promo';curProdName=t;}
@@ -1251,7 +1258,7 @@ function processPivot(rows,fname){
       }
       if(_esDesc(t)){
         // El descuento es un renglón de producto, NO un nombre: no debe volverse cliente ni vendedor.
-        curProdNameAll=t;   // para "todos los productos"
+        curProdNameAll=t; curCodeAll='';   // para "todos los productos"
         if(productFirst){curKind='skip';curProdName='';}      // sus fechas de abajo se suman solo en "todos los productos"
         else if(curMes)recTodos(t,curMes,val,monto,montoSinIva,fdate,cli);   // cliente→mes→producto: el renglón mismo es la hoja
         continue;
@@ -1270,6 +1277,7 @@ function processPivot(rows,fname){
     for(const c in lastReal){const f=lastReal[c];lastDate[c]=esDiario?f:new Date(f.getFullYear(),f.getMonth()+1,0);}
     LAST_DATA_YEAR=+(Object.keys(yearCount).sort((a,b)=>yearCount[b]-yearCount[a])[0])||0;LAST_DIAMES=diaMes;LAST_ESDIARIO=esDiario;
     window.LAST_DIACLI=diaMesCli;window.LAST_CLIVEND=clienteVend;window.LAST_LINEAS=lineasDet;
+    window.LAST_EMPAQUE=window.__empDia||null;window.__empDia=null;
     LAST_PROMO_PROD=promoCliProd; window.LAST_PROMO_PM=promoCliProdMes;
     window.LAST_VAL_PM=byClienteProdMesVal; window.LAST_VAL_MES=mesTotalVal; window.LAST_TIENE_MONTO=(colMonto>=0);
     window.LAST_VAL_PM_SINIVA=byClienteProdMesValSinIva; window.LAST_VAL_MES_SINIVA=mesTotalValSinIva; window.LAST_TIENE_SUBTOTAL=(colSubtotal>=0);
@@ -7365,6 +7373,9 @@ function autoPublishCloud(){
   const proy=(typeof buildProyeccionPayload==='function')?buildProyeccionPayload():null;
   if(proy)skFetch(db+'/skan/_proyeccion.json',{method:'PUT',body:JSON.stringify(proy)}).catch(()=>{});
   try{publishAlertasSinCompra();}catch(e){}
+  // Empaque: salidas diarias por producto exacto (venta + promoción + bonificación) → Centro de Mando calcula consumo de costales
+  try{const E=window.LAST_EMPAQUE;if(E&&Object.keys(E.d).length){Object.keys(E.d).forEach(k=>{const o=E.d[k];Object.keys(o).forEach(c=>o[c]=Math.round(o[c]*100)/100);});
+    skFetch(db+'/skan/_empaque.json',{method:'PUT',body:JSON.stringify({upd:Date.now(),updStr:pj.updatedStr,dias:E.d,nombres:E.n})}).catch(()=>{});}}catch(e){}
 }
 // Publica el resumen semanal YA CALCULADO cada vez que cargas un reporte nuevo de Odoo
 // (no solo cuando das clic en "Generar resumen"). Así, aunque tú nunca vuelvas a tocar el

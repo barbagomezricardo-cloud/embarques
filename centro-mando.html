@@ -62,6 +62,9 @@ main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
 .pipe b{display:block;font-size:22px}
 .pipe span{font-size:11px;color:var(--mut)}
 .list{margin:6px 0 0;padding:0;list-style:none;font-size:13px}
+.tbl-wrap{overflow-x:auto;margin-top:6px}.tbl{width:100%;border-collapse:collapse;font-size:12.5px}.tbl th{text-align:right;font:600 10.5px system-ui;color:var(--mut);text-transform:uppercase;letter-spacing:.3px;padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}.tbl th:first-child,.tbl td:first-child{text-align:left}.tbl td{text-align:right;padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}.tbl td:first-child{white-space:normal;min-width:170px}.tbl .sub{font-size:11px;color:var(--mut)}
+.pill.p-ok{background:rgba(29,122,69,.12);color:var(--ok)}
+.emp-ed{display:grid;grid-template-columns:1fr 120px;gap:6px;align-items:center;font-size:13px;max-height:52vh;overflow:auto;margin:8px 0}.emp-ed input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--tx);font:inherit;text-align:right}
 .list li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
 .list li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .list li span:last-child{color:var(--mut);white-space:nowrap}
@@ -106,6 +109,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <!-- Fórmulas de alertas de compra: las mismas del programa de Inventarios (no se duplican) -->
 <script src="inventarios/inventarios/core.js"></script>
+<script src="empaque-19h.js"></script>
 <script src="acceso-19h.js"></script>
 <script>
 /* =====================================================================
@@ -242,6 +246,7 @@ function arrancar() {
       <div class="card" id="c-bascula"></div>
       <div class="card" id="c-pt"></div>
       <div class="card" id="c-inv"></div>
+      <div class="card wide" id="c-empaque"></div>
       <div class="card" id="c-rh"></div>
       <div class="card wide" id="c-apps"></div>
     </div></main>
@@ -258,7 +263,8 @@ async function cargar() {
   const tareas = {
     ventas: cargarVentas, emb: () => Promise.all([leer('embarques'), leer('skan/_cuadre/bascula')]).then(a => ({ emb: a[0] || {}, pes: a[1] || {} })),
     bas: () => leer('cuadreBascula/entradas'), pt: () => Promise.all([leer('skan/_proyeccion'), leer('skan/_proyedit')]).then(a => ({ p: a[0], e: a[1] || {} })),
-    inv: cargarInv, rh: cargarRh, cli: cargarCli
+    inv: cargarInv, rh: cargarRh, cli: cargarCli,
+    emp: () => Promise.all([leer('skan/_empaque'), leer('skan/_empaqueCfg').catch(() => null)]).then(a => ({ E: a[0], cfg: a[1] || {} }))
   };
   await Promise.all(Object.entries(tareas).map(([k, f]) => Promise.resolve().then(f).then(v => { S.d[k] = v; delete S.err[k]; }).catch(e => { S.err[k] = (e && e.message) || 'Error'; })));
   S.ts = Date.now(); S.cargando = false; $('#bref').textContent = '⟳';
@@ -274,7 +280,7 @@ async function cargarVentas() {
 }
 async function cargarInv() {
   const u = AUTH_INV.currentUser || null; if (!S.inv) return null;   // sin sesión de Inventarios se usa la de Acceso 19H
-  const nodos = ['catalogo', 'fisico', 'pt', 'llegadas', 'silos', 'silosLect', 'notasCompra'];
+  const nodos = ['catalogo', 'fisico', 'pt', 'llegadas', 'silos', 'silosLect', 'notasCompra', 'movimientos'];   // movimientos: entradas de empaque para la existencia de control
   const r = await Promise.all(nodos.map(n => leer('inv/' + n, u).catch(() => ({}))));
   const o = {}; nodos.forEach((n, i) => o[n] = r[i] || {}); return o;
 }
@@ -400,6 +406,7 @@ const lnk = (href, t) => `<a class="btn sm" href="${href}" target="_blank" rel="
 function pintarTodo() {
   const V = calcVentas(S.d.ventas), E = calcEmb(S.d.emb), B = calcBas(S.d.bas), P = calcPT(S.d.pt), I = calcInv(S.d.inv), H = calcRh(S.d.rh), C = S.d.cli;
   pintarVentas(V); pintarCli(C); pintarEmb(E); pintarBas(B); pintarPT(P); pintarInv(I); pintarRh(H); pintarAlertas(V, E, B, P, I, H, C);
+  try { pintarEmpaque(); } catch (e) { $('#c-empaque').innerHTML = '<h2>📦 Empaque</h2><div class="empty">⚠️ ' + esc(e.message) + '</div>'; }
 }
 function pintarVentas(V) {
   const el = $('#c-ventas');
@@ -519,6 +526,87 @@ function pintarInv(I) {
   h += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${lnk('inventarios/inventarios/index.html', '📋 Inventarios')}</div>`;
   el.innerHTML = h; bindConectar('inv');
 }
+/* ---------- EMPAQUE: consumo dinámico, existencia de control y alcance (empaque-19h.js) ---------- */
+async function escribir(ruta, val) {
+  const h = { 'Content-Type': 'application/json' }; const t = await acToken(); if (t) h['X-Firebase-AppCheck'] = t;
+  const it = window.Acceso19H ? await Acceso19H.token() : ''; if (!it) throw new Error('Sin sesión');
+  const r = await fetch(DB + '/' + ruta + '.json?auth=' + encodeURIComponent(it), { method: 'PUT', headers: h, body: JSON.stringify(val) });
+  if (!r.ok) throw new Error('No se pudo guardar (HTTP ' + r.status + ')');
+}
+const esMasterCM = () => { try { const p = Acceso19H.perfil(); return !!(p && p.master); } catch (e) { return false; } };
+let EMP_VER = 'alerta';
+function pintarEmpaque() {
+  const el = $('#c-empaque'); const D = S.d.emp;
+  let h = '<h2>📦 Empaque · consumo dinámico y alcance<span class="src">Consumo con las salidas reales de Odoo (venta + promoción + bonificación)</span></h2>';
+  if (S.err.emp) { el.innerHTML = h + errBox('emp'); return; }
+  if (!D || !D.E) { el.innerHTML = h + '<div class="empty">Aún no hay salidas publicadas. Se publican desde ventas.html al cargar el reporte de Odoo.</div>'; return; }
+  const R = Empaque19H.calc(D.E, D.cfg, S.d.inv, window.INV, new Date());
+  if (!R) { el.innerHTML = h + '<div class="empty">Sin datos.</div>'; return; }
+  const F = R.filas.filter(f => f.vig > 0 || f.ctrl);
+  const crit = F.filter(f => f.a && f.a.crit === 'CRÍTICO'), ries = F.filter(f => f.a && f.a.crit === 'RIESGO'), ritmo = F.filter(f => f.alertaRitmo && !f.esCons);
+  const cos = F.filter(f => !f.esCons), totVig = cos.reduce((a, f) => a + f.vig, 0);
+  const conC = cos.filter(f => f.tieneConteo).length;
+  h += `<div class="kpis">${kpi('Críticos', fmt(crit.length), 'se acaban antes de que llegue un pedido', crit.length ? 'bad' : 'ok')}${kpi('En riesgo', fmt(ries.length), 'bajo stock mínimo', ries.length ? 'warn' : 'ok')}${kpi('Costales al mes', fmt(totVig), 'consumo vigente con ' + Math.round(R.merma * 100) + '% de merma')}${kpi('Promo + bonificación', (R.promoPct * 100).toFixed(1) + '%', 'de las salidas · últimos 3 meses')}${kpi('Cambio de ritmo', fmt(ritmo.length), 'últimos 30 días vs vigente (±' + Math.round(R.umbral * 100) + '%)', ritmo.length ? 'warn' : 'ok')}</div>`;
+  const base = R.cerrados.length ? R.cerrados.slice().reverse().map(k => Empaque19H.MESC[+k.slice(5) - 1]).join(', ') : '—';
+  h += `<div class="small mut" style="margin:-2px 0 6px">Consumo vigente = 50% promedio de los últimos 3 meses cerrados + 50% de los últimos 6 (${base}); se actualiza solo al cerrar cada mes. Salidas registradas hasta el <b>${esc(R.ultimo)}</b> (reporte ${esc(R.upd)}). ${R.conteo && R.conteo.fecha ? 'Existencia de control desde tu conteo del <b>' + esc(R.conteo.fecha) + '</b> (' + conC + ' de ' + cos.length + ' costales).' : '<b>Sin conteo base:</b> la existencia es la que reporta Inventarios.'}</div>`;
+  h += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 2px"><button class="btn sm${EMP_VER === 'alerta' ? ' pri' : ''}" data-ev="alerta">Alcance y compra</button><button class="btn sm${EMP_VER === 'tend' ? ' pri' : ''}" data-ev="tend">Consumo por mes</button><button class="btn sm${EMP_VER === 'ctrl' ? ' pri' : ''}" data-ev="ctrl">Control vs Inventarios</button>${esMasterCM() ? '<button class="btn sm" id="emp-conteo">📝 Conteo base</button><button class="btn sm" id="emp-par">⚙️ Parámetros</button>' : ''}</div>`;
+  const nom = f => `${esc(f.it.nombre || f.id)}<div class="sub">${esc(f.id)}${f.esCons ? ' · ' + fmt(f.it._kgMil, 2) + ' kg por 1,000 sacos' : ''}</div>`;
+  const pill = f => f.a ? `<span class="pill ${f.a.crit === 'CRÍTICO' ? 'p-bad' : f.a.crit === 'RIESGO' ? 'p-warn' : 'p-ok'}">${f.a.crit === 'SALUDABLE' ? 'OK' : f.a.crit}</span>` : '';
+  const u = f => f.esCons ? ' kg' : '';
+  if (EMP_VER === 'alerta') {
+    h += `<div class="tbl-wrap"><table class="tbl"><tr><th>Costal</th><th>Consumo/mes</th><th>Últ. 30 días</th><th>Existencia</th><th>En tránsito</th><th>Alcance</th><th>Pedir antes del</th><th>Sugerido</th></tr>` +
+      F.map(f => `<tr><td>${pill(f)} ${nom(f)}</td><td>${fmt(f.vig)}${u(f)}</td><td>${fmt(f.v30)}${u(f)}<div class="sub" style="color:${f.alertaRitmo ? 'var(--warn)' : 'var(--mut)'}">${f.desv == null ? '' : pct(f.desv, 0)}</div></td><td>${fmt(f.ctrl)}${u(f)}<div class="sub">${f.tieneConteo ? 'control' : 'Inventarios'}</div></td><td>${f.fincado ? fmt(f.fincado) : '—'}</td><td><b>${f.a && isFinite(f.a.alcance) ? Math.round(f.a.alcance) + ' d' : '—'}</b></td><td>${f.a && f.a.fechaPedir ? (f.a.diasPedir <= 0 ? '<b style="color:var(--bad)">ya</b>' : f.a.fechaPedir.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })) : '—'}</td><td>${f.a && f.a.sugerido > 0 ? '<b>' + fmt(f.a.sugerido) + '</b>' : '—'}</td></tr>`).join('') + '</table></div>';
+    h += '<div class="small mut" style="margin-top:4px">Alcance = existencia ÷ consumo diario. Pedir antes del = alcance − tiempo de entrega − inventario de seguridad (tiempos y % de seguridad del catálogo de Inventarios). Sugerido = stock mínimo − existencia − lo ya fincado.</div>';
+  } else if (EMP_VER === 'tend') {
+    const ms = R.cerrados.slice().reverse();
+    h += `<div class="tbl-wrap"><table class="tbl"><tr><th>Costal</th>${ms.map(k => `<th>${Empaque19H.MESC[+k.slice(5) - 1]}</th>`).join('')}<th>Vigente</th><th>Últ. 30 d</th></tr>` +
+      F.map(f => `<tr><td>${nom(f)}</td>${f.meses.map(m => `<td>${fmt(m.q)}</td>`).join('')}<td><b>${fmt(f.vig)}</b></td><td style="color:${f.alertaRitmo ? 'var(--warn)' : 'inherit'}">${fmt(f.v30)}</td></tr>`).join('') + '</table></div>';
+    const sm = Object.keys(R.sinMapa); if (sm.length) h += `<div class="small" style="margin-top:6px;color:var(--warn)">⚠️ Productos sin costal asignado (no se cuentan): ${sm.map(c => esc(c + ' ' + R.sinMapa[c].nombre) + ' (' + fmt(R.sinMapa[c].q) + ')').join(' · ')}</div>`;
+  } else {
+    h += `<div class="tbl-wrap"><table class="tbl"><tr><th>Costal</th><th>Conteo base</th><th>− Salidas</th><th>+ Entradas</th><th>Control</th><th>Inventarios</th><th>Diferencia</th></tr>` +
+      F.map(f => `<tr><td>${nom(f)}</td><td>${f.tieneConteo ? fmt(num(R.conteo.items[f.id])) : '—'}</td><td>${f.tieneConteo ? fmt(f.salidas) : '—'}</td><td>${f.tieneConteo ? fmt(f.entradas) : '—'}</td><td><b>${f.tieneConteo ? fmt(f.ctrl) : '—'}</b></td><td>${fmt(f.invFis)}</td><td style="color:${f.dif && Math.abs(f.dif) > Math.max(500, f.vig * 0.05) ? 'var(--bad)' : 'inherit'}">${f.dif == null ? '—' : (f.dif > 0 ? '+' : '') + fmt(f.dif)}</td></tr>`).join('') + '</table></div>';
+    h += '<div class="small mut" style="margin-top:4px">Diferencia = lo que reporta Inventarios − tu existencia de control. Una diferencia grande indica consumos o traslados mal registrados (o un conteo base desactualizado). Salidas incluyen la merma configurada.</div>';
+  }
+  h += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${lnk('inventarios/inventarios/index.html', '📋 Inventarios')}${lnk('ventas.html', '📤 Cargar reporte de ventas')}</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => { EMP_VER = b.getAttribute('data-ev'); pintarEmpaque(); });
+  const bc = $('#emp-conteo'); if (bc) bc.onclick = () => editarEmpaque('conteo', R);
+  const bp = $('#emp-par'); if (bp) bp.onclick = () => editarEmpaque('par', R);
+}
+function editarEmpaque(tipo, R) {
+  const cfg = JSON.parse(JSON.stringify((S.d.emp && S.d.emp.cfg) || {}));
+  const F = R.filas;
+  const ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:14px';
+  let h = '<div class="card" style="max-width:520px;width:100%;max-height:90vh;overflow:auto">';
+  if (tipo === 'conteo') {
+    const c = cfg.conteo || {};
+    h += `<h2>📝 Conteo base de empaque</h2><div class="small mut">Captura lo que contaste físicamente (almacén de empaque + insumos de PT) al cierre del día indicado. Desde el día siguiente el sistema descuenta solo las salidas reales de Odoo y suma las entradas que registre Inventarios. Deja vacío lo que no contaste: se usará lo que reporta Inventarios.</div>
+      <label class="small" style="display:block;margin-top:8px">Fecha del conteo (al cierre del día) <input type="date" id="emp-f" value="${esc(c.fecha || hoyISO())}" class="btn" style="width:auto"></label>
+      <div class="emp-ed">${F.map(f => `<span>${esc(f.it.nombre || f.id)}<span class="small mut"> · ${esc(f.id)}${f.invFis != null ? ' · Inv: ' + fmt(f.invFis) : ''}</span></span><input inputmode="decimal" data-id="${esc(f.id)}" value="${c.items && c.items[f.id] != null ? c.items[f.id] : ''}" placeholder="—">`).join('')}</div>`;
+  } else {
+    h += `<h2>⚙️ Parámetros de empaque</h2>
+      <div class="emp-ed"><span>Merma de empaque (%)<div class="small mut">costales que se rompen o desperdician en la envasadora</div></span><input inputmode="decimal" id="emp-mer" value="${((cfg.merma == null ? 0.01 : cfg.merma) * 100)}">
+      <span>Aviso de cambio de ritmo (±%)<div class="small mut">últimos 30 días contra el consumo vigente</div></span><input inputmode="decimal" id="emp-umb" value="${((cfg.umbral == null ? 0.15 : cfg.umbral) * 100)}">
+      ${F.filter(f => f.esCons).map(f => `<span>${esc(f.it.nombre || f.id)}: kg por cada 1,000 sacos<div class="small mut">vacío = se estima con el consumo del catálogo de Inventarios</div></span><input inputmode="decimal" data-kg="${esc(f.id)}" value="${cfg.kgMil && cfg.kgMil[f.id] != null ? cfg.kgMil[f.id] : ''}" placeholder="${fmt(f.it._kgMil, 2)}">`).join('')}</div>`;
+  }
+  h += '<div class="err" id="emp-e" style="color:var(--bad);font-size:13px"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn" id="emp-x">Cancelar</button><button class="btn pri" id="emp-ok">Guardar</button></div></div>';
+  ov.innerHTML = h; document.body.appendChild(ov);
+  ov.querySelector('#emp-x').onclick = () => ov.remove();
+  ov.querySelector('#emp-ok').onclick = async () => {
+    const b = ov.querySelector('#emp-ok'); b.disabled = true;
+    try {
+      if (tipo === 'conteo') {
+        const items = {}; ov.querySelectorAll('[data-id]').forEach(i => { const v = String(i.value).replace(/,/g, '').trim(); if (v !== '') items[i.getAttribute('data-id')] = Number(v); });
+        cfg.conteo = { fecha: ov.querySelector('#emp-f').value, items, por: (Acceso19H.perfil() || {}).nombre || '', ts: Date.now() };
+      } else {
+        cfg.merma = Math.max(0, num(ov.querySelector('#emp-mer').value) / 100); cfg.umbral = Math.max(0.01, num(ov.querySelector('#emp-umb').value) / 100);
+        cfg.kgMil = {}; ov.querySelectorAll('[data-kg]').forEach(i => { const v = String(i.value).trim(); if (v !== '') cfg.kgMil[i.getAttribute('data-kg')] = Number(v); });
+      }
+      await escribir('skan/_empaqueCfg', cfg);
+      S.d.emp.cfg = cfg; ov.remove(); pintarEmpaque();
+    } catch (e) { b.disabled = false; ov.querySelector('#emp-e').textContent = e.message; }
+  };
+}
 function pintarRh(H) {
   const el = $('#c-rh'); let h = '<h2>👥 Recursos Humanos · hoy</h2>';
   if (!S.rh) h += conectarHtml('rh', 'RH', 'Conecta tu usuario master o de Dirección de RH para ver asistencia y solicitudes.');
@@ -547,6 +635,11 @@ function bindConectar(sis) {
 function pintarAlertas(V, E, B, P, I, H, C) {
   const A = [];
   const add = (lvl, t, href) => A.push({ lvl, t, href });
+  try {   // empaque: costales críticos con el consumo dinámico
+    const RE = S.d.emp && S.d.emp.E ? Empaque19H.calc(S.d.emp.E, S.d.emp.cfg, S.d.inv, window.INV, new Date()) : null;
+    const ce = RE ? RE.filas.filter(f => f.a && f.a.crit === 'CRÍTICO' && f.vig > 0) : [];
+    if (ce.length) add('bad', `Empaque: ${ce.length} costal(es) se acaban antes de que llegue un pedido: ${ce.slice(0, 3).map(f => esc(f.it.nombre || f.id) + ' (' + (isFinite(f.a.alcance) ? Math.round(f.a.alcance) + ' d' : '—') + ')').join(', ')}${ce.length > 3 ? '…' : ''}.`, null);
+  } catch (e) { }
   if (V) {
     const avP = V.metaMes > 0 && V.proy != null ? V.proy / V.metaMes : null;
     if (avP != null && avP < 1) add(avP < .9 ? 'bad' : 'warn', `Ventas: la proyección de ${MES[V.m - 1]} (${fmt(V.proy)} sacos) va al ${Math.round(avP * 100)}% de la meta.`, 'maestra.html');
