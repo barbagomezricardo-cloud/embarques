@@ -122,7 +122,8 @@
     });
   }
 
-  function esNip(p) { return !!p && !p.master && !p.prog && !p.ventas && !p.maestra && !p.cli && !p.cm; }   // cb/carg/vend: NIP   // cargadores y vendedores: NIP de 6 números
+  // misma regla que el Panel (nipDe): quien también usa Inventarios o RH tiene contraseña, no NIP
+  function esNip(p) { return !!p && !p.master && !p.prog && !p.ventas && !p.maestra && !p.cli && !p.cm && !p.inv && !p.rh; }   // cb/carg/vend: NIP   // cargadores y vendedores: NIP de 6 números
   function cargarPerfil(uid) { return leer('acceso/usuarios/' + uid).then(function (p) { S.perfil = p; S.uid = uid; return p; }); }
 
   function msgError(e) {
@@ -303,7 +304,7 @@
     var ov = D.createElement('div'); ov.className = 'acc19-ov'; ov.style.background = 'rgba(245,240,235,.98)';
     ov.innerHTML = '<div class="acc19-bx"><h3>' + esc(op.titulo || 'Entrar') + '</h3><p id="acc19-ph">Verificando sesión…</p>' +
       '<select id="acc19-u" autocomplete="username"><option value="">Cargando…</option></select>' +
-      '<input type="password" id="acc19-p" ' + (op.nip ? 'inputmode="numeric" ' : '') + 'placeholder="' + (op.nip ? 'NIP' : 'Contraseña') + '" autocomplete="current-password">' +
+      '<input type="password" id="acc19-p" placeholder="' + (op.nip ? 'NIP o contraseña' : 'Contraseña') + '" autocomplete="current-password">' +   // sin teclado numérico forzado: la temporal del panel puede traer letras
       '<div class="acc19-e" id="acc19-pe"></div><button id="acc19-pb">Entrar</button></div>';
     var montar = function () { (D.body || D.documentElement).appendChild(ov); };
     if (D.body) montar(); else D.addEventListener('DOMContentLoaded', montar);
@@ -318,7 +319,7 @@
     return iniciar({ recaptcha: op.recaptcha }).then(function () { q('#acc19-ph').textContent = 'Revisando tu sesión… (2 de 2)'; return sesionActual(op.app, { nip: op.nip }); }).then(function (p) {
       clearTimeout(lento); var ay = q('#acc19-ay'); if (ay) ay.remove();
       if (p) { ov.remove(); sesionLista(p); return p; }
-      q('#acc19-ph').textContent = 'Elige tu nombre y escribe tu ' + (op.nip ? 'NIP' : 'contraseña') + '.';
+      q('#acc19-ph').textContent = 'Elige tu nombre y escribe tu ' + (op.nip ? 'NIP o contraseña' : 'contraseña') + '.';
       var LSK = 'acc19_ult_' + op.app;
       directorio(op.app).then(function (L) {
         var ult = ''; try { ult = localStorage.getItem(LSK) || ''; } catch (e) {}
@@ -327,7 +328,7 @@
       return new Promise(function (ok) {
         var go = function () {
           var k = q('#acc19-u').value, pw = q('#acc19-p').value, b = q('#acc19-pb');
-          if (!k || !pw) { q('#acc19-pe').textContent = 'Elige tu nombre y escribe tu ' + (op.nip ? 'NIP' : 'contraseña') + '.'; return; }
+          if (!k || !pw) { q('#acc19-pe').textContent = 'Elige tu nombre y escribe tu ' + (op.nip ? 'NIP o contraseña' : 'contraseña') + '.'; return; }
           b.disabled = true; q('#acc19-pe').textContent = '';
           entrar(k, pw, op.app, { nip: op.nip }).then(function (p) {
             try { localStorage.setItem(LSK, k); } catch (e) {}
