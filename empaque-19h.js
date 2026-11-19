@@ -13,11 +13,13 @@
    A la quincena se compara el ritmo de los últimos 30 días contra el
    vigente: si se aleja más del umbral (15 %) se avisa, sin mover el cálculo.
 
-   Existencia de control (independiente de Inventarios):
-     conteo base capturado por el master en una fecha
-   − salidas diarias desde el día siguiente al conteo (× (1 + merma))
-   + entradas registradas por Inventarios después del conteo
-   Si un costal no tiene conteo base se usa la existencia de Inventarios.
+   Ventana aproximada de existencia (la de Gerencia; Inventarios sigue con su control real):
+     base inicial = costales vacíos + sacos de producto terminado (reportes «Variante del
+                    producto» de Odoo) → «costales disponibles para vender»
+   − salidas diarias desde el día siguiente a la base (× (1 + merma))
+   + entradas de costales que registre Inventarios después de la base
+   Si un costal no tiene base se usa la existencia de Inventarios.
+   El consumo vigente se envía al catálogo de Inventarios al cerrar cada mes.
    ===================================================================== */
 (function (W) {
   'use strict';
@@ -30,7 +32,8 @@
     '04MAS001': '02SAC005', '04MAS0011': '02SAC005', '04MAS002': '02SAC006', '04MAS003': '02SAC001',
     '04MAS004': '02SAC008', '04MAS0015': '02SAC019', '04MAS005': '02SAC009', '04MAS006': '02SAC010',
     '04MAS0016': '02SAC011', '04MAS007': '02SAC012', '04MAS008': '02SAC007', '04MAS0012': '02SAC018',
-    '04MAS009': '02SAC004', '04MAS010': '02SAC026', '04MAS020': '02SAC002', '04MAS0013': '02SAC003'
+    '04MAS009': '02SAC004', '04MAS010': '02SAC026', '04MAS020': '02SAC002', '04MAS0020': '02SAC002', '04MAS0013': '02SAC003',
+    '04MAS0017': '02SAC017', '04MAS0019': '02PRO089', '04MAS011': '02SAC005'
   };
   function costalPorNombre(nombre) {
     const n = norm(nombre);
@@ -49,10 +52,11 @@
     const c = String(codigo || '').toUpperCase(), base = c.replace(/[PB]\d*$/, '');
     if (cfg && cfg.mapa && cfg.mapa[c]) return cfg.mapa[c];
     if (cfg && cfg.mapa && cfg.mapa[base]) return cfg.mapa[base];
-    // Las promociones/bonificaciones salen en el costal normal de su producto
-    if (POR_CODIGO[base] && !/[PB]\d*$/.test(c)) return POR_CODIGO[base];
+    if (POR_CODIGO[c]) return POR_CODIGO[c];
+    // Promociones/bonificaciones (…P, …B, …P1): salen en el costal de su producto. Se decide por el
+    // nombre, porque algunos códigos no siguen a su base (04MAS002B es Premium 25 + 2 kg, no 5 kg).
     const porNom = costalPorNombre(nombre);
-    if (/[PB]\d*$/.test(c)) return POR_CODIGO[base] || porNom;
+    if (/[PB]\d*$/.test(c)) return porNom || POR_CODIGO[base] || null;
     return porNom || POR_CODIGO[base] || null;
   }
   /* Consumibles que dependen del total de sacos (kg por cada 1,000 sacos) */
@@ -138,6 +142,7 @@
       const meses = cerrados.slice().reverse().map(k => ({ k, q: esCons ? num(totMes[k]) * (it._kgMil || 0) / 1000 : num((porMes[id] || {})[k]) }));
       filas.push({ id, it, esCons, vig, v30, desv, alertaRitmo: desv != null && Math.abs(desv) > umbral,
         ctrl, tieneConteo, invFis, dif: tieneConteo && invFis != null ? invFis - ctrl : null, entradas: num(entradas[id]), salidas: sal,
+        baseVac: conteo && conteo.vacios ? conteo.vacios[id] : null, basePT: conteo && conteo.ptCos ? conteo.ptCos[id] : null,
         fincado: num(tr.fincado), a, meses });
     });
     const ord = { 'CRÍTICO': 0, 'RIESGO': 1, 'SALUDABLE': 2 };
@@ -146,5 +151,29 @@
       promoPct: totSacos3 > 0 ? promoSacos3 / totSacos3 : 0, mesHoy, upd: E.updStr || '' };
   }
 
-  W.Empaque19H = { calc, costalDe, CONSUMIBLES, MESC };
+  /* Lee el reporte «Variante del producto» de Odoo (Nombre en pantalla | Cantidad a la mano | …).
+     empaque = 02SAC… / 02PRO… / PRO0… (vacíos y consumibles); pt = 04MAS… (producto terminado Pet Food) */
+  function leerVariantes(rows) {
+    const out = { empaque: {}, pt: {}, nombres: {} };
+    if (!rows || !rows.length) return out;
+    const h = rows[0].map(x => norm(x));
+    const cN = h.findIndex(x => /NOMBRE/.test(x)), cQ = h.findIndex(x => /A LA MANO/.test(x));
+    if (cN < 0 || cQ < 0) throw new Error('No encuentro las columnas «Nombre en pantalla» y «Cantidad a la mano». Exporta «Variante del producto» de Odoo con esas columnas.');
+    for (let i = 1; i < rows.length; i++) {
+      const t = String(rows[i][cN] || '').trim(), m = t.match(/^\[([^\]]+)\]\s*(.*)$/); if (!m) continue;
+      const code = m[1].toUpperCase().trim(), q = num(rows[i][cQ]);
+      out.nombres[code] = m[2].trim();
+      if (/^04MAS/.test(code)) out.pt[code] = q;
+      else if (/^0\d(SAC|PRO)\d|^PRO0/.test(code)) out.empaque[code] = q;
+    }
+    return out;
+  }
+  /* Producto terminado (sacos por código 04MAS) → sacos por costal. Los negativos no suman. */
+  function ptPorCostal(pt, nombres, cfg) {
+    const out = {}; let tot = 0;
+    Object.keys(pt || {}).forEach(c => { const q = num(pt[c]); if (q <= 0) return; tot += q; const cos = costalDe(c, (nombres || {})[c], cfg); if (cos) out[cos] = (out[cos] || 0) + q; });
+    return { porCostal: out, total: tot };
+  }
+
+  W.Empaque19H = { calc, costalDe, leerVariantes, ptPorCostal, CONSUMIBLES, MESC };
 })(window);
