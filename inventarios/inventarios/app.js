@@ -1079,6 +1079,26 @@
     const sum = a => a.reduce((s, x) => s + x.pend, 0);
     const al = R.filter(r => r.pdx.quiebre).map(r => { const pa = r.pdx.pedirAntes ? hoyISO(r.pdx.pedirAntes) : ''; const ult = r.p.meses[r.p.meses.length - 1]; return { r, q: r.pdx.quiebre, pa, dias: pa ? dDif(pa) : null, falt: ult && ult.stock < 0 ? -ult.stock : 0 }; }).sort((a, b) => (a.dias == null ? 1e9 : a.dias) - (b.dias == null ? 1e9 : b.dias));
     const pcUrg = pc.filter(l => l.lim && dDif(l.lim) <= 30), pcVenc = pc.filter(l => l.lim && dDif(l.lim) < 0), trAtr = tr.filter(l => l.f && l.f < hoy), alVenc = al.filter(a => a.dias != null && a.dias < 0);
+    /* ── ¿Qué pasa si el proveedor no entrega a tiempo? Punto exacto de quiebre (existencia en cero) ──
+       • Sin entregas: existencia de hoy ÷ consumo diario.
+       • Por cada pedido pendiente: si ESE pedido no llega (los anteriores sí), el día en que nos quedamos
+         sin existencia; «llegada máxima» = ese día; holgura = llegada máxima − fecha prometida.
+       • Pedido nuevo hoy: llegaría en hoy + lead time; si es después del quiebre, días sin existencia. */
+    const riesgo = R.filter(r => num(r.it.consumo) > 0).map(r => {
+      const cd = num(r.it.consumo) / 30, st = Math.max(0, num(r.f.total)), lt = I.ltDias(r.it);
+      const sinDias = Math.floor(st / cd), sinF = addD(hoy, sinDias);
+      let acum = st;
+      // Un pedido ATRASADO no se da por seguro: no suma para los pedidos posteriores, y su margen se mide desde hoy
+      const peds = lleg.filter(l => l.itemId === r.it.id).map(l => {
+        const atr = l.f && l.f < hoy ? -dDif(l.f) : 0;
+        const maxF = addD(hoy, Math.floor(acum / cd)), hol = atr ? dDif(maxF) : (l.f ? dDif(maxF) - dDif(l.f) : null);
+        const o = { l, maxF, hol, atr: l.estado === 'fincado' ? atr : 0 };
+        if (!atr) acum += l.pend; return o;
+      });
+      const nuevo = addD(hoy, lt), hueco = Math.max(0, dDif(nuevo) - sinDias);
+      return { r, cd, st, sinDias, sinF, peds, lt, nuevo, hueco, minHol: peds.length ? Math.min(...peds.map(p => p.hol == null ? 1e9 : p.hol)) : null };
+    }).filter(x => x.peds.length || x.sinDias <= x.lt + 30).sort((a, b) => a.sinDias - b.sinDias);
+    const enRiesgo = riesgo.filter(x => x.sinDias < x.lt);
     const pill = (cls, t) => `<span class="pill p-${cls}">${t}</span>`;
     const plazo = d => d == null ? '' : d < 0 ? pill('red', 'Vencida · ' + (-d) + ' d') : d <= 30 ? pill('amber', d + ' días') : pill('green', d + ' días');
     const nom = it => `${esc(it.nombre)}<div class="code">${esc(it.codigo || '')}</div>`;
@@ -1096,6 +1116,8 @@
     const acc = [];
     if (pcVenc.length) acc.push(`colocar de inmediato ${pcVenc.length === 1 ? 'la OC' : 'las OC'} por comprar cuya fecha límite ya pasó según su lead time: ${pcVenc.map(l => `<b>${esc(l.it.nombre)}</b> (${fmt(l.pend, 0)} para el ${fD(l.f)})`).join(', ')}`);
     if (alVenc.length) acc.push(`atender ${alVenc.map(a => `<b>${esc(a.r.it.nombre)}</b> (quiebre el ${fD(a.q)})`).join(', ')}, cuya fecha para pedir ya pasó`);
+    const critEnt = []; riesgo.forEach(x => x.peds.forEach(p => { if (p.l.estado === 'fincado' && p.hol != null && p.hol < 15) critEnt.push({ x, p }); }));
+    if (critEnt.length) acc.push(`exigir a los proveedores el cumplimiento puntual de ${critEnt.map(c => `la OC ${esc(c.p.l.oc || 's/n')} de <b>${esc(c.x.r.it.nombre)}</b> (${fmt(c.p.l.pend, 0)}): ${c.p.hol < 0 ? 'con la fecha prometida ya nos quedamos sin existencia ' + (-c.p.hol) + ' días' : 'si no llega antes del ' + fD(c.p.maxF) + ' nos quedamos sin existencia'}`).join('; ')}, y valorar una compra de respaldo con otro proveedor, ya que el lead time es de ${critEnt[0].x.lt} días`);
     if (trAtr.length) acc.push(`dar seguimiento con el proveedor a ${trAtr.map(l => `la OC ${esc(l.oc || 's/n')} de <b>${esc(l.it.nombre)}</b> (esperada el ${fD(l.f)})`).join(', ')}, aún pendiente de recepción`);
     if (pcUrg.length > pcVenc.length) acc.push(`programar en los próximos 30 días ${pcUrg.filter(l => dDif(l.lim) >= 0).map(l => `<b>${esc(l.it.nombre)}</b> (OC antes del ${fD(l.lim)})`).join(', ')}`);
     const nota = acc.length ? `<b>Propuesta para consideración de Dirección.</b> Someto a consideración: ${acc.map((a, i) => `(${i + 1}) ${a}`).join('; ')}.` : `<b>Situación para Dirección.</b> Con los pedidos programados, ninguna compra tiene fecha límite vencida ni próxima en los siguientes 30 días.`;
@@ -1104,7 +1126,7 @@
 <style>:root{--navy:#14284b;--ink:#1d2433;--mut:#6b7385;--line:#e4e7ee;--bg:#f5f6f9;--blue:#2f6fd6;--blueL:#e6eefb;--amber:#c98500;--amberL:#fdf1d8;--red:#c8342b;--redL:#fbe3e1;--green:#2e8a57;--greenL:#e3f3ea}
 *{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
 header{background:var(--navy);color:#fff;padding:28px 32px 56px}header .k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.7}header h1{margin:6px 0 4px;font-size:24px}header p{margin:0;opacity:.8;font-size:13px}
-main{max-width:1200px;margin:0 auto;padding:0 24px 48px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:-36px}
+main{max-width:1200px;margin:0 auto;padding:0 24px 48px}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:-36px}
 .kpi{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 2px 8px rgba(20,40,75,.08);border-top:4px solid var(--c)}.kpi .l{font-size:12px;color:var(--mut);font-weight:500}.kpi .v{font-size:28px;font-weight:700;margin:4px 0 2px;color:var(--c)}.kpi .s{font-size:12px;color:var(--mut)}
 section{background:#fff;border-radius:12px;padding:20px 22px;margin-top:20px;box-shadow:0 1px 3px rgba(20,40,75,.06)}h2{font-size:16px;margin:0 0 4px;color:var(--navy)}.sub{margin:0 0 14px;color:var(--mut);font-size:12.5px}
 table{width:100%;border-collapse:collapse}th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600}td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}.n{text-align:right;font-variant-numeric:tabular-nums}tr:last-child td{border-bottom:0}
@@ -1121,7 +1143,13 @@ table{width:100%;border-collapse:collapse}th{font-size:11px;text-transform:upper
 <div class="kpi" style="--c:var(--blue)"><div class="l">En tránsito (fincado)</div><div class="v">${tr.length} OC</div><div class="s">${fmt(sum(tr), 0)} por recibir${trAtr.length ? ' · ' + trAtr.length + ' atrasada' + (trAtr.length > 1 ? 's' : '') : ''}</div></div>
 <div class="kpi" style="--c:var(--amber)"><div class="l">Por comprar</div><div class="v">${pc.length} pedido${pc.length === 1 ? '' : 's'}</div><div class="s">${fmt(sum(pc), 0)} planeado</div></div>
 <div class="kpi" style="--c:var(--red)"><div class="l">OC a colocar en ≤ 30 días</div><div class="v">${pcUrg.length}</div><div class="s">${pcVenc.length ? pcVenc.length + ' con fecha límite vencida' : 'ninguna vencida'}</div></div>
+<div class="kpi" style="--c:var(--red)"><div class="l">Sin entregas, se acaban antes de que llegue un pedido nuevo</div><div class="v">${enRiesgo.length}</div><div class="s">${enRiesgo.length ? 'el primero: ' + esc(enRiesgo[0].r.it.nombre) + ' el ' + fD(enRiesgo[0].sinF) : 'ninguno'}</div></div>
 <div class="kpi" style="--c:var(--navy)"><div class="l">Artículos con quiebre</div><div class="v">${al.length} de ${R.length}</div><div class="s">${alVenc.length ? alVenc.length + ' con fecha de pedido vencida' : 'ninguno con fecha vencida'}</div></div></div>
+${riesgo.length ? `<section style="border:2px solid var(--red)"><h2 style="color:var(--red)">⚠️ Si el proveedor no entrega a tiempo</h2><p class="sub">Día exacto en que la existencia llega a <b>cero</b> con el consumo actual. «Llegada máxima» = último día en que puede llegar cada pedido sin que nos quedemos sin existencia, contando los pedidos anteriores que van en tiempo (los <b>atrasados no se dan por seguros</b>). Margen = días entre la fecha prometida y la llegada máxima; en un pedido atrasado, días desde hoy hasta que nos quedemos sin existencia. Con un lead time de ~${riesgo[0].lt} días, un pedido nuevo colocado hoy llegaría el ${fD(riesgo[0].nuevo)}.</p>
+<table><tr><th>Artículo</th><th class="n">Existencia hoy</th><th class="n">Consumo/día</th><th>Si no llega nada, se acaba el</th><th>Pedido pendiente</th><th>Llegada prometida</th><th>Llegada máxima</th><th>Margen</th></tr>
+${riesgo.map(x => { const n = Math.max(1, x.peds.length); const cab = `<td rowspan="${n}">${nom(x.r.it)}</td><td class="n" rowspan="${n}">${fmt(x.st, 0)}</td><td class="n" rowspan="${n}">${fmt(x.cd, 0)}</td><td rowspan="${n}"><b style="color:${x.sinDias < x.lt ? 'var(--red)' : 'inherit'}">${fD(x.sinF)}</b><div class="code">en ${x.sinDias} días${x.hueco ? ' · un pedido nuevo hoy llegaría ' + x.hueco + ' días tarde' : ''}</div></td>`;
+  if (!x.peds.length) return `<tr>${cab}<td colspan="4"><span class="pill p-red">Sin pedido programado</span></td></tr>`;
+  return x.peds.map((p, i) => `<tr>${i ? '' : cab}<td>${fmt(p.l.pend, 0)}${p.l.oc ? '<div class="code">OC ' + esc(p.l.oc) + '</div>' : ''}${p.l.estado === 'por_comprar' ? '<div class="code">por comprar</div>' : ''}${p.l.proveedor ? '<div class="code">' + esc(p.l.proveedor) + '</div>' : ''}</td><td>${fD(p.l.f)}${p.l.estim ? '*' : ''}${p.atr ? '<div>' + pill('red', 'atrasada ' + p.atr + ' d') + '</div>' : ''}</td><td><b>${fD(p.maxF)}</b></td><td>${p.hol == null ? '—' : p.hol < 0 ? pill('red', (-p.hol) + ' días sin existencia') : p.hol < 15 ? pill('amber', p.hol + ' días') : pill('green', p.hol + ' días')}</td></tr>`).join(''); }).join('')}</table></section>` : ''}
 <div class="two"><section><h2>Pedidos pendientes por llegar</h2><p class="sub">Órdenes de compra fincadas, aún no recibidas</p>${tr.length ? `<table><tr><th>Artículo</th><th>Fecha OC</th><th>Llegada</th><th class="n">Por recibir</th><th>OC</th><th>Estatus</th></tr>${tr.map(l => `<tr><td>${nom(l.it)}${l.proveedor ? `<div class="code">${esc(l.proveedor)}</div>` : ''}</td><td>${fD(l.fechaOC)}</td><td>${fD(l.f)}${l.estim ? '*' : ''}</td><td class="n">${fmt(l.pend, 0)}${num(l.recibido) ? `<div class="code">recibido ${fmt(l.recibido, 0)}</div>` : ''}</td><td>${esc(l.oc || '—')}</td><td>${l.f < hoy ? pill('red', 'Atrasada ' + (-dDif(l.f)) + ' d') : pill('blue', 'En ' + dDif(l.f) + ' d')}</td></tr>`).join('')}</table>` : '<div class="empty">Sin pedidos fincados pendientes</div>'}</section>
 <section><h2>Pedidos por comprar</h2><p class="sub">Planeados en la proyección, sin OC colocada. Fecha límite = fecha de llegada − lead time del artículo</p>${pc.length ? `<table><tr><th>Artículo</th><th>Llegada</th><th class="n">Cantidad</th><th>Colocar OC antes de</th></tr>${pc.map(l => `<tr><td>${nom(l.it)}<div class="code">LT ${I.ltDias(l.it)} días${l.proveedor ? ' · ' + esc(l.proveedor) : ''}</div></td><td>${fD(l.f)}${l.estim ? '*' : ''}</td><td class="n">${fmt(l.pend, 0)}</td><td>${fD(l.lim)}<br>${plazo(dDif(l.lim))}</td></tr>`).join('')}</table>` : '<div class="empty">Sin pedidos por comprar</div>'}</section></div>${sinFecha}
 ${bars ? `<section><h2>Volumen programado por mes de llegada</h2><p class="sub">Azul = fincado · ámbar = por comprar</p>${bars}</section>` : ''}
