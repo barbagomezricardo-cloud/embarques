@@ -4836,7 +4836,7 @@ function renderProductos(){
 const DEF_VPARAMS={capTonMes:5700,gTarget:0.07,metaNuevos:6};
 function getVParams(){return Object.assign({},DEF_VPARAMS,JSON.parse(localStorage.getItem('ventasParams04mas')||'{}'));}
 // ── Configuración en la nube: abrir el link en cualquier navegador y jalar toda la config ──
-var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','alertasAutoCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas','costos04mas','mesDesc04mas','cierreCatOv04mas','proyCfg04mas','bonos04mas'];
+var CFG_KEYS=['prodCfg04mas','descEsp04mas','descBloqueados04mas','nuevoCfg04mas','nuevoAuth04mas','ventasParams04mas','tierCfg04mas_v6','premCfg04mas','cobreCfg04mas','aiCfg04mas','resumenEmailCfg04mas','alertasAutoCfg04mas','evalPeriod04mas','mapping04mas','vendCfg04mas','dirCfg04mas','gastosFijos04mas','cloudCfg04mas','costos04mas','mesDesc04mas','cierreCatOv04mas','proyCfg04mas','bonos04mas','corte04mas','corteDet04mas','proyEdits04mas','stockProd04mas'];
 function _cfgBundle(){var o={};CFG_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v!=null)o[k]=v;});
   if(o['cloudCfg04mas']){try{var c=JSON.parse(o['cloudCfg04mas']);delete c.secret;o['cloudCfg04mas']=JSON.stringify(c);}catch(e){delete o['cloudCfg04mas'];}}
   return o;}
@@ -4867,8 +4867,45 @@ function syncBaselinesCloud(cb){
     }).catch(function(){ if(cb)cb(); });
   }catch(e){ if(cb)cb(); }
 }
-function pushConfigCloud(silent){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');skFetch(DB+'/skan/_config.json',{method:'PUT',body:JSON.stringify(_cfgBundle())}).then(function(){if(!silent)alert('✔ Configuración guardada en la nube. Cualquier navegador la tomará sola al abrir el link.');}).catch(function(){if(!silent)alert('No se pudo guardar (revisa internet/licencia).');});}catch(e){} }
-function syncConfigCloud(cb){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');skFetch(DB+'/skan/_config.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){ if(o&&typeof o==='object'){ CFG_KEYS.forEach(function(k){ if(o[k]==null)return; if(k==='cloudCfg04mas'){ try{var cloud=JSON.parse(o[k]);var loc=JSON.parse(localStorage.getItem(k)||'{}'); if(loc.secret)cloud.secret=loc.secret; localStorage.setItem(k,JSON.stringify(cloud)); }catch(e){} } else { localStorage.setItem(k,o[k]); } }); } if(cb)cb(); }).catch(function(){ if(cb)cb(); }); }catch(e){ if(cb)cb(); } }
+/* ── CONFIGURACIÓN SINCRONIZADA ENTRE EQUIPOS (Mac, iPad, otra PC) ──────────────────────────
+   Cada ajuste (objetivos, niveles, mapeo, costos, bonos, CORTES DE MES…) guarda la hora en que
+   cambió. Al cambiarlo se sube solo a la nube a los pocos segundos; al abrir el programa en otro
+   equipo se toma de la nube SOLO lo que sea más nuevo que lo local, y lo local más nuevo se sube.
+   Así ningún equipo pisa con datos viejos lo que se cambió en otro. */
+var CFG_TS_KEY='cfgTs04mas', _cfgSync=false, _cfgListo=false, _cfgDirty={}, _cfgTimer=null;   // _cfgListo: solo se registran cambios después de la primera sincronización
+function _cfgTs(){try{return JSON.parse(localStorage.getItem(CFG_TS_KEY)||'{}')||{};}catch(e){return {};}}
+function _cfgTsSet(o){try{Storage.prototype._setOrig.call(localStorage,CFG_TS_KEY,JSON.stringify(o));}catch(e){}}
+(function(){ if(Storage.prototype._setOrig)return; var orig=Storage.prototype.setItem; Storage.prototype._setOrig=orig;
+  Storage.prototype.setItem=function(k,v){ var antes=null; try{antes=this.getItem(k);}catch(e){}
+    orig.call(this,k,v);
+    if(this===window.localStorage&&_cfgListo&&!_cfgSync&&CFG_KEYS.indexOf(k)>=0&&antes!==String(v)){ var t=_cfgTs(); t[k]=Date.now(); _cfgTsSet(t); _cfgDirty[k]=1; clearTimeout(_cfgTimer); _cfgTimer=setTimeout(function(){pushConfigCloud(true,true);},2500); } };
+  var origRm=Storage.prototype.removeItem; Storage.prototype.removeItem=function(k){ var habia=false; try{habia=this.getItem(k)!=null;}catch(e){} origRm.call(this,k);
+    if(this===window.localStorage&&_cfgListo&&!_cfgSync&&habia&&CFG_KEYS.indexOf(k)>=0){ var t=_cfgTs(); t[k]=Date.now(); _cfgTsSet(t); _cfgDirty[k]=1; clearTimeout(_cfgTimer); _cfgTimer=setTimeout(function(){pushConfigCloud(true,true);},2500); } };
+})();
+function _cfgVal(k){ var v=localStorage.getItem(k); if(v!=null&&k==='cloudCfg04mas'){ try{var c=JSON.parse(v);delete c.secret;v=JSON.stringify(c);}catch(e){v=null;} } return v; }
+// soloCambios: sube solo lo que cambió en este equipo; si no, sube todo (botón «Guardar configuración en la nube»)
+function pushConfigCloud(silent,soloCambios){ try{
+  var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,''), t=_cfgTs(), up={}, ks=soloCambios?Object.keys(_cfgDirty):CFG_KEYS.slice(), now=Date.now();
+  ks.forEach(function(k){ var v=_cfgVal(k); up[k]=v==null?null:v; up['_ts/'+k]=t[k]||now; if(!t[k])t[k]=now; });
+  if(!soloCambios)_cfgTsSet(t);
+  if(!Object.keys(up).length)return;
+  _cfgDirty={};
+  skFetch(DB+'/skan/_config.json',{method:'PATCH',body:JSON.stringify(up)}).then(function(r){ if(!r.ok)throw new Error(r.status); if(!silent)alert('✔ Configuración guardada en la nube. Cualquier equipo la tomará sola al abrir el programa.');}).catch(function(){ ks.forEach(function(k){_cfgDirty[k]=1;}); if(!silent)alert('No se pudo guardar (revisa internet/licencia).');});
+}catch(e){} }
+function syncConfigCloud(cb){ try{var DB=((typeof getCloudCfg==='function'?getCloudCfg().db:'')||SK_DB).replace(/\/$/,'');
+  skFetch(DB+'/skan/_config.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(o){
+    if(o&&typeof o==='object'){ var lt=_cfgTs(), ct=o._ts||{}, subir=[];
+      _cfgSync=true;
+      try{ CFG_KEYS.forEach(function(k){
+        var cTs=Number(ct[k]||0), lTs=Number(lt[k]||0), loc=localStorage.getItem(k);
+        var tomar = o[k]!=null && (loc==null || cTs>lTs || (!cTs && !lTs));   // sin fechas (versión anterior): manda la nube, como antes
+        if(tomar){ if(k==='cloudCfg04mas'){ try{var cloud=JSON.parse(o[k]);var l2=JSON.parse(loc||'{}'); if(l2.secret)cloud.secret=l2.secret; localStorage.setItem(k,JSON.stringify(cloud)); }catch(e){} } else localStorage.setItem(k,o[k]); if(cTs)lt[k]=cTs; }
+        else if(loc!=null && (lTs>cTs || o[k]==null)) subir.push(k);   // lo de este equipo es más nuevo (o la nube no lo tiene): se sube
+      }); } finally { _cfgSync=false; }
+      _cfgTsSet(lt);
+      if(subir.length){ subir.forEach(function(k){_cfgDirty[k]=1;}); pushConfigCloud(true,true); }
+    }
+    _cfgListo=true; if(cb)cb(); }).catch(function(){ _cfgListo=true; if(cb)cb(); }); }catch(e){ _cfgListo=true; if(cb)cb(); } }
 function saveVParams(){ if(!reqSuper())return;
   const p={capTonMes:parseFloat(document.getElementById('p-cap').value)||5700,
            gTarget:(parseFloat(document.getElementById('p-gt').value)||7)/100,
