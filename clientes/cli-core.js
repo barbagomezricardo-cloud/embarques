@@ -46,6 +46,10 @@
   function prodKg(nombre) { var m = String(nombre || '').match(/(\d+(?:\.\d+)?)\s*K(?:G|GS|ILOS)?\b/i); return m ? Number(m[1]) : 25; }
   function esPetFood(code) { return /^04MAS/i.test(String(code || '')); }
   function esPremium(nombre) { var n = String(nombre || '').toUpperCase().replace(/KAT/g, 'CAT'); return PREMIUM_RE.test(n) || GATO_RE.test(n); }
+  function tonItems(items) { return Math.round((items || []).reduce(function (a, it) { return a + num(it.kg || prodKg(it.nombre)) * num(it.piezas); }, 0)) / 1000; }
+  function unidadesDe(fl) { // capacidad de cada tipo de unidad (la misma tabla de fletes)
+    return Object.keys(VEHICULOS_BASE).map(function (k) { var v = Object.assign({}, VEHICULOS_BASE[k], ((fl || {}).vehiculos || {})[k] || {}); return { id: k, nombre: v.nombre, ton: num(v.ton) }; }).sort(function (a, b) { return a.ton - b.ton; });
+  }
   function sacosPorTon(kg) { return Math.round(1000 / (kg || 25)); }   // 25→40 · 20→50 · 15→67 · 5→200 (misma regla del Excel)
 
   /* ---------- fletes (modelo del Excel "PARA IMPLEMENTAR", corregido) ---------- */
@@ -168,8 +172,8 @@
     function preciosCliente(cliCfg, cfg) {
       var vis = (cliCfg && cliCfg.precios) || 'auto';
       var mostrar = vis === 'mostrar' ? true : (vis === 'ocultar' ? false : !!cfg.mostrarPrecios);
-      return Promise.all([g('precios'), g('fletes'), cliCfg && cliCfg.catKey ? g('catalogo/' + cliCfg.catKey) : Promise.resolve(null)]).then(function (a) {
-        var pr = a[0] || {}, fl = a[1] || {}, cat = a[2];
+      return Promise.all([g('precios'), g('fletes'), cliCfg && cliCfg.catKey ? g('catalogo/' + cliCfg.catKey) : Promise.resolve(null), g('disponibilidad')]).then(function (a) {
+        var pr = a[0] || {}, fl = a[1] || {}, cat = a[2], disp = a[3] || {};
         var lists = pr.lists || {}, prod = pr.prod || {};
         var lid = (cliCfg && cliCfg.listaRecoge) || (cat && cat.l && cat.l[0]) || '';
         var L = lists[lid];
@@ -182,6 +186,7 @@
         var productos = codes.map(function (c) {
           var nombre = prod[c] || c, kg = prodKg(nombre), pet = esPetFood(c);
           var o = { code: c, nombre: nombre, kg: kg, petfood: pet, premium: pet && esPremium(nombre) };
+          if (disp[c] && disp[c].off) o.agotado = true;   // el master lo dejó fuera de venta
           if (mostrar && L) {
             var ivaPct = L.iva ? (pet ? num(cfg.ivaPet, 16) : num(cfg.ivaPec, 0)) : 0;
             var base = num(L.items[c]);
@@ -199,8 +204,8 @@
           }
           return o;
         });
-        productos.sort(function (a, b) { return (b.petfood - a.petfood) || (b.premium - a.premium) || a.nombre.localeCompare(b.nombre); });
-        return { mostrar: !!(mostrar && L), lista: L ? (L.name || lid) : '', productos: productos,
+        productos.sort(function (a, b) { return (!!a.agotado - !!b.agotado) || (b.petfood - a.petfood) || (b.premium - a.premium) || a.nombre.localeCompare(b.nombre); });
+        return { mostrar: !!(mostrar && L), lista: L ? (L.name || lid) : '', productos: productos, unidades: unidadesDe(fl),
           entregas: rutas.map(function (rt) { var f = calcFlete(rt, fl); return { id: 'ruta-' + rt.id, label: f.vehiculoNombre + (rt.destino ? ' · ' + rt.destino : ''), ton: f.ton }; }) };
       });
     }
@@ -236,10 +241,84 @@
       multi['ix/abiertos/' + p.id] = ABIERTOS[estado] ? estado : null;
       return Promise.resolve(db.update('cli', multi)).then(function () {
         var np = Object.assign({}, p, upd);
+        return erpSync(np, quien).catch(function () {}).then(function () { return np; });
+      }).then(function (np) {
         var msg = mensajeEstado(np);
         return (msg ? notificar(p.uid, msg.t, msg.c, { pedido: p.id, estado: estado }) : Promise.resolve()).then(function () { return np; });
       });
     }
+    /* ---------- ERP (Odoo) ----------
+       Cada pedido confirmado deja en cli/erp/salida/{id} su "orden de venta" con el formato que espera Odoo
+       (cliente, códigos de producto = default_code, cantidades, precios, entrega). Hoy Administración la
+       captura a mano y escribe el número (fincar). Mañana un conector lee las pendientes, crea la orden en
+       Odoo y responde con modo 'erp' → 'capturado' / 'facturado': el flujo es el mismo, solo cambia quién lo hace. */
+    var ERP_EST = { confirmado: 'por_capturar', fincado: 'capturado', liberado: 'entregado', facturado: 'facturado', rechazado: 'cancelado', cancelado: 'cancelado' };
+    function erpOrden(p) {
+      return { pedidoId: p.id, folio: p.folio, client_order_ref: p.folio,
+        cliente: { clave: p.clienteKey || '', nombre: p.skanName || p.razonSocial || '', razonSocial: p.razonSocial || '', numCliente: p.numCliente || '', contacto: p.contacto || '', tel: p.telContacto || p.tel || '' },
+        vendedor: { clave: p.vk || '', nombre: p.vendedorNombre || '' },
+        entrega: { modalidad: p.modalidad, detalle: p.entregaLabel || '', direccion: (p.negocio && p.negocio.dir) || '', lat: (p.negocio && p.negocio.lat) || null, lng: (p.negocio && p.negocio.lng) || null },
+        lineas: (p.items || []).map(function (it) { return { default_code: it.code, nombre: it.nombre, cantidad: num(it.piezas), uom: 'SACO', kg: num(it.kg), precio_unit: it.precio != null ? num(it.precio) : null, precio_con_iva: it.conIva != null ? num(it.conIva) : null }; }),
+        totales: p.totales || null, toneladas: p.ton != null ? p.ton : tonItems(p.items), nota: [p.nota, p.notaVendedor].filter(Boolean).join(' · '),
+        creado: p.creado, confirmado: p.confirmadoTs || null };
+    }
+    function erpSync(p, quien) {
+      var est = ERP_EST[p.estado]; if (!est) return Promise.resolve();
+      var t = now(), m = {};
+      if (p.estado === 'confirmado') { m['erp/salida/' + p.id] = { estado: est, orden: erpOrden(p), ref: '', factura: '', creado: t, actualizado: t, hist: [{ e: est, ts: t, por: quien || '' }] }; m['erp/pendientes/' + p.id] = t; }
+      else {
+        return g('erp/salida/' + p.id).then(function (x) {
+          if (!x) return;
+          var mm = {}; mm['erp/salida/' + p.id + '/estado'] = est; mm['erp/salida/' + p.id + '/actualizado'] = t;
+          mm['erp/salida/' + p.id + '/hist'] = (x.hist || []).concat([{ e: est, ts: t, por: quien || '' }]);
+          if (p.remision) mm['erp/salida/' + p.id + '/ref'] = p.remision;
+          if (p.factura) mm['erp/salida/' + p.id + '/factura'] = p.factura;
+          if (est !== 'por_capturar') mm['erp/pendientes/' + p.id] = null;
+          return Promise.resolve(db.update('cli', mm));
+        });
+      }
+      return Promise.resolve(db.update('cli', m));
+    }
+    // Conector futuro con Odoo (servidor a servidor, con la llave maestra). Hoy no lo usa nadie.
+    function erp(accion, b) {
+      b = b || {}; var S = { u: 'ERP', nombre: clip(b.quien || 'Odoo', 40), rol: 'erp' };
+      if (accion === 'pendientes') return g('erp/pendientes').then(function (ix) {
+        return Promise.all(Object.keys(ix || {}).slice(0, 100).map(function (id) { return g('erp/salida/' + id).then(function (x) { return x ? Object.assign({ id: id }, x) : null; }); }));
+      }).then(function (l) { return { ordenes: l.filter(Boolean) }; });
+      if (accion === 'orden') return g('erp/salida/' + clip(b.id, 40)).then(function (x) { if (!x) throw err('no_existe', 'No existe.', 404); return x; });
+      if (accion === 'capturado') return g('pedidos/' + clip(b.id, 40)).then(function (p) {
+        if (!p) throw err('no_existe', 'Pedido no encontrado.', 404);
+        if (p.estado !== 'confirmado') return { ok: true, sinCambio: true, estado: p.estado, ref: p.remision || '' };   // idempotente
+        return stFincar(S, { id: p.id, remision: b.ref, nota: 'Capturado automáticamente en Odoo' });
+      });
+      if (accion === 'facturado') return g('pedidos/' + clip(b.id, 40)).then(function (p) {
+        if (!p) throw err('no_existe', 'Pedido no encontrado.', 404);
+        if (p.estado === 'facturado') return { ok: true, sinCambio: true };
+        if (p.estado !== 'liberado') throw err('estado', 'El pedido está ' + p.estado + '.');
+        return stFacturado(S, { id: p.id, factura: b.factura });
+      });
+      return Promise.reject(err('accion', 'Acción no válida'));
+    }
+
+    /* ---------- productos disponibles para venta (los apaga/enciende el master) ---------- */
+    function stCatalogo(S) {
+      return Promise.all([g('precios'), g('disponibilidad')]).then(function (a) {
+        var pr = a[0] || {}, disp = a[1] || {}, prod = pr.prod || {}, codes = {};
+        Object.keys(prod).filter(esPetFood).forEach(function (c) { codes[c] = 1; });
+        Object.keys(pr.lists || {}).forEach(function (lid) { Object.keys((pr.lists[lid] || {}).items || {}).forEach(function (c) { if (num(pr.lists[lid].items[c]) > 0 && c !== 'SER001') codes[c] = 1; }); });
+        Object.keys(disp).forEach(function (c) { codes[c] = 1; });
+        if (!Object.keys(codes).length) ['04MAS001', '04MAS0019', '04MAS003', '04MAS004', '04MAS006', '04MAS0020', '04MAS009', '04MAS008', '04MAS010'].forEach(function (c) { codes[c] = 1; });
+        var l = Object.keys(codes).map(function (c) { var n = prod[c] || (disp[c] && disp[c].nombre) || c, d = disp[c] || {}; return { code: c, nombre: n, kg: prodKg(n), petfood: esPetFood(c), premium: esPetFood(c) && esPremium(n), activo: !d.off, por: d.por || '', ts: d.ts || 0, nota: d.nota || '' }; });
+        l.sort(function (x, y) { return (y.petfood - x.petfood) || x.nombre.localeCompare(y.nombre); });
+        return { productos: l, puedeEditar: S.rol === 'gerencia' || S.rol === 'progmaster' };
+      });
+    }
+    function stDisponible(S, b) {
+      var c = clip(b.code, 30).toUpperCase(); if (!/^[A-Z0-9._-]+$/.test(c)) return Promise.reject(err('datos', 'Producto no válido.'));
+      var o = b.activo ? null : { off: true, por: S.nombre, ts: now(), nota: clip(b.nota, 120), nombre: clip(b.nombre, 80) };
+      return s('disponibilidad/' + c, o).then(function () { return audit(S.u, b.activo ? 'reactivarProducto' : 'pausarProducto', { code: c }); }).then(function () { return { ok: true }; });
+    }
+
     function mensajeEstado(p) {
       var folio = p.folio || p.id;
       switch (p.estado) {
@@ -260,8 +339,8 @@
     function pedidoPublico(p, mostrarPrecios) {
       var o = { id: p.id, folio: p.folio, estado: p.estado, creado: p.creado, actualizado: p.actualizado, modalidad: p.modalidad, entregaLabel: p.entregaLabel || '',
         nota: p.nota || '', items: (p.items || []).map(function (it) { var x = { code: it.code, nombre: it.nombre, piezas: it.piezas, kg: it.kg }; if (mostrarPrecios && it.precio) { x.precio = it.precio; x.conIva = it.conIva; } return x; }),
-        remision: p.remision || '', motivo: p.motivo || '', ajustado: !!p.ajustado,
-        liberacion: p.liberacion ? { ts: p.liberacion.ts, fecha: p.liberacion.fecha, hora: p.liberacion.hora, lotes: p.liberacion.lotes || [], unidad: p.liberacion.unidad || '' } : null,
+        remision: p.remision || '', motivo: p.motivo || '', ajustado: !!p.ajustado, ton: p.ton != null ? p.ton : tonItems(p.items),
+        liberacion: p.liberacion ? { ts: p.liberacion.ts, fecha: p.liberacion.fecha, hora: p.liberacion.hora, lotes: p.liberacion.lotes || [], unidad: p.liberacion.unidad || '', ton: p.liberacion.ton || 0 } : null,
         hist: (p.hist || []).map(function (h) { return { e: h.e, ts: h.ts }; }) };
       if (mostrarPrecios && p.totales) o.totales = p.totales;
       return o;
@@ -406,7 +485,9 @@
           var limpio = []; var vistos = {};
           items.forEach(function (it) {
             var p = porCode[it && it.code]; var q = Math.floor(num(it && it.piezas));
-            if (!p || q <= 0 || vistos[p.code]) return; if (q > 3000) throw err('datos', 'Cantidad demasiado grande para ' + p.nombre + '. Para pedidos mayores llama a tu vendedor.');
+            if (!p || q <= 0 || vistos[p.code]) return;
+            if (p.agotado) throw err('agotado', p.nombre + ' ya no está disponible por ahora. Quítalo de tu prepedido.');
+            if (q > 3000) throw err('datos', 'Cantidad demasiado grande para ' + p.nombre + '. Para pedidos mayores llama a tu vendedor.');
             vistos[p.code] = 1; limpio.push({ code: p.code, nombre: p.nombre, kg: p.kg, piezas: q, petfood: p.petfood, premium: p.premium });
           });
           if (!limpio.length) throw err('datos', 'Agrega al menos un producto.');
@@ -430,9 +511,9 @@
           }
           return folioNuevo().then(function (folio) {
             var t = now(), id = newId(), d = mxDate(t);
-            var ped = { id: id, folio: folio, uid: uid, clienteKey: us.clienteKey, skanName: us.skanName, razonSocial: us.razonSocial, contacto: us.nombre, tel: us.tel, telContacto: us.telContacto || '',
+            var ped = { id: id, folio: folio, uid: uid, clienteKey: us.clienteKey, skanName: us.skanName, razonSocial: us.razonSocial, numCliente: us.numCliente || '', contacto: us.nombre, tel: us.tel, telContacto: us.telContacto || '',
               vk: us.vk, vendedorNombre: fila ? fila.meta.v : (us.vendedorNombre || ''), modalidad: modalidad, entregaLabel: entregaLabel, negocio: us.negocio || null,
-              items: limpio, totales: totales, nota: clip(b.nota, 400), estado: 'enviado', creado: t, actualizado: t,
+              items: limpio, ton: tonItems(limpio), totales: totales, nota: clip(b.nota, 400), estado: 'enviado', creado: t, actualizado: t,
               snap: { mes: d.m, sacosMes: fila ? sumaMes(fila.row, d.m) : 0 },
               hist: [{ e: 'enviado', ts: t, por: 'cliente', nota: '' }] };
             var m = {};
@@ -582,6 +663,9 @@
           case 'guardarClienteCfg': puede('progmaster', 'gerencia'); return stGuardarClienteCfg(S, body);
           case 'guardarConfig': puede('progmaster', 'gerencia'); return stGuardarConfig(S, body);
           case 'vistaPrecios': puede('programacion', 'progmaster', 'gerencia', 'admin'); return stVistaPrecios(S, body);
+          case 'catalogo': return stCatalogo(S);
+          case 'disponible': puede('gerencia', 'progmaster'); return stDisponible(S, body);
+          case 'erpOrden': puede('admin', 'gerencia'); return g('erp/salida/' + clip(body.id, 40));
           default: throw err('accion', 'Acción no válida');
         }
       });
@@ -627,7 +711,7 @@
           b.items.forEach(function (it) { var o = porCode[it.code]; var q = Math.floor(num(it.piezas)); if (!o) return; if (q !== o.piezas) cambio = true; if (q > 0) nuevos.push(Object.assign({}, o, { piezas: q })); });
           if (!nuevos.length) throw err('datos', 'El pedido no puede quedar vacío; si no procede, recházalo.');
           if (cambio || nuevos.length !== p.items.length) {
-            extra.items = nuevos; extra.ajustado = true; extra.itemsOriginal = p.items;
+            extra.items = nuevos; extra.ajustado = true; extra.itemsOriginal = p.items; extra.ton = tonItems(nuevos);
             if (p.totales) { var sub = 0, tot = 0; nuevos.forEach(function (it) { sub += num(it.precio) * it.piezas; tot += num(it.conIva) * it.piezas; }); extra.totales = Object.assign({}, p.totales, { subtotal: r2(sub), total: r2(tot), iva: r2(tot - sub) }); }
           }
         }
@@ -679,6 +763,7 @@
       });
     }
     function liberar(p, datos, quien) {
+      if (!datos.ton) { var tl = (datos.lotes || []).reduce(function (a, l) { return a + prodKg(l.prod) * num(l.sacos); }, 0) / 1000; datos.ton = Math.round(tl * 1000) / 1000 || 0; }
       return cambiarEstado(p, 'liberado', quien, datos.nota || 'Liberado por Cargadores', { liberacion: datos }).then(function (np) {
         var m = {}; m['ix/recientes/' + p.id] = now(); return Promise.resolve(db.update('cli', m)).then(function () { return np; });
       });
@@ -713,7 +798,7 @@
             if (!p || p.estado !== 'fincado') return null;
             var lotes = (Array.isArray(despues.lotes) ? despues.lotes : Object.keys(despues.lotes || {}).map(function (k) { return despues.lotes[k]; }))
               .map(function (l) { return { prod: clip(l.prod || l.cod || '', 80), lote: clip(l.lote, 40), sacos: Math.floor(num(l.sacos)) }; });
-            return liberar(p, { ts: now(), fecha: despues.fechaCarga || '', hora: despues.horaSalida || despues.finCarga || '', lotes: lotes, unidad: [despues.tipo, despues.eco].filter(Boolean).join(' '), origen: 'cargadores', embarque: despues.id || '' }, 'Cargadores').then(function () { return id; });
+            return liberar(p, { ts: now(), fecha: despues.fechaCarga || '', hora: despues.horaSalida || despues.finCarga || '', lotes: lotes, unidad: [despues.tipo, despues.eco].filter(Boolean).join(' '), origen: 'cargadores', embarque: despues.id || '', ton: pedidos.length === 1 && num(despues.kilos) > 0 ? Math.round(num(despues.kilos)) / 1000 : 0 }, 'Cargadores').then(function () { return id; });
           });
         });
       }));
@@ -955,11 +1040,11 @@
       return Promise.reject(err('accion', 'Acción no válida'));
     }
 
-    return { cliente: cliente, staff: staff, staffLogin: staffLogin, progLogin: progLogin, progLoginUid: progLoginUid, maestro: maestro, onEmbarque: onEmbarque, preciosCliente: preciosCliente };
+    return { cliente: cliente, staff: staff, staffLogin: staffLogin, progLogin: progLogin, progLoginUid: progLoginUid, maestro: maestro, onEmbarque: onEmbarque, preciosCliente: preciosCliente, erp: erp };
   }
 
   return {
     create: create, keyp: keyp, calcFlete: calcFlete, VEHICULOS_BASE: VEHICULOS_BASE, PARAMS_BASE: PARAMS_BASE, TIERS_BASE: TIERS_BASE,
-    prodKg: prodKg, esPremium: esPremium, esPetFood: esPetFood, sacosPorTon: sacosPorTon, normRem: normRem, tiersDeConfig: tiersDeConfig
+    prodKg: prodKg, esPremium: esPremium, esPetFood: esPetFood, sacosPorTon: sacosPorTon, tonItems: tonItems, normRem: normRem, tiersDeConfig: tiersDeConfig
   };
 });

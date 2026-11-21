@@ -121,6 +121,15 @@ textarea.in{min-height:96px;resize:vertical}
 .prod .nm{font-weight:700;font-size:14.5px;line-height:1.25}
 .prod .sub{font-size:12.5px;color:var(--tinta-3);margin-top:2px}
 .prod .precio{font:800 14px var(--f-d);color:var(--tinta)}
+.prod.agot{opacity:.55}
+.prod.agot .nm{text-decoration:line-through;text-decoration-thickness:1px}
+.chip.gris{background:var(--linea-2);color:var(--tinta-3)}
+.carga{display:grid;gap:8px}
+.carga .ton{font:900 24px var(--f-d);color:var(--tinta)}
+.unis{display:flex;flex-wrap:wrap;gap:6px}
+.uni{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:10px;font:700 12.5px var(--f-b);border:1.5px solid var(--linea);color:var(--tinta-2)}
+.uni.si{border-color:var(--ok);background:var(--ok-s);color:var(--ok)}
+.uni.no{opacity:.6}
 .chip{display:inline-block;font:800 10.5px var(--f-d);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:6px;background:var(--rojo-s);color:var(--rojo);vertical-align:1px;margin-left:4px}
 .paso{display:flex;align-items:center;border:1.5px solid var(--linea);border-radius:12px;overflow:hidden;background:var(--blanco)}
 .paso button{width:40px;height:42px;border:0;background:transparent;font:800 20px var(--f-d);color:var(--rojo);cursor:pointer}
@@ -655,6 +664,7 @@ function vPedir(m){
   h+='</div>'+(pr.mostrar?'<div class="mini">Precios de tu lista '+esc(pr.lista)+'. '+(pr.productos.some(function(p){return p.desglosaIva;})?'Mostramos precio + IVA.':'')+' El flete se calcula por saco según la unidad.</div>':'')+'</div>';
   h+='<div class="card" style="padding:4px 16px">';
   pr.productos.forEach(function(p){
+    if(p.agotado){ delete ESTADO.carrito[p.code]; h+='<div class="prod agot"><div><div class="nm">'+esc(p.nombre)+'</div><div class="sub">'+(p.kg?p.kg+' kg · ':'')+'por el momento no lo tenemos disponible</div></div><span class="chip gris">No disponible</span></div>'; return; }
     var e = precioEsc(p); var q=ESTADO.carrito[p.code]||0;
     h+='<div class="prod"><div><div class="nm">'+esc(p.nombre)+(p.premium?'<span class="chip">Premium</span>':'')+'</div>'+
       '<div class="sub">'+(e?'<span class="precio">'+money(e.conIva)+'</span> '+(p.desglosaIva?'con IVA · '+money(e.precio)+' + IVA':'por saco')+(e.flete?' · incluye flete '+money(e.flete):''):(p.kg?p.kg+' kg':''))+'</div></div>'+
@@ -662,7 +672,7 @@ function vPedir(m){
   });
   if(!pr.productos.length) h+='<div class="vacio">Aún no tenemos tu catálogo. Llama a tu vendedor.</div>';
   h+='</div>';
-  h+='<div id="simu"></div>';
+  h+='<div id="carga"></div><div id="simu"></div>';
   h+='<label class="campo">Comentarios para tu vendedor <small>(opcional)</small><textarea class="in" id="nota" rows="2" placeholder="Ej. entregar antes del jueves">'+esc(ESTADO.nota||'')+'</textarea></label>';
   h+='<div class="resumen" id="res"></div></div>';
   m.innerHTML=h;
@@ -673,10 +683,11 @@ function vPedir(m){
   resumen();
   function setQ(k,v){ if(v>0) ESTADO.carrito[k]=v; else delete ESTADO.carrito[k]; }
   function resumen(){
-    var sac=0, prem=0, tot=0, sub=0, petSac=0, completos=true;
-    pr.productos.forEach(function(p){ var q=ESTADO.carrito[p.code]||0; if(!q) return; sac+=q; if(p.petfood) petSac+=q; if(p.premium) prem+=q; var e=precioEsc(p); if(e){ tot+=e.conIva*q; sub+=e.precio*q; } else completos=false; });
+    var sac=0, prem=0, tot=0, sub=0, petSac=0, completos=true, kg=0;
+    pr.productos.forEach(function(p){ var q=ESTADO.carrito[p.code]||0; if(!q) return; sac+=q; kg+=(p.kg||25)*q; if(p.petfood) petSac+=q; if(p.premium) prem+=q; var e=precioEsc(p); if(e){ tot+=e.conIva*q; sub+=e.precio*q; } else completos=false; });
     var r=$('#res');
-    r.innerHTML='<div class="t"><b>'+fmt(sac)+' sacos</b><span>'+(pr.mostrar&&completos&&sac?'Total '+money(tot)+(tot!==sub?' con IVA':''):(sac?'Revisa y envía tu prepedido':'Agrega productos'))+'</span></div><button class="btn" id="enviar"'+(sac?'':' disabled')+'>Revisar</button>';
+    pintaCarga(kg);
+    r.innerHTML='<div class="t"><b>'+fmt(sac)+' sacos · '+fmtTon(kg/1000)+'</b><span>'+(pr.mostrar&&completos&&sac?'Total '+money(tot)+(tot!==sub?' con IVA':''):(sac?'Revisa y envía tu prepedido':'Agrega productos'))+'</span></div><button class="btn" id="enviar"'+(sac?'':' disabled')+'>Revisar</button>';
     $('#enviar').onclick=function(){ confirmarPedido(sac, tot, sub, completos); };
     var s=$('#simu');
     if(!c || !sac){ s.innerHTML=''; return; }
@@ -698,6 +709,23 @@ function vPedir(m){
       (falta.length?'<div class="chico muted">Te faltarían: '+falta.join('; ')+'.</div>':'<div class="chico" style="color:var(--ok);font-weight:700">Con este pedido alcanzas el máximo de tu nivel.</div>')+'</div>';
   }
 }
+function fmtTon(t){ return (t||0).toLocaleString('es-MX',{ minimumFractionDigits:2, maximumFractionDigits:2 })+' t'; }
+function tonPed(p){ return p.ton!=null ? p.ton : (p.items||[]).reduce(function(a,it){ return a+(it.kg||25)*it.piezas; },0)/1000; }
+// ¿Cabe en mi unidad? toneladas del prepedido contra la capacidad de cada tipo de unidad
+function pintaCarga(kg){
+  var c=$('#carga'); if(!c) return;
+  if(!kg){ c.innerHTML=''; return; }
+  var pr=ESTADO.yo.precios||{}, t=kg/1000, U=pr.unidades||[{nombre:'Nissan',ton:1},{nombre:'Isuzu',ton:5},{nombre:'Tortón',ton:15},{nombre:'Tráiler',ton:30}];
+  var ruta=(pr.entregas||[]).filter(function(e){ return e.id===ESTADO.escenario; })[0];
+  var h='<div class="card carga"><div class="entre"><span class="eyebrow">Peso de tu prepedido</span><span class="ton">'+fmtTon(t)+'</span></div>';
+  if(ruta && ruta.ton){
+    var pc=Math.round(t/ruta.ton*100);
+    h+='<div class="chico">Te lo llevamos en '+esc(ruta.label.split(' · ')[0])+' ('+fmt(ruta.ton)+' t): ocupa <b>'+pc+'%</b> de la unidad.</div>'+barra(t,ruta.ton)+(t>ruta.ton?'<div class="aviso warn chico">Rebasa la capacidad de una unidad: tu vendedor lo programará en más de un viaje o en otra unidad.</div>':'');
+  } else {
+    h+='<div class="chico muted">¿En qué unidad lo recoges? Te cabe en:</div><div class="unis">'+U.map(function(u){ var ok=t<=u.ton; return '<span class="uni '+(ok?'si':'no')+'">'+(ok?'✓':'✕')+' '+esc(u.nombre)+' · '+fmt(u.ton)+' t</span>'; }).join('')+'</div>';
+  }
+  c.innerHTML=h+'</div>';
+}
 function precioEsc(p){
   if(!p.escenarios) return null;
   var id = ESTADO.escenario;
@@ -707,10 +735,11 @@ function precioEsc(p){
 }
 function confirmarPedido(sac, tot, sub, completos){
   var y=ESTADO.yo, pr=y.precios;
+  var kgT = pr.productos.reduce(function(a,p){ return a+(ESTADO.carrito[p.code]?(p.kg||25)*ESTADO.carrito[p.code]:0); },0);
   var lineas = pr.productos.filter(function(p){ return ESTADO.carrito[p.code]; }).map(function(p){ var e=precioEsc(p); var q=ESTADO.carrito[p.code]; return '<div class="entre chico"><span>'+fmt(q)+' × '+esc(p.nombre)+'</span>'+(e?'<b>'+money(e.conIva*q)+'</b>':'')+'</div>'; }).join('');
   var escL = ESTADO.escenario==='recoge'?'Recojo en planta':(document.querySelector('input[name=esc]:checked')||{}).parentNode.textContent;
   abrirHoja('<h2>Revisa tu prepedido</h2><div class="items" style="border:0;padding:0">'+lineas+'</div>'+
-    '<div class="entre" style="border-top:1px solid var(--linea);padding-top:10px"><span>'+fmt(sac)+' sacos · '+esc(escL)+'</span>'+(pr.mostrar&&completos?'<b class="num" style="font-size:19px">'+money(tot)+'</b>':'')+'</div>'+
+    '<div class="entre" style="border-top:1px solid var(--linea);padding-top:10px"><span>'+fmt(sac)+' sacos · <b>'+fmtTon(kgT/1000)+'</b> · '+esc(escL)+'</span>'+(pr.mostrar&&completos?'<b class="num" style="font-size:19px">'+money(tot)+'</b>':'')+'</div>'+
     (pr.mostrar&&completos&&tot!==sub?'<div class="mini">Subtotal '+money(sub)+' + IVA '+money(tot-sub)+'. Precios de referencia: el precio final lo confirma tu vendedor.</div>':'')+
     '<div class="aviso info">Tu vendedor te llamará para confirmarlo. Cuando salga de planta te avisamos con los lotes y la hora.</div>'+
     '<div class="err" id="e"></div><button class="btn full" id="ok">Enviar prepedido</button><button class="btn ghost" id="no">Seguir editando</button>');
@@ -758,9 +787,9 @@ function vPedidos(m){
     if(!muerto) h+='<div class="linea" aria-label="Avance del pedido">'+PASOS.map(function(x,k){ return '<div class="'+(k<=i?'ya':'')+(k<=i&&p.estado==='facturado'?' fin':'')+'">'+(x[0]==='liberado'&&p.modalidad==='recoge'?'Cargado':x[1])+'</div>'; }).join('')+'</div>';
     h+='<div class="chico">'+textoEstado(p)+'</div>';
     if(p.ajustado) h+='<div class="aviso warn chico">Tu vendedor ajustó cantidades al confirmarlo contigo.</div>';
-    h+='<div class="items">'+p.items.map(function(it){ return '<div class="entre"><span>'+fmt(it.piezas)+' × '+esc(it.nombre)+'</span>'+(it.conIva?'<span class="mini">'+money(it.conIva*it.piezas)+'</span>':'')+'</div>'; }).join('')+(p.totales?'<div class="entre" style="font-weight:800"><span>Total</span><span>'+money(p.totales.total)+'</span></div>':'')+'</div>';
+    h+='<div class="items">'+p.items.map(function(it){ return '<div class="entre"><span>'+fmt(it.piezas)+' × '+esc(it.nombre)+'</span>'+(it.conIva?'<span class="mini">'+money(it.conIva*it.piezas)+'</span>':'')+'</div>'; }).join('')+'<div class="entre" style="font-weight:800"><span>'+fmt(p.items.reduce(function(a,it){return a+it.piezas;},0))+' sacos</span><span>'+fmtTon(tonPed(p))+'</span></div>'+(p.totales?'<div class="entre" style="font-weight:800"><span>Total</span><span>'+money(p.totales.total)+'</span></div>':'')+'</div>';
     if(p.liberacion && (p.liberacion.lotes||[]).length){
-      h+='<div class="lotes"><b>Salió '+esc(p.liberacion.fecha?p.liberacion.fecha.split('-').reverse().join('/'):'')+' a las '+esc(p.liberacion.hora||'')+'</b>'+(p.liberacion.unidad?' · '+esc(p.liberacion.unidad):'')+'<div style="margin-top:4px">'+p.liberacion.lotes.map(function(l){ return esc(l.prod)+' · lote <b>'+esc(l.lote)+'</b> · '+fmt(l.sacos)+' sacos'; }).join('<br>')+'</div></div>';
+      h+='<div class="lotes"><b>Salió '+esc(p.liberacion.fecha?p.liberacion.fecha.split('-').reverse().join('/'):'')+' a las '+esc(p.liberacion.hora||'')+'</b>'+(p.liberacion.unidad?' · '+esc(p.liberacion.unidad):'')+(p.liberacion.ton?' · '+fmtTon(p.liberacion.ton)+' cargadas':'')+'<div style="margin-top:4px">'+p.liberacion.lotes.map(function(l){ return esc(l.prod)+' · lote <b>'+esc(l.lote)+'</b> · '+fmt(l.sacos)+' sacos'; }).join('<br>')+'</div></div>';
     }
     if(p.estado==='enviado') h+='<button class="btn ghost" data-cancel="'+p.id+'" style="justify-self:start;padding-left:0">Cancelar prepedido</button>';
     h+='</article>';
@@ -877,7 +906,8 @@ var PASOS_GUIA=[
   { v:'inicio', sel:'[data-guia="nivel"]', t:'Mantén o sube de nivel', x:'Te decimos cuántos sacos necesitas para conservar tu nivel y cuántos para subir al siguiente, que paga más descuento.' },
   { v:'inicio', sel:'#aPedir', t:'Haz un prepedido', x:'Desde este botón o desde la pestaña <b>Pedir</b> armas tu pedido en segundos, sin llamadas ni mensajes.' },
   { v:'pedir', sel:'[data-guia="recibe"]', t:'¿Cómo lo recibes?', x:'Primero elige si lo recoges en planta o te lo entregamos. El precio por saco se ajusta según la opción.' },
-  { v:'pedir', sel:'.prod', tocar:'.prod .paso button[data-d="1"]', t:'Elige tus productos', x:'Usa <b>+</b> y <b>−</b> o escribe directo la cantidad de sacos.<br><span class="toca">👆 Pruébalo: toca el +</span>' },
+  { v:'pedir', sel:'.prod:not(.agot)', tocar:'.prod:not(.agot) .paso button[data-d="1"]', t:'Elige tus productos', x:'Usa <b>+</b> y <b>−</b> o escribe directo la cantidad de sacos.<br><span class="toca">👆 Pruébalo: toca el +</span>' },
+  { v:'pedir', sel:'#carga .card', t:'¿Te cabe en tu unidad?', x:'Te decimos cuántas toneladas pesa tu prepedido y en qué unidades cabe, para que llegues con el camión correcto.' },
   { v:'pedir', sel:'#simu', t:'Tu descuento en vivo', x:'Mientras agregas sacos te decimos qué descuento ganarías y cuántos sacos te faltan para el siguiente bono.' },
   { v:'pedir', sel:'#res', t:'Revisa y envía', x:'Aquí ves el total. Toca <b>Revisar</b>, confirma y listo. Tu vendedor te llamará para confirmarlo; mientras no lo confirme no es pedido en firme.' },
   { v:'pedidos', sel:'.ped,.vacio', t:'Sigue tu pedido', x:'Cada prepedido avanza por estas etapas:'+ESTADOS_GUIA },

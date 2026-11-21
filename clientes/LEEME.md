@@ -13,7 +13,7 @@ La app es para los clientes. Ahí ven su avance, su histórico y sus descuentos,
 | **Aviso de privacidad** | `clientes/privacidad.html` | Requisito de las tiendas |
 
 Direcciones, una vez publicadas en GitHub Pages:
-- Clientes: https://barbagomezricardo-cloud.github.io/embarques/clientes/
+- Clientes: https://embarques-mascotas.web.app/clientes/ (también en https://barbagomezricardo-cloud.github.io/embarques/clientes/)
 - Consola del personal: https://barbagomezricardo-cloud.github.io/embarques/clientes/personal.html
 - **Demostración, sin tocar datos reales:** agrega `?demo=1` a la app del cliente y `?clidemo=1` a cualquiera de tus apps o a la consola. Por ejemplo, abre `clientes/?demo=1` y `clientes/personal.html?clidemo=1` en el mismo navegador para ver el flujo completo. El código SMS de prueba es 123456. Los usuarios del personal en la demostración son DEMO, ADMINISTRACION, PROGRAMACION y GERENCIA, todos con PIN 123456.
 
@@ -33,6 +33,17 @@ Direcciones, una vez publicadas en GitHub Pages:
 10. **Mensaje a gerencia.** Desde **Más → Mensaje a gerencia**, el cliente escribe y la gerencia contesta en **Mensajes**. La respuesta le llega al cliente en su app.
 
 > **Importante para que la liberación se ligue sola:** Programación debe capturar en el embarque (campo «Pedido») el mismo número que Administración escribió al fincar. Si un embarque lleva varios pedidos, se separan con coma. El número se reconoce aunque cambie el prefijo (por ejemplo, «S00124», «PEDIDO 124» o «124»).
+
+### Productos disponibles para venta
+Panel «Clientes» → **Productos**. El master (usuario de gerencia o master del programador) apaga un producto cuando no hay existencia o no se debe vender, y lo vuelve a encender para reactivarlo. El cambio es inmediato: el cliente lo ve como «No disponible» y el servidor rechaza cualquier prepedido que lo incluya. Vendedores y Administración solo consultan.
+
+### Toneladas
+El prepedido muestra su peso en toneladas mientras el cliente lo arma. Si recoge en planta, ve en qué unidades le cabe (Nissan, Isuzu, Tortón, Tráiler, con las capacidades de la tabla de fletes). Si se lo entregamos, ve qué porcentaje ocupa de la unidad de su ruta. Las toneladas aparecen también en «Mis pedidos», en cada tarjeta del panel del personal y, al liberarse, las toneladas cargadas (kilos de báscula del embarque cuando la unidad lleva un solo pedido; si no, sacos de los lotes × kg).
+
+### Odoo: hoy manual, listo para integrarse
+- **Hoy:** Administración ve «Por fincar en Odoo», usa **📋 Copiar datos para Odoo** (cliente y número de cliente, códigos de producto, sacos, toneladas, entrega y notas), captura en Odoo y escribe el número. Con ese número el pedido sigue solo: Cargadores lo libera y la facturación publicada por ventas lo cierra.
+- **Para la integración:** cada pedido confirmado deja su orden de venta en `cli/erp/salida/{id}` con el formato que espera Odoo (`client_order_ref` = folio, líneas con `default_code`, cantidad, precio, entrega). Su estado avanza solo con el pedido: `por_capturar → capturado → entregado → facturado` (o `cancelado`).
+- El futuro conector usa `cliApi` con `modo: "erp"` y el encabezado `X-Cli-Maestro`: `pendientes` (órdenes por capturar), `orden`, `capturado` `{id, ref}` (equivale a fincar) y `facturado` `{id, factura}`. Son idempotentes y conviven con la captura manual: lo que ya fincó Administración no se duplica.
 
 ---
 
