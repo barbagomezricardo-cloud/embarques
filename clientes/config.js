@@ -17,5 +17,5 @@ window.CLI_CFG = {
   waRespaldo: "",
   // Correo para solicitudes de privacidad (derechos ARCO). Vacío = "con tu vendedor o la Gerencia Comercial".
   correoPrivacidad: "",
-  version: "1.0.0"
+  version: "1.1.0"
 };
