@@ -291,6 +291,18 @@
         if (p.estado !== 'confirmado') return { ok: true, sinCambio: true, estado: p.estado, ref: p.remision || '' };   // idempotente
         return stFincar(S, { id: p.id, remision: b.ref, nota: 'Capturado automáticamente en Odoo' });
       });
+      // salida del camión registrada por el ERP (cuando el ERP despacha, no Cargadores en la nube): el cliente ve su pedido liberado con lotes reales
+      if (accion === 'liberado') return (b.id ? Promise.resolve(clip(b.id, 40)) : g('ix/remision/' + normRem(b.ref)).then(function (id) { if (id) return id; var rn = remNum(b.ref); return rn ? g('ix/remNum/' + rn) : null; })).then(function (id) {
+        if (!id) throw err('no_existe', 'No hay prepedido ligado a ' + clip(b.ref || b.id, 40) + '.', 404);
+        return g('pedidos/' + id);
+      }).then(function (p) {
+        if (!p) throw err('no_existe', 'Pedido no encontrado.', 404);
+        if (p.estado === 'liberado' || p.estado === 'facturado') return { ok: true, sinCambio: true, estado: p.estado };   // idempotente
+        if (p.estado !== 'fincado') throw err('estado', 'El pedido está ' + p.estado + '.');
+        var t = now(), d = mxDate(t);
+        var lotes = (Array.isArray(b.lotes) ? b.lotes : []).slice(0, 40).map(function (l) { return { prod: clip(l.prod || l.cod || '', 80), lote: clip(l.lote, 40), sacos: Math.floor(num(l.sacos)) }; });
+        return liberar(p, { ts: t, fecha: clip(b.fecha, 10) || (d.y + '-' + ('0' + d.m).slice(-2) + '-' + ('0' + d.d).slice(-2)), hora: clip(b.hora, 5) || (('0' + d.hh).slice(-2) + ':' + ('0' + d.mi).slice(-2)), lotes: lotes, unidad: clip(b.unidad, 40), origen: 'erp', embarque: clip(b.embarque, 40), nota: 'Salió de planta (registrado por ' + S.nombre + ')' }, S.nombre).then(function () { return { ok: true }; });
+      });
       if (accion === 'facturado') return g('pedidos/' + clip(b.id, 40)).then(function (p) {
         if (!p) throw err('no_existe', 'Pedido no encontrado.', 404);
         if (p.estado === 'facturado') return { ok: true, sinCambio: true };

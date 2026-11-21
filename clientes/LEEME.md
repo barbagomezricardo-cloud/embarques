@@ -43,7 +43,7 @@ El prepedido muestra su peso en toneladas mientras el cliente lo arma. Si recoge
 ### Odoo: hoy manual, listo para integrarse
 - **Hoy:** Administración ve «Por fincar en Odoo», usa **📋 Copiar datos para Odoo** (cliente y número de cliente, códigos de producto, sacos, toneladas, entrega y notas), captura en Odoo y escribe el número. Con ese número el pedido sigue solo: Cargadores lo libera y la facturación publicada por ventas lo cierra.
 - **Para la integración:** cada pedido confirmado deja su orden de venta en `cli/erp/salida/{id}` con el formato que espera Odoo (`client_order_ref` = folio, líneas con `default_code`, cantidad, precio, entrega). Su estado avanza solo con el pedido: `por_capturar → capturado → entregado → facturado` (o `cancelado`).
-- El futuro conector usa `cliApi` con `modo: "erp"` y el encabezado `X-Cli-Maestro`: `pendientes` (órdenes por capturar), `orden`, `capturado` `{id, ref}` (equivale a fincar) y `facturado` `{id, factura}`. Son idempotentes y conviven con la captura manual: lo que ya fincó Administración no se duplica.
+- El futuro conector usa `cliApi` con `modo: "erp"` y el encabezado `X-Cli-Maestro`: `pendientes` (órdenes por capturar), `orden`, `capturado` `{id, ref}` (equivale a fincar), `liberado` `{id o ref, lotes, unidad, fecha, hora, embarque}` (la salida del camión cuando despacha el ERP; equivale a lo que hoy hace Cargadores) y `facturado` `{id, factura}`. Son idempotentes y conviven con la captura manual: lo que ya fincó Administración no se duplica.
 
 ---
 
