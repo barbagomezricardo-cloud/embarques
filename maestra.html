@@ -1094,24 +1094,28 @@ function fmtTs(ts){try{var d=new Date(ts);var p=function(n){return ('0'+n).slice
 function renderAccesos(){
   var app=document.getElementById('app');app.style.display='block';
   var h=syncBar()+viewTabs();
-  h+='<div class="hint" style="margin-bottom:10px">🔒 = su teléfono actual quedó registrado (normal). Si un vendedor dice que ya no puede entrar a su app, dale <b>Liberar dispositivo</b>: la próxima vez que abra su link, quedará autorizado ahí, sin perder nada.</div>';
+  h+='<div class="hint" style="margin-bottom:10px">🔒 = dispositivos registrados de cada vendedor. Con <b>Dispositivos permitidos</b> decides cuántos pueden usar su app al mismo tiempo (ej. teléfono + tableta) con el mismo usuario. Si alguien cambia de equipo, dale <b>Liberar dispositivos</b>: la próxima vez que abra su link quedará autorizado, sin perder nada.</div>';
   h+='<div id="accList">Cargando…</div>';
   app.innerHTML=h;
   var base=MDB.replace(/\/$/,'');
   Promise.all([
     skFetch(base+'/locks.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
-    skFetch(base+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
+    skFetch(base+'/skan/_vblock.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}),
+    skFetch(base+'/skan/_vmaxdev.json',{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;})
   ]).then(function(res){
-    var locks=res[0]||{}, blocks=res[1]||{};
+    var locks=res[0]||{}, blocks=res[1]||{}, maxs=res[2]||{};
     var keys=VKEYS.slice().sort(function(a,b){return (VNAMES[a]||a).localeCompare(VNAMES[b]||b);});
     var rows=keys.map(function(k){
       var l=locks[k]; var blocked=blocks[k]===true||(blocks[k]&&blocks[k].blocked===true);
-      var lockInfo = (l&&l.dev) ? ('🔒 dispositivo activo desde '+(l.ts?fmtTs(l.ts):'—')) : '🔓 sin candado (nadie lo ha abierto, o ya fue liberado)';
+      var devs={}; if(l){ if(l.devs)for(var dk in l.devs)devs[dk]=l.devs[dk]; if(l.dev)devs[l.dev]=l.ts||0; }
+      var nd=Object.keys(devs).length, mx=Math.max(1,parseInt(maxs[k],10)||1);
+      var lockInfo = nd ? ('🔒 '+nd+' de '+mx+' dispositivo'+(mx>1?'s':'')+' · última señal '+Object.keys(devs).map(function(d){return devs[d]?fmtTs(devs[d]):'—';}).join(', ')) : ('🔓 sin dispositivo registrado · permitidos: '+mx);
+      var selMax='<select onchange="setMaxDev(\''+k+'\',this.value)" title="Dispositivos permitidos" style="border:1px solid var(--kdEADFD3);border-radius:8px;padding:7px 6px;font-weight:700;font-size:12px;background:var(--kbFFFFFF);color:var(--kt281E12)">'+[1,2,3].map(function(n){return '<option value="'+n+'"'+(n===mx?' selected':'')+'>'+n+' dispositivo'+(n>1?'s':'')+'</option>';}).join('')+'</select>';
       return '<div style="background:var(--kbFFFFFF);border:1px solid var(--kdEADFD3);border-radius:12px;padding:12px;margin-bottom:8px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'+
         '<div><b>'+(VNAMES[k]||k)+'</b><div style="font-size:11.5px;color:var(--kt5A4E42);margin-top:2px">'+lockInfo+(blocked?' · 🚫 acceso desactivado':'')+'</div></div>'+
         '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-        ((l&&l.dev)?('<button onclick="liberarDispositivo(\''+k+'\')" style="background:var(--kbDE0A14);color:var(--ktFFFFFF);border:none;border-radius:8px;padding:8px 10px;font-weight:800;cursor:pointer;font-size:12px">Liberar dispositivo</button>'):'')+
+        selMax+(nd?('<button onclick="liberarDispositivo(\''+k+'\')" style="background:var(--kbDE0A14);color:var(--ktFFFFFF);border:none;border-radius:8px;padding:8px 10px;font-weight:800;cursor:pointer;font-size:12px">Liberar dispositivos</button>'):'')+
         '<button onclick="toggleVendBlock(\''+k+'\','+(!blocked)+')" style="background:'+(blocked?'var(--kbFBF7F2)':'var(--kbFFFFFF)')+';color:'+(blocked?'var(--kt281E12)':'var(--ktA80810)')+';border:none;border-radius:8px;padding:8px 10px;font-weight:800;cursor:pointer;font-size:12px">'+(blocked?'Reactivar acceso':'Desactivar acceso')+'</button>'+
         '</div></div></div>';
     }).join('');
@@ -1119,9 +1123,13 @@ function renderAccesos(){
   });
 }
 function liberarDispositivo(k){
-  if(!confirm('¿Liberar el candado de dispositivo de '+(VNAMES[k]||k)+'? La próxima vez que abra su link en cualquier teléfono quedará autorizado ahí.'))return;
+  if(!confirm('¿Liberar los dispositivos de '+(VNAMES[k]||k)+'? La próxima vez que abra su link quedará autorizado en el equipo que use (hasta el número de dispositivos permitidos).'))return;
   var base=MDB.replace(/\/$/,'');
   skFetch(base+'/locks/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).then(function(){renderAccesos();}).catch(function(){alert('No se pudo liberar. Intenta de nuevo.');});
+}
+function setMaxDev(k,n){
+  var base=MDB.replace(/\/$/,''); n=Math.max(1,Math.min(3,parseInt(n,10)||1));
+  skFetch(base+'/skan/_vmaxdev/'+encodeURIComponent(k)+'.json',{method:'PUT',body:JSON.stringify(n)}).then(function(r){ if(!r.ok)throw 0; renderAccesos(); }).catch(function(){alert('No se pudo guardar. Intenta de nuevo.');});
 }
 function toggleVendBlock(k,val){
   var base=MDB.replace(/\/$/,'');

@@ -1688,25 +1688,32 @@ function skDeviceBlocked(){_borrarCopia();var w=document.getElementById('wrap');
    dar señales de vida (ver lockHeartbeat), se considera abandonado y el nuevo dispositivo lo toma solo. */
 var LOCK_STALE_MS = 1000*60*60*72; // 72h
 var _lastLockPing = 0;
+/* Candado por cartera con N dispositivos (Gerencia → Accesos → «Dispositivos permitidos», por defecto 1).
+   locks/{v} = { devs: { idDispositivo: última señal } }  (formato anterior {dev, ts} se convierte solo).
+   El máximo lo fija el master en skan/_vmaxdev/{v}. Un dispositivo sin señal en 72 h deja su lugar libre. */
+function _lockDevs(c){ var d={}; if(c&&typeof c==='object'){ if(c.devs)for(var k in c.devs)d[k]=Number(c.devs[k])||0; if(c.dev)d[c.dev]=Number(c.ts)||Date.now(); } return d; }
 function lockHeartbeat(){
-  var q=parseHash(); var v=q.v||''; if(!v)return;
-  var DB=(q.db||SK_DB).replace(/\/$/,''); var lk='sk_dev_'+v; var mine='';
-  try{ mine=localStorage.getItem(lk)||''; }catch(e){}
-  if(!mine)return;
   var now=Date.now(); if(now-_lastLockPing<1000*60*10)return; // máx 1 vez cada 10 min
   _lastLockPing=now;
-  try{ skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:now})}).catch(function(){}); }catch(e){}
+  try{ skDeviceLock(function(){}); }catch(e){}   // vuelve a validar: si el master lo liberó y ya no hay lugar, se bloquea
 }
 function skDeviceLock(cb){
   var q=parseHash(); var v=q.v||''; if(!v){ cb(); return; }
   var DB=(q.db||SK_DB).replace(/\/$/,''); var lk='sk_dev_'+v; var mine='';
   try{ mine=localStorage.getItem(lk)||''; }catch(e){}
   if(!mine){ mine='d'+Date.now().toString(36)+Math.random().toString(36).slice(2,9); }
-  skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
-    var stale = c && c.dev && c.ts && (Date.now()-c.ts>LOCK_STALE_MS);
-    if(!c || !c.dev || stale){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).then(function(){cb();}).catch(function(){cb();}); }
-    else if(c.dev===mine){ try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=Date.now(); skFetch(DB+'/locks/'+encodeURIComponent(v)+'.json',{method:'PUT',body:JSON.stringify({dev:mine,ts:Date.now()})}).catch(function(){}); cb(); }
-    else { skDeviceBlocked(); }
+  var url=DB+'/locks/'+encodeURIComponent(v)+'.json';
+  Promise.all([
+    skFetch(url,{cache:'no-store'}).then(function(r){return r.json();}),
+    skFetch(DB+'/skan/_vmaxdev/'+encodeURIComponent(v)+'.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
+  ]).then(function(res){
+    var devs=_lockDevs(res[0]), max=Math.max(1,Math.min(5,parseInt(res[1],10)||1)), now=Date.now();
+    for(var k in devs){ if(k!==mine && now-devs[k]>LOCK_STALE_MS) delete devs[k]; }   // abandonados
+    var activos=Object.keys(devs).filter(function(k){return k!==mine;}).length;
+    if(devs[mine]!=null || activos<max){
+      devs[mine]=now; try{localStorage.setItem(lk,mine);}catch(e){} _lastLockPing=now;
+      skFetch(url,{method:'PUT',body:JSON.stringify({devs:devs})}).then(function(){cb();}).catch(function(){cb();});
+    } else skDeviceBlocked();
   }).catch(function(){ cb(); }); // sin internet: no bloquea (los datos tampoco cargan)
 }
 applyZoom();
