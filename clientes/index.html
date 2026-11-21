@@ -208,6 +208,39 @@ details.mas>summary::-webkit-details-marker{display:none}
 .vacio img{width:84px;opacity:.9;margin-bottom:8px}
 .pie{text-align:center;font-size:11.5px;color:var(--tinta-3);padding:6px 0 0}
 .pie img{width:46px;display:block;margin:0 auto 6px;opacity:.95}
+
+/* ── guía interactiva ── */
+.ayuda{position:relative;width:42px;height:42px;border-radius:12px;border:0;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;cursor:pointer;font:900 19px var(--f-d)}
+#guia{position:fixed;inset:0;z-index:80;pointer-events:none}
+#guia .bloq{position:fixed;inset:0;background:transparent;pointer-events:auto}
+#guia .burbuja{pointer-events:auto}
+#guia.libre .bloq{pointer-events:none}
+#guia .hueco{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(20,14,8,.66);pointer-events:none;transition:all .32s cubic-bezier(.3,.7,.2,1)}
+#guia .hueco::after{content:"";position:absolute;inset:-4px;border-radius:17px;border:3px solid #fff;animation:latido 1.6s ease-out infinite}
+#guia .hueco.cero{box-shadow:0 0 0 9999px rgba(20,14,8,.72)}
+#guia .hueco.cero::after{display:none}
+@keyframes latido{0%{opacity:.95;transform:scale(1)}70%{opacity:0;transform:scale(1.08)}100%{opacity:0}}
+#guia .burbuja{position:fixed;left:12px;right:12px;margin:0 auto;max-width:380px;background:var(--blanco);color:var(--tinta);border-radius:18px;padding:16px 16px 14px;box-shadow:0 18px 50px rgba(0,0,0,.35);display:grid;gap:8px;transition:top .32s cubic-bezier(.3,.7,.2,1),opacity .2s;border-top:5px solid var(--rojo)}
+#guia .burbuja.centro{top:50% !important;transform:translateY(-50%);text-align:center}
+#guia .burbuja .paso-n{font:800 11px var(--f-d);letter-spacing:.08em;text-transform:uppercase;color:var(--rojo)}
+#guia .burbuja h3{font:900 19px/1.15 var(--f-d);margin:0}
+#guia .burbuja p{margin:0;font-size:14.5px;line-height:1.45;color:var(--tinta-2)}
+#guia .burbuja .logo-g{width:84px;height:84px;margin:0 auto 4px;border-radius:50%;background:#fff;padding:4px;box-shadow:0 8px 22px rgba(168,8,16,.2)}
+#guia .burbuja .logo-g img{width:100%;height:100%}
+#guia .puntos{display:flex;gap:4px;justify-content:center;margin-top:2px}
+#guia .puntos i{width:6px;height:6px;border-radius:3px;background:var(--linea);transition:all .2s}
+#guia .puntos i.on{width:18px;background:var(--rojo)}
+#guia .acc{display:flex;gap:8px;align-items:center;margin-top:4px}
+#guia .acc .btn{padding:10px 16px;min-height:0}
+#guia .acc .salta{margin-right:auto;background:none;border:0;color:var(--tinta-3);font:700 13px var(--f-b);cursor:pointer;padding:8px 4px}
+#guia .toca{display:inline-flex;gap:6px;align-items:center;background:var(--rojo-s);color:var(--rojo);border-radius:10px;padding:7px 10px;font-weight:800;font-size:13px}
+#guia .estados{display:grid;gap:5px;margin-top:2px}
+#guia .estados div{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tinta-2)}
+#guia .estados b{min-width:92px;color:var(--tinta)}
+#guia .estados i{width:9px;height:9px;border-radius:50%;background:var(--rojo);flex:none}
+.dedo{position:fixed;z-index:81;font-size:30px;pointer-events:none;animation:dedo 1.1s ease-in-out infinite;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))}
+@keyframes dedo{0%,100%{transform:translate(0,0)}50%{transform:translate(-4px,-8px)}}
+@media (prefers-reduced-motion:reduce){#guia .hueco,#guia .burbuja{transition:none}#guia .hueco::after,.dedo{animation:none}}
 </style>
 </head>
 <body>
@@ -511,15 +544,17 @@ function pintarApp(){
   var abiertos=(y.pedidos||[]).filter(function(p){ return ['enviado','confirmado','fincado','liberado'].indexOf(p.estado)>=0; }).length;
   raiz.innerHTML = bandaDemo()+
     '<header class="top"><div class="sello"><img src="img/logo-petfood.png" alt=""></div><div class="marca"><b>Los 19 Hermanos</b><span>'+esc(y.cliente.nombre)+'</span></div>'+
-    '<button class="campana" id="camp" aria-label="Notificaciones'+(sinLeer?' ('+sinLeer+' nuevas)':'')+'">'+ico('campana')+(sinLeer?'<span class="pt">'+sinLeer+'</span>':'')+'</button></header>'+
+    '<button class="ayuda" id="ayuda" aria-label="Ayuda: cómo usar esta pantalla">?</button><button class="campana" id="camp" aria-label="Notificaciones'+(sinLeer?' ('+sinLeer+' nuevas)':'')+'">'+ico('campana')+(sinLeer?'<span class="pt">'+sinLeer+'</span>':'')+'</button></header>'+
     '<div class="estrellas" aria-hidden="true">★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>'+
     '<main id="vista"></main>'+
     '<nav class="nav" aria-label="Secciones">'+
       tabBtn('inicio','Inicio')+tabBtn('pedir','Pedir')+tabBtn('pedidos','Pedidos',abiertos)+tabBtn('historial','Historial')+tabBtn('mas','Más',(y.mensajes||[]).filter(function(m){return m.respuesta && !lsGet('cliMsgVisto'+m.id);}).length)+
     '</nav>';
   $('#camp').onclick=hojaNotifs;
+  $('#ayuda').onclick=function(){ Guia.iniciar(ESTADO.vista); };
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){ b.onclick=function(){ ir(b.dataset.v); }; });
   ir(ESTADO.vista, true);
+  if(!lsGet('cliGuia1') && !Guia.activa) setTimeout(function(){ if(!Guia.activa && !lsGet('cliGuia1')) Guia.iniciar('completa'); }, 700);
 }
 function tabBtn(v,t,n){ return '<button class="tab" data-v="'+v+'"'+(ESTADO.vista===v?' aria-current="page"':'')+'>'+ico(v)+'<span>'+t+'</span>'+(n?'<span class="pt">'+n+'</span>':'')+'</button>'; }
 function ir(v, sinScroll){
@@ -579,9 +614,9 @@ function vInicio(m){
   if(ult) h+='<button class="card" style="text-align:left;cursor:pointer;display:grid;gap:6px;font:inherit;width:100%" id="ultPed"><div class="entre"><span class="eyebrow">Tu pedido en curso</span><span class="badge b-'+ult.estado+'">'+etiquetaEstado(ult)+'</span></div><b class="num" style="font-size:17px">'+esc(ult.folio)+'</b><span class="muted chico">'+textoEstado(ult)+'</span></button>';
   if(ini){
     var meta=200*c.PER;
-    h+='<div class="card"><h2>Llega a Cobre</h2><p class="muted chico" style="margin:6px 0 10px">Con '+fmt(meta)+' sacos en el '+(c.PER===1?'mes':'trimestre')+' empiezas a ganar descuento en tu Pet Food.</p>'+barra(c.hoy,meta)+'<div class="entre chico"><span>Llevas '+fmt(c.hoy)+'</span><b>Te faltan '+fmt(Math.max(0,meta-c.hoy))+'</b></div></div>';
+    h+='<div class="card" data-guia="ganando"><h2>Llega a Cobre</h2><p class="muted chico" style="margin:6px 0 10px">Con '+fmt(meta)+' sacos en el '+(c.PER===1?'mes':'trimestre')+' empiezas a ganar descuento en tu Pet Food.</p>'+barra(c.hoy,meta)+'<div class="entre chico"><span>Llevas '+fmt(c.hoy)+'</span><b>Te faltan '+fmt(Math.max(0,meta-c.hoy))+'</b></div></div>';
   } else {
-    h+='<div class="card"><div class="entre"><h2>Lo que vas ganando</h2><span class="big" style="font-size:26px;color:var(--rojo)">'+pct(P.pct)+'</span></div><p class="muted chico" style="margin:4px 0 6px">'+(c.enCurso?'Con lo que llevas facturado en '+MES[c.mesVit]+'. Se paga como nota de crédito en tu primera compra de '+mesSig(c.mesVit)+'.':MES[c.mesVit].replace(/^./,function(x){return x.toUpperCase();})+' apenas comienza: tu avance aparece con tu primera factura del mes.')+'</p>'+
+    h+='<div class="card" data-guia="ganando"><div class="entre"><h2>Lo que vas ganando</h2><span class="big" style="font-size:26px;color:var(--rojo)">'+pct(P.pct)+'</span></div><p class="muted chico" style="margin:4px 0 6px">'+(c.enCurso?'Con lo que llevas facturado en '+MES[c.mesVit]+'. Se paga como nota de crédito en tu primera compra de '+mesSig(c.mesVit)+'.':MES[c.mesVit].replace(/^./,function(x){return x.toUpperCase();})+' apenas comienza: tu avance aparece con tu primera factura del mes.')+'</p>'+
       metaFila('Descuento fijo de tu nivel', true, '+'+pct(P.fijo), 'Por ser nivel '+NIVLAB[t[0]]+'.', null)+
       (c.base>0 ? metaFila('Crecer '+P.uc+'% vs. '+MES[((c.mesVit+10)%12)+1], P.okCrec, '+'+pct(P.kc), 'Llevas '+fmt(P.hoy)+' de '+fmt(P.metaCrec)+' sacos', [P.hoy,P.metaCrec])
                : metaFila('Crecer vs. el mes pasado', false, 'no aplica', 'No hubo compras el mes pasado para comparar.', null))+
@@ -590,7 +625,7 @@ function vInicio(m){
       metaFila('Premium+ escalón 2', P.ok2, '+'+pct(c.PREM.e2), 'Llevas '+fmt(P.pm)+' de '+fmt(P.m2)+' sacos', [P.pm,P.m2])+
       '<div class="mini" style="margin-top:8px">Cuentan Silver Kan Premium (25 y 20 kg) y Silver Cat 15 kg. Los escalones de Premium+ no se suman: cuenta el más alto.</div></div>';
     var mant=t[1]*c.PER;
-    h+='<div class="card"><h2>Tu nivel</h2><p class="muted chico" style="margin:6px 0 10px">El nivel se calcula con tu promedio mensual de los últimos 6 meses.</p>'+
+    h+='<div class="card" data-guia="nivel"><h2>Tu nivel</h2><p class="muted chico" style="margin:6px 0 10px">El nivel se calcula con tu promedio mensual de los últimos 6 meses.</p>'+
       '<div class="entre chico" style="padding:6px 0"><span>Para mantener '+NIVLAB[t[0]]+'</span><b>'+fmt(mant)+' sacos/'+(c.PER===1?'mes':'trimestre')+'</b></div>'+
       (c.nx?'<div class="entre chico" style="padding:6px 0;border-top:1px solid var(--linea-2)"><span>Para subir a '+NIVLAB[c.nx[0]]+'</span><b>'+fmt(c.nx[1]*c.PER)+' sacos/'+(c.PER===1?'mes':'trimestre')+'</b></div><div class="mini">'+NIVLAB[c.nx[0]]+' paga '+pct(c.nx[2])+' fijo y hasta '+pct(c.nx[2]+c.nx[3]+c.nx[4]+c.PREM.e2)+' con todos los bonos.</div>':'<div class="aviso ok" style="margin-top:6px">Estás en el nivel más alto. ¡Gracias por tu preferencia!</div>')+'</div>';
   }
@@ -615,7 +650,7 @@ function vPedir(m){
   if(!escs.some(function(e){return e.id===ESTADO.escenario;})) ESTADO.escenario='recoge';
   var h='<div class="vista">';
   h+='<div><h2 style="font-size:22px">Prepedido</h2><p class="muted chico" style="margin:4px 0 0">Tu vendedor te llamará para confirmarlo. No es un pedido en firme hasta que lo confirme.</p></div>';
-  h+='<div class="card" style="display:grid;gap:10px"><span class="eyebrow">¿Cómo lo recibes?</span><div style="display:grid;gap:6px">';
+  h+='<div class="card" data-guia="recibe" style="display:grid;gap:10px"><span class="eyebrow">¿Cómo lo recibes?</span><div style="display:grid;gap:6px">';
   escs.forEach(function(e){ h+='<label class="fila" style="padding:10px 12px;border:1.5px solid '+(ESTADO.escenario===e.id?'var(--rojo)':'var(--linea)')+';border-radius:12px;cursor:pointer;background:'+(ESTADO.escenario===e.id?'var(--rojo-s)':'transparent')+'"><input type="radio" name="esc" value="'+esc(e.id)+'"'+(ESTADO.escenario===e.id?' checked':'')+' style="accent-color:var(--rojo);width:18px;height:18px"><span style="font-weight:700;font-size:14px">'+esc(e.label)+'</span></label>'; });
   h+='</div>'+(pr.mostrar?'<div class="mini">Precios de tu lista '+esc(pr.lista)+'. '+(pr.productos.some(function(p){return p.desglosaIva;})?'Mostramos precio + IVA.':'')+' El flete se calcula por saco según la unidad.</div>':'')+'</div>';
   h+='<div class="card" style="padding:4px 16px">';
@@ -764,19 +799,21 @@ function vHistorial(m){
 function vMas(m){
   var y=ESTADO.yo, u=y.usuario;
   var h='<div class="vista"><h2 style="font-size:22px">Más</h2>';
-  h+='<div class="card" style="display:grid;gap:10px"><div class="entre"><h3>Mensaje a gerencia</h3></div><p class="muted chico" style="margin:0">¿Una sugerencia, una queja o algo que quieras tratar directamente con la gerencia comercial? Escríbenos.</p><button class="btn full" id="nuevoMsg">Escribir mensaje</button>';
+  h+='<div class="card" style="display:grid;gap:10px;border:1.5px solid var(--rojo)"><h3>¿Cómo usar la app?</h3><p class="muted chico" style="margin:0">Repasa en un minuto cómo ver tus descuentos, pedir y seguir tus pedidos.</p><button class="btn full" id="verGuia">Ver guía paso a paso</button></div>';
+  h+='<div class="card" data-guia="gerencia" style="display:grid;gap:10px"><div class="entre"><h3>Mensaje a gerencia</h3></div><p class="muted chico" style="margin:0">¿Una sugerencia, una queja o algo que quieras tratar directamente con la gerencia comercial? Escríbenos.</p><button class="btn full" id="nuevoMsg">Escribir mensaje</button>';
   (y.mensajes||[]).forEach(function(mm){ if(mm.respuesta) lsSet('cliMsgVisto'+mm.id,'1'); h+='<div style="border-top:1px solid var(--linea-2);padding-top:10px"><div class="mini">'+fechaHora(mm.ts)+'</div><div class="chico">'+esc(mm.texto)+'</div>'+(mm.respuesta?'<div class="aviso info chico" style="margin-top:6px"><b>Gerencia:</b> '+esc(mm.respuesta)+'</div>':'<div class="mini">Recibido · pendiente de respuesta</div>')+'</div>'; });
   h+='</div>';
   var tel=y.cliente.vendedorTel;
-  h+='<div class="card" style="display:grid;gap:8px"><h3>Tu vendedor</h3><div class="chico">'+esc(y.cliente.vendedor||'—')+'</div>'+(tel?'<div class="fila"><a class="btn sec" style="flex:1" href="tel:'+esc(tel)+'">Llamar</a><a class="btn wa" style="flex:1" target="_blank" rel="noopener" href="'+waLink(tel,'Hola, te escribo desde la app de Los 19 Hermanos.')+'">'+ico('wa')+' WhatsApp</a></div>':'')+'</div>';
+  h+='<div class="card" data-guia="vendedor" style="display:grid;gap:8px"><h3>Tu vendedor</h3><div class="chico">'+esc(y.cliente.vendedor||'—')+'</div>'+(tel?'<div class="fila"><a class="btn sec" style="flex:1" href="tel:'+esc(tel)+'">Llamar</a><a class="btn wa" style="flex:1" target="_blank" rel="noopener" href="'+waLink(tel,'Hola, te escribo desde la app de Los 19 Hermanos.')+'">'+ico('wa')+' WhatsApp</a></div>':'')+'</div>';
   h+='<div class="card" style="display:grid;gap:6px"><h3>Mis datos</h3><div class="chico"><b>'+esc(u.razonSocial)+'</b><br>'+esc(u.nombre)+'<br>'+esc(u.tel)+(u.negocio&&u.negocio.dir?'<br>'+esc(u.negocio.dir):'')+'</div><div class="mini">Para cambiar tus datos, avisa a tu vendedor.</div></div>';
-  h+='<div class="card" style="display:grid;gap:10px"><h3>Avisos en este teléfono</h3><p class="muted chico" style="margin:0">Recibe un aviso cuando tu pedido se confirme, salga de planta o se facture.</p><button class="btn sec full" id="push">Activar avisos</button>'+
+  h+='<div class="card" data-guia="avisos" style="display:grid;gap:10px"><h3>Avisos en este teléfono</h3><p class="muted chico" style="margin:0">Recibe un aviso cuando tu pedido se confirme, salga de planta o se facture.</p><button class="btn sec full" id="push">Activar avisos</button>'+
     '<button class="btn sec full" id="inst">Instalar la app en mi pantalla</button></div>';
   h+='<div class="card" style="display:grid;gap:8px"><h3>Apariencia</h3><div class="seg" style="--n:3" role="group" aria-label="Tema"><button data-t="">Automático</button><button data-t="light">Claro</button><button data-t="dark">Oscuro</button></div></div>';
   h+='<button class="btn ghost" id="salir">Cerrar sesión</button><button class="btn ghost" id="baja" style="color:var(--tinta-3);font-size:13px">Eliminar mi cuenta</button>';
   h+='<div class="pie"><img src="img/logo-19h.png" alt="Los 19 Hermanos">Leche 19 Diecinueve Hermanos S.A. de C.V. · División Pet Food · Tototlán, Jalisco<br><a href="privacidad.html" target="_blank" rel="noopener">Aviso de privacidad</a> · Versión '+esc(CFG.version||'')+'</div>';
   m.innerHTML=h+'</div>';
   $('#nuevoMsg').onclick=function(){ hojaMensaje(); };
+  $('#verGuia').onclick=function(){ Guia.iniciar('completa'); };
   $('#salir').onclick=function(){ Auth.salir().then(pantallaTel); };
   $('#push').onclick=activarPush;
   $('#baja').onclick=function(){
@@ -827,11 +864,135 @@ function instalar(){
 function aplicaTema(){ var t=lsGet('cliTema'); if(t) document.documentElement.setAttribute('data-theme',t); else document.documentElement.removeAttribute('data-theme'); }
 
 /* refresco: al volver a la app y cada 2 minutos mientras está abierta */
-document.addEventListener('visibilitychange', function(){ if(!document.hidden && ESTADO.yo && ESTADO.yo.estado==='activo' && ESTADO.vista!=='pedir') cargarYo(true); });
-setInterval(function(){ if(!document.hidden && ESTADO.yo && ESTADO.yo.estado==='activo' && !capa.innerHTML && ESTADO.vista!=='pedir') cargarYo(true); }, 120000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && ESTADO.yo && ESTADO.yo.estado==='activo' && ESTADO.vista!=='pedir' && !Guia.activa) cargarYo(true); });
+setInterval(function(){ if(!document.hidden && ESTADO.yo && ESTADO.yo.estado==='activo' && !capa.innerHTML && ESTADO.vista!=='pedir' && !Guia.activa) cargarYo(true); }, 120000);
+
+/* ================= GUÍA INTERACTIVA ================= */
+/* Recorrido que enseña a usar la app. Sale solo la primera vez; se repite con "?" (ayuda de la sección) o desde Más (guía completa). */
+var ESTADOS_GUIA='<div class="estados"><div><i style="background:#9C9084"></i><b>Por confirmar</b>Tu vendedor te llamará</div><div><i style="background:#1F4E8C"></i><b>Confirmado</b>Ya lo revisó contigo</div><div><i style="background:#A35F00"></i><b>Registrado</b>Tiene remisión, se programa la carga</div><div><i style="background:#DE0A14"></i><b>En camino</b>Salió de planta (o ya está cargado)</div><div><i style="background:#1D7A45"></i><b>Facturado</b>Ya suma a tu avance y descuentos</div></div>';
+var PASOS_GUIA=[
+  { v:'inicio', centro:true, logo:true, t:'¡Bienvenido a tu app!', x:'En un minuto te enseñamos a ver tus descuentos, hacer tus prepedidos y seguirlos hasta que se facturan.' },
+  { v:'inicio', sel:'.nivel', t:'Tu nivel y tu descuento', x:'Aquí ves tu nivel (Cobre, Plata, Oro…), cuántos sacos compras en promedio y el descuento que vas ganando para el próximo mes.' },
+  { v:'inicio', sel:'[data-guia="ganando"]', t:'Lo que vas ganando', x:'Cada renglón es un bono. La barra te dice cuántos sacos te faltan. Cuando aparece <b>✓</b> en verde, ese bono ya es tuyo.' },
+  { v:'inicio', sel:'[data-guia="nivel"]', t:'Mantén o sube de nivel', x:'Te decimos cuántos sacos necesitas para conservar tu nivel y cuántos para subir al siguiente, que paga más descuento.' },
+  { v:'inicio', sel:'#aPedir', t:'Haz un prepedido', x:'Desde este botón o desde la pestaña <b>Pedir</b> armas tu pedido en segundos, sin llamadas ni mensajes.' },
+  { v:'pedir', sel:'[data-guia="recibe"]', t:'¿Cómo lo recibes?', x:'Primero elige si lo recoges en planta o te lo entregamos. El precio por saco se ajusta según la opción.' },
+  { v:'pedir', sel:'.prod', tocar:'.prod .paso button[data-d="1"]', t:'Elige tus productos', x:'Usa <b>+</b> y <b>−</b> o escribe directo la cantidad de sacos.<br><span class="toca">👆 Pruébalo: toca el +</span>' },
+  { v:'pedir', sel:'#simu', t:'Tu descuento en vivo', x:'Mientras agregas sacos te decimos qué descuento ganarías y cuántos sacos te faltan para el siguiente bono.' },
+  { v:'pedir', sel:'#res', t:'Revisa y envía', x:'Aquí ves el total. Toca <b>Revisar</b>, confirma y listo. Tu vendedor te llamará para confirmarlo; mientras no lo confirme no es pedido en firme.' },
+  { v:'pedidos', sel:'.ped,.vacio', t:'Sigue tu pedido', x:'Cada prepedido avanza por estas etapas:'+ESTADOS_GUIA },
+  { v:'historial', sel:'#vista .card', t:'Tu historial', x:'Tus sacos comprados por mes y por producto. El mes en curso solo cuenta lo que ya se facturó.' },
+  { v:'historial', sel:'#camp', t:'Avisos', x:'La campana te avisa cuando tu pedido se confirma, sale de planta o se factura. El número rojo indica avisos nuevos.' },
+  { v:'mas', sel:'[data-guia="vendedor"]', t:'Tu vendedor a un toque', x:'Llámale o escríbele por WhatsApp directo desde aquí.' },
+  { v:'mas', sel:'[data-guia="gerencia"]', t:'Habla con gerencia', x:'¿Una sugerencia o algo que no salió bien? Escribe a la gerencia comercial; aquí mismo verás la respuesta.' },
+  { v:'mas', sel:'[data-guia="avisos"]', t:'Activa avisos e instala la app', x:'Activa los avisos para enterarte de cada paso de tu pedido, e instala la app en tu pantalla para abrirla como cualquier otra.' },
+  { v:'mas', sel:'#ayuda', t:'¿Dudas? Toca el ?', x:'En cualquier pantalla, el botón <b>?</b> te explica esa sección. La guía completa está en <b>Más</b>.' },
+  { v:'inicio', centro:true, logo:true, t:'¡Listo!', x:'Ya sabes usar tu app. Gracias por tu preferencia.', fin:'Empezar' }
+];
+var Guia={ activa:false };
+(function(){
+  var pasos=[], i=0, capaG=null, carritoAntes=null, vistaAntes=null, escAntes=null, dedo=null, onTocar=null, tReloc=0;
+  function visible(el){ if(!el) return false; var r=el.getBoundingClientRect(); return r.width>0 && r.height>0; }
+  function buscar(sel){ if(!sel) return null; var els=document.querySelectorAll(sel); for(var k=0;k<els.length;k++){ if(visible(els[k])) return els[k]; } return null; }
+  Guia.iniciar=function(modo){
+    if(!ESTADO.yo || ESTADO.yo.estado!=='activo') return;
+    cerrarHoja();
+    if(modo==='completa') pasos=PASOS_GUIA.slice();
+    else {
+      var v=modo||ESTADO.vista;
+      pasos=PASOS_GUIA.filter(function(p){ return p.v===v && !p.centro; });
+      if(v!=='historial') pasos.push(PASOS_GUIA.filter(function(p){ return p.sel==='#camp'; })[0]);
+      pasos=pasos.map(function(p){ return Object.assign({}, p, { _v:v }); });
+      if(v==='mas') pasos=pasos.filter(function(p){ return p.sel!=='#ayuda'; });
+    }
+    carritoAntes=JSON.stringify(ESTADO.carrito); escAntes=[ESTADO.escenario,ESTADO.modalidad]; vistaAntes=ESTADO.vista;
+    Guia.activa=true; Guia.modo=modo; i=0;
+    capaG=document.createElement('div'); capaG.id='guia'; capaG.setAttribute('role','dialog'); capaG.setAttribute('aria-modal','true'); capaG.setAttribute('aria-label','Guía de uso');
+    capaG.innerHTML='<div class="bloq"></div><div class="hueco cero"></div><div class="burbuja" aria-live="polite"></div>';
+    document.body.appendChild(capaG);
+    window.addEventListener('resize', reloc); window.addEventListener('scroll', reloc, true);
+    document.addEventListener('keydown', teclas);
+    mostrar(0, 1);
+  };
+  function teclas(e){ if(!Guia.activa) return; if(e.key==='Escape') terminar(); else if(e.key==='ArrowRight') mostrar(i+1,1); else if(e.key==='ArrowLeft') mostrar(i-1,-1); }
+  function mostrar(n, dir){
+    quitarTocar();
+    if(n<0) n=0;
+    if(n>=pasos.length) return terminar(true);
+    var p=pasos[n]; i=n;
+    var vista=p.centro?p.v:(p._v||p.v);
+    if(ESTADO.vista!==vista) ir(vista);
+    var el=p.centro?null:buscar(p.sel);
+    if(!p.centro && !el){ return mostrar(n+(dir||1), dir||1); }   // ese elemento no aplica a este cliente: se salta
+    if(el){ var r=el.getBoundingClientRect(), alto=window.innerHeight; if(r.top<90 || r.bottom>alto-90){ el.scrollIntoView({ block: r.height>alto*0.55?'start':'center', behavior:'smooth' }); } }
+    pintar(p, el);
+    clearTimeout(tReloc); tReloc=setTimeout(function(){ colocar(p, el); }, el?380:0);
+    colocar(p, el);
+  }
+  function pintar(p, el){
+    var b=capaG.querySelector('.burbuja'), total=pasos.length;
+    var ult=i===total-1;
+    b.innerHTML=(p.logo?'<div class="logo-g"><img src="img/logo-petfood.png" alt=""></div>':'')+
+      (p.centro?'':'<span class="paso-n">Paso '+(i+1)+' de '+total+'</span>')+
+      '<h3>'+p.t+'</h3><p>'+p.x+'</p>'+
+      (total>3?'<div class="puntos" aria-hidden="true">'+pasos.map(function(_,k){ return '<i'+(k===i?' class="on"':'')+'></i>'; }).join('')+'</div>':'')+
+      '<div class="acc">'+(ult?'':'<button class="salta" id="gSalta">Saltar guía</button>')+
+      (i>0&&!ult?'<button class="btn sec" id="gAnt">Atrás</button>':'')+
+      '<button class="btn" id="gSig"'+(ult?' style="flex:1"':'')+'>'+(p.fin||(i===0&&p.centro?'Comenzar':ult?'Terminar':'Siguiente'))+'</button></div>';
+    b.classList.toggle('centro', !!p.centro);
+    capaG.querySelector('.hueco').classList.toggle('cero', !el);
+    var s=$('#gSalta'); if(s) s.onclick=function(){ terminar(); };
+    var a=$('#gAnt'); if(a) a.onclick=function(){ mostrar(i-1,-1); };
+    $('#gSig').onclick=function(){ mostrar(i+1,1); };
+    if(p.tocar){
+      var t=buscar(p.tocar);
+      if(t){
+        capaG.classList.add('libre');
+        onTocar=function(){ setTimeout(function(){ if(Guia.activa && pasos[i]===p) mostrar(i+1,1); }, 450); };
+        t.addEventListener('click', onTocar, { once:true }); Guia._tocarEl=t;
+        dedo=document.createElement('div'); dedo.className='dedo'; dedo.textContent='👆'; document.body.appendChild(dedo);
+      }
+    }
+    setTimeout(function(){ try{ $('#gSig').focus({ preventScroll:true }); }catch(e){} }, 60);
+  }
+  function quitarTocar(){
+    if(capaG) capaG.classList.remove('libre');
+    if(Guia._tocarEl && onTocar){ Guia._tocarEl.removeEventListener('click', onTocar); }
+    Guia._tocarEl=null; onTocar=null;
+    if(dedo){ dedo.remove(); dedo=null; }
+  }
+  function reloc(){ if(!Guia.activa) return; var p=pasos[i]; colocar(p, p.centro?null:buscar(p.sel)); }
+  function colocar(p, el){
+    if(!capaG) return;
+    var h=capaG.querySelector('.hueco'), b=capaG.querySelector('.burbuja');
+    var W=window.innerWidth, H=window.innerHeight;
+    if(!el){ h.style.left=(W/2)+'px'; h.style.top=(H/2)+'px'; h.style.width='0px'; h.style.height='0px'; b.style.top=''; return; }
+    var r=el.getBoundingClientRect(), pad=6;
+    var top=Math.max(4, r.top-pad), bot=Math.min(H-4, r.bottom+pad);
+    h.style.left=Math.max(4,r.left-pad)+'px'; h.style.top=top+'px'; h.style.width=(Math.min(W-4,r.right+pad)-Math.max(4,r.left-pad))+'px'; h.style.height=Math.max(0,bot-top)+'px';
+    var bh=b.offsetHeight||200, arriba=top, abajo=H-bot, y;
+    if(abajo>=bh+16) y=bot+12;
+    else if(arriba>=bh+16) y=top-bh-12;
+    else y=Math.max(8, H-bh-90);   // el elemento es alto: la burbuja va abajo, sobre él
+    b.style.top=y+'px';
+    if(dedo && Guia._tocarEl){ var q=Guia._tocarEl.getBoundingClientRect(); dedo.style.left=(q.left+q.width/2-8)+'px'; dedo.style.top=(q.bottom+2)+'px'; }
+  }
+  function terminar(completo){
+    quitarTocar();
+    Guia.activa=false;
+    window.removeEventListener('resize', reloc); window.removeEventListener('scroll', reloc, true); document.removeEventListener('keydown', teclas);
+    if(capaG){ capaG.remove(); capaG=null; }
+    lsSet('cliGuia1','1');
+    // lo que se movió durante la guía no se queda en el carrito
+    try{ ESTADO.carrito=JSON.parse(carritoAntes)||{}; }catch(e){ ESTADO.carrito={}; }
+    ESTADO.escenario=escAntes[0]; ESTADO.modalidad=escAntes[1];
+    ir(Guia.modo==='completa'?'inicio':vistaAntes);
+    if(completo && Guia.modo==='completa') toast('Puedes repetir la guía cuando quieras desde Más');
+  }
+})();
 
 aplicaTema();
-window.CliApp = { estado:ESTADO, recargar:cargarYo, ir:ir };
+window.CliApp = { estado:ESTADO, recargar:cargarYo, ir:ir, guia:function(m){ Guia.iniciar(m||'completa'); } };
 arrancar();
 })();
 </script>
