@@ -89,6 +89,7 @@
       if (modo === 'login') return core.staffLogin(datos.usuario, datos.pin).then(function (ses) { return { token: b64(ses), yo: ses }; });
       if (modo === 'loginProg') return core.progLogin(datos.pwd).then(function (ses) { return { token: b64(ses), yo: ses }; });
       if (modo === 'staff') { var ses = unb64(auth && auth.sesion); if (!ses) throw { status: 401, error: 'Tu sesión terminó.', code: 'sin_sesion' }; return core.staff(ses, accion, datos); }
+      if (modo === 'erp') return core.erp(accion, datos);
       if (modo === 'maestro') { if (accion === 'estado') return { reglasCerradas: true, licenciaClientes: true, licenciaPersonal: true }; return core.maestro(accion, datos); }
       throw { status: 400, error: 'Solicitud no válida' };
     }).catch(function (e) { if (e && e.publico) throw { status: e.status, error: e.publico, code: e.code }; throw e; });

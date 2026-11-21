@@ -34,6 +34,8 @@
   function $(s, c) { return (c || D).querySelector(s); }
   function $$(s, c) { return Array.prototype.slice.call((c || D).querySelectorAll(s)); }
   function keyp(s) { return String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function tonDe(items) { return (items || []).reduce(function (a, it) { return a + (Number(it.kg) || 25) * (Number(it.piezas) || 0); }, 0) / 1000; }
+  function fTon(t) { return fmt(t, 2) + ' t'; }
   function wa(tel, txt) { var d = String(tel || '').replace(/\D/g, ''); if (d.length === 10) d = '52' + d; return 'https://wa.me/' + d + '?text=' + encodeURIComponent(txt || ''); }
   function cargar(url) { return new Promise(function (ok, ko) { if (D.querySelector('script[src="' + url + '"]')) return ok(); var s = D.createElement('script'); s.src = url; s.onload = ok; s.onerror = function () { ko(new Error('No cargó ' + url)); }; D.head.appendChild(s); }); }
   function toast(t, malo) { $$('.clis-toast').forEach(function (x) { x.remove(); }); var e = D.createElement('div'); e.className = 'clis-toast' + (malo ? ' malo' : ''); e.textContent = t; D.body.appendChild(e); setTimeout(function () { e.remove(); }, 3600); }
@@ -244,6 +246,7 @@
     if (rol === 'gerencia') t.push(['mensajes', 'Mensajes']);
     if (rol === 'programacion' || rol === 'gerencia') t.push(['fletes', 'Fletes y precios']);
     if (rol === 'programacion' || rol === 'progmaster') t = [['fletes', 'Fletes y precios'], ['pedidos', 'Pedidos']];
+    t.splice(1, 0, ['productos', 'Productos']);
     t.push(['accesos', '🔑 Accesos']);
     return t;
   }
@@ -264,7 +267,7 @@
   }
   function pintarCuerpo() {
     var c = $('#clis-cuerpo'); if (!c || !S.ses) return;
-    var f = { pedidos: vPedidos, registros: vRegistros, mensajes: vMensajes, fletes: vFletes, accesos: vAccesos }[S.tab] || vPedidos;
+    var f = { pedidos: vPedidos, productos: vProductos, registros: vRegistros, mensajes: vMensajes, fletes: vFletes, accesos: vAccesos }[S.tab] || vPedidos;
     f(c);
   }
 
@@ -296,20 +299,21 @@
     h += '<div class="clis-fila clis-mini"><b style="color:var(--t)">' + esc(p.entregaLabel || (p.modalidad === 'recoge' ? 'Recoge en planta' : 'Entrega')) + '</b>' + (p.negocio && p.negocio.lat ? ' · <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + p.negocio.lat + ',' + p.negocio.lng + '">ver ubicación</a>' : '') + (p.negocio && p.negocio.dir ? ' · ' + esc(p.negocio.dir) : '') + '</div>';
     h += '<div class="clis-items">' + p.items.map(function (it) {
       return '<div class="clis-entre"><span>' + (editable ? '<input type="number" min="0" data-q="' + esc(it.code) + '" value="' + it.piezas + '" aria-label="Sacos de ' + esc(it.nombre) + '"> × ' : fmt(it.piezas) + ' × ') + esc(it.nombre) + '</span>' + (it.conIva ? '<span class="clis-mini">' + money(it.conIva) + ' c/u</span>' : '') + '</div>';
-    }).join('') + '<div class="clis-entre"><b>' + fmt(p.items.reduce(function (a, x) { return a + x.piezas; }, 0)) + ' sacos</b>' + (p.totales ? '<b>' + money(p.totales.total) + ' con IVA</b>' : '') + '</div></div>';
+    }).join('') + '<div class="clis-entre"><b>' + fmt(p.items.reduce(function (a, x) { return a + x.piezas; }, 0)) + ' sacos · ' + fTon(p.ton != null ? p.ton : tonDe(p.items)) + '</b>' + (p.totales ? '<b>' + money(p.totales.total) + ' con IVA</b>' : '') + '</div></div>';
     if (p.ajustado) h += '<div class="clis-aviso w">Cantidades ajustadas al confirmar (original: ' + (p.itemsOriginal || []).map(function (x) { return x.piezas + ' ' + x.nombre; }).join(', ') + ').</div>';
     if (p.nota) h += '<div class="clis-aviso i"><b>Nota del cliente:</b> ' + esc(p.nota) + '</div>';
     if (p.notaVendedor) h += '<div class="clis-mini"><b>Nota del vendedor:</b> ' + esc(p.notaVendedor) + '</div>';
     if (p.confirmadoPor) h += '<div class="clis-mini">Confirmado por ' + esc(p.confirmadoPor) + ' · ' + fh(p.confirmadoTs) + '</div>';
     if (p.remision) h += '<div class="clis-fila"><span class="clis-sello">✓ Fincado en Odoo · ' + esc(p.remision) + '</span><span class="clis-mini">por ' + esc(p.fincadoPor || '') + ' · ' + fh(p.fincadoTs) + '</span>' + ((rol === 'admin' || rol === 'gerencia') && ['fincado', 'liberado', 'facturado'].indexOf(p.estado) >= 0 ? '<button class="clis-btn ghost" data-acc="remision">Editar número</button>' : '') + '</div>';
     if (p.remHist && p.remHist.length) h += '<div class="clis-mini">Cambios de número: ' + p.remHist.map(function (r) { return esc(r.de) + ' → ' + esc(r.a) + ' (' + esc(r.motivo) + ', ' + esc(r.por) + ')'; }).join('; ') + '</div>';
-    if (p.liberacion) h += '<div class="clis-aviso o"><b>Liberado ' + esc((p.liberacion.fecha || '').split('-').reverse().join('/')) + ' ' + esc(p.liberacion.hora || '') + '</b>' + (p.liberacion.unidad ? ' · ' + esc(p.liberacion.unidad) : '') + ' · ' + (p.liberacion.origen === 'cargadores' ? 'por Cargadores' : 'manual') + '<br>' + (p.liberacion.lotes || []).map(function (l) { return esc(l.prod) + ' · lote ' + esc(l.lote) + ' · ' + l.sacos + ' sacos'; }).join('<br>') + '</div>';
+    if (p.liberacion) h += '<div class="clis-aviso o"><b>Liberado ' + esc((p.liberacion.fecha || '').split('-').reverse().join('/')) + ' ' + esc(p.liberacion.hora || '') + '</b>' + (p.liberacion.unidad ? ' · ' + esc(p.liberacion.unidad) : '') + (p.liberacion.ton ? ' · <b>' + fTon(p.liberacion.ton) + ' cargadas</b>' : '') + ' · ' + (p.liberacion.origen === 'cargadores' ? 'por Cargadores' : 'manual') + '<br>' + (p.liberacion.lotes || []).map(function (l) { return esc(l.prod) + ' · lote ' + esc(l.lote) + ' · ' + l.sacos + ' sacos'; }).join('<br>') + '</div>';
     if (p.motivo) h += '<div class="clis-aviso r"><b>Motivo:</b> ' + esc(p.motivo) + '</div>';
     // contacto
     var tel = p.telContacto || p.tel;
     h += '<div class="clis-fila"><a class="clis-btn sec" href="tel:' + esc(tel) + '">📞 ' + esc(tel) + '</a><a class="clis-btn wa" target="_blank" rel="noopener" href="' + wa(tel, 'Hola ' + (p.contacto || '').split(' ')[0] + ', te llamo de Los 19 Hermanos por tu prepedido ' + p.folio + '.') + '">WhatsApp al cliente</a></div>';
     // acciones
     if (editable) h += '<input data-nota placeholder="Nota interna (opcional)" style="width:100%"><div class="clis-fila"><button class="clis-btn ok" data-acc="confirmar">✓ Ya lo validé por teléfono · Confirmar</button><button class="clis-btn sec" data-acc="rechazar">Rechazar</button></div>';
+    if (p.estado === 'confirmado' && (rol === 'admin' || rol === 'gerencia')) h += '<div class="clis-fila"><button class="clis-btn sec" data-acc="copiarOdoo">📋 Copiar datos para Odoo</button><span class="clis-mini">Cliente, códigos de producto, sacos, toneladas y entrega, listos para capturar.</span></div>';
     if (p.estado === 'confirmado' && (rol === 'admin' || rol === 'gerencia')) h += '<div class="clis-fila"><input data-rem placeholder="No. de pedido / remisión en Odoo" style="flex:1;min-width:200px"><button class="clis-btn ok" data-acc="fincar">Ya lo fincamos en Odoo</button><button class="clis-btn sec" data-acc="rechazar">Cancelar</button></div><div class="clis-mini">Usa el mismo número que Programación capture en el embarque: con él la app reconoce la salida de Cargadores y avisa al cliente.</div>';
     if (p.estado === 'confirmado' && rol === 'vendedor') h += '<a class="clis-btn wa" target="_blank" rel="noopener" href="' + wa(S.bandeja.waAdmin, 'Confirmé el prepedido ' + p.folio + ' de ' + (p.skanName || '') + ' (' + p.items.map(function (x) { return x.piezas + ' ' + x.nombre; }).join(', ') + '). ¿Me ayudan a fincarlo en Odoo?') + '">Avisar a Administración por WhatsApp</a>';
     if (p.estado === 'fincado' && (rol === 'admin' || rol === 'gerencia' || rol === 'programacion')) h += '<div class="clis-fila"><span class="clis-mini" style="flex:1">Se libera solo cuando Cargadores finaliza la unidad con el pedido <b>' + esc(p.remision) + '</b>.</span><button class="clis-btn sec" data-acc="liberar">Liberar manualmente</button>' + (DEMO ? '<button class="clis-btn" data-acc="simCarga">Simular Cargadores</button>' : '') + '</div>';
@@ -344,6 +348,13 @@
         } else if (acc === 'facturado') {
           var fa = prompt('Número de factura (opcional):', '') || '';
           api('staff', 'facturado', { id: id, factura: fa }).then(function () { return hecho('Marcado facturado'); }).catch(falla);
+        } else if (acc === 'copiarOdoo') {
+          var tx = 'PREPEDIDO ' + p.folio + '\nCliente: ' + (p.skanName || p.razonSocial) + (p.numCliente ? ' (No. ' + p.numCliente + ')' : '') + '\nVendedor: ' + (p.vendedorNombre || '') +
+            '\nEntrega: ' + (p.entregaLabel || p.modalidad) + (p.negocio && p.negocio.dir ? ' · ' + p.negocio.dir : '') + '\n' +
+            p.items.map(function (it) { return it.code + '\t' + it.piezas + ' sacos\t' + it.nombre + (it.precio ? '\t$' + it.precio : ''); }).join('\n') +
+            '\nTotal: ' + p.items.reduce(function (a, x) { return a + x.piezas; }, 0) + ' sacos · ' + fTon(p.ton != null ? p.ton : tonDe(p.items)) + ([p.nota, p.notaVendedor].filter(Boolean).length ? '\nNotas: ' + [p.nota, p.notaVendedor].filter(Boolean).join(' · ') : '');
+          var ok = function () { toast('Copiado. Pégalo como referencia al capturar en Odoo.'); };
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(ok, function () { prompt('Copia el texto:', tx); }); else prompt('Copia el texto:', tx);
         } else if (acc === 'simCarga') {
           W.CliDemo.simularCargador(p.remision).then(function () { return hecho('Cargadores finalizó la unidad (simulado)'); });
         } else if (acc === 'simFact') {
@@ -352,6 +363,33 @@
         }
       };
     });
+  }
+
+  /* ================= PRODUCTOS DISPONIBLES ================= */
+  // El master (gerencia) deja fuera de venta un producto o lo reactiva. El cliente ya no lo puede pedir;
+  // el resto del personal solo consulta.
+  function vProductos(c) {
+    c.innerHTML = '<div class="clis-mut">Cargando productos…</div>';
+    api('staff', 'catalogo', {}).then(function (r) {
+      var L = r.productos || [], ed = r.puedeEditar, off = L.filter(function (x) { return !x.activo; }).length;
+      var h = '<div class="clis-barra"><h3>Productos disponibles para venta</h3><span class="clis-mini">' + (L.length - off) + ' disponibles · ' + off + ' fuera de venta</span></div>' +
+        '<div class="clis-aviso i">' + (ed ? 'Apaga un producto cuando no haya existencia o no se deba vender: desaparece de inmediato del prepedido de los clientes (lo ven como «No disponible»). Enciéndelo para reactivarlo.' : 'Solo el master enciende o apaga productos. Aquí ves cuáles pueden pedir hoy los clientes.') + '</div>';
+      h += '<div class="clis-card" style="padding:4px 14px">' + L.map(function (x) {
+        return '<div class="clis-entre" style="padding:11px 0;border-top:1px solid var(--l2)"><div><b' + (x.activo ? '' : ' style="color:var(--t3);text-decoration:line-through"') + '>' + esc(x.nombre) + '</b>' + (x.premium ? ' <span class="clis-badge" style="background:var(--rs);color:var(--r)">Premium</span>' : '') +
+          '<div class="clis-mini">' + esc(x.code) + ' · ' + x.kg + ' kg' + (x.activo ? '' : ' · fuera de venta' + (x.por ? ' por ' + esc(x.por) : '') + (x.ts ? ' · ' + fh(x.ts) : '') + (x.nota ? ' · ' + esc(x.nota) : '')) + '</div></div>' +
+          '<label class="clis-sw"><input type="checkbox" data-prod="' + esc(x.code) + '" data-nom="' + esc(x.nombre) + '"' + (x.activo ? ' checked' : '') + (ed ? '' : ' disabled') + ' aria-label="' + esc(x.nombre) + ' disponible"> <span style="min-width:86px">' + (x.activo ? 'Disponible' : 'Fuera') + '</span></label></div>';
+      }).join('') + '</div>';
+      c.innerHTML = h;
+      $$('[data-prod]', c).forEach(function (i) {
+        i.onchange = function () {
+          var act = i.checked, nota = '';
+          if (!act) { nota = prompt('Motivo (opcional, solo lo ve el personal):', 'Sin existencia') ; if (nota === null) { i.checked = true; return; } }
+          i.disabled = true;
+          api('staff', 'disponible', { code: i.dataset.prod, activo: act, nota: nota, nombre: i.dataset.nom }).then(function () { toast(act ? 'Producto reactivado para venta' : 'Producto fuera de venta'); vProductos(c); })
+            .catch(function (e) { i.checked = !act; i.disabled = false; toast(e.error || 'No se pudo', true); });
+        };
+      });
+    }).catch(function (e) { c.innerHTML = '<div class="clis-aviso r">' + esc(e.error || 'No se pudo cargar') + '</div>'; });
   }
 
   /* ================= REGISTROS ================= */

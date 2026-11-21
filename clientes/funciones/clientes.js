@@ -13,6 +13,8 @@
                    lógica de cli-core.js sobre el nodo /cli, que está
                    cerrado al público (nadie lo lee ni lo escribe sin
                    pasar por aquí).
+   · modo 'erp'  → puerta para el futuro conector con Odoo: lee las órdenes
+                   confirmadas (cli/erp/salida) y marca capturado/facturado.
    · cliEmbarque → escucha /embarques: cuando Cargadores finaliza una
                    unidad cuyo pedido coincide con un prepedido fincado,
                    lo marca "liberado" con lotes y hora, y avisa al cliente.
@@ -36,6 +38,8 @@ const CLI_MAESTRO = defineSecret('CLI_MAESTRO');
 // Desde dónde se acepta la llamada: tu GitHub Pages y las apps de tienda (Capacitor).
 const ALLOWED_ORIGINS = [
   'https://barbagomezricardo-cloud.github.io',
+  'https://embarques-mascotas.web.app',          // la app y los paneles también se sirven desde Firebase Hosting
+  'https://embarques-mascotas.firebaseapp.com',
   'capacitor://localhost',      // iPhone (App Store)
   'https://localhost',          // Android (Google Play)
   'http://localhost'
@@ -168,6 +172,13 @@ exports.cliApi = onRequest(
         }
         if (accion === 'estado') out = {reglasCerradas: await reglasCerradas(), licenciaClientes: await licenciaOk('clientes'), licenciaPersonal: await licenciaOk('clientes_personal')};
         else out = await core.maestro(accion, datos);
+      } else if (modo === 'erp') {
+        // Conector futuro con Odoo (servidor a servidor). Misma llave maestra que Accesos.
+        if (!igualSeguro(req.get('x-cli-maestro'), CLI_MAESTRO.value())) {
+          await new Promise((r) => setTimeout(r, 1200));
+          return res.status(401).json({error: 'Llave incorrecta.'});
+        }
+        out = await core.erp(accion, datos);
       } else {
         return res.status(400).json({error: 'Solicitud no válida'});
       }
