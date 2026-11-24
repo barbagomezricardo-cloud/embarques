@@ -2598,6 +2598,11 @@ function parseOdooFac(rows){
       if(cur&&/^R\d{4,}$/i.test(a)) out.push([cur,a.toUpperCase(),Math.round((parseFloat(r[colQ])||0)*1000)/1000,colS>=0?Math.round((parseFloat(r[colS])||0)*100)/100:0]); });
     return {kind:'facrem',rows:out,nm:{},info:{formato:'por remisión'}}; }
   if(hasMonthLabels && !(String(rows[0][0])==='Column0')){
+    // tabla dinámica mensual mes → CLIENTE (sin producto): se guarda aparte («faccli») y solo alimenta la vista por cliente
+    { let cur='', nP=0, nC=0; const out=[]; rows.forEach(r=>{ const a=String(r[0]||''); const m=a.match(monthRe);
+        if(m){ cur=m[2]+'-'+String(MESES_ES.indexOf(m[1].toLowerCase())+1).padStart(2,'0'); return; }
+        const t=a.trim(); if(!cur||!t||t==='Total') return; if(_prodRow(t)||_esManiobra(t)){ nP++; return; } nC++; out.push([cur,t.toUpperCase(),Math.round((parseFloat(r[colQ])||0)*1000)/1000]); });
+      if(nC>nP) return {kind:'faccli',rows:out,nm:{},info:{formato:'por cliente'}}; }
     // tabla dinámica mensual (sale.report): mes → producto (sin cliente)
     let cur=''; rows.forEach(r=>{ const a=String(r[0]||''); const m=a.match(monthRe);
       if(m){ cur=m[2]+'-'+String(MESES_ES.indexOf(m[1].toLowerCase())+1).padStart(2,'0'); return; }
@@ -2628,6 +2633,11 @@ async function cuadOdooFiles(files){
     try{ const buf=await f.arrayBuffer(); const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
       const res=parseOdooInv(rows)||parseOdooFac(rows);
+      if(res&&res.kind==='faccli'){   // facturado por cliente: solo la vista «Por cliente»; no cambia el facturado por producto
+        if(!res.rows.length){ out.push('✗ '+f.name+': no encontré clientes'); continue; }
+        const byM={}; res.rows.forEach(r=>{ (byM[r[0]]=byM[r[0]]||[]).push([r[1],r[2]]); });
+        Object.keys(byM).forEach(P=>{ cuadSet('odoodata/'+P+'/faccli',JSON.stringify({rows:byM[P]})); cuadSet('odoo/'+P+'/faccli',{ts:Date.now(),usuario:cuadUser(),fname:f.name,n:byM[P].length,tot:Math.round(byM[P].reduce((a,r)=>a+r[1],0)*100)/100}); delete _odooCache[P+'|faccli']; odTsSet(P,'faccli'); });
+        out.push('✓ '+f.name+': facturado por cliente · '+Object.keys(byM).map(perLabel).join(', ')+' (ver Cuadre → Vista «Por cliente»)'); continue; }
       if(res&&res.kind==='facrem'){   // se guarda aparte: alimenta la vista «Por remisión (facturado)»; no cambia el cuadre por producto
         if(!res.rows.length){ out.push('✗ '+f.name+': no encontré remisiones'); continue; }
         const byM={}; res.rows.forEach(r=>{ (byM[r[0]]=byM[r[0]]||[]).push([r[1],r[2],r[3]]); });
@@ -2675,7 +2685,7 @@ const _fetching={};
 function odTsGet(P,kind){ const t=CUAD.odoodata._ts; return (t&&t[P+'|'+kind])||0; }
 function odTsSet(P,kind){ const m=CUAD.odoo[P]&&CUAD.odoo[P][kind]; if(!CUAD.odoodata._ts||typeof CUAD.odoodata._ts!=='object') CUAD.odoodata._ts={}; CUAD.odoodata._ts[P+'|'+kind]=(m&&m.ts)||Date.now(); cuadSaveOdooLocal(); }
 function cuadFetchOdoo(P){ if(_fetching[P]||!fb||!fbCuad) return; _fetching[P]=true;
-  Promise.all([fbCuad.child('odoodata/'+P).once('value'),fbCuad.child('odoodata/_lotes').once('value')]).then(([s,sl])=>{ const v=s.val(); if(v){ CUAD.odoodata[P]=v; ['inv','fac','mov'].forEach(k=>{ delete _odooCache[P+'|'+k]; if(v[k]) odTsSet(P,k); }); } const l=sl.val(); if(l) CUAD.odoodata._lotes=l; cuadSaveOdooLocal(); _fetching[P]=false; try{ refreshCuad(); }catch(e){} },()=>{ _fetching[P]=false; }); }
+  Promise.all([fbCuad.child('odoodata/'+P).once('value'),fbCuad.child('odoodata/_lotes').once('value')]).then(([s,sl])=>{ const v=s.val(); if(v){ CUAD.odoodata[P]=v; ['inv','fac','mov','faccli','facrem'].forEach(k=>{ delete _odooCache[P+'|'+k]; if(v[k]) odTsSet(P,k); }); } const l=sl.val(); if(l) CUAD.odoodata._lotes=l; cuadSaveOdooLocal(); _fetching[P]=false; try{ refreshCuad(); }catch(e){} },()=>{ _fetching[P]=false; }); }
 
 
 /* ---------- cálculo del cuadre de un periodo contable ---------- */
@@ -2727,7 +2737,9 @@ function cuadCompute(P){
   let facDesc=0, facMan=0, facBruto=0;
   if(fac) fac.rows.forEach(([c,pk,q,t])=>{ if(_semi(pk)&&t!=='d'&&t!=='m') return; if(_sv(pk)&&t!=='d'&&t!=='m'){ sacVacF+=q; return; } facBruto+=q; if(t==='d'){facDesc+=q;return;} if(t==='m'){facMan+=q;return;}
     const o=gp(pk); o.name=o.name||nm[pk]||pk; o.fac+=q; if(c){ const oc=gc(normNom(c)); oc.name=oc.name||c; oc.fac+=q; } });
-  const hasFacCli=!!(fac&&fac.rows.some(r=>r[0]&&!_sv(r[1])));
+  let hasFacCli=!!(fac&&fac.rows.some(r=>r[0]&&!_sv(r[1])));
+  const fcli=odooRows(P,'faccli');   // reporte «mes → cliente»: manda en la vista por cliente
+  if(fcli&&fcli.rows&&fcli.rows.length){ hasFacCli=true; cli.forEach(o=>{ o.fac=0; }); fcli.rows.forEach(([c,q])=>{ const oc=gc(normNom(c)); oc.name=oc.name||c; oc.fac+=q; oc.facCli=1; }); }
   const arr=m=>[...m.values()].filter(o=>o.c||o.b||o.inv||o.fac||o.dev).sort((a,b)=>(a.name||'').localeCompare(b.name||'','es'));
   const prodA=arr(prod); prodA.forEach(o=>{ o.name=prodNameByKey(o.k,o.name); }); prodA.sort((a,b)=>a.name.localeCompare(b.name,'es'));   // nombre del catálogo (Odoo a veces trae el de la promoción)
   const lotA=arr(lot); lotA.forEach(o=>{ o.name=prodNameByKey(o.pk,o.name); }); lotA.sort((a,b)=>a.name.localeCompare(b.name,'es')||String(a.lote).localeCompare(String(b.lote)));
@@ -3041,14 +3053,16 @@ function renderCuadre(){
     const hasD=src.some(o=>o.dev); src.forEach(o=>{ o.bn=o.b-(o.dev||0); });   // bn = báscula neta de devoluciones
     head=th(CQ.view==='prod'?'Producto':CQ.view==='cli'?'Cliente':'Producto · lote')+th('Cargadores',1)+th('Báscula',1)+(hasD?th('↩️ Devueltos',1):'')+th('Odoo inventario',1)+(hasF?th('Odoo facturado',1):'')+th(bF?'Báscula − Fact.':'Báscula − Inv.',1)+(hasF?th('Inv. − Fact.',1):'')+th('Lectura');
     const esLote=CQ.view==='lote';   // el reporte por lote es solo informativo: no cuenta como error de productos, cantidades ni pesos
-    const rows=src.map(o=>({o,lec:cuadLec(Object.assign({},o,{fac:hasF?o.fac:null}),D.hasInv,hasF,cfg.tolSacos).map(l=>esLote?['info',l[1]]:l)})).filter(x=>(!CQ.soloDif||(esLote?x.lec.length:x.lec.some(l=>l[0]!=='info')))&&(!q||normNom((x.o.name||'')+' '+(x.o.lote||'')).includes(q)));
+    // facturado por cliente (mes → cliente) incluye renglones de descuento/maniobra y costales: se tolera ±1 %
+    const tolO=o=>o.facCli?Math.max(cfg.tolSacos,Math.ceil((o.fac||0)*0.01)+2):cfg.tolSacos;
+    const rows=src.map(o=>({o,lec:cuadLec(Object.assign({},o,{fac:hasF?o.fac:null}),D.hasInv,hasF,tolO(o)).map(l=>esLote?['info',l[1]]:l)})).filter(x=>(!CQ.soloDif||(esLote?x.lec.length:x.lec.some(l=>l[0]!=='info')))&&(!q||normNom((x.o.name||'')+' '+(x.o.lote||'')).includes(q)));
     body=rows.map(({o,lec})=>`<tr><td>${escProy(o.name||o.k)}${CQ.view==='lote'?` · <b class="code">${escProy(o.lote||'')}</b>`:''}</td><td class="num">${fS(o.c)}</td><td class="num">${fS(o.b)}</td>${hasD?`<td class="num" style="color:var(--dev)">${o.dev?'−'+fS(o.dev):''}</td>`:''}<td class="num">${oN(o.inv)}</td>${hasF?`<td class="num">${fS(o.fac)}</td>`:''}
-      ${bF?`<td class="num ${Math.abs(o.bn-o.fac)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${(o.c||o.b)?sgn(o.bn-o.fac):'—'}</td>`:`<td class="num ${D.hasInv&&Math.abs(o.bn-o.inv)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${D.hasInv&&(o.c||o.b)?sgn(o.bn-o.inv):'—'}</td>`}${hasF?`<td class="num ${Math.abs(o.inv-o.fac)>cfg.tolSacos?'dwarn':''}">${D.hasInv?sgn(o.inv-o.fac):'—'}</td>`:''}<td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
+      ${bF?`<td class="num ${Math.abs(o.bn-o.fac)>tolO(o)&&(o.c||o.b)?'dcrit':''}">${(o.c||o.b)?sgn(o.bn-o.fac):'—'}</td>`:`<td class="num ${D.hasInv&&Math.abs(o.bn-o.inv)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${D.hasInv&&(o.c||o.b)?sgn(o.bn-o.inv):'—'}</td>`}${hasF?`<td class="num ${Math.abs(o.inv-o.fac)>cfg.tolSacos?'dwarn':''}">${D.hasInv?sgn(o.inv-o.fac):'—'}</td>`:''}<td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
     const T=rows.reduce((t,{o})=>{ t.c+=o.c;t.b+=o.b;t.d+=(o.dev||0);t.inv+=o.inv;t.fac+=(hasF?o.fac:0); return t; },{c:0,b:0,d:0,inv:0,fac:0});
     if(rows.length) body+=`<tr style="font-weight:700;background:var(--panel3)"><td>Total</td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td>${hasD?`<td class="num" style="color:var(--dev)">${T.d?'−'+fS(T.d):''}</td>`:''}<td class="num">${oN(T.inv)}</td>${hasF?`<td class="num">${fS(T.fac)}</td>`:''}<td class="num">${bF?sgn(T.b-T.d-T.fac):(D.hasInv?sgn(T.b-T.d-T.inv):'—')}</td>${hasF?`<td class="num">${D.hasInv?sgn(T.inv-T.fac):'—'}</td>`:''}<td></td></tr>`;
     if(CQ.view==='cli'&&!D.hasFacCli&&D.hasFac) body+='<tr><td colspan="9" class="hint" style="white-space:normal">El reporte de ventas facturadas cargado es la tabla mensual (sin cliente). Para ver facturado por cliente carga el pivote por cliente.</td></tr>';
     document.getElementById('cqHint').innerHTML=CQ.view==='prod'?'Producto a producto: lo que cargaron, lo que pesó báscula, lo que salió de inventario en Odoo y lo facturado (sin descuento ni maniobra). Las promociones y bonificaciones cuentan como el mismo producto.'
-      :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto) se empareja con el del programa ignorando acentos y signos.':'Por lote · INFORMATIVO: compara el lote de Cargadores, Báscula y Odoo (se ignoran espacios y símbolos). Las diferencias aquí no cuentan como error: el cuadre se juzga por producto, cantidad y peso.';
+      :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto, o la remisión si el reporte no trae Contacto) se empareja con el del programa ignorando acentos y signos.'+((CUAD.odoo[CQ.per]||{}).faccli?' Facturado: reporte «mes → cliente» ('+escProy(CUAD.odoo[CQ.per].faccli.fname||'')+'), que suma renglones de descuento y maniobra: se tolera ±1 %.':' Para ver lo facturado por cliente, carga el reporte de ventas agrupado mes → cliente.'):'Por lote · INFORMATIVO: compara el lote de Cargadores, Báscula y Odoo (se ignoran espacios y símbolos). Las diferencias aquí no cuentan como error: el cuadre se juzga por producto, cantidad y peso.';
   } else if(CQ.view==='rem'){
     const fr=odooRows(CQ.per,'facrem'); const F=new Map(); (fr&&fr.rows||[]).forEach(([v,qq,sub])=>F.set(String(v).toUpperCase(),{q:qq,sub}));
     const alias=new Map(); D.cus.forEach(c=>remAdminDe(c.u.r).forEach(x=>alias.set(String(x.v).toUpperCase(),String(c.u.r.pedido||'').trim().toUpperCase())));

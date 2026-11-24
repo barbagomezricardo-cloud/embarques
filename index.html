@@ -34,24 +34,48 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Carga · App de Cargadores</title>
+<meta name="theme-color" content="#DE0A14">
+<script src="tema-19h.js"></script>
 <style>
   :root{
-    --bg:#0d1520;--panel:#16212e;--panel2:#1d2a3a;--line:#28394d;--txt:#eaf1f8;--muted:#93a6bc;
-    --accent:#3b9dff;--accent2:#1f6feb;--ok:#2ecc71;--okbg:#123522;--late:#ff5c5c;--latebg:#3a1414;
-    --warn:#ffb020;--warnbg:#3a2c10;--proc:#8a97a8;
+    --bg:#FBF7F2;--panel:#FFFFFF;--panel2:#F6F0E9;--panel3:#F8F3EC;--line:#EADFD3;--txt:#281E12;--txt2:#3D3226;--muted:#8C8178;
+    --accent:#DE0A14;--accent2:#DE0A14;--brand:#DE0A14;--ok:#178540;--okbg:#E5F4EA;--late:#C0392B;--latebg:#FDE8E9;
+    --warn:#8A6114;--warnbg:#FBF1DC;--proc:#6B6259;--procbg:#F1ECE6;--grid:#EADFD3;--lchip:#A80810;--okline:#9BD3B0;--badline:#F0A9A3;--dis:#E6DED4;--distx:#8C8178;
+    --rojo:#DE0A14;--fd19:"Archivo",system-ui,sans-serif;--f19:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:light;
   }
+  :root[data-theme="dark"]{
+    --bg:#120E0A;--panel:#1C1611;--panel2:#251D16;--panel3:#17120D;--line:#3A2F25;--txt:#F3ECE4;--txt2:#E6DCD0;--muted:#B0A395;
+    --accent:#FF4D55;--accent2:#DE0A14;--brand:#A80810;--ok:#4ADE80;--okbg:#12301F;--late:#FF6B6B;--latebg:#3A1414;
+    --warn:#FFB454;--warnbg:#3A2C10;--proc:#A89C90;--procbg:#2B231B;--grid:#3A2F25;--lchip:#FF9EA3;--okline:#1f5c3a;--badline:#7a2a2a;--dis:#33291F;--distx:#8C8178;color-scheme:dark;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#120E0A;--panel:#1C1611;--panel2:#251D16;--panel3:#17120D;--line:#3A2F25;--txt:#F3ECE4;--txt2:#E6DCD0;--muted:#B0A395;
+    --accent:#FF4D55;--accent2:#DE0A14;--brand:#A80810;--ok:#4ADE80;--okbg:#12301F;--late:#FF6B6B;--latebg:#3A1414;
+    --warn:#FFB454;--warnbg:#3A2C10;--proc:#A89C90;--procbg:#2B231B;--grid:#3A2F25;--lchip:#FF9EA3;--okline:#1f5c3a;--badline:#7a2a2a;--dis:#33291F;--distx:#8C8178;color-scheme:dark;}}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:15px;padding-bottom:30px}
-  header{position:sticky;top:0;z-index:10;background:linear-gradient(120deg,#11203a,#0d3b66);padding:12px 15px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+  body{margin:0;font-family:var(--f19);background:var(--bg);color:var(--txt);font-size:15px;padding-bottom:30px}
+  header{position:sticky;top:0;z-index:10;background:var(--brand);color:#fff;box-shadow:0 2px 10px rgba(168,8,16,.25);padding:12px 15px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
   header .t{font-size:16px;font-weight:700}
-  header .s{font-size:11px;color:#b9d4f0}
+  header .s{font-size:11px;color:rgba(255,255,255,.85)}
   .conn{font-size:11px;padding:4px 9px;border-radius:20px;border:1px solid var(--line);display:inline-flex;gap:6px;align-items:center}
   .conn .d{width:8px;height:8px;border-radius:50%;background:var(--muted)}
   .conn.online .d{background:var(--ok)}.conn.local .d{background:var(--warn)}
-  .gear{background:none;border:none;color:#cfe0f2;font-size:20px;cursor:pointer}
+  .gear{background:none;border:none;color:#fff;font-size:20px;cursor:pointer}
+  header .t{font-family:var(--fd19);color:#fff} header .conn{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.35);color:#fff}
+  .sellos19{display:flex;align-items:center;flex:none;margin-right:10px}
+  .sellos19 span{width:38px;height:38px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+  .sellos19 span+span{margin-left:-11px}
+  .sellos19 img{width:34px;height:34px;object-fit:contain}
+  #tema19h-btn{flex:none;width:36px;height:36px;border-radius:50%;padding:0;font-size:17px;line-height:36px;cursor:pointer;background:rgba(255,255,255,.16);color:#fff;border:0;box-shadow:0 0 0 1px rgba(255,255,255,.35);margin-left:6px}
+  #tema19h-menu{position:fixed;z-index:99999;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:10px;display:grid;gap:6px;min-width:170px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  #tema19h-menu b{font:800 12px var(--fd19);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 4px}
+  #tema19h-menu button{border:1px solid var(--line);background:var(--bg);color:var(--txt);border-radius:10px;padding:10px 12px;font:700 14px var(--f19);text-align:left}
+  #tema19h-menu button[aria-pressed="true"]{background:var(--rojo);border-color:var(--rojo);color:#fff}
+  .apptab.active{font-weight:800}
+  .bg-stop{background:#281E12!important}.bg-done{background:#178540!important}.bg-dis{color:var(--distx)!important}
+
   main{max-width:640px;margin:0 auto;padding:12px 14px}
   .datebar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
-  input,select{background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:10px 11px;border-radius:9px;font-size:15px;font-family:inherit}
+  input,select{background:var(--panel3);border:1px solid var(--line);color:var(--txt);padding:10px 11px;border-radius:9px;font-size:15px;font-family:inherit}
   .datebar input{flex:1}
   .search{width:100%;margin-bottom:12px}
   .counts{display:flex;gap:8px;margin-bottom:12px}
@@ -63,46 +87,46 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   .card .cli{font-size:16px;font-weight:700}
   .card .meta{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.5}
   .badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
-  .b-pend{background:var(--warnbg);color:var(--warn)}.b-proc{background:#212c38;color:var(--proc)}
+  .b-pend{background:var(--warnbg);color:var(--warn)}.b-proc{background:var(--procbg);color:var(--proc)}
   .b-ok{background:var(--okbg);color:var(--ok)}.b-late{background:var(--latebg);color:var(--late)}
-  .chip{display:inline-block;background:#0d1a27;border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:12px;margin-right:5px}
+  .chip{display:inline-block;background:var(--panel3);border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:12px;margin-right:5px}
   .empty{text-align:center;color:var(--muted);padding:44px 10px}
   /* detail sheet */
-  .sheet{position:fixed;inset:0;background:rgba(4,9,15,.8);display:none;align-items:flex-end;z-index:40}
+  .sheet{position:fixed;inset:0;background:rgba(20,14,8,.55);display:none;align-items:flex-end;z-index:40}
   .sheet.show{display:flex}
   .sheetc{background:var(--panel);border-top-left-radius:20px;border-top-right-radius:20px;width:100%;max-width:640px;margin:0 auto;max-height:92vh;overflow:auto;border:1px solid var(--line)}
   .sheeth{padding:16px 18px 8px;position:sticky;top:0;background:var(--panel)}
   .sheeth .cli{font-size:20px;font-weight:800}
   .sheeth .meta{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.6}
   .sheetb{padding:6px 18px 20px}
-  .timerbox{background:#0d1a27;border:1px solid var(--line);border-radius:13px;padding:14px;text-align:center;margin:10px 0}
+  .timerbox{background:var(--panel3);border:1px solid var(--line);border-radius:13px;padding:14px;text-align:center;margin:10px 0}
   .timerbox .big{font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px}
   .timerbox .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
   .stamps{display:flex;gap:10px;margin:10px 0;font-size:13px}
-  .stamps .st{flex:1;background:#0d1a27;border:1px solid var(--line);border-radius:10px;padding:9px;text-align:center}
+  .stamps .st{flex:1;background:var(--panel3);border:1px solid var(--line);border-radius:10px;padding:9px;text-align:center}
   .stamps .st b{display:block;font-size:17px;margin-top:2px}
   .bigbtn{display:block;width:100%;padding:16px;border-radius:13px;border:none;font-size:17px;font-weight:700;color:#fff;margin-top:11px;cursor:pointer}
   .bigbtn:active{filter:brightness(.92)}
-  .bg-start{background:var(--accent2)}.bg-stop{background:#c0392b}.bg-done{background:#1f8f4d}.bg-dis{background:#33414f;color:#8ea3ba}
+  .bg-start{background:var(--accent2)}.bg-stop{background:#c0392b}.bg-done{background:#1f8f4d}.bg-dis{background:var(--dis);color:var(--muted)}
   .statusline{text-align:center;font-size:15px;font-weight:700;padding:10px;border-radius:10px;margin-top:10px}
   .field{display:flex;flex-direction:column;gap:5px;margin-top:12px}
   .field label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .closebtn{background:none;border:none;color:var(--muted);font-size:26px;position:absolute;right:14px;top:12px;cursor:pointer}
-  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#123522;color:#c9ffdf;border:1px solid #2ecc71;padding:12px 20px;border-radius:11px;opacity:0;transition:.3s;pointer-events:none;z-index:99;font-weight:600}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--okbg);color:var(--ok);border:1px solid var(--ok);padding:12px 20px;border-radius:11px;opacity:0;transition:.3s;pointer-events:none;z-index:99;font-weight:600}
   .toast.show{opacity:1}
-  .modal{position:fixed;inset:0;background:rgba(4,9,15,.8);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
+  .modal{position:fixed;inset:0;background:rgba(20,14,8,.55);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
   .modal.show{display:flex}
   .modalc{background:var(--panel);border:1px solid var(--line);border-radius:15px;width:100%;max-width:440px;padding:18px}
   .modalc h3{margin:0 0 10px}
-  textarea{width:100%;background:#0d1a27;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:10px;font-family:ui-monospace,monospace;font-size:12px}
+  textarea{width:100%;background:var(--panel3);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:10px;font-family:ui-monospace,monospace;font-size:12px}
   .hint{font-size:12px;color:var(--muted)}
   .apptabs{display:flex;gap:6px;padding:8px 14px;max-width:640px;margin:0 auto;align-items:center}
   .apptab{flex:0 0 auto;background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:9px 14px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
   .apptab.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
-  .turnobtn{margin-left:auto;background:transparent;border:1px solid var(--line);color:#cfe0f2;padding:9px 12px;border-radius:10px;font-size:13px;cursor:pointer}
+  .turnobtn{margin-left:auto;background:transparent;border:1px solid var(--line);color:var(--txt2);padding:9px 12px;border-radius:10px;font-size:13px;cursor:pointer}
   .turnobtn.on{border-color:var(--ok);color:var(--ok)}
   .viewbadge{max-width:640px;margin:0 auto;padding:0 14px 8px}
-  .viewbadge .b{background:#2a2410;border:1px solid var(--warn);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:12.5px;display:flex;align-items:center;gap:8px}
+  .viewbadge .b{background:var(--warnbg);border:1px solid var(--warn);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:12.5px;display:flex;align-items:center;gap:8px}
   .monbar{display:flex;gap:8px;max-width:900px;margin:0 auto 12px;padding:0 14px}
   .monstat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
   .monstat b{font-size:30px;display:block;color:var(--warn);font-variant-numeric:tabular-nums}
@@ -116,14 +140,14 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   .monrow .sub{font-size:12px;color:var(--muted);margin-top:2px}
   .monrow .right{text-align:right}
   .monrow .st{font-size:13px;font-weight:800;letter-spacing:.5px}
-  .monrow .pbar{height:7px;background:#22303f;border-radius:6px;margin-top:6px;overflow:hidden}
+  .monrow .pbar{height:7px;background:var(--grid);border-radius:6px;margin-top:6px;overflow:hidden}
   .monrow .pbar>i{display:block;height:100%}
   .bl-pend{border-left-color:var(--warn)} .bl-proc{border-left-color:var(--accent)} .bl-done{border-left-color:var(--ok)} .bl-late{border-left-color:var(--late)}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
   .loading-dot{animation:pulse 1.2s infinite}
   /* ---- trazabilidad: lotes por producto ---- */
-  .lotbox{background:#0d1a27;border:1px solid var(--line);border-radius:13px;padding:12px;margin-top:12px}
-  .lotbox.err{border-color:var(--late);box-shadow:0 0 0 2px rgba(255,92,92,.25)}
+  .lotbox{background:var(--panel3);border:1px solid var(--line);border-radius:13px;padding:12px;margin-top:12px}
+  .lotbox.err{border-color:var(--late);box-shadow:0 0 0 2px rgba(222,10,20,.2)}
   .lotbox .lh{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
   .lotbox .lh b{color:var(--txt);font-size:13px;text-transform:none;letter-spacing:0}
   .lotrow{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:7px}
@@ -135,16 +159,36 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   .lotdel{background:none;border:1px solid var(--line);color:var(--late);border-radius:8px;padding:6px 9px;font-size:15px;cursor:pointer}
   .lottot{font-size:12.5px;margin-top:6px;line-height:1.55}
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-  .lchip{background:#0d1a27;border:1px solid var(--accent);color:#9fd0ff;border-radius:18px;padding:6px 12px;font-size:13px;font-weight:700;letter-spacing:.4px;cursor:pointer}
-  .lcnt{display:inline-block;font-size:11.5px;border-radius:7px;padding:2px 8px;margin-right:5px;border:1px solid var(--line);background:#0d1a27}
-  .lcnt.ok{color:var(--ok);border-color:#1f5c3a}.lcnt.bad{color:var(--late);border-color:#7a2a2a}
+  .lchip{background:var(--panel3);border:1px solid var(--accent);color:var(--lchip);border-radius:18px;padding:6px 12px;font-size:13px;font-weight:700;letter-spacing:.4px;cursor:pointer}
+  .lcnt{display:inline-block;font-size:11.5px;border-radius:7px;padding:2px 8px;margin-right:5px;border:1px solid var(--line);background:var(--panel3)}
+  .lcnt.ok{color:var(--ok);border-color:var(--okline)}.lcnt.bad{color:var(--late);border-color:var(--badline)}
+  /* ===== MODO TABLETA ===== */
+  @media (min-width:760px){
+    main,.apptabs,.viewbadge{max-width:1180px}
+    main{padding:14px 22px}
+    .apptabs{padding:10px 22px}
+    .apptab{padding:11px 18px;font-size:15px}
+    .datebar,.search{max-width:none}
+    #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;align-items:start}
+    #list .card{margin-bottom:0}
+    #list>:not(.card){grid-column:1/-1}
+    .counts{gap:12px}.cnt{padding:12px}.cnt b{font-size:26px}
+    .sheet{align-items:center;padding:20px}
+    .sheetc{max-width:760px;border-radius:20px;max-height:90vh}
+    #monView{max-width:1180px}.monbar{max-width:1180px}
+    .modalc{max-width:520px}
+  }
+  @media (min-width:1100px){ #monBoard{display:grid;grid-template-columns:1fr 1fr;gap:10px} #monBoard .monrow{margin-bottom:0} #monBoard>:not(.monrow){grid-column:1/-1} }
 </style>
 </head>
 <body>
 <header>
-  <div>
-    <div class="t">🐾 Carga de Camiones</div>
+  <div style="display:flex;align-items:center">
+    <div class="sellos19"><span><img src="clientes/img/logo-19h.png" alt="Los 19 Hermanos"></span><span><img src="clientes/img/logo-petfood.png" alt="Pet Food"></span></div>
+    <div>
+    <div class="t">Carga de Camiones</div>
     <div class="s">Registro de tiempos en piso</div>
+    </div>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="conn local" id="conn"><span class="d"></span><span id="connTxt">Local</span></span>
@@ -188,8 +232,8 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   <div class="modalc">
     <h3>👤 Iniciar turno</h3>
     <p class="hint">Elige tu nombre y escribe <b>la misma contraseña (o NIP) que usas en tus otras apps</b>. Solo los cargadores registran cargas; los demás entran a consultar. Si tu usuario es nuevo, usa la temporal que te dio el master: te pedirá crear la tuya una sola vez y te servirá en todas tus apps.</p>
-    <select id="turnoName" style="width:100%;font-size:16px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px;margin-bottom:9px"></select>
-    <input id="turnoPin" type="password" autocomplete="current-password" placeholder="Contraseña o NIP" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')doTurno()">
+    <select id="turnoName" style="width:100%;font-size:16px;background:var(--panel3);border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px;margin-bottom:9px"></select>
+    <input id="turnoPin" type="password" autocomplete="current-password" placeholder="Contraseña o NIP" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:var(--panel3);border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')doTurno()">
     <div id="turnoErr" style="color:var(--late);font-size:13px;margin-top:6px;display:none">Usuario o NIP incorrecto</div>
     <button class="bigbtn bg-start" onclick="doTurno()">Entrar</button>
     <button class="bigbtn bg-dis" onclick="document.getElementById('turnoModal').classList.remove('show')">Cancelar</button>
@@ -201,7 +245,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   <div class="modalc">
     <h3>🔒 PIN de configuración</h3>
     <p class="hint">La conexión solo la cambia un supervisor. Ingresa el PIN.</p>
-    <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:#0d1a27;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')checkPin()">
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;font-size:18px;text-align:center;letter-spacing:4px;background:var(--panel3);border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:9px" onkeydown="if(event.key==='Enter')checkPin()">
     <div id="pinErr" style="color:var(--late);font-size:13px;margin-top:6px;display:none">PIN incorrecto</div>
     <button class="bigbtn bg-start" onclick="checkPin()">Entrar</button>
     <button class="bigbtn bg-dis" onclick="document.getElementById('pinModal').classList.remove('show')">Cancelar</button>
@@ -443,8 +487,8 @@ function fillSheet(r){
     body+=`<button class="bigbtn bg-dis" onclick="undoStart('${r.id}')">Deshacer inicio</button>`;
   } else {
     // ya no hay botón «Marcar despachado»: «Finalizar carga» libera la unidad. Solo una carga finalizada antes de este cambio puede quedar sin liberar; la libera Programación.
-    if(!isDesp(r)) body+=`<div class="statusline" style="background:#3a2a10;color:var(--warn,#f0b429)">Carga finalizada · pendiente de liberar en Programación</div>`;
-    else body+=`<div class="statusline" style="background:#123522;color:var(--ok)">🚚 Carga finalizada y liberada</div>`;
+    if(!isDesp(r)) body+=`<div class="statusline" style="background:var(--warnbg);color:var(--warn,var(--warn))">Carga finalizada · pendiente de liberar en Programación</div>`;
+    else body+=`<div class="statusline" style="background:var(--okbg);color:var(--ok)">🚚 Carga finalizada y liberada</div>`;
   }
   document.getElementById('sheetBody').innerHTML=body;
 }
@@ -520,25 +564,25 @@ function ppInit(){ if(document.getElementById('ppOv')) return;
   const st=document.createElement('style'); st.textContent=`
 #ppOv{position:fixed;inset:0;background:rgba(5,10,18,.72);z-index:99999;display:none;align-items:flex-end;justify-content:center}
 #ppOv.show{display:flex}
-#ppSheet{background:var(--panel,#16212e);color:var(--txt,#eaf1f8);border:1px solid var(--line,#28394d);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+#ppSheet{background:var(--panel,var(--panel));color:var(--txt,var(--txt));border:1px solid var(--line,var(--line));border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 -10px 40px rgba(0,0,0,.5)}
 @media(min-width:700px){#ppOv{align-items:center}#ppSheet{border-radius:16px;max-height:80vh}}
 #ppSheet .pph{display:flex;align-items:center;gap:8px;padding:14px 16px 6px}
 #ppSheet .pph b{flex:1;font-size:16px}
-#ppSheet .ppx{background:transparent;border:0;color:var(--muted,#93a6bc);font-size:22px;line-height:1;padding:4px 8px;cursor:pointer}
-#ppQ{margin:4px 16px 8px;padding:13px 14px;font-size:16px;border-radius:11px;border:1px solid var(--line,#28394d);background:var(--bg,#0d1520);color:var(--txt,#eaf1f8);width:calc(100% - 32px);box-sizing:border-box}
+#ppSheet .ppx{background:transparent;border:0;color:var(--muted,var(--muted));font-size:22px;line-height:1;padding:4px 8px;cursor:pointer}
+#ppQ{margin:4px 16px 8px;padding:13px 14px;font-size:16px;border-radius:11px;border:1px solid var(--line,var(--line));background:var(--bg,var(--bg));color:var(--txt,var(--txt));width:calc(100% - 32px);box-sizing:border-box}
 #ppCats{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 8px}
-#ppCats button{border:1px solid var(--line,#28394d);background:var(--panel2,#1d2a3a);color:var(--txt,#eaf1f8);border-radius:20px;padding:8px 13px;font-size:14px;cursor:pointer}
-#ppCats button.on{background:#2f6df6;border-color:#2f6df6;color:#fff;font-weight:700}
+#ppCats button{border:1px solid var(--line,var(--line));background:var(--panel2,var(--panel2));color:var(--txt,var(--txt));border-radius:20px;padding:8px 13px;font-size:14px;cursor:pointer}
+#ppCats button.on{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:700}
 #ppList{overflow:auto;padding:0 10px 14px;flex:1;-webkit-overflow-scrolling:touch}
-#ppList .ppi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line,#28394d);color:var(--txt,#eaf1f8);padding:13px 8px;font-size:15px;cursor:pointer;border-radius:0}
-#ppList .ppi:active,#ppList .ppi:hover{background:var(--panel2,#1d2a3a)}
+#ppList .ppi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line,var(--line));color:var(--txt,var(--txt));padding:13px 8px;font-size:15px;cursor:pointer;border-radius:0}
+#ppList .ppi:active,#ppList .ppi:hover{background:var(--panel2,var(--panel2))}
 #ppList .ppi.sel{background:rgba(47,109,246,.18)}
 #ppList .ppi .pn{flex:1;line-height:1.25}
-#ppList .ppi .pk{color:var(--muted,#93a6bc);font-size:12.5px;white-space:nowrap}
-#ppList .ppe{padding:22px;text-align:center;color:var(--muted,#93a6bc)}
-.ppbtn{width:100%;text-align:left;background:var(--panel2,#1d2a3a);border:1px solid var(--line,#28394d);color:var(--txt,#eaf1f8);border-radius:9px;padding:11px 12px;font-size:15px;cursor:pointer;display:flex;align-items:center;gap:8px}
-.ppbtn small{color:var(--muted,#93a6bc);font-size:12px;margin-left:auto;white-space:nowrap}
-.ppbtn.empty{color:var(--muted,#93a6bc)}`;
+#ppList .ppi .pk{color:var(--muted,var(--muted));font-size:12.5px;white-space:nowrap}
+#ppList .ppe{padding:22px;text-align:center;color:var(--muted,var(--muted))}
+.ppbtn{width:100%;text-align:left;background:var(--panel2,var(--panel2));border:1px solid var(--line,var(--line));color:var(--txt,var(--txt));border-radius:9px;padding:11px 12px;font-size:15px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.ppbtn small{color:var(--muted,var(--muted));font-size:12px;margin-left:auto;white-space:nowrap}
+.ppbtn.empty{color:var(--muted,var(--muted))}`;
   document.head.appendChild(st);
   const ov=document.createElement('div'); ov.id='ppOv';
   ov.innerHTML='<div id="ppSheet" role="dialog" aria-label="Elegir producto"><div class="pph"><b>🔎 Elegir producto</b><button type="button" class="ppx" aria-label="Cerrar" onclick="ppClose()">✕</button></div><input id="ppQ" type="search" inputmode="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Buscar… (ej. gallo 40, kan 5, caballo)"><div id="ppCats"></div><div id="ppList"></div></div>';
