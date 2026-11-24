@@ -168,7 +168,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-basc-ok onclick="exportCSV()">⬇ CSV</button>
     <button class="ghost" onclick="copyPuntualidad()" title="Genera un mensaje con el % de entregas a tiempo, listo para compartir">📣 Puntualidad</button>
     <button class="ghost protected" data-prot onclick="exportJSON()">💾 Respaldo</button>
-    <button class="ghost protected" data-prot data-master onclick="document.getElementById('impF').click()">📂 Cargar</button>
+    <button class="ghost protected" data-prot data-master onclick="document.getElementById('impF').click()" title="Agrega los embarques de un respaldo que falten. Nunca borra ni cambia los actuales.">📂 Recuperar de archivo</button>
     <input type="file" id="impF" accept=".json" style="display:none" onchange="importJSON(event)">
     <button class="ghost protected" data-prot data-master onclick="openConfig()">⚙ Configuración</button>
     <button class="lock" id="lockBtn" onclick="toggleLock()">🔒 Superusuario</button>
@@ -578,11 +578,12 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
       <h3 style="margin:0 0 8px;font-size:13px">Seguridad y datos</h3>
       <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
         <button class="ghost" onclick="cambiarMiPwd()">🔑 Cambiar mi contraseña</button>
-        <button class="ghost" onclick="resetData()">↺ Restablecer a datos de ejemplo</button>
-        <button class="ghost" style="color:var(--late);border-color:var(--late)" onclick="clearAll()">🗑️ Vaciar todo (empezar de cero)</button>
       </div>
       <div id="masterCfg" style="display:none;margin-top:10px;padding:10px;border:1px dashed var(--late);border-radius:8px">
         <div style="font-size:12px;color:var(--late);margin-bottom:6px">🕵️ Área master (solo tú ves esto)</div>
+        <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">🛟 Respaldos de la programación</div>
+        <div id="respPanel" style="margin-bottom:10px"></div>
+        <hr style="border-color:var(--line);margin:12px 0">
         <div style="font-size:12px;color:#cfe0f2;margin-bottom:6px">👤 Usuarios · Programador (master, superusuario, consulta, báscula) y app de Cargadores</div>
         <div id="accesoPanel" style="margin-bottom:10px"></div>
         <hr style="border-color:var(--line);margin:12px 0">
@@ -999,6 +1000,9 @@ function entregaIncShow(){ const l=entregaIncList(); alert('Incidencias de entre
 function renderBanners(){
   const box=document.getElementById('alertBanners'); if(!box)return;
   let html='';
+  try{ const p=(unlocked||isBasc)?leerPrevio():null, fl=p?faltantesDe(p.data).length:0;
+    if(RESP_ALERTA||fl>=10){ html+=`<div ${isMaster?'onclick="openConfig();setTimeout(respRender,50)"':''} style="cursor:pointer;background:#3a1414;border:2px solid var(--late);color:#fff;border-radius:10px;padding:12px 14px;margin:0 0 10px;font-weight:700;font-size:13.5px">⚠ Faltan embarques en la nube${RESP_ALERTA?` (respaldo del ${RESP_ALERTA.ult}: ${RESP_ALERTA.nU} · hoy: ${RESP_ALERTA.n})`:''}${fl?` · este equipo conserva ${fl} que no están en la nube`:''}. ${isMaster?'Toca aquí para recuperarlos.':'Avisa al master para recuperarlos; no cierres ni borres datos de este equipo.'}</div>`; }
+  }catch(e){}
   try{ const inc=entregaIncList();
     if(inc.length){ html+=`<div onclick="entregaIncShow()" style="cursor:pointer;background:#3a1414;border:1px solid var(--late);color:var(--late);border-radius:10px;padding:10px 14px;margin:0 0 10px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px">📦 ${inc.length} entrega(s) con incidencia reportada por el vendedor — toca para ver el detalle (también en la columna «Entrega (vendedor)»)</div>`; }
   }catch(e){}
@@ -1593,7 +1597,7 @@ function espacioLiberar(auto){
 // vigilancia automática: si el espacio pasa de 85% y la nube está conectada, libera solo (sin recargar ni preguntar)
 setInterval(()=>{ try{ if(espacioUso().pct>=85&&espNubeOk()) espacioLiberar(true); }catch(e){} },60000);
 setTimeout(()=>{ try{ if(espacioUso().pct>=85&&espNubeOk()) espacioLiberar(true); }catch(e){} },12000);
-function openConfig(){ if(!requireMaster())return; buildCfg(); espacioRender(); document.getElementById('cfgOverlay').classList.add('show'); }
+function openConfig(){ if(!requireMaster())return; buildCfg(); espacioRender(); try{ respRender(); }catch(e){} document.getElementById('cfgOverlay').classList.add('show'); }
 function buildCfg(){
   document.getElementById('cfgBody').innerHTML=Object.entries(CFG.limites).map(([k,v])=>`
     <div style="display:flex;gap:9px;align-items:center;margin-bottom:7px">
@@ -1651,21 +1655,17 @@ function saveConfig(){
   if(reinit) initFirebase();
 }
 function cambiarMiPwd(){ Acceso19H.pedirCambio({nombre:(Acceso19H.perfil()||{}).nombre,cancelar:true}).then(ok=>{ if(ok) toast('Contraseña actualizada ✓'); }); }
-function resetData(){ if(!requireMaster())return; if(!confirm('Esto borra los cambios y regresa a los datos de ejemplo. ¿Continuar?'))return;
-  DATA=normalize(JSON.parse(JSON.stringify(SEED))); CFG.limites={...DEFAULT_LIMITES};
-  persistAll(); render(); toast('Datos restablecidos'); }
-function clearAll(){ if(!requireMaster())return;
-  if(!confirm('Esto deja TODO en blanco: borra todos los embarques aquí y en la nube (Firebase). Esta acción no se puede deshacer. ¿Continuar?'))return;
-  DATA=[];
-  try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){}
-  if(fb&&fbData){ fbData.set(null); if(fbCfg) fbCfg.update({seeded:true}); }
-  document.getElementById('cfgOverlay').classList.remove('show');
-  render(); toast('Todo vacío — listo para empezar de cero'); }
+// «Restablecer a datos de ejemplo» y «Vaciar todo» reemplazaban TODA la programación de la nube.
+// Se retiraron: en operación real no tienen uso y un clic equivocado borraba todo.
+function resetData(){ toast('Opción retirada para proteger la programación'); }
+function clearAll(){ toast('Opción retirada para proteger la programación'); }
 
 /* ================= EXPORT/IMPORT ================= */
 function exportJSON(){ if(!requireUnlock())return; dlBlob(new Blob([JSON.stringify({cfg:CFG,data:DATA},null,2)],{type:'application/json'}),'respaldo_embarques.json'); toast('Respaldo descargado'); }
-function importJSON(e){ if(!requireUnlock())return; const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
-  rd.onload=()=>{ try{ const o=JSON.parse(rd.result); DATA=normalize(Array.isArray(o)?o:(o.data||[])); if(o.cfg)CFG=sinViejos({...CFG,...o.cfg}); persistAll(); render(); toast('Respaldo cargado ✓'); }catch(err){ toast('Archivo inválido'); } };
+// Recuperar de archivo: SOLO agrega los embarques del respaldo que no existen hoy. Nunca borra ni sobrescribe.
+function importJSON(e){ if(!requireMaster())return; const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+  rd.onload=()=>{ let arr; try{ const o=JSON.parse(rd.result); arr=normalize(Array.isArray(o)?o:(o.data||(o&&typeof o==='object'?Object.values(o).filter(x=>x&&x.id):[]))); }catch(err){ toast('Archivo inválido'); return; }
+    recuperarFaltantes(arr,'archivo '+f.name); };
   rd.readAsText(f); e.target.value=''; }
 function exportCSV(){
   const H=['F.Prog','Cita','SalidaProg','Pedido','Cliente','Destino','Estado','Unidad','Eco','Anden','Turno','Operador','Colocacion','Inicio','Fin','SalidaReal','EsperaAnden','T.Carga','EstatusCarga','EstatusSalida','RetrasoSalidaMin','Permanencia','Semaforo','KgProg','KgCargado','KgMin','F.Carga','Despachado','Motivo','Cargador','Obs'];
@@ -1683,7 +1683,77 @@ function saveCfgLocal(){} // noop placeholder to keep render happy
 function persistCfg(){ CFG=sinViejos(CFG); try{ localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbCfg){ fbCfg.set(sanitize(CFG)); } }
 function persist(id,rec){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fb&&fbData&&rec){ fbData.child(id).set(sanitize(rec)); } }
 function persistDelete(id){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} if(fb&&fbData){ fbData.child(id).remove(); } }
-function persistAll(){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbData){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); persistCfg(); } }
+// Nunca reemplaza el nodo completo: escribe embarque por embarque (update), así no puede borrar nada.
+function persistAll(){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){} if(fb&&fbData&&DATA.length){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.update(o); persistCfg(); } }
+
+/* ================= RESPALDOS (anti-borrado) =================
+   · Cada día, el primer equipo de Programación/báscula que abre guarda una foto de /embarques en
+     /respaldos/embarques/dias/AAAA-MM-DD (y la actualiza hasta 4 veces al día si crece). Se guardan 30 días.
+   · Si la nube trae muchos menos embarques que el último respaldo, NO se respalda encima y se avisa al master.
+   · Este equipo conserva la copia que tenía antes de conectarse (por si la nube se vació).
+   · Recuperar = agregar los que faltan. Nunca borra ni cambia lo que hoy existe. */
+let LOCAL0=null, fbResp=null, RESP_IDX=null, RESP_ALERTA=null, _respHecho=false;
+const PREVIO_KEY='progEmbarques_previo_v1';
+function hoyISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function quienResp(){ try{ const p=Acceso19H.perfil()||{}; return p.nombre||p.usuario||quienSU(); }catch(e){ return quienSU(); } }
+function idsBorrados(){ const b=new Set(); AUDIT.forEach(a=>{ if(a&&a.field==='borrado'&&a.id) b.add(a.id); }); return b; }
+function faltantesDe(arr){ const hay=new Set(DATA.map(r=>r.id)), bor=idsBorrados(); return (arr||[]).filter(r=>r&&r.id&&!hay.has(r.id)&&!bor.has(r.id)); }
+function respaldoDiario(val){
+  if(_respHecho||!fbResp||!(unlocked||isBasc)) return; _respHecho=true;
+  const n=Object.keys(val||{}).length;
+  fbResp.child('indice').once('value').then(s=>{
+    RESP_IDX=s.val()||{}; const hoy=hoyISO(), dias=Object.keys(RESP_IDX).sort(), ult=dias[dias.length-1], nU=ult?(RESP_IDX[ult].n||0):0;
+    if(nU>=10 && n<nU*0.6){ RESP_ALERTA={ult,nU,n}; renderBanners(); auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(programación)',field:'faltantes',label:'La nube trae menos embarques que el respaldo',from:nU+' ('+ult+')',to:n+' hoy',maquillaje:true,estatusAntes:'',estatusDespues:'',by:quienResp(),origen:'programador'}); return; }
+    if(!n) return;
+    const x=RESP_IDX[hoy]; if(x && (n<=x.n || Date.now()-(x.ts||0)<6*3600e3)) return;
+    const up={}; up['dias/'+hoy]=val; up['indice/'+hoy]={n,ts:Date.now(),por:quienResp()};
+    fbResp.update(up).then(()=>{ RESP_IDX[hoy]=up['indice/'+hoy]; if(isMaster) podarRespaldos(); }).catch(e=>console.warn('respaldo:',e&&e.message));
+  }).catch(e=>console.warn('respaldo idx:',e&&e.message));
+}
+function podarRespaldos(){ const d=Object.keys(RESP_IDX||{}).sort(); const sobran=d.slice(0,Math.max(0,d.length-30)); if(!sobran.length) return; const up={}; sobran.forEach(k=>{ up['dias/'+k]=null; up['indice/'+k]=null; delete RESP_IDX[k]; }); fbResp.update(up).catch(()=>{}); }
+function respaldoAntes(motivo){ // foto completa antes de cualquier recuperación
+  if(!fbResp) return Promise.resolve(); const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); if(!DATA.length) return Promise.resolve();
+  const k=hoyISO()+'_'+motivo.replace(/[^a-z0-9]/gi,'').slice(0,20)+'_'+Date.now().toString(36); const up={}; up['dias/'+k]=o; up['indice/'+k]={n:DATA.length,ts:Date.now(),por:quienResp(),motivo};
+  return fbResp.update(up).catch(()=>{});
+}
+function recuperarFaltantes(arr,origen){
+  if(!requireMaster()) return;
+  const f=faltantesDe(arr);
+  if(!f.length){ toast('No falta nada: todos los embarques de '+origen+' ya están en la nube'); return; }
+  const fechas=f.map(r=>r.fechaProg||r.fechaCarga||'').filter(Boolean).sort();
+  const ej=f.slice(0,8).map(r=>'· '+(r.pedido||'s/pedido')+' — '+(r.cliente||'')+' — '+(r.fechaProg||'')).join('\n');
+  if(!confirm('Recuperar desde '+origen+':\n\n'+f.length+' embarques que hoy NO están en la nube'+(fechas.length?' (del '+fechas[0]+' al '+fechas[fechas.length-1]+')':'')+'.\n'+ej+(f.length>8?'\n…':'')+'\n\nSolo se agregan. No se borra ni cambia ningún embarque actual. Los que el master borró a propósito no regresan.\n¿Continuar?')) return;
+  respaldoAntes('antes-recuperar').then(()=>{
+    const o={}; f.forEach(r=>o[r.id]=sanitize(r));
+    return fbData.update(o).then(()=>{
+      auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(programación)',field:'recuperacion',label:'Recuperación de embarques',from:'faltaban '+f.length,to:'recuperados desde '+origen,maquillaje:false,estatusAntes:'',estatusDespues:'',by:quienResp(),origen:'programador'});
+      RESP_ALERTA=null; toast('✓ '+f.length+' embarques recuperados',3500); renderBanners(); respRender();
+    });
+  }).catch(e=>toast('No se pudo recuperar: '+(e&&e.message||'sin permiso')));
+}
+function respRecuperarDia(k){ fbResp.child('dias/'+k).once('value').then(s=>recuperarFaltantes(normalize(Object.values(s.val()||{})),'respaldo del '+k)).catch(e=>toast('No se pudo leer el respaldo')); }
+function respRecuperarLocal(){ const p=leerPrevio(); recuperarFaltantes(p?p.data:[],'la copia de este equipo'); }
+function respDescargar(k){ fbResp.child('dias/'+k).once('value').then(s=>{ dlBlob(new Blob([JSON.stringify({data:Object.values(s.val()||{})},null,1)],{type:'application/json'}),'respaldo_embarques_'+k+'.json'); }); }
+function leerPrevio(){ try{ return JSON.parse(localStorage.getItem(PREVIO_KEY)||'null'); }catch(e){ return null; } }
+function guardarPrevio(nNube){ // la copia de este equipo vale como respaldo si tenía más que la nube
+  if(!LOCAL0||!LOCAL0.length) return; const p=leerPrevio();
+  if(LOCAL0.length>nNube && (!p || LOCAL0.length>=p.data.length || Date.now()-p.ts>7*864e5)){ try{ localStorage.setItem(PREVIO_KEY,JSON.stringify({ts:Date.now(),data:LOCAL0})); }catch(e){} }
+}
+function respRender(){
+  const box=document.getElementById('respPanel'); if(!box) return;
+  if(!fbResp){ box.innerHTML='<div class="hint">Conéctate a la nube para ver los respaldos.</div>'; return; }
+  const pintar=()=>{
+    const d=Object.keys(RESP_IDX||{}).sort().reverse(), p=leerPrevio(), fl=p?faltantesDe(p.data).length:0;
+    let h='<div class="hint" style="margin:0 0 6px">Nube hoy: <b>'+DATA.length+'</b> embarques. «Recuperar» solo agrega los que falten; nunca borra ni cambia los actuales.</div>';
+    if(RESP_ALERTA) h+='<div style="color:var(--late);font-weight:700;font-size:12.5px;margin-bottom:6px">⚠ El respaldo del '+RESP_ALERTA.ult+' tenía '+RESP_ALERTA.nU+' embarques y la nube trae '+RESP_ALERTA.n+'.</div>';
+    h+='<div style="display:grid;gap:4px;max-height:240px;overflow:auto">';
+    if(p&&p.data&&p.data.length) h+='<div style="display:flex;gap:8px;align-items:center;font-size:12.5px"><span style="flex:1">💻 Copia de este equipo · '+p.data.length+' embarques · '+new Date(p.ts).toLocaleString('es-MX')+(fl?' · <b style="color:var(--late)">'+fl+' no están en la nube</b>':'')+'</span>'+(fl?'<button class="ghost" onclick="respRecuperarLocal()">Recuperar '+fl+'</button>':'')+'</div>';
+    if(!d.length) h+='<div class="hint">Aún no hay respaldos en la nube: el primero se guarda hoy al abrir con usuario de Programación.</div>';
+    d.forEach(k=>{ const x=RESP_IDX[k]; h+='<div style="display:flex;gap:8px;align-items:center;font-size:12.5px"><span style="flex:1">📅 '+k.slice(0,10)+(x.motivo?' · '+x.motivo:'')+' · <b>'+x.n+'</b> embarques · '+(x.por||'')+'</span><button class="ghost" onclick="respRecuperarDia(\''+k+'\')">Recuperar faltantes</button><button class="ghost" onclick="respDescargar(\''+k+'\')" title="Descargar">⬇</button></div>'; });
+    box.innerHTML=h+'</div>';
+  };
+  if(RESP_IDX) pintar(); else fbResp.child('indice').once('value').then(s=>{ RESP_IDX=s.val()||{}; pintar(); }).catch(()=>{ box.innerHTML='<div class="hint">Falta permitir /respaldos en las reglas de Firebase (correr FASE=proteger).</div>'; });
+}
 function sanitize(o){ return JSON.parse(JSON.stringify(o)); }
 const CFG_VIEJOS=['pwd','masterPwd','pwdBascula','staffUsers','bascUsers','users'];   // Acceso 19H: ya no viven aquí
 function sinViejos(o){ const c=Object.assign({},o); CFG_VIEJOS.forEach(k=>delete c[k]); return c; }
@@ -1695,7 +1765,7 @@ function loadLocal(){
   try{ const a=localStorage.getItem(AUDIT_KEY); if(a) AUDIT=JSON.parse(a); }catch(e){}
   loadFlotaLocal();
   loadProyLocal();
-  try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=normalize(JSON.parse(d)); return; } }catch(e){}
+  try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=normalize(JSON.parse(d)); LOCAL0=DATA.slice(); return; } }catch(e){}
   DATA=normalize(JSON.parse(JSON.stringify(SEED)));
   try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}
 }
@@ -1715,20 +1785,24 @@ function initFirebase(){
     try{
       if(!fb){ fb = Acceso19H.app(); if(!fb){ setConn('local','Sin sesión'); return; } }   // Acceso 19H: la misma app donde entraste (lleva tu sesión a la base)
       const db = firebase.database(fb);
-      fbData = db.ref('embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('skan/_proyeccion'); fbProyEdit = db.ref('skan/_proyedit'); fbCuad = db.ref('skan/_cuadre');
+      fbData = db.ref('embarques'); fbResp = db.ref('respaldos/embarques'); fbCfg = db.ref('config'); fbAudit = db.ref('audit'); fbFlota = db.ref('flota'); fbProy = db.ref('skan/_proyeccion'); fbProyEdit = db.ref('skan/_proyedit'); fbCuad = db.ref('skan/_cuadre');
       setConn('online','Conectando…');
       // sembrar datos de ejemplo SOLO la primera vez (marca "seeded" en la nube).
       // Tras vaciar todo, la marca queda puesta y ya no se vuelve a sembrar.
       Promise.all([fbData.once('value'), fbCfg.once('value')]).then(([ds,cs])=>{
         const cv=cs.val()||{};
-        if(!ds.exists() && !cv.seeded){ const o={}; DATA.forEach(r=>o[r.id]=sanitize(r)); fbData.set(o); fbCfg.update({...sanitize(sinViejos(CFG)), seeded:true}); }
+        // ya no se siembran datos de ejemplo sobre la nube (podían encimarse a la programación real)
       });
       // sembrar flota la primera vez (marca "flotaSeeded" independiente)
       Promise.all([fbFlota.once('value'), fbCfg.once('value')]).then(([fs,cs])=>{
         const cv=cs.val()||{};
         if(!fs.exists() && !cv.flotaSeeded){ const o={}; FLOTA.forEach(r=>o[r.id]=sanitize(r)); fbFlota.set(o); fbCfg.update({flotaSeeded:true}); }
       });
-      fbData.on('value', snap=>{ const val=snap.val(); if(val){ DATA=normalize(Object.values(val)); render(); } setConn('online','Nube conectada'); document.getElementById('footer').textContent='Programador de embarques · sincronizado en tiempo real con la app de cargadores (Firebase).'; });
+      let _primeraNube=true;
+      fbData.on('value', snap=>{ const val=snap.val();
+        if(_primeraNube){ _primeraNube=false; const n=val?Object.keys(val).length:0; guardarPrevio(n); respaldoDiario(val||{}); }
+        if(val){ DATA=normalize(Object.values(val)); render(); }
+        else { DATA=[]; render(); } setConn('online','Nube conectada'); document.getElementById('footer').textContent='Programador de embarques · sincronizado en tiempo real con la app de cargadores (Firebase).'; });
       fbCfg.on('value', snap=>{ const v=snap.val(); if(v){ CFG=sinViejos({...CFG,...v}); _cfgSynced=true; SERV_OVERRIDES=CFG.servClientes||null;
         // la nube todavía no tiene el catálogo de motivos (cuentas ya sembradas antes de este cambio): lo sube ahora
         if(!v.motivos || !v.motivos.length){ CFG.motivos=MOTIVOS_DEFAULT.map(m=>({...m})); persistCfg(); }

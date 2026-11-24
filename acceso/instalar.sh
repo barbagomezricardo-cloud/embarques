@@ -17,6 +17,9 @@
 #      · Borra las contraseñas viejas de /config.
 #      · Cierra /config, /audit y /flota: solo usuarios con sesión.
 #
+#  PROTEGER LA PROGRAMACIÓN (evita borrados masivos de /embarques):
+#    curl -sL https://raw.githubusercontent.com/barbagomezricardo-cloud/embarques/main/acceso/instalar.sh | RAMA=main FASE=proteger bash
+#
 #  Se puede volver a correr sin dañar nada. Antes de tocar las reglas
 #  guarda un respaldo en tu carpeta de Cloud Shell.
 # =====================================================================
@@ -79,6 +82,19 @@ if fase=='cerrar2':   # ola 2: lo que leen Ventas, Maestra, Vendedor y Cuadre de
       if e is False: continue
       if 'acceso/usuarios' not in e: v[op]='('+e+') && '+U
     R[n]=v
+if fase=='proteger':   # la programación ya no se puede borrar ni reemplazar de golpe: solo embarque por embarque
+  E=R.get('embarques') or {}
+  if not isinstance(E,dict): E={}
+  E=dict(E); E.pop('.write',None)
+  comodin=next((k for k in E if k.startswith('$')),'$id')
+  sub=E.get(comodin) if isinstance(E.get(comodin),dict) else {}
+  sub=dict(sub); sub['.write']=LIC+" && "+U+" && (newData.exists() || "+P+" === 'master' || "+P+" === 'su')"
+  E[comodin]=sub
+  if '.read' not in E: E['.read']=LIC+" && "+U
+  R['embarques']=E
+  RW=LIC+" && "+ESCRIBE+" && (newData.exists() || "+P+" === 'master')"
+  R['respaldos']={".read": LIC+" && "+U+" && ("+P+" === 'master' || "+P+" === 'su' || "+P+" === 'basc')",
+    "embarques": {"dias": {"$d": {".write": RW}}, "indice": {"$d": {".write": RW}}}}
 json.dump(d,open('/tmp/acc_rules_nuevas.json','w'),indent=2,ensure_ascii=False)
 PY
   R=$(curl -s -o /tmp/acc_put.json -w '%{http_code}' -X PUT --data-binary @/tmp/acc_rules_nuevas.json "$DB/.settings/rules.json?access_token=$TOKEN")
@@ -156,6 +172,25 @@ if [ "$FASE" = "ola3" ]; then
   paso "Ola 3 · 2/2 Tu usuario master entra también a Inventarios, RH y Centro de Mando"
   llamar '{"accion":"ola3"}'; echo
   ok "Listo. Avísame para publicar las apps."
+  exit 0
+fi
+
+if [ "$FASE" = "proteger" ]; then
+  paso "1/3 Respaldo completo de la programación en tu Cloud Shell"
+  F="$HOME/embarques-respaldo-$(date +%Y%m%d-%H%M%S).json"
+  curl -s "$DB/embarques.json?access_token=$TOKEN" -o "$F"
+  python3 -c "import json,sys;d=json.load(open('$F')) or {};print('  Embarques hoy en la nube:',len(d))"
+  echo "  Guardado en: $F"
+  paso "2/3 Últimos movimientos de la bitácora (para ver quién/qué)"
+  curl -s "$DB/audit.json?orderBy=%22%24key%22&limitToLast=40&access_token=$TOKEN" | python3 -c "
+import json,sys
+d=json.load(sys.stdin) or {}
+for k,a in sorted(d.items(),key=lambda x:(x[1] or {}).get('ts','')):
+  a=a or {}; print('  ',(a.get('ts') or '')[:16].replace('T',' '),'|',a.get('by',''),'|',a.get('label',''),'|',a.get('pedido',''),a.get('cliente',''))
+" || true
+  paso "3/3 Reglas: sin borrado ni reemplazo masivo + nodo de respaldos diarios"
+  reglas proteger || exit 1
+  ok "Listo. La programación solo se escribe embarque por embarque; borrar uno queda para master/superusuario."
   exit 0
 fi
 
