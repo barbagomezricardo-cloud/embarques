@@ -211,6 +211,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button data-v="traza" onclick="setView('traza')">🧾 Trazabilidad <span id="trzCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="bascula" data-basc onclick="setView('bascula')">⚖️ Báscula <span id="bsCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="cuadre" data-basc onclick="setView('cuadre')">🧮 Cuadre <span id="cqCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
+    <button data-v="devol" data-basc onclick="setView('devol')">↩️ Devoluciones <span id="dvCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
     <button data-v="cierre" data-basc onclick="setView('cierre')">🗓️ Corte de mes <span id="ciCount" class="pill p-warn" style="margin-left:4px;display:none"></span></button>
     <button data-v="fletes" onclick="setView('fletes')">💲 Fletes y precios</button>
     <button data-v="sol" id="tabSol" style="display:none" onclick="setView('sol')">✋ Solicitudes <span id="solCount" class="pill p-late" style="margin-left:4px;display:none"></span></button>
@@ -365,6 +366,20 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
   </div>
 
   <!-- CIERRE DE MES -->
+  <div class="view" id="v-devol">
+    <div class="periodbar" style="margin-bottom:10px">
+      <div class="f"><label>Periodo</label><select id="dvPer" onchange="DV.per=this.value;renderDevol()"></select></div>
+      <div class="f"><label>Estado</label><select id="dvEst" onchange="DV.est=this.value;renderDevol()"><option value="">Todas</option><option value="registrada">Por validar</option><option value="validada">Validada · falta Odoo</option><option value="cerrada">Cerrada (en Odoo)</option><option value="rechazada">Rechazada</option></select></div>
+      <div class="f"><label>Buscar</label><input id="dvQ" placeholder="Cliente, pedido, producto, lote…" oninput="DV.q=this.value;renderDevol()"></div>
+      <div class="spacer"></div>
+      <button class="primary" onclick="openDevol()">＋ Registrar devolución</button>
+      <button class="ghost" onclick="devolCSV()">⬇ CSV para Ventas / Inventarios</button>
+    </div>
+    <div class="hint" style="margin:0 0 10px">Sacos que regresan de un cliente. Báscula (o Programación) la registra contra el <b>pedido de donde salieron</b>; superusuario o master la valida y anota el folio con que se afectó en Odoo. El pesaje y la carga originales no se modifican (son lo que realmente salió): el <b>Cuadre</b> resta la devolución en el mes en que se recibió, igual que Odoo.</div>
+    <div class="kpis" id="dvKpis"></div>
+    <div class="tablewrap"><table><thead id="theadDv"></thead><tbody id="tbodyDv"></tbody></table></div>
+  </div>
+
   <div class="view" id="v-cierre">
     <div class="periodbar" style="margin-bottom:10px">
       <div class="f"><label>Periodo</label><select id="ciPer" onchange="ciSet(this.value)"></select></div>
@@ -499,6 +514,35 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     </div>
     <div class="actions"><button class="ghost" id="bsDelBtn" style="display:none;color:var(--late)" onclick="deleteBasc()">🗑 Borrar (master)</button>
       <div style="display:flex;gap:9px;margin-left:auto"><button class="ghost" onclick="closeBasc()">Cerrar</button><button class="primary" id="bsSaveBtn" onclick="saveBasc()">Guardar pesaje</button></div></div>
+  </div>
+</div>
+
+<!-- DEVOLUCIÓN DE SACOS -->
+<div class="overlay" id="devolOverlay">
+  <div class="modal">
+    <h2 id="dvTitle">↩️ Registrar devolución de sacos</h2>
+    <div style="padding:14px 18px">
+      <div class="grid">
+        <div class="field half"><label>Pedido de donde salieron los sacos *</label><input id="dv_buscar" placeholder="Remisión, pedido, cliente o eco…" oninput="dvBuscar()"></div>
+        <div class="field half"><label>&nbsp;</label><select id="dv_emb" onchange="dvElegir(this.value)"></select></div>
+        <div class="field full"><div id="dvInfo" class="hint" style="font-size:12px"></div></div>
+        <div class="field"><label>Fecha en que se recibió *</label><input type="date" id="dv_fecha"></div>
+        <div class="field"><label>Recibió *</label><input id="dv_recibe" placeholder="Nombre"></div>
+        <div class="field"><label>Motivo *</label><select id="dv_motivo"><option value="">—</option><option>Producto dañado / saco roto</option><option>Rechazo del cliente</option><option>Error de pedido (producto equivocado)</option><option>Excedente / no lo pidió</option><option>Calidad / caducidad</option><option>Otro</option></select></div>
+        <div class="field"><label>Destino *</label><select id="dv_destino"><option value="reingreso">Reingreso a almacén de PT</option><option value="merma">Merma / destrucción</option><option value="reproceso">Reproceso</option></select></div>
+        <div class="sech full">📦 ¿Cuántos sacos regresan? (de lo que salió en ese pedido)</div>
+        <div class="field full" id="dv_lineas" style="padding:0"></div>
+        <div class="sech full">⚖️ Peso en báscula de la devolución (opcional)</div>
+        <div class="field"><label>Peso bruto (kg)</label><input type="number" id="dv_bruto" oninput="dvRecalc()"></div>
+        <div class="field"><label>Tara (kg)</label><input type="number" id="dv_tara" oninput="dvRecalc()"></div>
+        <div class="field"><label>Neto (kg)</label><input id="dv_neto" disabled></div>
+        <div class="field"><label>Folio de báscula</label><input id="dv_folio" style="text-transform:uppercase"></div>
+        <div class="field full"><div id="dvChk" class="hint" style="font-size:12.5px"></div></div>
+        <div class="field full"><label>Notas</label><textarea id="dv_nota" rows="2" placeholder="Qué pasó, quién lo reporta, evidencia…"></textarea></div>
+      </div>
+    </div>
+    <div class="actions"><span class="hint">Se avisa al superusuario y al master para validarla.</span>
+      <div style="display:flex;gap:9px;margin-left:auto"><button class="ghost" onclick="closeDevol()">Cerrar</button><button class="primary" onclick="saveDevol()">Registrar devolución</button></div></div>
   </div>
 </div>
 
@@ -1706,7 +1750,8 @@ const PREVIO_KEY='progEmbarques_previo_v1';
 function hoyISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function quienResp(){ try{ const p=Acceso19H.perfil()||{}; return p.nombre||p.usuario||quienSU(); }catch(e){ return quienSU(); } }
 function idsBorrados(){ const b=new Set(); AUDIT.forEach(a=>{ if(a&&a.field==='borrado'&&a.id) b.add(a.id); }); return b; }
-function faltantesDe(arr){ const hay=new Set(DATA.map(r=>r.id)), bor=idsBorrados(); return (arr||[]).filter(r=>r&&r.id&&!hay.has(r.id)&&!bor.has(r.id)); }
+const SEED_IDS=new Set(SEED.map(r=>r.id));   // datos de ejemplo: nunca cuentan como faltantes ni se recuperan
+function faltantesDe(arr){ const hay=new Set(DATA.map(r=>r.id)), bor=idsBorrados(); return (arr||[]).filter(r=>r&&r.id&&!SEED_IDS.has(r.id)&&!hay.has(r.id)&&!bor.has(r.id)); }
 function respaldoDiario(val){
   if(_respHecho||!fbResp||!(unlocked||isBasc)) return; _respHecho=true;
   const n=Object.keys(val||{}).length;
@@ -1774,9 +1819,8 @@ function loadLocal(){
   try{ const a=localStorage.getItem(AUDIT_KEY); if(a) AUDIT=JSON.parse(a); }catch(e){}
   loadFlotaLocal();
   loadProyLocal();
-  try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=normalize(JSON.parse(d)); LOCAL0=DATA.slice(); return; } }catch(e){}
-  DATA=normalize(JSON.parse(JSON.stringify(SEED)));
-  try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); localStorage.setItem(CFG_KEY,JSON.stringify(CFG)); }catch(e){}
+  try{ const d=localStorage.getItem(STORE_KEY); if(d){ DATA=normalize(JSON.parse(d)).filter(r=>!SEED_IDS.has(r.id)); LOCAL0=DATA.slice(); return; } }catch(e){}
+  DATA=[];   // equipo nuevo: se espera a la nube (antes se mostraban y guardaban datos de EJEMPLO que luego parecían «faltantes»)
 }
 function loadFlotaLocal(){
   try{ const f=localStorage.getItem(FLOTA_KEY); if(f!=null){ FLOTA=normalize(JSON.parse(f)); return; } }catch(e){}
@@ -1832,7 +1876,7 @@ function initFirebase(){
         err=>{ console.error('proyedit:',err&&err.message); });
       // Báscula / Cuadre / Cierre: tres escuchas separadas (el dato pesado de Odoo, odoodata, se baja solo cuando se necesita).
       // Si la nube está vacía y este equipo ya traía registros (trabajó sin internet), los sube en vez de borrarlos.
-      ['bascula','cierres','odoo','ajustes','bandeja','solicitudes','obs'].forEach(nodo=>{ let first=true;
+      ['bascula','cierres','odoo','ajustes','bandeja','solicitudes','obs','devol'].forEach(nodo=>{ let first=true;
         fbCuad.child(nodo).on('value', snap=>{ const v=snap.val();
           if(first&&v==null&&Object.keys(CUAD[nodo]||{}).length){ first=false; try{ fbCuad.child(nodo).set(sanitize(CUAD[nodo])); }catch(e){} return; }
           first=false; CUAD[nodo]=v||{}; if(nodo==='odoo'){ Object.keys(_odooCache).forEach(k=>delete _odooCache[k]); } cuadSaveLocal(); try{ render(); }catch(e){} },
@@ -1873,7 +1917,7 @@ function fill(id,arr){ const el=document.getElementById(id); if(!el)return; cons
 function dl(id,arr){ const el=document.getElementById(id); if(el) el.innerHTML=arr.map(v=>`<option value="${v}">`).join(''); }
 
 /* ================= VISTAS ================= */
-function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(v==='sol'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.body.dataset.view=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='conc')concRender(); if(v==='sol')renderSol(); if(v==='fletes'&&window.CliStaff)CliStaff.mountFletes('cliFletesMount'); }
+function setView(v){ if(v==='audit'&&!isMaster)return; if(v==='conc'&&!isMaster)return; if(v==='sol'&&!isMaster)return; if(isBasc&&!BASC_VIEWS.includes(v))return; curView=v; document.body.dataset.view=v; document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v)); document.querySelectorAll('.view').forEach(el=>el.classList.remove('show')); document.getElementById('v-'+v).classList.add('show'); if(v==='audit')renderAudit(); if(v==='flota')renderFlota(); if(v==='proyeccion')renderProyeccion(); if(v==='traza')renderTraza(); if(v==='bascula')renderBascula(); if(v==='cuadre')renderCuadre(); if(v==='cierre')renderCierre(); if(v==='devol')renderDevol(); if(v==='conc')concRender(); if(v==='sol')renderSol(); if(v==='fletes'&&window.CliStaff)CliStaff.mountFletes('cliFletesMount'); }
 
 /* ================================================================
    ================= FLOTA / MANTENIMIENTO ========================
@@ -2326,7 +2370,7 @@ const MESES_ES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto
 // Catálogo de la hoja "Catalogos" del Excel de báscula (con el código real de Odoo cuando el Excel traía uno distinto)
 const BASC_CATALOGO=[{cod:'04MAS0024',name:'KAN KAN 20 KG (R)',kg:20},{cod:'04MAS009',name:'KAN KAN 20 KGS',kg:20},{cod:'04MAS0013',name:'KAN KAN 25 + 1 KG EXTRA',kg:26},{cod:'04MAS0020',name:'KAN KAN 25 KG',kg:25},{cod:'04MAS0023',name:'KAN KAN 25 KG (R)',kg:25},{cod:'04MAS0012',name:'MI BOOB 20 + 1 KG EXTRA',kg:21},{cod:'04MAS008',name:'MI BOOB 20 KGS',kg:20},{cod:'04MAS010',name:'PET FOOD 20 KG (R)',kg:20},{cod:'04MAS0016',name:'SILVER CAT 15 + 1 KG EXTRA',kg:16},{cod:'04MAS006',name:'SILVER CAT 15 KGS',kg:15},{cod:'04MAS007',name:'SILVER CAT 5 KGS',kg:5},{cod:'04MAS0017',name:'SILVER KAN 18% 25 KG +1 EXTRAS',kg:26},{cod:'04MAS003',name:'SILVER KAN 18% 25 KGS',kg:25},{cod:'04MAS002',name:'SILVER KAN 18% 5 KGS',kg:5},{cod:'04MAS0015',name:'SILVER KAN CACHORRO 20 +1 KG EXTRA',kg:21},{cod:'04MAS004',name:'SILVER KAN CACHORRO 20 KGS',kg:20},{cod:'04MAS005',name:'SILVER KAN CACHORRO 5 KGS',kg:5},{cod:'04MAS001',name:'SILVER KAN PREMIUM +22% 25 KG',kg:25},{cod:'04MAS0011',name:'SILVER KAN PREMIUM+22% DE 25 KG + 2 KILOS EXTRAS',kg:27},{cod:'02CROQ037',name:'CABALLO IMPERIAL 15KG',kg:15},{cod:'02GAL43',name:'CRECIMIENTO POLLO EXTRUSADO 20 KGS',kg:20},{cod:'03CAB01',name:'CABALLO FIEL 40 KG',kg:40},{cod:'03CAB02',name:'CABALLO IMPERIAL 40KG',kg:40},{cod:'03GAL14',name:'GALLO MANTENIMIENTO 14% 40KG',kg:40},{cod:'03GAL19',name:'GALLO DE PELEA PELECHA 40 KG',kg:40},{cod:'03GAL22',name:'GALLO DE PELEA GANADOR F19 40 KGS',kg:40},{cod:'03GAL40',name:'PRE-INICIO POLLO 40KGS',kg:40},{cod:'03GAL42',name:'PRE INICIO POLLO 15 KGS (EXTRUSADO)',kg:15},{cod:'03GAL43',name:'CRECIMIENTO POLLO 20 KG EXTRUSADO',kg:20},{cod:'03GAL23',name:'GALLO MANTENIMIENTO SUPER 40 KG',kg:40}];
 
-let CUAD={bascula:{},cierres:{},odoo:{},odoodata:{},ajustes:{},bandeja:{},solicitudes:{},obs:{}}, fbCuad=null, isBasc=false, bascName='';
+let CUAD={bascula:{},cierres:{},odoo:{},odoodata:{},ajustes:{},bandeja:{},solicitudes:{},obs:{},devol:{}}, fbCuad=null, isBasc=false, bascName='';
 /* Base del cuadre de Báscula/Embarques: 'fac' = lo FACTURADO en Odoo (default) · 'inv' = salidas de inventario.
    Con base facturado, inventario queda como referencia «pendiente con Inventarios» (no es error de báscula ni de embarques). */
 function cuadBase(){ return CFG.cuadreBase==='inv'?'inv':'fac'; }
@@ -2334,7 +2378,7 @@ const cuadCfg=()=>({ tolKg:(CFG.bascTolKg!=null&&!isNaN(Number(CFG.bascTolKg)))?
   tolProg:(CFG.cuadreTolProgPct!=null&&!isNaN(Number(CFG.cuadreTolProgPct)))?Math.max(0,Number(CFG.cuadreTolProgPct)):5,
   tolSacos:(CFG.bascTolSacos!=null&&!isNaN(Number(CFG.bascTolSacos)))?Math.max(0,Number(CFG.bascTolSacos)):0 });
 function cuadLoadLocal(){
-  const _ap=o=>{ CUAD.bascula=o.bascula||{}; CUAD.cierres=o.cierres||{}; CUAD.odoo=o.odoo||{}; CUAD.ajustes=o.ajustes||{}; CUAD.bandeja=o.bandeja||{}; CUAD.solicitudes=o.solicitudes||{}; CUAD.obs=o.obs||{}; };
+  const _ap=o=>{ CUAD.bascula=o.bascula||{}; CUAD.cierres=o.cierres||{}; CUAD.odoo=o.odoo||{}; CUAD.ajustes=o.ajustes||{}; CUAD.bandeja=o.bandeja||{}; CUAD.solicitudes=o.solicitudes||{}; CUAD.obs=o.obs||{}; CUAD.devol=o.devol||{}; };
   /* El caché del cuadre (2 MB) también vive en IndexedDB. Migración segura: se copia, se confirma y SOLO entonces se borra de localStorage. */
   try{ const c=localStorage.getItem(CUAD_KEY); if(c){ const o=JSON.parse(c); _ap(o); _idbPut('cuadre',o).then(ok=>{ if(ok){ try{ localStorage.removeItem(CUAD_KEY); }catch(e){} } }); } }catch(e){}
   _idbGet('cuadre').then(o=>{ if(!o) return; const vacio=!Object.keys(CUAD.bascula||{}).length&&!Object.keys(CUAD.odoo||{}).length; if(vacio){ _ap(o); try{ refreshCuad(); }catch(e){} } });
@@ -2342,7 +2386,7 @@ function cuadLoadLocal(){
   odIdbGet().then(o=>{ if(!o) return; let ch=false; Object.keys(o).forEach(k=>{ if(CUAD.odoodata[k]==null){ CUAD.odoodata[k]=o[k]; ch=true; } else if(k==='_ts'&&typeof o[k]==='object'){ CUAD.odoodata._ts=Object.assign({},o[k],CUAD.odoodata._ts||{}); } }); if(ch){ try{ refreshCuad(); }catch(e){} } });
 }
 let _cuadIdbT=null;
-function cuadSaveLocal(){ clearTimeout(_cuadIdbT); _cuadIdbT=setTimeout(()=>{ try{ _idbPut('cuadre',JSON.parse(JSON.stringify({bascula:CUAD.bascula,cierres:CUAD.cierres,odoo:CUAD.odoo,ajustes:CUAD.ajustes,bandeja:CUAD.bandeja,solicitudes:CUAD.solicitudes,obs:CUAD.obs}))); }catch(e){} },500); }
+function cuadSaveLocal(){ clearTimeout(_cuadIdbT); _cuadIdbT=setTimeout(()=>{ try{ _idbPut('cuadre',JSON.parse(JSON.stringify({bascula:CUAD.bascula,cierres:CUAD.cierres,odoo:CUAD.odoo,ajustes:CUAD.ajustes,bandeja:CUAD.bandeja,solicitudes:CUAD.solicitudes,obs:CUAD.obs,devol:CUAD.devol}))); }catch(e){} },500); }
 function cuadSaveOdooLocal(){ odIdbSet(); }
 // escribe en memoria + localStorage + nube. path = 'bascula/ID' · 'cierres/2026-09' · 'cierres/2026-09/areas/bascula' …
 function cuadSet(path,val){
@@ -2475,8 +2519,12 @@ function parseOdooInv(rows){
     cQ=_colIdx(hd,/^cantidad$/), cR=_colIdx(hd,/^cantidad real/), cE=_colIdx(hd,/^estado/), cRf=_colIdx(hd,/^referencia/), cV=_colIdx(hd,/^ventas/);
   const agg=new Map(), nm={}; let leafs=0, kept=0, devol=0; const picks=new Map();   // picks: una salida de almacén (PT/SAL/…) con su remisión (columna Ventas)
   for(let i=h+1;i<rows.length;i++){ const r=rows[i]; const f=r[cF]; if(!(f instanceof Date)) continue; leafs++;
-    if(!/^pt\//i.test(String(r[cD]||'').trim())||String(r[cA]||'').trim().toLowerCase()!=='customers') continue;
+    const _esDev=String(r[cD]||'').trim().toLowerCase()==='customers'&&/^pt\//i.test(String(r[cA]||'').trim());   // devolución de cliente: regresa a PT
+    if(!_esDev&&(!/^pt\//i.test(String(r[cD]||'').trim())||String(r[cA]||'').trim().toLowerCase()!=='customers')) continue;
     if(cE>=0&&String(r[cE]||'').trim().toLowerCase()!=='hecho') continue;
+    if(_esDev){ const qd=cR>=0&&r[cR]!==''?(parseFloat(r[cR])||0):(parseFloat(r[cQ])||0); if(!(qd>0)) continue;
+      const pc=_prodCodeName(r[cP]), pk=pkey(pc.code); nm[pk]=nm[pk]||pc.name; const mes=_isoD(f).slice(0,7), cli=String(r[cC]||'').trim().toUpperCase()||'(SIN CONTACTO)', lote=normLote(r[cL]);
+      const key=mes+'|'+cli+'|'+pk+'|'+lote; const o=agg.get(key); if(o) o[4]-=qd; else agg.set(key,[mes,cli,pk,lote,-qd]); devol+=qd; continue; }
     const q0=parseFloat(r[cQ])||0, qr=cR>=0&&r[cR]!==''?(parseFloat(r[cR])||0):q0, q=cR>=0?qr:q0;
     if(q0>qr) devol+=q0-qr;
     if(!(q>0)) continue;
@@ -2620,17 +2668,25 @@ function cuadCompute(P){
         m._cli=ds.map(d=>cliRem[d]).find(Boolean)||m.cli;
         if(org===P&&tgt!==P){ mvAdj(m,-1); corteOut.push(m.v); } else if(org!==P&&tgt===P){ mvAdj(m,1); corteIn.push(m.v); } }); });
   }catch(e){ console.error('corte inv:',e); } }
+  // Devoluciones de sacos (pestaña ↩️): cuentan en el mes en que se RECIBIERON, igual que la entrada de devolución en Odoo
+  let devT=0, devPend=0, devN=0;
+  Object.values(CUAD.devol||{}).forEach(d=>{ if(!d||d.estado==='rechazada'||perDe(d.fecha)!==P) return;
+    if(d.estado==='registrada'){ devPend+=devSacos(d); return; }
+    devN++; const nc=normNom(d.cliente);
+    asArr(d.items).forEach(x=>{ const q=Number(x.sacos)||0; if(!q) return; const k=pkey(x.cod||x.prod); if(esSemiCuadre(k)) return; devT+=q;
+      const o=gp(k); o.name=o.name||x.prod; o.dev=(o.dev||0)+q; const oc=gc(nc); oc.name=oc.name||d.cliente; oc.dev=(oc.dev||0)+q;
+      const o2=gl(k+'|'+normLote(x.lote)); o2.pk=k; o2.lote=o2.lote||x.lote||'(sin lote)'; o2.name=o2.name||x.prod; o2.dev=(o2.dev||0)+q; }); });
   let facDesc=0, facMan=0, facBruto=0;
   if(fac) fac.rows.forEach(([c,pk,q,t])=>{ if(_semi(pk)&&t!=='d'&&t!=='m') return; if(_sv(pk)&&t!=='d'&&t!=='m'){ sacVacF+=q; return; } facBruto+=q; if(t==='d'){facDesc+=q;return;} if(t==='m'){facMan+=q;return;}
     const o=gp(pk); o.name=o.name||nm[pk]||pk; o.fac+=q; if(c){ const oc=gc(normNom(c)); oc.name=oc.name||c; oc.fac+=q; } });
   const hasFacCli=!!(fac&&fac.rows.some(r=>r[0]&&!_sv(r[1])));
-  const arr=m=>[...m.values()].filter(o=>o.c||o.b||o.inv||o.fac).sort((a,b)=>(a.name||'').localeCompare(b.name||'','es'));
+  const arr=m=>[...m.values()].filter(o=>o.c||o.b||o.inv||o.fac||o.dev).sort((a,b)=>(a.name||'').localeCompare(b.name||'','es'));
   const prodA=arr(prod); prodA.forEach(o=>{ o.name=prodNameByKey(o.k,o.name); }); prodA.sort((a,b)=>a.name.localeCompare(b.name,'es'));   // nombre del catálogo (Odoo a veces trae el de la promoción)
   const lotA=arr(lot); lotA.forEach(o=>{ o.name=prodNameByKey(o.pk,o.name); }); lotA.sort((a,b)=>a.name.localeCompare(b.name,'es')||String(a.lote).localeCompare(String(b.lote)));
   const sum=(a,k)=>a.reduce((s,o)=>s+(o[k]||0),0);
   const k={n:cus.length,conB:cus.filter(c=>c.u.b).length,ok:cus.filter(c=>c.st==='ok').length,dif:cus.filter(c=>c.st==='dif').length,ana:cus.filter(c=>c.st==='ana').length,
     pend:cus.filter(c=>c.st==='pend').length,gen:cus.filter(c=>c.u.b&&c.u.b.generado).length,noProg:cus.filter(c=>c.u.noProg).length,
-    c:sum(prodA,'c'),b:sum(prodA,'b'),inv:sum(prodA,'inv'),fac:sum(prodA,'fac'),cPend,corteIn,corteOut,cSinB,bSinC,nCSinB,nBSinC,
+    c:sum(prodA,'c'),b:sum(prodA,'b'),inv:sum(prodA,'inv'),fac:sum(prodA,'fac'),dev:devT,devPend,devN,cPend,corteIn,corteOut,cSinB,bSinC,nCSinB,nBSinC,
     kgProg:cus.reduce((s,c)=>s+c.Pkg,0),kgNeto:cus.reduce((s,c)=>s+c.neto,0)};
   return {P,cus,prod:prodA,cli:arr(cli),lot:lotA,k,hasInv:!!inv,hasFac:!!fac,hasFacCli,sacVac:Math.max(sacVac,sacVacF),facDesc,facMan,facBruto,invMeta:CUAD.odoo[P]&&CUAD.odoo[P].inv,facMeta:CUAD.odoo[P]&&CUAD.odoo[P].fac};
 }
@@ -2643,6 +2699,7 @@ function cuadLec(o,hasInv,hasFac,tolS){
     if(bs>tolS) out.push(['warn','Pesado en báscula sin liberar por Cargadores ('+fS(bs)+') · desfase']);
     if(Math.abs(res)>tolS) out.push(['crit','Cargadores ≠ Báscula ('+sgn(res)+')']); }
   const baseFac=cuadBase()==='fac'&&hasFac&&o.fac!=null;
+  if(o.dev){ out.push(['info','Devueltos '+fS(o.dev)+' sacos (ya restados contra Odoo)']); o=Object.assign({},o,{b:o.b-o.dev}); }
   if(baseFac){   // báscula vs FACTURADO
     if(soloOdoo){ if(o.fac) out.push(['info','Solo en Odoo (no pasó por báscula)']); }
     else { const d=o.b-o.fac; if(Math.abs(d)>tolS){ if(d>0) out.push(['warn','Pesado en báscula sin facturar ('+sgn(d)+') · falta liberar/facturar']); else out.push(['crit','Facturado de más vs báscula ('+sgn(d)+')']); } }
@@ -2905,11 +2962,12 @@ function renderCuadre(){
     {l:'Falta báscula',v:K.pend,f:K.cPend?fS(K.cPend)+' sacos cargados sin pesar':'al corriente',c:K.pend?'warn':'ok'},
     {l:'Sacos · Cargadores',v:fS(K.c),f:'liberado por Cargadores'+(K.cSinB?' · '+fS(K.cSinB)+' aún sin pesar ('+K.nCSinB+')':''),c:K.cSinB?'warn':'blue'},
     {l:'Sacos · Báscula',v:fS(K.b),f:cuadBascFoot(K,cfg),c:cuadBascCls(K,cfg)},
+    ...((K.dev||K.devPend)?[{l:'↩️ Devoluciones del mes',v:K.dev?'−'+fS(K.dev):'0',f:(K.devN?K.devN+' validada(s), restadas contra Odoo':'')+(K.devPend?(K.devN?' · ':'')+fS(K.devPend)+' sacos por validar (aún no se restan)':''),c:K.devPend?'warn':'pur'}]:[]),
     ...(cuadBase()==='fac'?[
-    {l:'Odoo · facturado neto (base)',v:D.hasFac?fS(K.fac):'—',f:D.hasFac?'vs báscula '+sgn(K.b-K.fac)+(Math.abs(K.b-K.fac)<0.5?' ✓':K.b>K.fac?' · por facturar':' · facturado de más'):'carga el reporte de ventas',c:D.hasFac?(Math.abs(K.b-K.fac)<0.5?'ok':'warn'):'warn'},
+    {l:'Odoo · facturado neto (base)',v:D.hasFac?fS(K.fac):'—',f:D.hasFac?'vs báscula'+(K.dev?' − devol.':'')+' '+sgn(K.b-(K.dev||0)-K.fac)+(Math.abs(K.b-(K.dev||0)-K.fac)<0.5?' ✓':K.b-(K.dev||0)>K.fac?' · por facturar':' · facturado de más'):'carga el reporte de ventas',c:D.hasFac?(Math.abs(K.b-(K.dev||0)-K.fac)<0.5?'ok':'warn'):'warn'},
     {l:'Odoo · salidas inventario (ref.)',v:D.hasInv?fS(K.inv):'—',f:D.hasInv&&D.hasFac?'vs facturado '+sgn(dInvFac)+(Math.abs(dInvFac)<0.5?' ✓':' · pendiente con Inventarios'):D.hasInv?'informativo':'opcional: sin reporte de inventarios',c:D.hasInv?(Math.abs(dInvFac)<0.5?'pur':'warn'):'blue'}
     ]:[
-    {l:'Odoo · salidas inventario',v:D.hasInv?fS(K.inv):'—',f:D.hasInv?'vs báscula '+sgn(K.b-K.inv):'carga el reporte de Odoo',c:D.hasInv?'pur':'warn'},
+    {l:'Odoo · salidas inventario',v:D.hasInv?fS(K.inv):'—',f:D.hasInv?'vs báscula'+(K.dev?' − devol.':'')+' '+sgn(K.b-(K.dev||0)-K.inv):'carga el reporte de Odoo',c:D.hasInv?'pur':'warn'},
     {l:'Odoo · facturado neto',v:D.hasFac?fS(K.fac):'—',f:D.hasFac&&D.hasInv?'inventario − facturado '+sgn(dInvFac)+(dInvFac>0?' · por facturar':dInvFac<0?' · facturado sin salir':' ✓'):D.hasFac?'sin descuento ni maniobra':'carga el reporte de Odoo',c:D.hasFac?(Math.abs(dInvFac)<0.5?'ok':'warn'):'warn'}])
   ];
   document.getElementById('cqKpis').innerHTML=kp.map(k=>`<div class="kpi ${k.c}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="foot">${k.f||''}</div>${k.bar!=null?`<div class="bar"><i style="width:${k.bar}%"></i></div>`:''}</div>`).join('');
@@ -2932,13 +2990,14 @@ function renderCuadre(){
     const src=CQ.view==='prod'?D.prod:CQ.view==='cli'?D.cli:D.lot;
     const hasF=CQ.view==='lote'?false:(CQ.view==='cli'?D.hasFacCli:D.hasFac);
     const bF=cuadBase()==='fac'&&hasF;   // base facturado: la diferencia de báscula se mide contra lo facturado
-    head=th(CQ.view==='prod'?'Producto':CQ.view==='cli'?'Cliente':'Producto · lote')+th('Cargadores',1)+th('Báscula',1)+th('Odoo inventario',1)+(hasF?th('Odoo facturado',1):'')+th(bF?'Báscula − Fact.':'Báscula − Inv.',1)+(hasF?th('Inv. − Fact.',1):'')+th('Lectura');
+    const hasD=src.some(o=>o.dev); src.forEach(o=>{ o.bn=o.b-(o.dev||0); });   // bn = báscula neta de devoluciones
+    head=th(CQ.view==='prod'?'Producto':CQ.view==='cli'?'Cliente':'Producto · lote')+th('Cargadores',1)+th('Báscula',1)+(hasD?th('↩️ Devueltos',1):'')+th('Odoo inventario',1)+(hasF?th('Odoo facturado',1):'')+th(bF?'Báscula − Fact.':'Báscula − Inv.',1)+(hasF?th('Inv. − Fact.',1):'')+th('Lectura');
     const esLote=CQ.view==='lote';   // el reporte por lote es solo informativo: no cuenta como error de productos, cantidades ni pesos
     const rows=src.map(o=>({o,lec:cuadLec(Object.assign({},o,{fac:hasF?o.fac:null}),D.hasInv,hasF,cfg.tolSacos).map(l=>esLote?['info',l[1]]:l)})).filter(x=>(!CQ.soloDif||(esLote?x.lec.length:x.lec.some(l=>l[0]!=='info')))&&(!q||normNom((x.o.name||'')+' '+(x.o.lote||'')).includes(q)));
-    body=rows.map(({o,lec})=>`<tr><td>${escProy(o.name||o.k)}${CQ.view==='lote'?` · <b class="code">${escProy(o.lote||'')}</b>`:''}</td><td class="num">${fS(o.c)}</td><td class="num">${fS(o.b)}</td><td class="num">${oN(o.inv)}</td>${hasF?`<td class="num">${fS(o.fac)}</td>`:''}
-      ${bF?`<td class="num ${Math.abs(o.b-o.fac)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${(o.c||o.b)?sgn(o.b-o.fac):'—'}</td>`:`<td class="num ${D.hasInv&&Math.abs(o.b-o.inv)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${D.hasInv&&(o.c||o.b)?sgn(o.b-o.inv):'—'}</td>`}${hasF?`<td class="num ${Math.abs(o.inv-o.fac)>cfg.tolSacos?'dwarn':''}">${D.hasInv?sgn(o.inv-o.fac):'—'}</td>`:''}<td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
-    const T=rows.reduce((t,{o})=>{ t.c+=o.c;t.b+=o.b;t.inv+=o.inv;t.fac+=(hasF?o.fac:0); return t; },{c:0,b:0,inv:0,fac:0});
-    if(rows.length) body+=`<tr style="font-weight:700;background:#12202f"><td>Total</td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td><td class="num">${oN(T.inv)}</td>${hasF?`<td class="num">${fS(T.fac)}</td>`:''}<td class="num">${bF?sgn(T.b-T.fac):(D.hasInv?sgn(T.b-T.inv):'—')}</td>${hasF?`<td class="num">${D.hasInv?sgn(T.inv-T.fac):'—'}</td>`:''}<td></td></tr>`;
+    body=rows.map(({o,lec})=>`<tr><td>${escProy(o.name||o.k)}${CQ.view==='lote'?` · <b class="code">${escProy(o.lote||'')}</b>`:''}</td><td class="num">${fS(o.c)}</td><td class="num">${fS(o.b)}</td>${hasD?`<td class="num" style="color:#f6c177">${o.dev?'−'+fS(o.dev):''}</td>`:''}<td class="num">${oN(o.inv)}</td>${hasF?`<td class="num">${fS(o.fac)}</td>`:''}
+      ${bF?`<td class="num ${Math.abs(o.bn-o.fac)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${(o.c||o.b)?sgn(o.bn-o.fac):'—'}</td>`:`<td class="num ${D.hasInv&&Math.abs(o.bn-o.inv)>cfg.tolSacos&&(o.c||o.b)?'dcrit':''}">${D.hasInv&&(o.c||o.b)?sgn(o.bn-o.inv):'—'}</td>`}${hasF?`<td class="num ${Math.abs(o.inv-o.fac)>cfg.tolSacos?'dwarn':''}">${D.hasInv?sgn(o.inv-o.fac):'—'}</td>`:''}<td style="white-space:normal">${chips(lec)}</td></tr>`).join('');
+    const T=rows.reduce((t,{o})=>{ t.c+=o.c;t.b+=o.b;t.d+=(o.dev||0);t.inv+=o.inv;t.fac+=(hasF?o.fac:0); return t; },{c:0,b:0,d:0,inv:0,fac:0});
+    if(rows.length) body+=`<tr style="font-weight:700;background:#12202f"><td>Total</td><td class="num">${fS(T.c)}</td><td class="num">${fS(T.b)}</td>${hasD?`<td class="num" style="color:#f6c177">${T.d?'−'+fS(T.d):''}</td>`:''}<td class="num">${oN(T.inv)}</td>${hasF?`<td class="num">${fS(T.fac)}</td>`:''}<td class="num">${bF?sgn(T.b-T.d-T.fac):(D.hasInv?sgn(T.b-T.d-T.inv):'—')}</td>${hasF?`<td class="num">${D.hasInv?sgn(T.inv-T.fac):'—'}</td>`:''}<td></td></tr>`;
     if(CQ.view==='cli'&&!D.hasFacCli&&D.hasFac) body+='<tr><td colspan="9" class="hint" style="white-space:normal">El reporte de ventas facturadas cargado es la tabla mensual (sin cliente). Para ver facturado por cliente carga el pivote por cliente.</td></tr>';
     document.getElementById('cqHint').innerHTML=CQ.view==='prod'?'Producto a producto: lo que cargaron, lo que pesó báscula, lo que salió de inventario en Odoo y lo facturado (sin descuento ni maniobra). Las promociones y bonificaciones cuentan como el mismo producto.'
       :CQ.view==='cli'?'Por cliente. El cliente de Odoo (Contacto) se empareja con el del programa ignorando acentos y signos.':'Por lote · INFORMATIVO: compara el lote de Cargadores, Báscula y Odoo (se ignoran espacios y símbolos). Las diferencias aquí no cuentan como error: el cuadre se juzga por producto, cantidad y peso.';
@@ -2997,6 +3056,7 @@ function cuadDet(id){
       ${hist.length?`<div class="hint"><b>Historial del embarque y del pesaje</b><br>${hist.map(h=>ttsStr(h.ts)+' · '+escProy(h.usuario||'')+' · '+escProy(h.accion||'')+' — '+escProy(h.detalle||'')).join('<br>')}</div>`:''}
     </div>`;
   document.getElementById('cqDetBtns').innerHTML=(isMaster&&!cu.u.noProg?`<button class="ghost" onclick="remAdminEdit('${id}')" title="Odoo re-documentó la remisión de este embarque en otra(s)">🧾 Remisión dividida${remAdminDe(r).length?' ('+remAdminDe(r).length+')':''}</button>`:'');
+  try{ const dv=devDeEmb(id); if(dv.length){ const bd=document.getElementById('cqDetBody'); bd.insertAdjacentHTML('beforeend',`<div style="padding:0 18px 14px"><div style="border-left:3px solid #f6c177;background:#1d1a12;border-radius:6px;padding:8px 10px;font-size:12.5px"><b>↩️ Devoluciones de este pedido</b>`+dv.map(d=>`<div>${d.fecha} · ${fS(devSacos(d))} sacos · ${escProy(d.motivo||'')} · ${(DV_EST[d.estado]||['',''])[1]}${d.odoo&&d.odoo.folio?' · Odoo '+escProy(d.odoo.folio):''}</div>`).join('')+`<div class="hint" style="margin:4px 0 0">El pesaje y la carga de arriba son lo que salió; la devolución se resta en el Cuadre del mes en que se recibió.</div></div></div>`); } }catch(e){}
   document.getElementById('cqDetOverlay').classList.add('show');
 }
 function remAdminEdit(id){
@@ -3032,8 +3092,8 @@ function cuadSaveAna(id){ if(!bascPuede()||isBasc)return; const b=CUAD.bascula[i
 function cuadTabla(kind,D){
   if(kind==='emb') return {H:['Fecha','Pedido','Cliente','ProgramadoKg','CargadoresKg','CargadoresSacos','BasculaNetoKg','BasculaSacos','FolioBascula','Estatus','Diferencias','Analisis'],
     rows:D.cus.map(c=>[c.u.fecha,c.u.r.pedido,c.u.r.cliente,Math.round(c.Pkg),Math.round(c.Cef),c.Csc,Math.round(c.neto),c.Bsc,c.u.b&&c.u.b.folio,c.st,c.flags.filter(f=>f.lvl!=='info').map(f=>f.t).join(' | '),c.u.b&&c.u.b.analisis&&c.u.b.analisis.txt])};
-  return {H:['Producto','Cargadores','Bascula','OdooInventario','OdooFacturadoNeto','Bascula-Inv','Inv-Fact'],
-    rows:D.prod.map(o=>[o.name,o.c,o.b,D.hasInv?o.inv:'',D.hasFac?o.fac:'',D.hasInv?o.b-o.inv:'',D.hasInv&&D.hasFac?o.inv-o.fac:''])};
+  return {H:['Producto','Cargadores','Bascula','Devueltos','OdooInventario','OdooFacturadoNeto','BasculaNeta-Inv','Inv-Fact'],
+    rows:D.prod.map(o=>[o.name,o.c,o.b,o.dev||0,D.hasInv?o.inv:'',D.hasFac?o.fac:'',D.hasInv?o.b-(o.dev||0)-o.inv:'',D.hasInv&&D.hasFac?o.inv-o.fac:''])};
 }
 function cuadCSV(kind){
   const D=cuadCompute(CQ.per); const q=v=>{ v=v==null?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
@@ -3174,7 +3234,7 @@ function reabrirCierre(P){ if(!requireMaster())return; const m=prompt('Reabrir '
   toast(perLabel(P)+' reabierto'); refreshCuad(); }
 
 /* ================= ENGANCHE CON render() Y CON LOS PERFILES ================= */
-function cuadRenderHook(){ try{ refreshAvisos(); }catch(e){ console.error('avisos:',e); } if(curView==='sol')renderSol(); else if(curView==='bascula')renderBascula(); else if(curView==='cuadre')renderCuadre(); else if(curView==='cierre')renderCierre(); else if(curView==='conc')concRender();
+function cuadRenderHook(){ try{ refreshAvisos(); }catch(e){ console.error('avisos:',e); } try{ if(curView==='devol') renderDevol(); else { const n=Object.values(CUAD.devol||{}).filter(d=>d&&(d.estado==='registrada'||(unlocked&&d.estado==='validada'))).length, c=document.getElementById('dvCount'); if(c){ c.style.display=n&&(unlocked||isBasc)?'':'none'; c.textContent=n; } } }catch(e){} if(curView==='sol')renderSol(); else if(curView==='bascula')renderBascula(); else if(curView==='cuadre')renderCuadre(); else if(curView==='cierre')renderCierre(); else if(curView==='conc')concRender();
   try{ const tc=document.getElementById('concCount'); if(tc&&curView!=='conc'){ const n=Object.values(CUAD.bandeja||{}).filter(x=>x.estado==='abierto').length; tc.textContent=n; tc.style.display=n?'inline-flex':'none'; } }catch(e){}
   // pestaña Corte de mes: al master le avisa cuántos cierres esperan su autorización; a cada área, en cuántos meses falta su corte
   try{ const e=document.getElementById('ciCount'); if(e){ let n=0;
@@ -3183,7 +3243,7 @@ function cuadRenderHook(){ try{ refreshAvisos(); }catch(e){ console.error('aviso
       e.textContent=n; e.style.display=n?'inline-flex':'none'; } }catch(e){}
   // contador de pendientes de pesar en la pestaña Báscula
   try{ const n=DATA.filter(r=>!r.cancelado&&isDesp(r)&&!CUAD.bascula[r.id]).length; const e=document.getElementById('bsCount'); if(e){ e.textContent=n; e.style.display=n?'inline-flex':'none'; } }catch(e){} }
-const BASC_VIEWS=['tabla','bascula','cuadre','cierre'];
+const BASC_VIEWS=['tabla','bascula','cuadre','devol','cierre'];
 
 /* ================= CONCILIACIÓN MAESTRA CON ODOO · BANDEJA DE ERRORES (solo master) =================
    Cada vez que se cargan las salidas de inventario de Odoo (cada una con su folio PT/SAL y su remisión R#####), esta pestaña
@@ -3787,8 +3847,152 @@ function avisosCalc(){
   const mias=isBasc?Object.values(CUAD.solicitudes||{}).filter(x=>x&&x.usuario===cuadUser()):[];
   const ack=ackGet(); const resueltas=mias.filter(x=>x.estado!=='pendiente'&&!ack[x.id]);
   const misPend=mias.filter(x=>x.estado==='pendiente');
-  return {sinPesar,viejas,difs,sol,cierres,otras,resueltas,misPend,area};
+  const DVL=Object.values(CUAD.devol||{}).filter(Boolean);
+  const dvPend=DVL.filter(d=>d.estado==='registrada'), dvOdoo=DVL.filter(d=>d.estado==='validada');
+  const dvRech=isBasc?DVL.filter(d=>d.estado==='rechazada'&&d.registra===cuadUser()&&!ack['dv_'+d.id]&&Date.now()-(d.resTs||0)<7*864e5):[];
+  return {sinPesar,viejas,difs,sol,cierres,otras,resueltas,misPend,area,dvPend,dvOdoo,dvRech};
 }
+
+/* ================================================================
+   ================= DEVOLUCIONES DE SACOS =========================
+   Báscula (o Programación) registra los sacos que regresa un cliente, ligados al pedido de donde salieron.
+   Superusuario / master la valida y anota el folio con que se afectó en Odoo (devolución o nota de crédito).
+   No se toca el pesaje ni la carga original (son lo que salió): el Cuadre resta la devolución en el mes
+   en que se recibió, igual que Odoo, para que Báscula, Ventas e Inventarios cuadren.
+   Estados: registrada → validada → cerrada (con folio Odoo) · rechazada.
+   ================================================================ */
+let DV={per:'',est:'',q:''}, dvEmb=null, dvLines=[];
+const DV_EST={registrada:['p-warn','Por validar'],validada:['p-proc','Validada · falta Odoo'],cerrada:['p-ok','Cerrada (en Odoo)'],rechazada:['p-late','Rechazada']};
+const DV_DEST={reingreso:'Reingreso a PT',merma:'Merma / destrucción',reproceso:'Reproceso'};
+function devSacos(d){ return asArr(d&&d.items).reduce((a,x)=>a+(Number(x.sacos)||0),0); }
+function devKg(d){ return asArr(d&&d.items).reduce((a,x)=>a+(Number(x.sacos)||0)*(Number(x.kgSaco)||0),0); }
+function devDeEmb(id){ return Object.values(CUAD.devol||{}).filter(d=>d&&d.embId===id&&d.estado!=='rechazada'); }
+function devPuedeValidar(){ return unlocked; }   // master o superusuario
+// lo que salió en el embarque: lo pesado en báscula (si hay) o lo que liberó Cargadores
+function dvSalida(r){
+  const b=CUAD.bascula[r.id], src=(b&&bascItems(b).length)?bascItems(b):lotesDe(r), m=new Map();
+  src.forEach(x=>{ const k=pkey(x.cod||x.prod)+'|'+normLote(x.lote); const o=m.get(k)||{cod:x.cod||'',prod:prodNameByKey(pkey(x.cod||x.prod),x.prod||x.cod||''),lote:x.lote||'',kgSaco:Number(x.kgSaco)||0,salio:0}; o.salio+=Number(x.sacos)||0; m.set(k,o); });
+  const ya={}; devDeEmb(r.id).forEach(d=>asArr(d.items).forEach(x=>{ const k=pkey(x.cod||x.prod)+'|'+normLote(x.lote); ya[k]=(ya[k]||0)+(Number(x.sacos)||0); }));
+  return [...m.entries()].map(([k,o])=>Object.assign(o,{k,yaDev:ya[k]||0,sacos:''}));
+}
+function openDevol(){
+  if(!bascPuede()){ toast('Registra devoluciones el usuario de báscula, superusuario o master'); return; }
+  dvEmb=null; dvLines=[];
+  ['dv_buscar','dv_bruto','dv_tara','dv_neto','dv_folio','dv_nota'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('dv_fecha').value=TODAY; document.getElementById('dv_motivo').value=''; document.getElementById('dv_destino').value='reingreso';
+  document.getElementById('dv_recibe').value=isBasc?(bascName||''):(userName||'');
+  dvBuscar(); dvPintar(); document.getElementById('devolOverlay').classList.add('show'); setTimeout(()=>document.getElementById('dv_buscar').focus(),60);
+}
+function closeDevol(){ document.getElementById('devolOverlay').classList.remove('show'); }
+function dvBuscar(){
+  const q=normNom(document.getElementById('dv_buscar').value), lim=addDias(TODAY,-150);
+  const L=DATA.filter(r=>!r.cancelado&&(isDesp(r)||CUAD.bascula[r.id])&&fechaEmb(r)>=lim&&(!q||normNom([r.pedido,r.cliente,r.eco,r.destino,...remAdminDe(r).map(x=>x.v)].join(' ')).includes(q)))
+    .sort((a,b)=>String(fechaEmb(b)).localeCompare(String(fechaEmb(a)))).slice(0,60);
+  const sel=document.getElementById('dv_emb');
+  sel.innerHTML='<option value="">'+(L.length?'— Elige el embarque ('+L.length+(L.length===60?'+':'')+') —':'Sin embarques despachados que coincidan')+'</option>'+L.map(r=>`<option value="${r.id}"${dvEmb&&dvEmb.id===r.id?' selected':''}>${fechaEmb(r)} · ${escProy(r.pedido||'s/pedido')} · ${escProy(r.cliente||'')}${r.eco?' · '+escProy(r.eco):''}</option>`).join('');
+  if(L.length===1&&!dvEmb) dvElegir(L[0].id);
+}
+function dvElegir(id){ const r=DATA.find(x=>x.id===id); dvEmb=r||null; dvLines=r?dvSalida(r):[]; dvPintar(); }
+function dvPintar(){
+  const info=document.getElementById('dvInfo'), box=document.getElementById('dv_lineas');
+  if(!dvEmb){ info.innerHTML='Busca por remisión, pedido o cliente y elige el embarque de donde salieron los sacos.'; box.innerHTML=''; dvRecalc(); return; }
+  const r=dvEmb, b=CUAD.bascula[r.id], prev=devDeEmb(r.id);
+  info.innerHTML=`<b>${escProy(r.cliente||'')}</b> · pedido <b>${escProy(r.pedido||'—')}</b> · salió ${fechaEmb(r)}${r.eco?' · '+escProy(r.eco):''} · ${b?'según báscula (folio '+escProy(b.folio||'—')+')':'según Cargadores (sin báscula)'}`+(prev.length?` · <span style="color:#f6c177">ya tiene ${prev.length} devolución(es): ${fS(prev.reduce((a,d)=>a+devSacos(d),0))} sacos</span>`:'');
+  if(!dvLines.length){ box.innerHTML='<div class="hint" style="padding:6px 0">Este embarque no tiene productos capturados por báscula ni por Cargadores.</div>'; dvRecalc(); return; }
+  box.innerHTML=`<table style="width:100%;font-size:12.5px"><thead><tr><th style="text-align:left">Producto</th><th style="text-align:left">Lote</th><th style="text-align:right">Salieron</th><th style="text-align:right">Ya devueltos</th><th style="text-align:right">Regresan ahora</th></tr></thead><tbody>`+
+    dvLines.map((x,i)=>`<tr><td>${escProy(x.prod)}</td><td class="code">${escProy(x.lote||'—')}</td><td class="num">${fS(x.salio)}</td><td class="num">${x.yaDev?fS(x.yaDev):''}</td><td style="text-align:right"><input type="number" min="0" step="1" value="${x.sacos}" style="width:90px;text-align:right" oninput="dvLines[${i}].sacos=this.value;dvRecalc()"></td></tr>`).join('')+'</tbody></table>';
+  dvRecalc();
+}
+function dvRecalc(){
+  const br=Number(document.getElementById('dv_bruto').value)||0, ta=Number(document.getElementById('dv_tara').value)||0, ne=br&&ta?Math.max(0,br-ta):0;
+  document.getElementById('dv_neto').value=ne?fK(ne):'';
+  const sac=dvLines.reduce((a,x)=>a+(Number(x.sacos)||0),0), kg=dvLines.reduce((a,x)=>a+(Number(x.sacos)||0)*(x.kgSaco||0),0);
+  const exc=dvLines.filter(x=>(Number(x.sacos)||0)>x.salio-x.yaDev);
+  let h=sac?`Regresan <b>${fS(sac)} sacos</b>${kg?' · '+fK(kg)+' kg teóricos':''}`:'Escribe cuántos sacos regresan en cada renglón.';
+  if(ne&&kg){ const d=ne-kg, tol=cuadCfg().tolKg; h+=` · neto báscula ${fK(ne)} kg (${d>0?'+':''}${fK(d)} kg)`+(Math.abs(d)>tol?' <span style="color:var(--late)">⚠ fuera de tolerancia</span>':' ✓'); }
+  if(exc.length) h+=`<div style="color:var(--late);margin-top:4px">⚠ ${exc.map(x=>escProy(x.prod)+' lote '+escProy(x.lote||'—')).join(', ')}: regresan más de los que salieron en ese pedido.</div>`;
+  document.getElementById('dvChk').innerHTML=h;
+}
+function saveDevol(){
+  if(!bascPuede()) return;
+  if(!dvEmb){ toast('Elige el pedido de donde salieron los sacos'); return; }
+  const items=dvLines.filter(x=>(Number(x.sacos)||0)>0).map(x=>({cod:x.cod,prod:x.prod,lote:x.lote,kgSaco:x.kgSaco,sacos:Math.round(Number(x.sacos))}));
+  if(!items.length){ toast('Indica cuántos sacos regresan'); return; }
+  if(dvLines.some(x=>(Number(x.sacos)||0)>x.salio-x.yaDev)){ toast('No pueden regresar más sacos de los que salieron en ese pedido'); return; }
+  const g=i=>document.getElementById(i).value.trim();
+  const fecha=g('dv_fecha'), recibe=g('dv_recibe'), motivo=g('dv_motivo');
+  if(!fecha||!recibe||!motivo){ toast('Faltan fecha, quién recibió o motivo'); return; }
+  if(fecha>TODAY){ toast('La fecha no puede ser futura'); return; }
+  const br=Number(g('dv_bruto'))||0, ta=Number(g('dv_tara'))||0, r=dvEmb, now=Date.now(), id='dv'+now.toString(36);
+  const rec={id,ts:now,fecha,embId:r.id,pedido:r.pedido||'',cliente:r.cliente||'',fechaSalida:fechaEmb(r),eco:r.eco||'',items,motivo,destino:g('dv_destino'),recibe,
+    bascula:br&&ta?{bruto:br,tara:ta,neto:Math.max(0,br-ta),folio:g('dv_folio').toUpperCase()}:null,nota:g('dv_nota'),registra:cuadUser(),estado:'registrada',
+    hist:{['h'+now]:{ts:now,usuario:cuadUser(),accion:'Registró',detalle:devSacos({items})+' sacos · '+motivo}}};
+  // registrada por superusuario/master: queda validada de una vez (la valida quien la capturó)
+  if(unlocked){ rec.estado='validada'; rec.valida={por:cuadUser(),ts:now}; rec.hist['h'+(now+1)]={ts:now,usuario:cuadUser(),accion:'Validó',detalle:'Capturada por superusuario/master'}; }
+  cuadSet('devol/'+id,rec);
+  auditPush({ts:new Date().toISOString(),id:r.id,pedido:r.pedido||'',cliente:r.cliente||'',field:'devolucion',label:'Devolución de sacos',from:'',to:devSacos(rec)+' sacos · '+motivo,maquillaje:false,estatusAntes:'',estatusDespues:'',by:cuadUser(),origen:'programador'});
+  closeDevol(); DV.per=perDe(fecha); renderDevol(); refreshAvisos();
+  toast(unlocked?'✓ Devolución registrada y validada. Falta anotar el folio de Odoo.':'✓ Devolución registrada. Se avisó al superusuario y al master para validarla.',4000);
+}
+function dvHist(d,accion,detalle){ const t=Date.now(); cuadSet('devol/'+d.id+'/hist/h'+t,{ts:t,usuario:cuadUser(),accion,detalle:detalle||''}); }
+function devValidar(id){ if(!devPuedeValidar()) return; const d=CUAD.devol[id]; if(!d||d.estado!=='registrada') return;
+  if(!confirm('Validar la devolución de '+fS(devSacos(d))+' sacos de '+d.cliente+' (pedido '+d.pedido+').\n\nA partir de ahora el Cuadre la resta contra Odoo. ¿Continuar?')) return;
+  const t=Date.now(); cuadSet('devol/'+id,{...d,estado:'validada',valida:{por:cuadUser(),ts:t},resTs:t}); dvHist(d,'Validó','');
+  renderDevol(); refreshAvisos(); toast('✓ Validada. Falta afectarla en Odoo y anotar el folio.'); }
+function devRechazar(id){ if(!devPuedeValidar()) return; const d=CUAD.devol[id]; if(!d) return;
+  const m=prompt('¿Por qué se rechaza? (lo verá báscula)',''); if(m===null) return; if(!m.trim()){ toast('Escribe el motivo'); return; }
+  const t=Date.now(); cuadSet('devol/'+id,{...d,estado:'rechazada',rechazo:m.trim(),resTs:t,valida:{por:cuadUser(),ts:t}}); dvHist(d,'Rechazó',m.trim());
+  renderDevol(); refreshAvisos(); toast('Devolución rechazada'); }
+function devOdoo(id){ if(!devPuedeValidar()) return; const d=CUAD.devol[id]; if(!d) return;
+  const f=prompt('Folio con el que se afectó en Odoo (devolución PT/IN/… o nota de crédito):',(d.odoo&&d.odoo.folio)||''); if(f===null) return;
+  const v=f.trim().toUpperCase(); if(!v){ toast('Escribe el folio'); return; }
+  const t=Date.now(); cuadSet('devol/'+id,{...d,estado:'cerrada',odoo:{folio:v,por:cuadUser(),ts:t}}); dvHist(d,'Folio Odoo',v);
+  renderDevol(); refreshAvisos(); toast('✓ Devolución cerrada con folio '+v); }
+function devBorrar(id){ if(!isMaster) return; const d=CUAD.devol[id]; if(!d) return;
+  if(!confirm('Borrar esta devolución (queda en Auditoría). ¿Continuar?')) return;
+  auditPush({ts:new Date().toISOString(),id:d.embId,pedido:d.pedido,cliente:d.cliente,field:'devolucion',label:'Devolución borrada',from:devSacos(d)+' sacos',to:'BORRADA',maquillaje:true,estatusAntes:d.estado,estatusDespues:'BORRADA',by:'master',origen:'programador'});
+  cuadSet('devol/'+id,null); renderDevol(); refreshAvisos(); }
+function devAck(id){ const a=ackGet(); a['dv_'+id]=1; try{ localStorage.setItem(ackKey,JSON.stringify(a)); }catch(e){} refreshAvisos(); }
+function dvFiltradas(){ const q=normNom(DV.q);
+  return Object.values(CUAD.devol||{}).filter(d=>d&&(!DV.per||perDe(d.fecha)===DV.per)&&(!DV.est||d.estado===DV.est)&&(!q||normNom([d.cliente,d.pedido,d.motivo,d.odoo&&d.odoo.folio,...asArr(d.items).map(x=>x.prod+' '+x.lote)].join(' ')).includes(q)))
+    .sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||(b.ts-a.ts)); }
+function renderDevol(){
+  const ps=document.getElementById('dvPer'); if(!ps) return;
+  const pers=[...new Set([perDe(TODAY),...Object.values(CUAD.devol||{}).filter(Boolean).map(d=>perDe(d.fecha))])].sort().reverse();
+  if(DV.per&&!pers.includes(DV.per)) pers.push(DV.per);
+  ps.innerHTML='<option value="">Todos los meses</option>'+pers.map(p=>`<option value="${p}">${perLabel(p)}</option>`).join(''); ps.value=DV.per;
+  document.getElementById('dvEst').value=DV.est;
+  const L=dvFiltradas(), all=Object.values(CUAD.devol||{}).filter(d=>d&&(!DV.per||perDe(d.fecha)===DV.per)&&d.estado!=='rechazada');
+  const sum=(a,f)=>a.reduce((s,d)=>s+f(d),0), por=e=>all.filter(d=>d.estado===e);
+  const kp=[
+    {l:'Sacos devueltos',v:fS(sum(all,devSacos)),f:fK(sum(all,devKg))+' kg · '+all.length+' devolución(es)',c:'blue'},
+    {l:'Por validar',v:por('registrada').length,f:fS(sum(por('registrada'),devSacos))+' sacos · aún no cuentan en el cuadre',c:por('registrada').length?'warn':'ok'},
+    {l:'Validadas · falta Odoo',v:por('validada').length,f:fS(sum(por('validada'),devSacos))+' sacos · anotar folio de Odoo',c:por('validada').length?'warn':'ok'},
+    {l:'Cerradas en Odoo',v:por('cerrada').length,f:fS(sum(por('cerrada'),devSacos))+' sacos',c:'ok'}];
+  document.getElementById('dvKpis').innerHTML=kp.map(k=>`<div class="kpi ${k.c}"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="foot">${k.f}</div></div>`).join('');
+  document.getElementById('theadDv').innerHTML='<th>Recibida</th><th>Pedido · cliente</th><th>Producto · lote</th><th style="text-align:right">Sacos</th><th>Motivo · destino</th><th>Estado</th><th></th>';
+  document.getElementById('tbodyDv').innerHTML=L.length?L.map(d=>{ const e=DV_EST[d.estado]||['','']; const its=asArr(d.items);
+    let acc='';
+    if(d.estado==='registrada'&&devPuedeValidar()) acc+=`<button class="primary" onclick="devValidar('${d.id}')">✓ Validar</button> <button class="ghost" onclick="devRechazar('${d.id}')">Rechazar</button>`;
+    if(d.estado==='validada'&&devPuedeValidar()) acc+=`<button class="primary" onclick="devOdoo('${d.id}')">🧾 Folio Odoo</button> <button class="ghost" onclick="devRechazar('${d.id}')">Rechazar</button>`;
+    if(d.estado==='cerrada'&&devPuedeValidar()) acc+=`<button class="ghost" onclick="devOdoo('${d.id}')">Editar folio</button>`;
+    if(d.estado==='rechazada'&&isBasc&&!ackGet()['dv_'+d.id]) acc+=`<button class="ghost" onclick="devAck('${d.id}')">Enterado</button>`;
+    if(isMaster) acc+=` <button class="ghost" style="color:var(--late)" title="Borrar (master)" onclick="devBorrar('${d.id}')">🗑</button>`;
+    return `<tr><td>${d.fecha}<div class="hint" style="margin:0">recibió ${escProy(d.recibe||'')}</div></td>
+      <td><b>${escProy(d.pedido||'—')}</b> · ${escProy(d.cliente||'')}<div class="hint" style="margin:0">salió ${escProy(d.fechaSalida||'')}${d.eco?' · '+escProy(d.eco):''}</div></td>
+      <td>${its.map(x=>escProy(x.prod)+' · <span class="code">'+escProy(x.lote||'—')+'</span>').join('<br>')}</td>
+      <td class="num">${its.map(x=>fS(x.sacos)).join('<br>')}${its.length>1?'<div style="font-weight:700">'+fS(devSacos(d))+'</div>':''}${d.bascula?'<div class="hint" style="margin:0">'+fK(d.bascula.neto)+' kg báscula</div>':''}</td>
+      <td style="white-space:normal">${escProy(d.motivo||'')}<div class="hint" style="margin:0">${DV_DEST[d.destino]||''}${d.nota?' · '+escProy(d.nota):''}</div></td>
+      <td><span class="pill ${e[0]}">${e[1]}</span>${d.odoo&&d.odoo.folio?'<div class="hint" style="margin:0">Odoo: <b>'+escProy(d.odoo.folio)+'</b></div>':''}${d.rechazo?'<div class="hint" style="margin:0;color:var(--late)">'+escProy(d.rechazo)+'</div>':''}<div class="hint" style="margin:0">${escProy(d.registra||'')}${d.valida?' → '+escProy(d.valida.por):''}</div></td>
+      <td style="white-space:nowrap">${acc}</td></tr>`; }).join(''):`<tr><td colspan="7" class="empty">Sin devoluciones${DV.per?' en '+perLabel(DV.per):''}.</td></tr>`;
+  const n=Object.values(CUAD.devol||{}).filter(d=>d&&(d.estado==='registrada'||(unlocked&&d.estado==='validada'))).length, c=document.getElementById('dvCount');
+  if(c){ c.style.display=n&&(unlocked||isBasc)?'':'none'; c.textContent=n; }
+}
+function devolCSV(){
+  const L=dvFiltradas(), H=['FechaRecibida','Periodo','Pedido','Cliente','FechaSalida','CodigoProducto','Producto','Lote','Sacos','KgTeoricos','Motivo','Destino','Estado','FolioOdoo','Registro','Valido','NetoBasculaKg','Notas'], rows=[];
+  L.forEach(d=>asArr(d.items).forEach(x=>rows.push([d.fecha,perDe(d.fecha),d.pedido,d.cliente,d.fechaSalida,x.cod,x.prod,x.lote,x.sacos,(Number(x.sacos)||0)*(Number(x.kgSaco)||0),d.motivo,DV_DEST[d.destino]||d.destino,(DV_EST[d.estado]||['',''])[1],d.odoo&&d.odoo.folio||'',d.registra,d.valida&&d.valida.por||'',d.bascula&&d.bascula.neto||'',d.nota||''])));
+  const esc=v=>{ const t=String(v==null?'':v); return /[",\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t; };
+  dlBlob(new Blob(['\ufeff'+[H,...rows].map(r=>r.map(esc).join(',')).join('\n')],{type:'text/csv;charset=utf-8'}),'devoluciones_'+(DV.per||'todas')+'.csv'); }
 function irA(sel,msg){ setTimeout(()=>{ const e=document.querySelector(sel); if(e) e.scrollIntoView({behavior:'smooth',block:'start'}); },60); if(msg) toast(msg,2600); }
 function bsFiltro(fil){
   setView('bascula');
@@ -3821,14 +4025,20 @@ function refreshAvisos(){
     A.resueltas.forEach(s=>row(s.estado==='aprobada'?'✅':'⛔',s.estado==='aprobada'?'ok':'warn',`Tu solicitud de edición del folio ${escProy(s.folio||'')} fue ${s.estado==='aprobada'?'APROBADA':'RECHAZADA'}${s.motivoRechazo?': '+escProy(s.motivoRechazo):''}`,'Entendido',`ackSol('${s.id}')`));
     A.otras.forEach(o=>row('✂️','info',`${o.lab} ya hizo su corte de ${perLabel(o.p)}: falta el de Báscula`,'Hacer corte',"setView('cierre')"));
     if(A.misPend.length) row('✋','info',`${A.misPend.length} solicitud(es) tuya(s) esperan al master`,'',"");
+    cnt.dvr=A.dvRech.length; A.dvRech.forEach(d=>row('↩️','warn',`Devolución de ${escProy(d.cliente||'')} (pedido ${escProy(d.pedido||'')}) RECHAZADA: ${escProy(d.rechazo||'')}`,'Ver',"setView('devol')"));
   } else if(isMaster){
     cnt.sol=A.sol.length; cnt.cie=A.cierres.length; cnt.dif=A.difs.length; cnt.vie=A.viejas.length;
     if(A.sol.length) row('✋','',`${A.sol.length} ${A.sol.length===1?'solicitud de edición espera':'solicitudes de edición esperan'} tu autorización`,'Revisar',"setView('sol')");
+    cnt.dev=A.dvPend.length; cnt.dvo=A.dvOdoo.length;
+    if(A.dvPend.length) row('↩️','',`${A.dvPend.length} ${A.dvPend.length===1?'devolución de sacos espera':'devoluciones de sacos esperan'} validación (${fS(A.dvPend.reduce((a,d)=>a+devSacos(d),0))} sacos)`,'Revisar',"DV.est='registrada';setView('devol')");
+    if(A.dvOdoo.length) row('🧾','warn',`${A.dvOdoo.length} ${A.dvOdoo.length===1?'devolución validada falta':'devoluciones validadas faltan'} de afectar en Odoo (folio)`,'Ver',"DV.est='validada';setView('devol')");
     if(A.cierres.length) row('🗓️','',`${A.cierres.length} ${A.cierres.length===1?'cierre de mes espera':'cierres de mes esperan'} tu autorización (${A.cierres.map(perLabel).join(', ')})`,'Revisar',"CI.per='"+A.cierres[0]+"';setView('cierre')");
     if(A.difs.length) row('⚠️','warn',`${A.difs.length} embarque(s) con diferencia sin analizar`,'Ver',"cqFiltro('dif')");
     if(A.viejas.length) row('⏳','warn',`${A.viejas.length} unidad(es) despachada(s) sin pesar de días anteriores`,'Ver',"cqFiltro('old')");
   } else {
-    cnt.dif=A.difs.length; cnt.vie=A.viejas.length; cnt.otr=A.otras.length;
+    cnt.dif=A.difs.length; cnt.vie=A.viejas.length; cnt.otr=A.otras.length; cnt.dev=A.dvPend.length; cnt.dvo=A.dvOdoo.length;
+    if(A.dvPend.length) row('↩️','',`${A.dvPend.length} ${A.dvPend.length===1?'devolución de sacos registrada por báscula espera':'devoluciones de sacos registradas por báscula esperan'} tu validación`,'Revisar',"DV.est='registrada';setView('devol')");
+    if(A.dvOdoo.length) row('🧾','warn',`${A.dvOdoo.length} ${A.dvOdoo.length===1?'devolución validada falta':'devoluciones validadas faltan'} de afectar en Odoo`,'Ver',"DV.est='validada';setView('devol')");
     if(A.difs.length) row('⚠️','',`${A.difs.length} ${A.difs.length===1?'embarque con diferencia entre Cargadores y Báscula':'embarques con diferencia entre Cargadores y Báscula'} · hay que revisarlos`,'Atender ahora',"cqFiltro('dif')");
     if(A.viejas.length) row('⏳','warn',`${A.viejas.length} ${A.viejas.length===1?'unidad despachada lleva':'unidades despachadas llevan'} días sin pesarse en báscula`,'Ver',"cqFiltro('old')");
     A.otras.forEach(o=>row('✂️','info',`${o.lab} ya hizo su corte de ${perLabel(o.p)}: falta el de Programación`,'Hacer corte',"setView('cierre')"));
@@ -3840,12 +4050,15 @@ function refreshAvisos(){
   if(_avCounts){
     const up=k=>cnt[k]!=null&&_avCounts[k]!=null&&cnt[k]>_avCounts[k];
     if(isBasc){
+      if(up('dvr')){ beep(2); notifyBrowser('↩️ Devolución rechazada','Revisa la devolución que registraste.'); }
       if(up('pes')){ beep(3); notifyBrowser('⚖️ Unidad por pesar','Hay '+cnt.pes+' unidades esperando báscula.'); toast('⚖️ Nueva unidad por pesar',3000); }
       if(up('res')){ beep(2); notifyBrowser('Solicitud resuelta','El master respondió tu solicitud de edición.'); }
       if(up('otr')){ beep(2); notifyBrowser('✂️ Corte de mes','Otra área ya hizo su corte.'); }
     } else if(isMaster){
+      if(up('dev')){ beep(2); notifyBrowser('↩️ Devolución de sacos','Báscula registró una devolución: valídala.'); toast('↩️ Nueva devolución por validar',3000); }
       if(up('sol')||up('cie')){ beep(2); notifyBrowser('✋ Por autorizar','Tienes solicitudes o cierres esperando tu autorización.'); toast('✋ Algo espera tu autorización',3000); }
     } else {
+      if(up('dev')){ beep(2); notifyBrowser('↩️ Devolución de sacos','Báscula registró una devolución: valídala.'); toast('↩️ Nueva devolución por validar',3000); }
       if(up('dif')){ beep(2); notifyBrowser('⚠️ Diferencia en báscula','Hay embarques con diferencia por revisar.'); toast('⚠️ Nueva diferencia en báscula',3000); }
       if(up('otr')){ beep(2); notifyBrowser('✂️ Corte de mes','Báscula ya hizo su corte.'); }
     }
