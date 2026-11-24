@@ -167,7 +167,7 @@ function servClass(n){const t=servicioCliente(n);return t==='CHALAN'?'serv-card-
     <button class="primary" onclick="openForm()">＋ Programar embarque</button>
     <button data-basc-ok onclick="exportCSV()">⬇ CSV</button>
     <button class="ghost" onclick="copyPuntualidad()" title="Genera un mensaje con el % de entregas a tiempo, listo para compartir">📣 Puntualidad</button>
-    <button class="ghost protected" data-prot onclick="exportJSON()">💾 Respaldo</button>
+    <button class="ghost protected" data-prot onclick="exportJSON()" title="Guarda una copia en la nube y descarga el archivo a este equipo">💾 Respaldar ahora</button>
     <button class="ghost protected" data-prot data-master onclick="document.getElementById('impF').click()" title="Agrega los embarques de un respaldo que falten. Nunca borra ni cambia los actuales.">📂 Recuperar de archivo</button>
     <input type="file" id="impF" accept=".json" style="display:none" onchange="importJSON(event)">
     <button class="ghost protected" data-prot data-master onclick="openConfig()">⚙ Configuración</button>
@@ -1001,6 +1001,8 @@ function renderBanners(){
   const box=document.getElementById('alertBanners'); if(!box)return;
   let html='';
   try{ const p=(unlocked||isBasc)?leerPrevio():null, fl=p?faltantesDe(p.data).length:0;
+    let um=0; try{ um=+localStorage.getItem('progEmbarques_ultRespManual')||0; }catch(e){}
+    if(unlocked && DATA.length && Date.now()-um>7*864e5) html+=`<div onclick="exportJSON()" style="cursor:pointer;background:#13283d;border:1px solid #3b82f6;color:#cfe0f2;border-radius:10px;padding:10px 14px;margin:0 0 10px;font-weight:700;font-size:13px">💾 ${um?'Hace más de una semana':'Aún no'} se hace un respaldo manual desde este equipo. Toca aquí: se guarda en la nube y se descarga el archivo.</div>`;
     if(RESP_ALERTA||fl>=10){ html+=`<div ${isMaster?'onclick="openConfig();setTimeout(respRender,50)"':''} style="cursor:pointer;background:#3a1414;border:2px solid var(--late);color:#fff;border-radius:10px;padding:12px 14px;margin:0 0 10px;font-weight:700;font-size:13.5px">⚠ Faltan embarques en la nube${RESP_ALERTA?` (respaldo del ${RESP_ALERTA.ult}: ${RESP_ALERTA.nU} · hoy: ${RESP_ALERTA.n})`:''}${fl?` · este equipo conserva ${fl} que no están en la nube`:''}. ${isMaster?'Toca aquí para recuperarlos.':'Avisa al master para recuperarlos; no cierres ni borres datos de este equipo.'}</div>`; }
   }catch(e){}
   try{ const inc=entregaIncList();
@@ -1661,7 +1663,14 @@ function resetData(){ toast('Opción retirada para proteger la programación'); 
 function clearAll(){ toast('Opción retirada para proteger la programación'); }
 
 /* ================= EXPORT/IMPORT ================= */
-function exportJSON(){ if(!requireUnlock())return; dlBlob(new Blob([JSON.stringify({cfg:CFG,data:DATA},null,2)],{type:'application/json'}),'respaldo_embarques.json'); toast('Respaldo descargado'); }
+// Respaldo manual: copia en la nube (Respaldos, con nombre de quién) + archivo descargado en este equipo.
+function exportJSON(){ if(!requireUnlock())return;
+  if(!DATA.length){ toast('No hay embarques para respaldar'); return; }
+  const f=hoyISO()+'_'+String(new Date().getHours()).padStart(2,'0')+String(new Date().getMinutes()).padStart(2,'0');
+  dlBlob(new Blob([JSON.stringify({cfg:sinViejos(CFG),data:DATA},null,1)],{type:'application/json'}),'respaldo_embarques_'+f+'.json');
+  respaldoAntes('manual').then(()=>{ RESP_IDX=null; try{ localStorage.setItem('progEmbarques_ultRespManual',String(Date.now())); }catch(e){} renderBanners();
+    auditPush({ts:new Date().toISOString(),id:'',pedido:'',cliente:'(programación)',field:'respaldo',label:'Respaldo manual',from:'',to:DATA.length+' embarques',maquillaje:false,estatusAntes:'',estatusDespues:'',by:quienResp(),origen:'programador'});
+    toast('✓ Respaldo de '+DATA.length+' embarques: guardado en la nube y descargado',4000); }); }
 // Recuperar de archivo: SOLO agrega los embarques del respaldo que no existen hoy. Nunca borra ni sobrescribe.
 function importJSON(e){ if(!requireMaster())return; const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
   rd.onload=()=>{ let arr; try{ const o=JSON.parse(rd.result); arr=normalize(Array.isArray(o)?o:(o.data||(o&&typeof o==='object'?Object.values(o).filter(x=>x&&x.id):[]))); }catch(err){ toast('Archivo inválido'); return; }
