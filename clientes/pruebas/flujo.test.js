@@ -33,12 +33,14 @@ const cli = { uid: 'u1', tel: '+523311112222' };
   const f2 = C.calcFlete({ vehiculo: 'NISSAN', km: 120, casetas: 105 }, {});
   assert.ok(Math.abs(f2.total - 1028.437) < 0.1, 'Nissan fila 3: ' + f2.total);
   // prepedido
-  r = await D.api('cliente', 'prepedido', { items: [{ code: '04MAS003', piezas: 80 }, { code: '04MAS001', piezas: 20 }, { code: 'XXX', piezas: 5 }], modalidad: 'entrega', escenario: prod.escenarios[1].id, nota: 'Llegar antes de las 12' }, cli);
+  r = await D.api('cliente', 'prepedido', { items: [{ code: '04MAS003', piezas: 80, conFactura: true }, { code: '04MAS001', piezas: 20, conFactura: false }, { code: 'XXX', piezas: 5 }], modalidad: 'entrega', escenario: prod.escenarios[1].id, nota: 'Llegar antes de las 12' }, cli);
   const pid = r.pedido.id; console.log('folio', r.pedido.folio, r.pedido.totales, r.pedido.entregaLabel);
   assert.equal(r.pedido.items.length, 2);
   let b = await D.api('staff', 'bandeja', {}, { sesion: vend }); assert.equal(b.cont.enviado, 1);
   await assert.rejects(D.api('staff', 'fincar', { id: pid, remision: 'S00123' }, { sesion: adm }), (e) => /confirmar/.test(e.error || e.message));
-  await D.api('staff', 'confirmar', { id: pid, items: [{ code: '04MAS003', piezas: 100 }, { code: '04MAS001', piezas: 20 }] }, { sesion: vend });
+  { const pp = (await D.api('cliente', 'yo', {}, cli)).pedidos.find(x => x.id === pid); assert.equal(pp.reqFactura, 'parcial', 'factura parcial'); assert.equal(pp.items.find(i => i.code === '04MAS001').conFactura, false); }
+  await D.api('staff', 'confirmar', { id: pid, items: [{ code: '04MAS003', piezas: 100, conFactura: true }, { code: '04MAS001', piezas: 20, conFactura: true }] }, { sesion: vend });
+  { const pp = (await D.api('cliente', 'yo', {}, cli)).pedidos.find(x => x.id === pid); assert.equal(pp.reqFactura, 'todo', 'el vendedor corrige la factura'); assert.ok(pp.items.every(i => i.conFactura === true)); console.log('factura por producto: OK'); }
   b = await D.api('staff', 'bandeja', {}, { sesion: adm }); assert.equal(b.cont.confirmado, 1);
   await D.api('staff', 'fincar', { id: pid, remision: 'S00123' }, { sesion: adm });
   await D.api('staff', 'editarRemision', { id: pid, remision: 'S00124', motivo: 'Odoo cambió el pedido' }, { sesion: adm });

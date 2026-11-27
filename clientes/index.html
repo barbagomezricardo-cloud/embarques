@@ -213,6 +213,7 @@ details.mas>summary::-webkit-details-marker{display:none}
 .notif{padding:11px 0;border-top:1px solid var(--linea-2)}
 .notif.nueva b::before{content:"● ";color:var(--rojo)}
 .mini{font-size:12px;color:var(--tinta-3)}
+.fac{display:grid;gap:6px;border:1.5px solid var(--linea);border-radius:12px;padding:12px}.fac label{display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer}.fac input{accent-color:var(--rojo);width:20px;height:20px;flex:none}.fac .rap{display:flex;gap:6px}.fac .rap button{border:1.5px solid var(--linea);background:transparent;border-radius:99px;padding:3px 10px;font-weight:700;font-size:12px;font-family:inherit;color:var(--tinta);cursor:pointer}
 .vacio{text-align:center;padding:26px 10px;color:var(--tinta-3)}
 .vacio img{width:84px;opacity:.9;margin-bottom:8px}
 .pie{text-align:center;font-size:11.5px;color:var(--tinta-3);padding:6px 0 0}
@@ -733,6 +734,24 @@ function precioEsc(p){
   if(!e && id==='recoge') e=p.escenarios[0];
   return e||null;
 }
+// ¿Necesitas factura? El cliente marca qué productos de este pedido llevan factura (se recuerda para el siguiente)
+function facGuardada(){ try{ return JSON.parse(localStorage.getItem('cli_fac')||'{}')||{}; }catch(e){ return {}; } }
+function facturaHtml(){
+  var G=facGuardada(), pr=ESTADO.yo.precios;
+  var ps=pr.productos.filter(function(p){ return ESTADO.carrito[p.code]; });
+  return '<div class="fac" id="fac"><div class="entre"><span class="eyebrow">¿Necesitas factura?</span><span class="rap"><button type="button" data-fa="1">Todos</button><button type="button" data-fa="0">Ninguno</button></span></div>'+
+    '<div class="mini" style="margin-top:-2px">Marca los productos que llevan factura. Tu vendedor y facturación lo verán.</div>'+
+    ps.map(function(p){ return '<label><input type="checkbox" data-fac="'+esc(p.code)+'"'+(G[p.code]===false?'':' checked')+'><span>'+fmt(ESTADO.carrito[p.code])+' × '+esc(p.nombre)+'</span></label>'; }).join('')+
+    '<div class="mini" id="facR"></div></div>';
+}
+function leeFactura(){ var F={}; Array.prototype.forEach.call(document.querySelectorAll('#fac input[data-fac]'), function(i){ F[i.dataset.fac]=!!i.checked; }); return F; }
+function enlazaFactura(){
+  var box=$('#fac'); if(!box) return;
+  var pinta=function(){ var F=leeFactura(), k=Object.keys(F), si=k.filter(function(x){ return F[x]; }).length; $('#facR').textContent = !k.length?'':si===k.length?'Todo el pedido lleva factura.':si===0?'Este pedido no lleva factura.':si+' de '+k.length+' productos llevan factura.'; };
+  Array.prototype.forEach.call(box.querySelectorAll('input[data-fac]'), function(i){ i.onchange=pinta; });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-fa]'), function(b){ b.onclick=function(){ Array.prototype.forEach.call(box.querySelectorAll('input[data-fac]'), function(i){ i.checked=b.dataset.fa==='1'; }); pinta(); }; });
+  pinta();
+}
 function confirmarPedido(sac, tot, sub, completos){
   var y=ESTADO.yo, pr=y.precios;
   var kgT = pr.productos.reduce(function(a,p){ return a+(ESTADO.carrito[p.code]?(p.kg||25)*ESTADO.carrito[p.code]:0); },0);
@@ -741,12 +760,15 @@ function confirmarPedido(sac, tot, sub, completos){
   abrirHoja('<h2>Revisa tu prepedido</h2><div class="items" style="border:0;padding:0">'+lineas+'</div>'+
     '<div class="entre" style="border-top:1px solid var(--linea);padding-top:10px"><span>'+fmt(sac)+' sacos · <b>'+fmtTon(kgT/1000)+'</b> · '+esc(escL)+'</span>'+(pr.mostrar&&completos?'<b class="num" style="font-size:19px">'+money(tot)+'</b>':'')+'</div>'+
     (pr.mostrar&&completos&&tot!==sub?'<div class="mini">Subtotal '+money(sub)+' + IVA '+money(tot-sub)+'. Precios de referencia: el precio final lo confirma tu vendedor.</div>':'')+
+    facturaHtml()+
     '<div class="aviso info">Tu vendedor te llamará para confirmarlo. Cuando salga de planta te avisamos con los lotes y la hora.</div>'+
     '<div class="err" id="e"></div><button class="btn full" id="ok">Enviar prepedido</button><button class="btn ghost" id="no">Seguir editando</button>');
   $('#no').onclick=cerrarHoja;
+  enlazaFactura();
   $('#ok').onclick=function(){
     var b=this; b.disabled=true; b.textContent='Enviando…';
-    var items=Object.keys(ESTADO.carrito).map(function(k){ return { code:k, piezas:ESTADO.carrito[k] }; });
+    var F=leeFactura(); try{ localStorage.setItem('cli_fac', JSON.stringify(Object.assign(facGuardada(), F))); }catch(e){}
+    var items=Object.keys(ESTADO.carrito).map(function(k){ return { code:k, piezas:ESTADO.carrito[k], conFactura:F[k]!==false }; });
     Net.llamar('prepedido', { items:items, modalidad:ESTADO.escenario==='recoge'?'recoge':'entrega', escenario:ESTADO.escenario, nota:ESTADO.nota||'' })
       .then(function(r){ ESTADO.carrito={}; ESTADO.nota=''; exito(r.pedido); return cargarYo(true); })
       .catch(function(e){ b.disabled=false; b.textContent='Enviar prepedido'; $('#e').textContent=e.error||'No se pudo enviar.'; });
@@ -787,7 +809,7 @@ function vPedidos(m){
     if(!muerto) h+='<div class="linea" aria-label="Avance del pedido">'+PASOS.map(function(x,k){ return '<div class="'+(k<=i?'ya':'')+(k<=i&&p.estado==='facturado'?' fin':'')+'">'+(x[0]==='liberado'&&p.modalidad==='recoge'?'Cargado':x[1])+'</div>'; }).join('')+'</div>';
     h+='<div class="chico">'+textoEstado(p)+'</div>';
     if(p.ajustado) h+='<div class="aviso warn chico">Tu vendedor ajustó cantidades al confirmarlo contigo.</div>';
-    h+='<div class="items">'+p.items.map(function(it){ return '<div class="entre"><span>'+fmt(it.piezas)+' × '+esc(it.nombre)+'</span>'+(it.conIva?'<span class="mini">'+money(it.conIva*it.piezas)+'</span>':'')+'</div>'; }).join('')+'<div class="entre" style="font-weight:800"><span>'+fmt(p.items.reduce(function(a,it){return a+it.piezas;},0))+' sacos</span><span>'+fmtTon(tonPed(p))+'</span></div>'+(p.totales?'<div class="entre" style="font-weight:800"><span>Total</span><span>'+money(p.totales.total)+'</span></div>':'')+'</div>';
+    h+='<div class="items">'+p.items.map(function(it){ return '<div class="entre"><span>'+fmt(it.piezas)+' × '+esc(it.nombre)+(it.conFactura===true?' <span class="chip">🧾 Factura</span>':'')+'</span>'+(it.conIva?'<span class="mini">'+money(it.conIva*it.piezas)+'</span>':'')+'</div>'; }).join('')+(p.reqFactura?'<div class="mini">'+({ todo:'🧾 Todo con factura', parcial:'🧾 Factura solo de los productos marcados', no:'Sin factura' }[p.reqFactura]||'')+'</div>':'')+'<div class="entre" style="font-weight:800"><span>'+fmt(p.items.reduce(function(a,it){return a+it.piezas;},0))+' sacos</span><span>'+fmtTon(tonPed(p))+'</span></div>'+(p.totales?'<div class="entre" style="font-weight:800"><span>Total</span><span>'+money(p.totales.total)+'</span></div>':'')+'</div>';
     if(p.liberacion && (p.liberacion.lotes||[]).length){
       h+='<div class="lotes"><b>Salió '+esc(p.liberacion.fecha?p.liberacion.fecha.split('-').reverse().join('/'):'')+' a las '+esc(p.liberacion.hora||'')+'</b>'+(p.liberacion.unidad?' · '+esc(p.liberacion.unidad):'')+(p.liberacion.ton?' · '+fmtTon(p.liberacion.ton)+' cargadas':'')+'<div style="margin-top:4px">'+p.liberacion.lotes.map(function(l){ return esc(l.prod)+' · lote <b>'+esc(l.lote)+'</b> · '+fmt(l.sacos)+' sacos'; }).join('<br>')+'</div></div>';
     }
@@ -909,7 +931,7 @@ var PASOS_GUIA=[
   { v:'pedir', sel:'.prod:not(.agot)', tocar:'.prod:not(.agot) .paso button[data-d="1"]', t:'Elige tus productos', x:'Usa <b>+</b> y <b>−</b> o escribe directo la cantidad de sacos.<br><span class="toca">👆 Pruébalo: toca el +</span>' },
   { v:'pedir', sel:'#carga .card', t:'¿Te cabe en tu unidad?', x:'Te decimos cuántas toneladas pesa tu prepedido y en qué unidades cabe, para que llegues con el camión correcto.' },
   { v:'pedir', sel:'#simu', t:'Tu descuento en vivo', x:'Mientras agregas sacos te decimos qué descuento ganarías y cuántos sacos te faltan para el siguiente bono.' },
-  { v:'pedir', sel:'#res', t:'Revisa y envía', x:'Aquí ves el total. Toca <b>Revisar</b>, confirma y listo. Tu vendedor te llamará para confirmarlo; mientras no lo confirme no es pedido en firme.' },
+  { v:'pedir', sel:'#res', t:'Revisa y envía', x:'Aquí ves el total. Toca <b>Revisar</b>: ahí marcas <b>qué productos llevan factura</b> (todos, ninguno o solo algunos), confirma y listo. Tu vendedor te llamará para confirmarlo; mientras no lo confirme no es pedido en firme.' },
   { v:'pedidos', sel:'.ped,.vacio', t:'Sigue tu pedido', x:'Cada prepedido avanza por estas etapas:'+ESTADOS_GUIA },
   { v:'historial', sel:'#vista .card', t:'Tu historial', x:'Tus sacos comprados por mes y por producto. El mes en curso solo cuenta lo que ya se facturó.' },
   { v:'historial', sel:'#camp', t:'Avisos', x:'La campana te avisa cuando tu pedido se confirma, sale de planta o se factura. El número rojo indica avisos nuevos.' },

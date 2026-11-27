@@ -298,8 +298,9 @@
     if (i >= 0) h += '<div class="clis-linea">' + orden.map(function (x, k) { return '<i class="' + (k <= i ? (p.estado === 'facturado' ? 'fin' : 'on') : '') + '"></i>'; }).join('') + '</div>';
     h += '<div class="clis-fila clis-mini"><b style="color:var(--t)">' + esc(p.entregaLabel || (p.modalidad === 'recoge' ? 'Recoge en planta' : 'Entrega')) + '</b>' + (p.negocio && p.negocio.lat ? ' · <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + p.negocio.lat + ',' + p.negocio.lng + '">ver ubicación</a>' : '') + (p.negocio && p.negocio.dir ? ' · ' + esc(p.negocio.dir) : '') + '</div>';
     h += '<div class="clis-items">' + p.items.map(function (it) {
-      return '<div class="clis-entre"><span>' + (editable ? '<input type="number" min="0" data-q="' + esc(it.code) + '" value="' + it.piezas + '" aria-label="Sacos de ' + esc(it.nombre) + '"> × ' : fmt(it.piezas) + ' × ') + esc(it.nombre) + '</span>' + (it.conIva ? '<span class="clis-mini">' + money(it.conIva) + ' c/u</span>' : '') + '</div>';
-    }).join('') + '<div class="clis-entre"><b>' + fmt(p.items.reduce(function (a, x) { return a + x.piezas; }, 0)) + ' sacos · ' + fTon(p.ton != null ? p.ton : tonDe(p.items)) + '</b>' + (p.totales ? '<b>' + money(p.totales.total) + ' con IVA</b>' : '') + '</div></div>';
+      var fac = typeof it.conFactura === 'boolean' ? (editable ? '<label class="clis-mini" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" data-fac="' + esc(it.code) + '"' + (it.conFactura ? ' checked' : '') + ' style="width:auto;min-height:0"> 🧾 factura</label>' : '<span class="clis-badge ' + (it.conFactura ? 'clis-b-confirmado' : 'clis-b-cancelado') + '" style="font-size:11px">' + (it.conFactura ? '🧾 Con factura' : 'Sin factura') + '</span>') : '';
+      return '<div class="clis-entre"><span>' + (editable ? '<input type="number" min="0" data-q="' + esc(it.code) + '" value="' + it.piezas + '" aria-label="Sacos de ' + esc(it.nombre) + '"> × ' : fmt(it.piezas) + ' × ') + esc(it.nombre) + '</span><span class="clis-fila">' + fac + (it.conIva ? '<span class="clis-mini">' + money(it.conIva) + ' c/u</span>' : '') + '</span></div>';
+    }).join('') + (p.reqFactura ? '<div class="clis-mini"><b style="color:var(--t)">Factura: ' + ({ todo: 'todo el pedido', parcial: 'solo los productos marcados 🧾', no: 'el cliente no requiere factura' }[p.reqFactura] || '') + '</b></div>' : '') + '<div class="clis-entre"><b>' + fmt(p.items.reduce(function (a, x) { return a + x.piezas; }, 0)) + ' sacos · ' + fTon(p.ton != null ? p.ton : tonDe(p.items)) + '</b>' + (p.totales ? '<b>' + money(p.totales.total) + ' con IVA</b>' : '') + '</div></div>';
     if (p.ajustado) h += '<div class="clis-aviso w">Cantidades ajustadas al confirmar (original: ' + (p.itemsOriginal || []).map(function (x) { return x.piezas + ' ' + x.nombre; }).join(', ') + ').</div>';
     if (p.nota) h += '<div class="clis-aviso i"><b>Nota del cliente:</b> ' + esc(p.nota) + '</div>';
     if (p.notaVendedor) h += '<div class="clis-mini"><b>Nota del vendedor:</b> ' + esc(p.notaVendedor) + '</div>';
@@ -328,7 +329,7 @@
         var hecho = function (t) { toast(t); return refrescarBandeja(true).then(pintarCuerpo); };
         var falla = function (e) { b.disabled = false; toast(e.error || 'No se pudo', true); };
         if (acc === 'confirmar') {
-          var items = $$('[data-q]', card).map(function (i) { return { code: i.dataset.q, piezas: Number(i.value) || 0 }; });
+          var items = $$('[data-q]', card).map(function (i) { var x = { code: i.dataset.q, piezas: Number(i.value) || 0 }; var f = $('[data-fac="' + i.dataset.q + '"]', card); if (f) x.conFactura = !!f.checked; return x; });
           b.disabled = true; api('staff', 'confirmar', { id: id, items: items, notaInterna: ($('[data-nota]', card) || {}).value || '' }).then(function () { return hecho('Confirmado. Administración ya lo ve para fincarlo.'); }).catch(falla);
         } else if (acc === 'rechazar') {
           var m = prompt('Motivo (lo verá el cliente):'); if (!m) return;
@@ -351,7 +352,7 @@
         } else if (acc === 'copiarOdoo') {
           var tx = 'PREPEDIDO ' + p.folio + '\nCliente: ' + (p.skanName || p.razonSocial) + (p.numCliente ? ' (No. ' + p.numCliente + ')' : '') + '\nVendedor: ' + (p.vendedorNombre || '') +
             '\nEntrega: ' + (p.entregaLabel || p.modalidad) + (p.negocio && p.negocio.dir ? ' · ' + p.negocio.dir : '') + '\n' +
-            p.items.map(function (it) { return it.code + '\t' + it.piezas + ' sacos\t' + it.nombre + (it.precio ? '\t$' + it.precio : ''); }).join('\n') +
+            p.items.map(function (it) { return it.code + '\t' + it.piezas + ' sacos\t' + it.nombre + (it.precio ? '\t$' + it.precio : '') + (typeof it.conFactura === 'boolean' ? (it.conFactura ? '\tCON FACTURA' : '\tSIN FACTURA') : ''); }).join('\n') +
             '\nTotal: ' + p.items.reduce(function (a, x) { return a + x.piezas; }, 0) + ' sacos · ' + fTon(p.ton != null ? p.ton : tonDe(p.items)) + ([p.nota, p.notaVendedor].filter(Boolean).length ? '\nNotas: ' + [p.nota, p.notaVendedor].filter(Boolean).join(' · ') : '');
           var ok = function () { toast('Copiado. Pégalo como referencia al capturar en Odoo.'); };
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(ok, function () { prompt('Copia el texto:', tx); }); else prompt('Copia el texto:', tx);

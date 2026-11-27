@@ -258,7 +258,8 @@
         cliente: { clave: p.clienteKey || '', nombre: p.skanName || p.razonSocial || '', razonSocial: p.razonSocial || '', numCliente: p.numCliente || '', contacto: p.contacto || '', tel: p.telContacto || p.tel || '' },
         vendedor: { clave: p.vk || '', nombre: p.vendedorNombre || '' },
         entrega: { modalidad: p.modalidad, detalle: p.entregaLabel || '', direccion: (p.negocio && p.negocio.dir) || '', lat: (p.negocio && p.negocio.lat) || null, lng: (p.negocio && p.negocio.lng) || null },
-        lineas: (p.items || []).map(function (it) { return { default_code: it.code, nombre: it.nombre, cantidad: num(it.piezas), uom: 'SACO', kg: num(it.kg), precio_unit: it.precio != null ? num(it.precio) : null, precio_con_iva: it.conIva != null ? num(it.conIva) : null }; }),
+        lineas: (p.items || []).map(function (it) { return { default_code: it.code, nombre: it.nombre, cantidad: num(it.piezas), uom: 'SACO', kg: num(it.kg), precio_unit: it.precio != null ? num(it.precio) : null, precio_con_iva: it.conIva != null ? num(it.conIva) : null, con_factura: typeof it.conFactura === 'boolean' ? it.conFactura : null }; }),
+        requiere_factura: p.reqFactura || resumenFactura(p.items),
         totales: p.totales || null, toneladas: p.ton != null ? p.ton : tonItems(p.items), nota: [p.nota, p.notaVendedor].filter(Boolean).join(' · '),
         creado: p.creado, confirmado: p.confirmadoTs || null };
     }
@@ -348,9 +349,16 @@
       var k = 'seq/' + pref;
       return g(k).then(function (n) { n = num(n) + 1; return s(k, n).then(function () { return pref + '-' + ('000' + n).slice(-4); }); });
     }
+    /* factura por producto: 'todo' | 'parcial' | 'no' (null si el pedido es de antes de esta opción) */
+    function resumenFactura(items) {
+      var m = (items || []).filter(function (it) { return typeof it.conFactura === 'boolean'; });
+      if (!m.length) return null;
+      var si = m.filter(function (it) { return it.conFactura; }).length;
+      return si === m.length ? 'todo' : si === 0 ? 'no' : 'parcial';
+    }
     function pedidoPublico(p, mostrarPrecios) {
       var o = { id: p.id, folio: p.folio, estado: p.estado, creado: p.creado, actualizado: p.actualizado, modalidad: p.modalidad, entregaLabel: p.entregaLabel || '',
-        nota: p.nota || '', items: (p.items || []).map(function (it) { var x = { code: it.code, nombre: it.nombre, piezas: it.piezas, kg: it.kg }; if (mostrarPrecios && it.precio) { x.precio = it.precio; x.conIva = it.conIva; } return x; }),
+        nota: p.nota || '', reqFactura: p.reqFactura || resumenFactura(p.items), items: (p.items || []).map(function (it) { var x = { code: it.code, nombre: it.nombre, piezas: it.piezas, kg: it.kg }; if (typeof it.conFactura === 'boolean') x.conFactura = it.conFactura; if (mostrarPrecios && it.precio) { x.precio = it.precio; x.conIva = it.conIva; } return x; }),
         remision: p.remision || '', motivo: p.motivo || '', ajustado: !!p.ajustado, ton: p.ton != null ? p.ton : tonItems(p.items),
         liberacion: p.liberacion ? { ts: p.liberacion.ts, fecha: p.liberacion.fecha, hora: p.liberacion.hora, lotes: p.liberacion.lotes || [], unidad: p.liberacion.unidad || '', ton: p.liberacion.ton || 0 } : null,
         hist: (p.hist || []).map(function (h) { return { e: h.e, ts: h.ts }; }) };
@@ -500,7 +508,9 @@
             if (!p || q <= 0 || vistos[p.code]) return;
             if (p.agotado) throw err('agotado', p.nombre + ' ya no está disponible por ahora. Quítalo de tu prepedido.');
             if (q > 3000) throw err('datos', 'Cantidad demasiado grande para ' + p.nombre + '. Para pedidos mayores llama a tu vendedor.');
-            vistos[p.code] = 1; limpio.push({ code: p.code, nombre: p.nombre, kg: p.kg, piezas: q, petfood: p.petfood, premium: p.premium });
+            vistos[p.code] = 1; var ln = { code: p.code, nombre: p.nombre, kg: p.kg, piezas: q, petfood: p.petfood, premium: p.premium };
+            if (typeof it.conFactura === 'boolean') ln.conFactura = it.conFactura;   // el cliente marca qué productos llevan factura
+            limpio.push(ln);
           });
           if (!limpio.length) throw err('datos', 'Agrega al menos un producto.');
           if (limpio.length > 25) throw err('datos', 'Demasiados renglones.');
@@ -525,7 +535,7 @@
             var t = now(), id = newId(), d = mxDate(t);
             var ped = { id: id, folio: folio, uid: uid, clienteKey: us.clienteKey, skanName: us.skanName, razonSocial: us.razonSocial, numCliente: us.numCliente || '', contacto: us.nombre, tel: us.tel, telContacto: us.telContacto || '',
               vk: us.vk, vendedorNombre: fila ? fila.meta.v : (us.vendedorNombre || ''), modalidad: modalidad, entregaLabel: entregaLabel, negocio: us.negocio || null,
-              items: limpio, ton: tonItems(limpio), totales: totales, nota: clip(b.nota, 400), estado: 'enviado', creado: t, actualizado: t,
+              items: limpio, ton: tonItems(limpio), reqFactura: resumenFactura(limpio), totales: totales, nota: clip(b.nota, 400), estado: 'enviado', creado: t, actualizado: t,
               snap: { mes: d.m, sacosMes: fila ? sumaMes(fila.row, d.m) : 0 },
               hist: [{ e: 'enviado', ts: t, por: 'cliente', nota: '' }] };
             var m = {};
@@ -719,11 +729,12 @@
         var extra = { confirmadoPor: S.nombre, confirmadoTs: now() };
         if (Array.isArray(b.items)) { // el vendedor ajusta cantidades acordadas por teléfono
           var porCode = {}; p.items.forEach(function (it) { porCode[it.code] = it; });
-          var nuevos = []; var cambio = false;
-          b.items.forEach(function (it) { var o = porCode[it.code]; var q = Math.floor(num(it.piezas)); if (!o) return; if (q !== o.piezas) cambio = true; if (q > 0) nuevos.push(Object.assign({}, o, { piezas: q })); });
+          var nuevos = []; var cambio = false, cambioF = false;
+          b.items.forEach(function (it) { var o = porCode[it.code]; var q = Math.floor(num(it.piezas)); if (!o) return; if (q !== o.piezas) cambio = true; var x = Object.assign({}, o, { piezas: q }); if (typeof it.conFactura === 'boolean' && it.conFactura !== o.conFactura) { x.conFactura = it.conFactura; cambioF = true; } if (q > 0) nuevos.push(x); });
           if (!nuevos.length) throw err('datos', 'El pedido no puede quedar vacío; si no procede, recházalo.');
+          if (cambioF && !cambio && nuevos.length === p.items.length) { extra.items = nuevos; extra.reqFactura = resumenFactura(nuevos); }   // solo cambió qué lleva factura
           if (cambio || nuevos.length !== p.items.length) {
-            extra.items = nuevos; extra.ajustado = true; extra.itemsOriginal = p.items; extra.ton = tonItems(nuevos);
+            extra.items = nuevos; extra.ajustado = true; extra.itemsOriginal = p.items; extra.ton = tonItems(nuevos); extra.reqFactura = resumenFactura(nuevos);
             if (p.totales) { var sub = 0, tot = 0; nuevos.forEach(function (it) { sub += num(it.precio) * it.piezas; tot += num(it.conIva) * it.piezas; }); extra.totales = Object.assign({}, p.totales, { subtotal: r2(sub), total: r2(tot), iva: r2(tot - sub) }); }
           }
         }

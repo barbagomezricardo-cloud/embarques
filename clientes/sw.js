@@ -1,5 +1,5 @@
 /* Service worker de la App Clientes: arranque rápido sin conexión y avisos push. */
-const CACHE = 'cli19h-v1';
+const CACHE = 'cli19h-v2';
 const BASE = ['./', 'index.html', 'config.js', 'manifest.json', 'img/logo-petfood.png', 'img/logo-19h.png', 'img/icono-192.png', 'img/favicon.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(BASE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

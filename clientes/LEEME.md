@@ -24,7 +24,7 @@ Direcciones, una vez publicadas en GitHub Pages:
 1. **Registro del cliente.** El cliente entra con su celular y recibe un código por SMS. Después captura su nombre completo, razón social, número de cliente (opcional), teléfono de contacto y su negocio. La ubicación la puede registrar de tres formas: «Estoy aquí» (GPS), marcándola en el mapa o escribiendo solo la dirección.
 2. **Validación por Ventas.** El registro llega a **Registros → Por validar** con posibles coincidencias en el catálogo, por teléfono y por nombre. Administración o gerencia busca al cliente en las carteras publicadas y pulsa **Vincular y activar**. Al cliente le llega el aviso de que su cuenta está activa.
 3. **El cliente ve su avance.** Ve su nivel, el descuento que paga este mes y lo que va ganando para el siguiente: crecimiento, Premium base y Premium+, con barras de avance. También ve cuánto le falta para mantener o subir de nivel y su histórico por producto y mes. Son los mismos números que ve su vendedor, porque salen de lo que ventas publica.
-4. **Prepedido.** El cliente elige productos y sacos y escoge si recoge en planta o le entregan, según la ruta. Si los precios están habilitados, ve el precio por saco, el IVA y el flete. Antes de enviar ve el **simulador**: cómo cambiaría su descuento del siguiente mes si ese pedido se factura en el mes y qué le faltaría para el siguiente bono.
+4. **Prepedido.** El cliente elige productos y sacos y escoge si recoge en planta o le entregan, según la ruta. Si los precios están habilitados, ve el precio por saco, el IVA y el flete. Antes de enviar ve el **simulador**: cómo cambiaría su descuento del siguiente mes si ese pedido se factura en el mes y qué le faltaría para el siguiente bono. Al revisar marca **qué productos llevan factura** (todos, ninguno o solo algunos); la app recuerda su última elección. El vendedor, Administración y facturación lo ven en cada renglón (🧾 Con factura / Sin factura), el vendedor lo puede corregir al confirmar y «📋 Copiar datos para Odoo» lo incluye.
 5. **Alerta.** Al enviarlo, el vendedor recibe la alerta en su app (botón rojo con contador, sonido y aviso del navegador). Además, el cliente tiene un botón para **avisar a su vendedor por WhatsApp** con el mensaje ya armado.
 6. **El vendedor confirma.** Llama al cliente, ajusta cantidades si hace falta y pulsa **«Ya lo validé por teléfono · Confirmar»**. Desde ahí puede avisar a Administración por WhatsApp.
 7. **Administración finca en Odoo.** Las asistentes ven **Por fincar en Odoo**, lo capturan en Odoo y escriben el **número de pedido o remisión**. El pedido queda con el sello verde «✓ Fincado en Odoo · número», que es el control visual. Si el número cambia, **Editar número** pide el motivo y guarda el historial.
@@ -84,6 +84,12 @@ Copia las reglas y publícalas en Firebase → Realtime Database → Reglas. Si 
 5. Confirma que la URL de `cliApi` que te muestra la terminal coincide con `api` en `clientes/config.js`. Si no coincide, cámbiala ahí.
 
 Se crean dos funciones: **cliApi**, la puerta de entrada de la app y del panel, y **cliEmbarque**, que escucha a Cargadores y avisa al cliente.
+
+### Actualización · factura por producto (27-nov-2026)
+La página ya está publicada en GitHub. Para que el servidor **guarde** la elección de factura hay que volver a subir la lógica:
+1. En Cloud Shell reemplaza `functions/cli-core.js` por el nuevo **`clientes/funciones/cli-core.js`** de este repositorio (`clientes.js` no cambió).
+2. Despliega: `firebase deploy --only functions:cliApi`
+Mientras no se despliegue, la app funciona igual que antes: el cliente ve las casillas, pero la elección no se guarda.
 
 ### Paso 5. Licencia
 En tu Panel de Licencia puedes agregar dos interruptores: **`clientes`** (la app de clientes) y **`clientes_personal`** (el panel del personal). Si no los agregas, heredan la licencia general, y «Apagar TODO» también los apaga.
